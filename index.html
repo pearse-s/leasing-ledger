@@ -543,7 +543,6 @@
         <div class="note" id="sh-note">click a row to open the Tours tab</div>
         <div class="pair click" data-go="tours"><span class="pl">Showings booked</span><span class="pv" id="sh-booked">&ndash;</span></div>
         <div class="pair click" data-go="tours"><span class="pl">&mdash; completed / canceled</span><span class="pv" id="sh-dc">&ndash;</span></div>
-        <div class="pair click" data-go="tours"><span class="pl">Tours logged in CRM</span><span class="pv" id="sh-tours">&ndash;</span></div>
         <div class="agents" id="sh-agents"></div>
         <div class="sect">Term-end outcomes (window)</div>
         <div class="pair"><span class="pl">Lease terms ended</span><span class="pv" id="o-ends">&ndash;</span></div>
@@ -825,7 +824,7 @@
   var uSort = { k:'property_name', d:1 }, oSort = { k:'display_name', d:1 };
   var uFilter = 'all';
   var curPhotosLm = [], curPhotosUm = [];
-  var dlTimer = null;
+  var dlBusy = false;
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aFilter = 'all';
   var aWin = { mode:'90', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 }, rRange = 'past30';
@@ -1083,9 +1082,9 @@
     countUp('k-vacant', v.vacant_total, fmtNum);
     el('k-vacant-sub').innerHTML = '<b>' + fmtNum(v.op_vacant) + '</b> operational &middot; <b>' + fmtNum(v.never_leased) + '</b> never leased';
     countUp('k-oprate', v.op_vacancy_rate, pct);
-    el('k-oprate-sub').innerHTML = fmtNum(v.op_vacant) + ' of ' + fmtNum((v.total_units||0)-(v.never_leased||0)) + ' ever-leased units';
+    el('k-oprate-sub').innerHTML = fmtNum(v.op_vacant) + ' vacant &divide; ' + fmtNum((v.total_units||0)-(v.never_leased||0)) + ' ever-leased<br>(' + fmtNum(v.never_leased) + ' never-leased units excluded)';
     countUp('k-totrate', v.total_vacancy_rate, pct);
-    el('k-totrate-sub').innerHTML = fmtNum(v.vacant_total) + ' of ' + fmtNum(v.total_units) + ' total units';
+    el('k-totrate-sub').innerHTML = fmtNum(v.vacant_total) + ' vacant &divide; ' + fmtNum(v.total_units) + ' total units<br>(incl. never-leased new inventory)';
     countUp('k-pre', v.pre_leased, fmtNum);
     countUp('k-risk', d.money && d.money.rent_at_risk, fmtMoney);
     countUp('k-unlisted', d.vacant_not_listed, fmtNum);
@@ -1173,7 +1172,7 @@
     el('s-signed').textContent = fmtNum(act.leases_signed);
     var split = act.leases_signed_split || {};
     el('s-signed-sub').innerHTML = (split.starting_now != null)
-      ? fmtNum(split.starting_now) + ' starting now &middot; ' + fmtNum(split.future_start) + ' future'
+      ? fmtNum(split.starting_now) + ' already started &middot; ' + fmtNum(split.future_start) + ' future start'
       : '';
     el('s-movein').textContent = fmtNum(act.move_ins);
 
@@ -1181,10 +1180,10 @@
     if (leads && leads.in_window != null) {
       if (leads.filtered && leads.matched != null) {
         el('s-leads').textContent = fmtNum(leads.matched);
-        el('s-leads-sub').innerHTML = 'matched to filtered properties &middot; ' + fmtNum(leads.in_window) + ' total in window';
+        el('s-leads-sub').innerHTML = fmtNum(leads.matched_active) + ' active &middot; ' + fmtNum(leads.matched_lost) + ' lost &middot; matched to filters';
       } else {
         el('s-leads').textContent = fmtNum(leads.in_window);
-        el('s-leads-sub').innerHTML = 'incl. archived/lost &middot; ' + fmtNum(leads.total) + ' all-time on board';
+        el('s-leads-sub').innerHTML = fmtNum(leads.active) + ' active &middot; ' + fmtNum(leads.lost) + ' lost/archived';
       }
     } else {
       el('s-leads').textContent = '–';
@@ -1235,7 +1234,6 @@
     }
     el('sh-booked').textContent = fmtNum(sh.booked);
     el('sh-dc').innerHTML = fmtNum(sh.completed) + ' <small>/</small> ' + fmtNum(sh.canceled);
-    el('sh-tours').textContent = fmtNum(sh.tours_logged);
 
     var agents = sh.by_agent || [];
     var ahtml = '';
@@ -1393,30 +1391,43 @@
   }
   function downloadAll(photos, btn, noteEl){
     var list = photos.filter(function(p){ return p.image_id != null; });
-    if (!list.length || dlTimer) return;
+    if (!list.length || dlBusy) return;
+    dlBusy = true;
     btn.disabled = true;
-    var i = 0;
-    noteEl.textContent = 'Starting ' + list.length + ' downloads — your browser may ask to allow multiple files…';
-    dlTimer = setInterval(function(){
+    var i = 0, failed = 0;
+    // Fetch each photo to completion (blob) BEFORE saving and moving on —
+    // rapid anchor clicks to the cross-origin proxy cancel each other's
+    // in-flight requests, so only the last file ever finished downloading.
+    function next(){
       if (i >= list.length) {
-        clearInterval(dlTimer); dlTimer = null; btn.disabled = false;
-        noteEl.textContent = list.length + ' downloads started.';
+        dlBusy = false; btn.disabled = false;
+        noteEl.textContent = (list.length - failed) + ' of ' + list.length + ' photos downloaded' + (failed ? ' (' + failed + ' failed)' : '.');
         return;
       }
-      // proxied attachment responses download reliably from a programmatic
-      // anchor click (the old hidden-iframe + 302-to-S3 approach silently
-      // rendered the image instead of saving it)
       var p = list[i];
-      var a = document.createElement('a');
-      a.href = dlHref(p, true);
-      a.download = p.name || ('photo-' + p.image_id + '.jpg');
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(function(){ if (a.parentNode) a.parentNode.removeChild(a); }, 8000);
-      i++;
-      noteEl.textContent = 'Downloading ' + i + ' of ' + list.length + '…';
-    }, 850);
+      noteEl.textContent = 'Downloading ' + (i + 1) + ' of ' + list.length + '… (each file finishes before the next starts)';
+      fetch(API + '/photo-dl?scope=' + p.scope + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id + '&proxy=1',
+            { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+        .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+        .then(function(blob){
+          var u = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = u;
+          a.download = p.name || ('photo-' + p.image_id + '.jpg');
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function(){ URL.revokeObjectURL(u); if (a.parentNode) a.parentNode.removeChild(a); }, 5000);
+          i++;
+          next();
+        })
+        .catch(function(){
+          failed++;
+          i++;
+          next();
+        });
+    }
+    next();
   }
   el('lm-dlall').addEventListener('click', function(){ downloadAll(curPhotosLm, this, el('lm-phnote')); });
   el('um-dlall').addEventListener('click', function(){ downloadAll(curPhotosUm, this, el('um-phnote')); });

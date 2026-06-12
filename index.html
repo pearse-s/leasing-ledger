@@ -601,6 +601,17 @@
         <span class="count-note" id="u-count"></span>
       </div>
       <div class="qchips" id="u-chips"></div>
+      <div class="tablebar" id="u-nbfilters" style="display:none;margin:0 0 10px;padding:8px 10px;background:var(--paper-deep);border-radius:3px">
+        <span style="font-size:.66rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)">Nookbook</span>
+        <select id="nb-bt" title="Building type"><option value="">Any building type</option></select>
+        <select id="nb-park" title="Parking"><option value="">Any parking</option></select>
+        <select id="nb-appl" title="Appliances">
+          <option value="">Appliances: any</option>
+          <option value="Yes">Appliances: yes</option>
+          <option value="No">Appliances: no</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="nb-notready"> not ready only</label>
+      </div>
       <div class="scrolly tallscroll">
         <table id="utable">
           <thead><tr>
@@ -618,7 +629,7 @@
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">Owner take-backs appear dimmed here and are excluded from all Ledger stats. Click any row for full detail, Buildium links, tenant contacts and photos.</div>
+      <div class="note" style="margin-top:10px">Owner take-backs and Nookbook &ldquo;not ready&rdquo; (construction) units appear dimmed here and are excluded from all Ledger stats. The Nookbook chip reveals building-type / parking / appliance filters from the client&rsquo;s sheet. Click any row for full detail, Buildium links, tenant contacts and photos.</div>
     </div>
   </div>
 
@@ -1289,6 +1300,7 @@
     el('rangenote').textContent = 'Activity window: ' + (m.date_from||'') + ' → ' + (m.date_to||'');
     el('foot').innerHTML =
       (tb ? '<b>' + fmtNum(tb) + ' owner take-back unit' + (tb === 1 ? '' : 's') + ' excluded from all stats</b> (visible on the Units tab). ' : '') +
+      (m.not_ready_excluded ? '<b>' + fmtNum(m.not_ready_excluded) + ' Nookbook not-ready (construction) unit' + (m.not_ready_excluded === 1 ? '' : 's') + ' also excluded</b>. ' : '') +
       'Vacancy is live state from the last Buildium sync; the activity window only affects applications, leases, move-ins, showings, tours, leads and term-end outcomes. ' +
       'The vacancy-aging chart counts <b>listed</b> vacant units only; the Vacant &amp; unlisted KPI tracks the rest. ' +
       'Pre-leased units (signed future lease) count as <b>occupied</b> in both rates. ' +
@@ -1502,6 +1514,7 @@
     { k:'mi',       label:'Move-ins this month' },
     { k:'mo',       label:'Move-outs this month' },
     { k:'listed',   label:'Listed' },
+    { k:'nookbook', label:'Nookbook' },
     { k:'otb',      label:'Take-backs' }
   ];
   function sameMonth(dstr2){
@@ -1523,8 +1536,36 @@
     if (k === 'mi') return r.lease_source !== 'Historic' && sameMonth(r.lease_from_date);
     if (k === 'mo') return sameMonth(r.next_move_out);
     if (k === 'listed') return !!r.is_listed;
+    if (k === 'nookbook') return !!r.is_nookbook;
     if (k === 'otb') return !!r.is_owner_takeback;
     return true;
+  }
+  function nbTest(r){
+    if (uFilter !== 'nookbook') return true;
+    var bt = el('nb-bt').value, park = el('nb-park').value, appl = el('nb-appl').value;
+    if (bt && (r.nb_building_type || '') !== bt) return false;
+    if (park && (r.nb_parking || '') !== park) return false;
+    if (appl && (r.nb_appliances || '') !== appl) return false;
+    if (el('nb-notready').checked && !r.is_not_ready) return false;
+    return true;
+  }
+  function fillNbOptions(){
+    if (unitsAll === null) return;
+    var bts = {}, parks = {};
+    unitsAll.forEach(function(r){
+      if (!r.is_nookbook) return;
+      if (r.nb_building_type) bts[r.nb_building_type] = 1;
+      if (r.nb_parking) parks[r.nb_parking] = 1;
+    });
+    function fill(id, vals, anyLabel){
+      var cur = el(id).value;
+      var h = '<option value="">' + anyLabel + '</option>';
+      Object.keys(vals).sort().forEach(function(v){ h += '<option value="' + esc(v) + '">' + esc(v) + '</option>'; });
+      el(id).innerHTML = h;
+      el(id).value = cur;
+    }
+    fill('nb-bt', bts, 'Any building type');
+    fill('nb-park', parks, 'Any parking');
   }
   function drawChips(){
     var html = '';
@@ -1540,13 +1581,17 @@
     uFilter = b.getAttribute('data-q');
     if (uFilter === 'exp60' || uFilter === 'exp90') { uSort = { k:'days_remaining', d:1 }; }
     if (uFilter === 'balance') { uSort = { k:'total_balance', d:-1 }; }
+    el('u-nbfilters').style.display = uFilter === 'nookbook' ? 'flex' : 'none';
     drawChips(); drawUnits();
   });
+  ['nb-bt','nb-park','nb-appl'].forEach(function(id){ el(id).addEventListener('change', drawUnits); });
+  el('nb-notready').addEventListener('change', drawUnits);
   function loadUnits(after){
     el('veil').classList.remove('hide');
     authFetch('/units')
       .then(function(j){
         unitsAll = j.units || [];
+        fillNbOptions();
         drawChips(); drawUnits();
         el('veil').classList.add('hide');
         if (after) after();
@@ -1567,9 +1612,11 @@
     var q = (el('u-search').value || '').toLowerCase();
     var rows = unitsAll.filter(function(r){
       if (!qfTest(r, uFilter)) return false;
+      if (!nbTest(r)) return false;
       if (!q) return true;
       return ((r.property_name||'') + ' ' + (r.unit_number||'') + ' ' + (r.tenant_names||'') + ' ' +
-              (r.primary_owner_name||'') + ' ' + (r.address_line1||'') + ' ' + (r.property_manager_name||'')).toLowerCase().indexOf(q) >= 0;
+              (r.primary_owner_name||'') + ' ' + (r.address_line1||'') + ' ' + (r.property_manager_name||'') + ' ' +
+              (r.nb_building_type||'') + ' ' + (r.nb_parking||'')).toLowerCase().indexOf(q) >= 0;
     });
     rows.sort(function(a,b){
       var x = a[uSort.k], y = b[uSort.k];
@@ -1580,7 +1627,7 @@
     var html = '';
     rows.forEach(function(r){
       var cls = [];
-      if (r.is_owner_takeback) cls.push('r-otb');
+      if (r.is_owner_takeback || r.is_not_ready) cls.push('r-otb');
       else {
         if ((r.total_balance || 0) > 0) cls.push('r-bal');
         else if (r.lease_source === 'Active' && r.days_remaining != null && r.days_remaining <= 60) cls.push('r-exp');
@@ -1594,7 +1641,7 @@
         '<td>' + esc(r.property_name) + '</td>' +
         '<td>' + esc(r.unit_number) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
-        '<td>' + (STATUS_CHIP[r.occupancy_status] || '') + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + '</td>' +
+        '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + '</td>' +
         '<td>' + evChip(r.unit_event) + '</td>' +
         '<td>' + leaseEnd + '</td>' +
         '<td class="rt">' + (r.monthly_rent != null ? fmtMoney(r.monthly_rent) : '–') + '</td>' +
@@ -1636,8 +1683,13 @@
     el('um-sub').innerHTML = sub.join(' &middot; ');
 
     var f = '';
-    f += fitem('Status', (STATUS_CHIP[r.occupancy_status] || '') + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : ''));
+    f += fitem('Status', (r.is_not_ready ? '<span class="chip c-otb">not ready</span> ' : '') + (STATUS_CHIP[r.occupancy_status] || '') + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : ''));
     f += fitem('Unit event', r.unit_event ? evChip(r.unit_event) : '–');
+    if (r.is_nookbook) {
+      f += fitem('Building type', esc(r.nb_building_type));
+      f += fitem('Parking', esc(r.nb_parking));
+      f += fitem('Appliances', esc(r.nb_appliances));
+    }
     f += fitem('Lease', r.lease_source ? esc(r.lease_source) + (r.lease_type ? ' · ' + esc(r.lease_type) : '') : 'None');
     f += fitem('Lease start', esc(r.lease_from_date));
     f += fitem('Lease end', r.lease_to_date ? esc(r.lease_to_date) + (r.days_remaining != null ? ' (' + r.days_remaining + 'd)' : '') : null);
@@ -1894,7 +1946,8 @@
     f += fitem('Buildium app ID', esc(r.application_id));
     el('am-fields').innerHTML = f;
     var links = '';
-    if (r.property_id && r.unit_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit in Buildium &rarr;</a>';
+    if (r.applicant_id) links += '<a class="btn primary" target="_blank" rel="noopener" href="' + BMGR + '/leasing/applicant/' + r.applicant_id + '/summary">Application in Buildium &rarr;</a>';
+    if (r.property_id && r.unit_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit &rarr;</a>';
     if (r.property_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/summary">Property &rarr;</a>';
     el('am-links').innerHTML = links || '<span class="noapply">No property link on this application</span>';
     openModal('amodal');
@@ -1903,8 +1956,12 @@
     if (!apps.length) { box.textContent = 'No applications on record for this unit.'; return; }
     var h = '';
     apps.slice(0, 8).forEach(function(a){
+      var nm = esc(a.applicant_name || 'Applicant');
+      if (a.applicant_id) {
+        nm = '<a href="' + BMGR + '/leasing/applicant/' + a.applicant_id + '/summary" target="_blank" rel="noopener" style="color:var(--clay);text-decoration:none" title="Open application in Buildium">' + nm + ' &#8599;</a>';
+      }
       h += '<div class="minirow"><span class="md">' + esc((a.submitted_at || '').slice(0,10)) + '</span>' +
-        '<span class="mn">' + esc(a.applicant_name || 'Applicant') + '</span>' + appChip(a.application_status) +
+        '<span class="mn">' + nm + '</span>' + appChip(a.application_status) +
         (a.approx_decision_days != null ? '<span class="md">' + a.approx_decision_days + 'd</span>' : '') + '</div>';
     });
     if (apps.length > 8) h += '<div class="minirow"><span class="md">+ ' + (apps.length - 8) + ' more</span></div>';

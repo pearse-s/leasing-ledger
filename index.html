@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --paper:#FAF6F0; --paper-deep:#F3ECE1; --ink:#211E19; --ink-soft:#5C554A;
@@ -355,6 +357,20 @@
   tr.r-cxl td{opacity:.6}
   .approx{font-size:.68rem;color:var(--ink-soft);font-style:italic;margin-top:8px}
 
+  /* map view */
+  #umap{height:660px;display:none;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);background:var(--paper-deep)}
+  .maptitle{font-family:var(--serif);font-weight:600;font-size:.95rem;margin-bottom:4px}
+  .mapsub{font-size:.7rem;color:var(--ink-soft);margin-bottom:6px}
+  .maplist{min-width:240px;max-height:230px;overflow:auto}
+  .maprow{display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px dotted var(--hairline-dark);font-size:.78rem}
+  .maprow:last-child{border-bottom:none}
+  .maprow .mu{font-weight:700;min-width:72px}
+  .maprow .mr{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .mapopen{font-family:var(--sans);font-size:.68rem;font-weight:700;cursor:pointer;color:var(--moss);background:var(--moss-soft);border:1px solid var(--moss);border-radius:9px;padding:1px 8px}
+  .mapopen:hover{background:var(--moss);color:#fff}
+  .leaflet-popup-content{font-family:var(--sans)}
+  .leaflet-container{font:inherit}
+
   @media(max-width:980px){
     .kpis{grid-template-columns:repeat(3,1fr)}
     .kpi:nth-child(3){border-right:none}
@@ -569,6 +585,9 @@
         </select>
         <input type="number" id="t-rmin" placeholder="Min rent" min="0" step="50" title="Minimum rent (listed rent, market rent if unlisted)">
         <input type="number" id="t-rmax" placeholder="Max rent" min="0" step="50" title="Maximum rent (listed rent, market rent if unlisted)">
+        <select id="t-amen" title="Amenity (from active listings — unlisted units have no amenity data)">
+          <option value="">Any amenity</option>
+        </select>
         <label class="toggle"><input type="checkbox" id="t-listed"> listed only</label>
         <label class="toggle"><input type="checkbox" id="t-unlisted"> unlisted only</label>
         <span class="count-note" id="t-count"></span>
@@ -597,7 +616,23 @@
     <div class="card tablecard" style="margin-top:18px">
       <div class="tablebar">
         <h2>All units</h2>
+        <div class="presets" id="u-view">
+          <button data-v="list" class="on">List</button>
+          <button data-v="map">Map</button>
+        </div>
         <input type="text" id="u-search" placeholder="Search property, unit, tenant, owner&hellip;">
+        <select id="u-beds" title="Bedrooms">
+          <option value="">Any beds</option>
+          <option value="Studio">Studio</option>
+          <option value="1">1 bed</option>
+          <option value="2">2 bed</option>
+          <option value="3">3 bed</option>
+          <option value="4">4+ bed</option>
+        </select>
+        <input type="number" id="u-rmax" placeholder="Max rent" min="0" step="50" title="Maximum rent (listed rent if listed, else lease rent, else market rent)">
+        <select id="u-amen" title="Amenity (from active listings — unlisted units have no amenity data)">
+          <option value="">Any amenity</option>
+        </select>
         <span class="count-note" id="u-count"></span>
       </div>
       <div class="qchips" id="u-chips"></div>
@@ -612,7 +647,8 @@
         </select>
         <label class="toggle"><input type="checkbox" id="nb-notready"> not ready only</label>
       </div>
-      <div class="scrolly tallscroll">
+      <div id="umap"></div>
+      <div class="scrolly tallscroll" id="u-listwrap">
         <table id="utable">
           <thead><tr>
             <th data-k="property_name">Property</th>
@@ -839,6 +875,7 @@
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aFilter = 'all';
   var aWin = { mode:'90', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 }, rRange = 'past30';
+  var uView = 'list', umap = null, umapLayer = null, umapSig = '';
 
   var COL = {
     moss:'#5A6B4F', amber:'#C98F2B', clay:'#BF4D26', plum:'#6E5A78',
@@ -864,6 +901,29 @@
   };
   function appChip(s){
     return '<span class="chip ' + (APP_CHIP_CLS[s] || 'c-cold') + '">' + esc(APP_NICE[s] || s || '–') + '</span>';
+  }
+
+  /* ── amenity helpers (from active listings) ── */
+  function amenLabel(s){
+    if (s === 'FURNISHED_ANY') return 'Furnished (any)';
+    return String(s).replace(/_/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  }
+  function amenMatch(arr, val){
+    if (!val) return true;
+    if (!arr || !arr.length) return false;
+    if (val === 'FURNISHED_ANY') return arr.indexOf('Furnished') >= 0 || arr.indexOf('FurnishedAvailable') >= 0;
+    return arr.indexOf(val) >= 0;
+  }
+  function fillAmenSelect(id, rows, getter){
+    var seen = {};
+    rows.forEach(function(r){ (getter(r) || []).forEach(function(a){ seen[a] = 1; }); });
+    var keys = Object.keys(seen).sort();
+    var cur = el(id).value;
+    var h = '<option value="">Any amenity</option>';
+    if (seen['Furnished'] || seen['FurnishedAvailable']) h += '<option value="FURNISHED_ANY">' + amenLabel('FURNISHED_ANY') + '</option>';
+    keys.forEach(function(k){ h += '<option value="' + esc(k) + '">' + esc(amenLabel(k)) + '</option>'; });
+    el(id).innerHTML = h;
+    el(id).value = cur;
   }
 
   if (window.Chart) {
@@ -1284,6 +1344,7 @@
     msSetItems('properties', fo.properties);
 
     tableRows = d.vacant_units || [];
+    fillAmenSelect('t-amen', tableRows, function(r){ return r.listing_amenities; });
     drawTable();
 
     var ops = d.ops || {};
@@ -1348,6 +1409,7 @@
       var rent = r.listing_rent != null ? r.listing_rent : r.market_rent;
       if (!isNaN(rmin) && (rent == null || rent < rmin)) return false;
       if (!isNaN(rmax) && (rent == null || rent > rmax)) return false;
+      if (!amenMatch(r.listing_amenities, el('t-amen').value)) return false;
       if (!q) return true;
       return ((r.property||'') + ' ' + (r.unit||'') + ' ' + (r.owner||'') + ' ' + (r.manager||'')).toLowerCase().indexOf(q) >= 0;
     });
@@ -1592,6 +1654,7 @@
       .then(function(j){
         unitsAll = j.units || [];
         fillNbOptions();
+        fillAmenSelect('u-amen', unitsAll, function(r){ return r.amenities; });
         drawChips(); drawUnits();
         el('veil').classList.add('hide');
         if (after) after();
@@ -1610,9 +1673,22 @@
   function drawUnits(){
     if (unitsAll === null) return;
     var q = (el('u-search').value || '').toLowerCase();
+    var bed = el('u-beds').value;
+    var rmax = parseFloat(el('u-rmax').value);
+    var amen = el('u-amen').value;
     var rows = unitsAll.filter(function(r){
       if (!qfTest(r, uFilter)) return false;
       if (!nbTest(r)) return false;
+      if (bed) {
+        if (bed === '4') { if (!(parseInt(r.unit_bedrooms, 10) >= 4)) return false; }
+        else if (String(r.unit_bedrooms || '') !== bed) return false;
+      }
+      if (!isNaN(rmax)) {
+        var rent = (r.is_listed && r.listing_rent != null) ? r.listing_rent
+                 : (r.monthly_rent != null ? r.monthly_rent : r.market_rent);
+        if (rent == null || rent > rmax) return false;
+      }
+      if (!amenMatch(r.amenities, amen)) return false;
       if (!q) return true;
       return ((r.property_name||'') + ' ' + (r.unit_number||'') + ' ' + (r.tenant_names||'') + ' ' +
               (r.primary_owner_name||'') + ' ' + (r.address_line1||'') + ' ' + (r.property_manager_name||'') + ' ' +
@@ -1651,8 +1727,86 @@
     });
     el('utable').querySelector('tbody').innerHTML = html ||
       '<tr><td colspan="10" style="text-align:center;color:var(--ink-soft);font-style:italic;padding:24px">Nothing matches</td></tr>';
-    el('u-count').textContent = rows.length + ' of ' + unitsAll.length + ' units';
+    var note = rows.length + ' of ' + unitsAll.length + ' units';
+    if (uView === 'map') {
+      var unmapped = rows.filter(function(r){ return r.lat == null; }).length;
+      if (unmapped) note += ' · ' + unmapped + ' without coordinates';
+      drawMap(rows);
+    }
+    el('u-count').textContent = note;
   }
+
+  /* ── map view (Leaflet + OpenStreetMap) ───── */
+  function drawMap(rows){
+    if (!window.L) return;
+    if (!umap) {
+      umap = L.map('umap', { scrollWheelZoom: true }).setView([53.5461, -113.4938], 11);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(umap);
+      umapLayer = L.layerGroup().addTo(umap);
+    }
+    umapLayer.clearLayers();
+    var groups = {};
+    rows.forEach(function(r){
+      if (r.lat == null || r.lng == null) return;
+      var g = groups[r.property_id] || (groups[r.property_id] = { lat: r.lat, lng: r.lng, name: r.property_name, units: [] });
+      g.units.push(r);
+    });
+    var pids = Object.keys(groups);
+    var bounds = [];
+    pids.forEach(function(pid){
+      var g = groups[pid];
+      var hasVacant = g.units.some(function(r){ return r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'; });
+      var color = hasVacant ? '#BF4D26' : '#5A6B4F';
+      var radius = Math.min(7 + Math.sqrt(g.units.length) * 2.5, 16);
+      var mk = L.circleMarker([g.lat, g.lng], {
+        radius: radius, color: '#FFFEFB', weight: 2, fillColor: color, fillOpacity: 0.82
+      });
+      var ph = '<div class="maptitle">' + esc(g.name) + '</div>' +
+        '<div class="mapsub">' + g.units.length + ' unit' + (g.units.length === 1 ? '' : 's') + ' in current filter</div>' +
+        '<div class="maplist">';
+      g.units.slice(0, 14).forEach(function(r){
+        var rent = (r.is_listed && r.listing_rent != null) ? r.listing_rent
+                 : (r.monthly_rent != null ? r.monthly_rent : r.market_rent);
+        ph += '<div class="maprow"><span class="mu">' + esc(r.unit_number) + '</span>' +
+          (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '')) +
+          '<span class="mr">' + (rent != null ? fmtMoney(rent) : '–') + '</span>' +
+          '<button type="button" class="mapopen" data-uid="' + r.unit_id + '">open</button></div>';
+      });
+      if (g.units.length > 14) ph += '<div class="maprow"><span class="mu">+ ' + (g.units.length - 14) + ' more</span></div>';
+      ph += '</div>';
+      mk.bindPopup(ph, { maxWidth: 320 });
+      umapLayer.addLayer(mk);
+      bounds.push([g.lat, g.lng]);
+    });
+    var sig = pids.sort().join(',');
+    if (bounds.length && sig !== umapSig) {
+      umap.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+      umapSig = sig;
+    }
+  }
+  el('u-view').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if (!b) return;
+    Array.prototype.forEach.call(el('u-view').children, function(x){ x.classList.remove('on'); });
+    b.classList.add('on');
+    uView = b.getAttribute('data-v');
+    el('umap').style.display = uView === 'map' ? 'block' : 'none';
+    el('u-listwrap').style.display = uView === 'map' ? 'none' : 'block';
+    if (uView === 'map') {
+      drawUnits();
+      setTimeout(function(){ if (umap) umap.invalidateSize(); drawUnits(); }, 60);
+    } else {
+      drawUnits();
+    }
+  });
+  el('umap').addEventListener('click', function(e){
+    var b = e.target.closest('.mapopen'); if (!b) return;
+    openUnit(b.getAttribute('data-uid'));
+  });
+  ['u-beds','u-amen'].forEach(function(id){ el(id).addEventListener('change', drawUnits); });
+  el('u-rmax').addEventListener('input', drawUnits);
   el('u-search').addEventListener('input', drawUnits);
   el('utable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return;
@@ -2162,6 +2316,7 @@
   });
   el('t-search').addEventListener('input', drawTable);
   el('t-beds').addEventListener('change', drawTable);
+  el('t-amen').addEventListener('change', drawTable);
   el('t-rmin').addEventListener('input', drawTable);
   el('t-rmax').addEventListener('input', drawTable);
   el('t-unlisted').addEventListener('change', function(){

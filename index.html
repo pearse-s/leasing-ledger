@@ -332,6 +332,29 @@
   .propchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .propchips span{font-size:.72rem;background:#fff;border:1px solid var(--hairline-dark);border-radius:10px;padding:3px 10px}
 
+  /* v5: clickable sections, app/tour tabs, vacant filters */
+  .kpi.click,.tile.click{cursor:pointer}
+  .kpi.click:hover .num,.tile.click:hover .tv{color:var(--clay)}
+  .kpi.click:hover .lbl,.tile.click:hover .tl{color:var(--clay)}
+  .funnel-row.click{cursor:pointer}
+  .funnel-row.click:hover .fl{color:var(--clay);font-weight:700}
+  .funnel-row.click:hover .bar i{background:var(--clay)}
+  .pair.click{cursor:pointer}
+  .pair.click:hover .pl{color:var(--clay)}
+  .tablebar select,.tablebar input[type=number]{
+    font-family:var(--sans);font-size:.8rem;padding:7px 8px;border:1px solid var(--hairline-dark);
+    border-radius:3px;background:#fff;color:var(--ink)
+  }
+  .tablebar input[type=number]{width:96px}
+  .minirows{margin-top:4px}
+  .minirow{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px dotted var(--hairline-dark);font-size:.78rem;flex-wrap:wrap}
+  .minirow:last-child{border-bottom:none}
+  .minirow .md{color:var(--ink-soft);font-variant-numeric:tabular-nums;min-width:78px}
+  .minirow .mn{font-weight:600}
+  tr.r-upc td{background:#EDF1E6}
+  tr.r-cxl td{opacity:.6}
+  .approx{font-size:.68rem;color:var(--ink-soft);font-style:italic;margin-top:8px}
+
   @media(max-width:980px){
     .kpis{grid-template-columns:repeat(3,1fr)}
     .kpi:nth-child(3){border-right:none}
@@ -376,6 +399,8 @@
     <nav class="tabs" id="tabs">
       <button type="button" class="tab on" data-tab="ledger">Ledger</button>
       <button type="button" class="tab" data-tab="units">Units</button>
+      <button type="button" class="tab" data-tab="applications">Applications</button>
+      <button type="button" class="tab" data-tab="tours">Tours</button>
       <button type="button" class="tab" data-tab="owners">Owners</button>
     </nav>
   </header>
@@ -432,7 +457,7 @@
     </div>
 
     <div class="kpis">
-      <div class="kpi alert">
+      <div class="kpi alert click" id="kpi-vacant" title="See the vacant units below">
         <div class="lbl">Vacant units</div>
         <div class="num" id="k-vacant">&ndash;</div>
         <div class="sub" id="k-vacant-sub"></div>
@@ -447,17 +472,17 @@
         <div class="num" id="k-totrate">&ndash;</div>
         <div class="sub" id="k-totrate-sub"></div>
       </div>
-      <div class="kpi">
+      <div class="kpi click" id="kpi-pre" title="See pre-leased units on the Units tab">
         <div class="lbl">Pre-leased</div>
         <div class="num" id="k-pre">&ndash;</div>
-        <div class="sub">signed, not yet moved in<br>counted as occupied</div>
+        <div class="sub">signed, not yet moved in<br>counted as occupied &mdash; click to view</div>
       </div>
       <div class="kpi">
         <div class="lbl">Rent at risk</div>
         <div class="num" id="k-risk">&ndash;</div>
         <div class="sub">market rent of vacant units, per month</div>
       </div>
-      <div class="kpi alert">
+      <div class="kpi alert click" id="kpi-unlisted" title="See unlisted vacant units below">
         <div class="lbl">Vacant &amp; unlisted</div>
         <div class="num" id="k-unlisted">&ndash;</div>
         <div class="sub">vacant with no active listing &mdash; <b>not being marketed</b></div>
@@ -467,7 +492,7 @@
     <div class="grid g2">
       <div class="card">
         <h2>Vacancy aging</h2>
-        <div class="note">click a bar to see those units below &middot; operational ages from last lease end, new inventory from listing date</div>
+        <div class="note">listed units only &middot; click a bar to see those units below &middot; operational ages from last lease end, new inventory from listing date</div>
         <div class="chartbox tall"><canvas id="ch-aging"></canvas></div>
       </div>
       <div class="card">
@@ -483,7 +508,7 @@
         <div class="note">chart: last 8 weeks, always &middot; counters: selected window only</div>
         <div class="chartbox"><canvas id="ch-activity"></canvas></div>
         <div class="tiles">
-          <div class="tile">
+          <div class="tile click" id="tile-apps" title="Open the Applications tab">
             <div class="tl">Applications</div>
             <div class="tv" id="s-apps">&ndash;</div>
             <div class="ts" id="s-apps-sub"></div>
@@ -493,7 +518,7 @@
             <div class="tv" id="s-signed">&ndash;</div>
             <div class="ts" id="s-signed-sub"></div>
           </div>
-          <div class="tile">
+          <div class="tile click" id="tile-mi" title="See this month's move-ins on the Units tab">
             <div class="tl">Move-ins</div>
             <div class="tv" id="s-movein">&ndash;</div>
             <div class="ts">by lease start date</div>
@@ -507,22 +532,25 @@
       </div>
       <div class="card">
         <h2>Application funnel</h2>
-        <div class="note">status of applications received in window</div>
+        <div class="note">status of applications received in window &middot; click a row to see those applications</div>
         <div id="funnel"></div>
+        <div class="sect">Timelines &amp; rates</div>
+        <div id="apptimes"></div>
+        <div class="approx">decision timing is approximate &mdash; based on the applicant&rsquo;s last update in Buildium</div>
       </div>
       <div class="card">
         <h2>Showings &amp; renewals</h2>
-        <div class="note">showings are portfolio-wide</div>
-        <div class="pair"><span class="pl">Showings booked</span><span class="pv" id="sh-booked">&ndash;</span></div>
-        <div class="pair"><span class="pl">&mdash; completed / canceled</span><span class="pv" id="sh-dc">&ndash;</span></div>
-        <div class="pair"><span class="pl">Tours logged in CRM</span><span class="pv" id="sh-tours">&ndash;</span></div>
+        <div class="note" id="sh-note">click a row to open the Tours tab</div>
+        <div class="pair click" data-go="tours"><span class="pl">Showings booked</span><span class="pv" id="sh-booked">&ndash;</span></div>
+        <div class="pair click" data-go="tours"><span class="pl">&mdash; completed / canceled</span><span class="pv" id="sh-dc">&ndash;</span></div>
+        <div class="pair click" data-go="tours"><span class="pl">Tours logged in CRM</span><span class="pv" id="sh-tours">&ndash;</span></div>
         <div class="agents" id="sh-agents"></div>
         <div class="sect">Term-end outcomes (window)</div>
         <div class="pair"><span class="pl">Lease terms ended</span><span class="pv" id="o-ends">&ndash;</span></div>
         <div class="pair"><span class="pl">Stayed / renewed</span><span class="pv" id="o-stay">&ndash;</span></div>
         <div class="pair"><span class="pl">Moved out</span><span class="pv" id="o-move">&ndash;</span></div>
         <div class="sect">Upcoming expiries</div>
-        <div class="pair"><span class="pl">Expiring &le;30 / &le;60 / &le;90d</span><span class="pv" id="p-exp">&ndash;</span></div>
+        <div class="pair click" id="pair-exp" title="See expiring leases on the Units tab"><span class="pl">Expiring &le;30 / &le;60 / &le;90d</span><span class="pv" id="p-exp">&ndash;</span></div>
         <div class="warnchip" id="caly-warn"></div>
       </div>
     </div>
@@ -532,6 +560,16 @@
         <h2>Vacant units</h2>
         <button type="button" class="bucketchip" id="bucketchip"><span id="bucketlabel"></span>&nbsp;&#10005;</button>
         <input type="text" id="t-search" placeholder="Search property, unit, owner&hellip;">
+        <select id="t-beds" title="Bedrooms">
+          <option value="">Any beds</option>
+          <option value="Studio">Studio</option>
+          <option value="1">1 bed</option>
+          <option value="2">2 bed</option>
+          <option value="3">3 bed</option>
+          <option value="4">4+ bed</option>
+        </select>
+        <input type="number" id="t-rmin" placeholder="Min rent" min="0" step="50" title="Minimum rent (listed rent, market rent if unlisted)">
+        <input type="number" id="t-rmax" placeholder="Max rent" min="0" step="50" title="Maximum rent (listed rent, market rent if unlisted)">
         <label class="toggle"><input type="checkbox" id="t-listed"> listed only</label>
         <label class="toggle"><input type="checkbox" id="t-unlisted"> unlisted only</label>
         <span class="count-note" id="t-count"></span>
@@ -585,6 +623,69 @@
     </div>
   </div>
 
+  <div id="page-applications" style="display:none">
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar">
+        <h2>Applications</h2>
+        <div class="presets" id="a-presets">
+          <button data-days="30">30d</button>
+          <button data-days="90" class="on">90d</button>
+          <button data-days="365">1y</button>
+          <button data-days="all">All</button>
+        </div>
+        <input type="text" id="a-search" placeholder="Search applicant, property, unit&hellip;">
+        <span class="count-note" id="a-count"></span>
+      </div>
+      <div class="qchips" id="a-chips"></div>
+      <div class="scrolly tallscroll">
+        <table id="atable">
+          <thead><tr>
+            <th data-k="submitted_at">Submitted</th>
+            <th data-k="applicant_name">Applicant</th>
+            <th data-k="property_name">Property</th>
+            <th data-k="unit_number">Unit</th>
+            <th data-k="application_status">Status</th>
+            <th data-k="approx_decision_days" class="rt">Days to decision</th>
+            <th data-k="property_manager_name">Manager</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="note" style="margin-top:10px">&ldquo;Days to decision&rdquo; is approximate (submission &rarr; last applicant update). Entity filters from the Ledger tab apply here too. Click any row for full detail and Buildium links.</div>
+    </div>
+  </div>
+
+  <div id="page-tours" style="display:none">
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar">
+        <h2>Tours &amp; showings</h2>
+        <div class="presets" id="r-presets">
+          <button data-r="upcoming">Upcoming</button>
+          <button data-r="past30" class="on">Past 30d</button>
+          <button data-r="past90">Past 90d</button>
+          <button data-r="all">All</button>
+        </div>
+        <input type="text" id="r-search" placeholder="Search agent, address, property&hellip;">
+        <label class="toggle"><input type="checkbox" id="r-showings" checked> showings only</label>
+        <span class="count-note" id="r-count"></span>
+      </div>
+      <div class="scrolly tallscroll">
+        <table id="rtable">
+          <thead><tr>
+            <th data-k="start_time">When</th>
+            <th data-k="event_name">Event</th>
+            <th data-k="agent">Agent</th>
+            <th data-k="status">Status</th>
+            <th data-k="location_text">Location</th>
+            <th data-k="matched_property_name">Property</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="note" style="margin-top:10px">From Calendly (synced hourly, trailing 90 days + future). &ldquo;Property&rdquo; is a best-effort address match &mdash; tours at addresses outside the managed portfolio stay unmatched. Entity filters from the Ledger tab apply here too.</div>
+    </div>
+  </div>
+
   <div id="page-owners" style="display:none">
     <div class="card tablecard" style="margin-top:18px">
       <div class="tablebar">
@@ -624,6 +725,8 @@
         <button type="button" class="dlall" id="lm-dlall">&#8595; Download all</button>
       </div>
       <div class="lmphotos" id="lm-photos"></div>
+      <div class="sect">Applications</div>
+      <div id="lm-apps" class="minirows lmphnote" style="margin-bottom:12px">&nbsp;</div>
       <div class="lmdesc" id="lm-desc"></div>
       <div class="lmamen" id="lm-amen"></div>
     </div>
@@ -646,6 +749,8 @@
       <div class="fgrid" id="um-fields"></div>
       <div class="sect">Tenants</div>
       <div id="um-tenants" class="lmphnote">&nbsp;</div>
+      <div class="sect">Applications</div>
+      <div id="um-apps" class="minirows lmphnote">&nbsp;</div>
       <div class="sect" id="um-photo-sect" style="display:none">Listing photos</div>
       <div class="lmphbar" id="um-phbar" style="display:none">
         <span class="lmphnote" id="um-phnote"></span>
@@ -673,6 +778,21 @@
     <div class="lmfoot">
       <button type="button" class="btn" id="om-viewunits">View this owner&rsquo;s units &rarr;</button>
     </div>
+  </div>
+</div>
+
+<div class="lmodal" id="amodal">
+  <div class="lmback" data-close="amodal"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="amodal">&times;</button>
+    <div class="lmhead">
+      <h3 id="am-title"></h3>
+      <div class="lmsub" id="am-sub"></div>
+    </div>
+    <div class="lmbody">
+      <div class="fgrid" id="am-fields"></div>
+    </div>
+    <div class="lmfoot" id="am-links"></div>
   </div>
 </div>
 
@@ -706,6 +826,9 @@
   var uFilter = 'all';
   var curPhotosLm = [], curPhotosUm = [];
   var dlTimer = null;
+  var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aFilter = 'all';
+  var aWin = { mode:'90', from:null, to:null };
+  var toursAll = null, rSort = { k:'start_time', d:-1 }, rRange = 'past30';
 
   var COL = {
     moss:'#5A6B4F', amber:'#C98F2B', clay:'#BF4D26', plum:'#6E5A78',
@@ -720,6 +843,18 @@
     op_vacant:   '<span class="chip c-hot">vacant</span>',
     never_leased:'<span class="chip c-new">never leased</span>'
   };
+  var APP_NICE = {
+    Undecided:'Undecided', Deferred:'Deferred', Approved:'Approved',
+    AddedToDraftLease:'Draft lease', AddedToLease:'Added to lease',
+    Rejected:'Rejected', Cancelled:'Cancelled'
+  };
+  var APP_CHIP_CLS = {
+    AddedToLease:'c-ok', Approved:'c-ok', AddedToDraftLease:'c-warm',
+    Undecided:'c-new', Deferred:'c-cold', Rejected:'c-hot', Cancelled:'c-cold'
+  };
+  function appChip(s){
+    return '<span class="chip ' + (APP_CHIP_CLS[s] || 'c-cold') + '">' + esc(APP_NICE[s] || s || '–') + '</span>';
+  }
 
   if (window.Chart) {
     Chart.defaults.font.family = "'Schibsted Grotesk', Verdana, sans-serif";
@@ -770,25 +905,50 @@
   }
 
   /* ── tabs ─────────────────────────────────── */
-  var PAGES = { ledger:'app', units:'page-units', owners:'page-owners' };
-  el('tabs').addEventListener('click', function(e){
-    var b = e.target.closest('.tab'); if (!b) return;
-    document.querySelectorAll('#tabs .tab').forEach(function(t){ t.classList.remove('on'); });
-    b.classList.add('on');
-    var key = b.getAttribute('data-tab');
+  var PAGES = { ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', owners:'page-owners' };
+  function showTab(key){
+    document.querySelectorAll('#tabs .tab').forEach(function(t){
+      t.classList.toggle('on', t.getAttribute('data-tab') === key);
+    });
     Object.keys(PAGES).forEach(function(k){
       el(PAGES[k]).style.display = k === key ? 'block' : 'none';
     });
     if (key === 'units' && unitsAll === null) loadUnits();
     if (key === 'owners' && ownersAll === null) loadOwners();
+    if (key === 'applications' && appsAll === null) loadApps();
+    if (key === 'tours' && toursAll === null) loadTours();
+  }
+  el('tabs').addEventListener('click', function(e){
+    var b = e.target.closest('.tab'); if (!b) return;
+    showTab(b.getAttribute('data-tab'));
   });
   function gotoUnitsWithSearch(q){
-    document.querySelectorAll('#tabs .tab').forEach(function(t){
-      t.classList.toggle('on', t.getAttribute('data-tab') === 'units');
-    });
-    Object.keys(PAGES).forEach(function(k){ el(PAGES[k]).style.display = k === 'units' ? 'block' : 'none'; });
-    var go = function(){ el('u-search').value = q || ''; uFilter = 'all'; drawUnits(); };
+    showTab('units');
+    var go = function(){ el('u-search').value = q || ''; uFilter = 'all'; drawChips(); drawUnits(); };
     if (unitsAll === null) loadUnits(go); else go();
+  }
+  function gotoUnitsFiltered(filterKey){
+    showTab('units');
+    var go = function(){
+      el('u-search').value = '';
+      uFilter = filterKey;
+      if (filterKey === 'exp60' || filterKey === 'exp90') uSort = { k:'days_remaining', d:1 };
+      drawChips(); drawUnits();
+    };
+    if (unitsAll === null) loadUnits(go); else go();
+  }
+  function gotoApplications(status, useLedgerWindow){
+    aFilter = status || 'all';
+    if (useLedgerWindow) {
+      var w = windowDates();
+      aWin = { mode:'custom', from:w.from, to:w.to };
+      appsAll = null;
+    }
+    showTab('applications');
+    if (appsAll !== null) { drawAppChips(); drawApps(); }
+  }
+  function gotoTours(){
+    showTab('tours');
   }
 
   function windowDates(){
@@ -811,6 +971,7 @@
   }
 
   function load(){
+    appsAll = null; toursAll = null; // entity filters / window changed → lazy-reload those tabs
     el('veil').classList.remove('hide');
     fetch(API + '/stats?' + buildQuery().toString(), { headers: { 'Authorization': 'Bearer ' + TOKEN } })
       .then(function(r){
@@ -930,13 +1091,35 @@
     countUp('k-unlisted', d.vacant_not_listed, fmtNum);
 
     var ag = d.aging || {}; var op = ag.op_vacant || {}; var nl = ag.never_leased || {};
+    var stackTotals = {
+      id:'stackTotals',
+      afterDatasetsDraw:function(chart){
+        var ctx = chart.ctx;
+        var d0 = chart.data.datasets[0].data, d1 = chart.data.datasets[1].data;
+        var m0 = chart.getDatasetMeta(0), m1 = chart.getDatasetMeta(1);
+        ctx.save();
+        ctx.font = '700 11px "Schibsted Grotesk", Verdana, sans-serif';
+        ctx.fillStyle = COL.ink;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        for (var i = 0; i < d0.length; i++) {
+          var tot = (d0[i] || 0) + (d1[i] || 0);
+          if (!tot) continue;
+          var bar = (d1[i] ? m1.data[i] : m0.data[i]);
+          if (!bar) continue;
+          ctx.fillText(String(tot), bar.x, bar.y - 4);
+        }
+        ctx.restore();
+      }
+    };
     mkChart('ch-aging', {
       type:'bar',
+      plugins:[stackTotals],
       data:{ labels:BUCKET_LABELS, datasets:[
         { label:'Operational', data:BUCKET_KEYS.map(function(k){return op[k]||0;}), backgroundColor:COL.clay, stack:'a', borderRadius:2 },
         { label:'Never leased', data:BUCKET_KEYS.map(function(k){return nl[k]||0;}), backgroundColor:COL.plum, stack:'a', borderRadius:2 }
       ]},
-      options:{ responsive:true, maintainAspectRatio:false,
+      options:{ responsive:true, maintainAspectRatio:false, layout:{ padding:{ top:16 } },
         onClick:function(evt, els){
           if (!els || !els.length) return;
           var idx = els[0].index, ds = els[0].datasetIndex;
@@ -996,8 +1179,13 @@
 
     var leads = d.leads;
     if (leads && leads.in_window != null) {
-      el('s-leads').textContent = fmtNum(leads.in_window);
-      el('s-leads-sub').innerHTML = 'of ' + fmtNum(leads.total) + ' on Aptly board';
+      if (leads.filtered && leads.matched != null) {
+        el('s-leads').textContent = fmtNum(leads.matched);
+        el('s-leads-sub').innerHTML = 'matched to filtered properties &middot; ' + fmtNum(leads.in_window) + ' total in window';
+      } else {
+        el('s-leads').textContent = fmtNum(leads.in_window);
+        el('s-leads-sub').innerHTML = 'incl. archived/lost &middot; ' + fmtNum(leads.total) + ' all-time on board';
+      }
     } else {
       el('s-leads').textContent = '–';
       el('s-leads-sub').innerHTML = '<span title="Add the APTLY_API_KEY edge-function secret to connect">connect Aptly</span>';
@@ -1011,14 +1199,40 @@
     var fhtml = '';
     ORDER.forEach(function(k){
       if (!fn[k]) return;
-      fhtml += '<div class="funnel-row' + (NEG[k] ? ' neg' : '') + '">' +
+      var drill = APP_NICE[k] ? ' click" data-status="' + k : '';
+      fhtml += '<div class="funnel-row' + (NEG[k] ? ' neg' : '') + drill + '">' +
         '<span class="fl">' + esc(NICE[k] || k) + '</span>' +
         '<span class="bar"><i style="width:' + Math.round(100*fn[k]/fmax) + '%"></i></span>' +
         '<span class="fn">' + fn[k] + '</span></div>';
     });
     el('funnel').innerHTML = fhtml || '<div class="empty" style="height:80px">No applications in this window</div>';
 
+    var tl = apps.timelines || {};
+    var tlA = tl.approved || {}, tlC = tl.cancelled || {}, tlR = tl.rejected || {}, tlO = tl.open || {};
+    var thtml = '';
+    thtml += '<div class="pair"><span class="pl">Days to approve (median)</span><span class="pv">' +
+      (tlA.median_days != null ? tlA.median_days + 'd' : '–') + ' <small>' + fmtNum(tlA.n) + ' apps</small></span></div>';
+    thtml += '<div class="pair"><span class="pl">Days to cancel (median)</span><span class="pv">' +
+      (tlC.median_days != null ? tlC.median_days + 'd' : '–') + ' <small>' + fmtNum(tlC.n) + ' apps</small></span></div>';
+    thtml += '<div class="pair"><span class="pl">Days to reject (median)</span><span class="pv">' +
+      (tlR.median_days != null ? tlR.median_days + 'd' : '–') + ' <small>' + fmtNum(tlR.n) + ' apps</small></span></div>';
+    thtml += '<div class="pair"><span class="pl">Approval rate (of decided)</span><span class="pv">' + pct(tl.approval_rate_pct) + '</span></div>';
+    thtml += '<div class="pair click" data-status="AddedToDraftLease" title="See draft-lease applications"><span class="pl">On a draft lease &rarr;</span><span class="pv">' + fmtNum(tl.draft_lease_n) + '</span></div>';
+    thtml += '<div class="pair"><span class="pl">Still open (undecided/deferred)</span><span class="pv">' + fmtNum(tlO.n) +
+      (tlO.oldest_days != null ? ' <small>oldest ' + tlO.oldest_days + 'd</small>' : '') + '</span></div>';
+    if (leads && leads.conversion_pct !== undefined) {
+      thtml += '<div class="pair"><span class="pl">Lead &rarr; lease conversion</span><span class="pv">' + pct(leads.conversion_pct) +
+        ' <small>' + fmtNum(leads.leases_signed) + ' signed / ' + fmtNum(leads.filtered ? leads.matched : leads.in_window) + ' leads</small></span></div>';
+    }
+    el('apptimes').innerHTML = thtml;
+
     var sh = act.showings || {};
+    var shn = el('sh-note');
+    if (sh.filtered) {
+      shn.textContent = 'filtered — ' + fmtNum(sh.matched_events) + ' of ' + fmtNum(sh.total_events) + ' showings matched to a property; unmatched are excluded';
+    } else {
+      shn.textContent = 'portfolio-wide — click a row to open the Tours tab';
+    }
     el('sh-booked').textContent = fmtNum(sh.booked);
     el('sh-dc').innerHTML = fmtNum(sh.completed) + ' <small>/</small> ' + fmtNum(sh.canceled);
     el('sh-tours').textContent = fmtNum(sh.tours_logged);
@@ -1078,6 +1292,7 @@
     el('foot').innerHTML =
       (tb ? '<b>' + fmtNum(tb) + ' owner take-back unit' + (tb === 1 ? '' : 's') + ' excluded from all stats</b> (visible on the Units tab). ' : '') +
       'Vacancy is live state from the last Buildium sync; the activity window only affects applications, leases, move-ins, showings, tours, leads and term-end outcomes. ' +
+      'The vacancy-aging chart counts <b>listed</b> vacant units only; the Vacant &amp; unlisted KPI tracks the rest. ' +
       'Pre-leased units (signed future lease) count as <b>occupied</b> in both rates. ' +
       '“Leases signed” = lease records created in Buildium in the window; the future-start portion is pre-leasing. ' +
       '“Stayed / renewed” = lease still active past its recorded end date (renewal or month-to-month). ' +
@@ -1098,6 +1313,7 @@
   function inBucket(r){
     var b = state.bucket;
     if (!b) return true;
+    if (!r.is_listed) return false; // aging chart counts listed units only
     if (b.klass === 'op_vacant' && r.never_leased) return false;
     if (b.klass === 'never_leased' && !r.never_leased) return false;
     var range = BUCKET_RANGE[b.key];
@@ -1108,10 +1324,20 @@
     var q = (el('t-search').value || '').toLowerCase();
     var onlyUnlisted = el('t-unlisted').checked;
     var onlyListed = el('t-listed').checked;
+    var bed = el('t-beds').value;
+    var rmin = parseFloat(el('t-rmin').value);
+    var rmax = parseFloat(el('t-rmax').value);
     var rows = tableRows.filter(function(r){
       if (!inBucket(r)) return false;
       if (onlyUnlisted && r.is_listed) return false;
       if (onlyListed && !r.is_listed) return false;
+      if (bed) {
+        if (bed === '4') { if (!(parseInt(r.bedrooms, 10) >= 4)) return false; }
+        else if (String(r.bedrooms || '') !== bed) return false;
+      }
+      var rent = r.listing_rent != null ? r.listing_rent : r.market_rent;
+      if (!isNaN(rmin) && (rent == null || rent < rmin)) return false;
+      if (!isNaN(rmax) && (rent == null || rent > rmax)) return false;
       if (!q) return true;
       return ((r.property||'') + ' ' + (r.unit||'') + ' ' + (r.owner||'') + ' ' + (r.manager||'')).toLowerCase().indexOf(q) >= 0;
     });
@@ -1139,9 +1365,13 @@
   }
 
   /* ── photo helpers (shared) ───────────────── */
-  function dlHref(p){
-    return API + '/photo-dl?token=' + encodeURIComponent(TOKEN) +
+  function dlHref(p, proxy){
+    var s = API + '/photo-dl?token=' + encodeURIComponent(TOKEN) +
       '&scope=' + esc(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id;
+    // proxy mode streams the bytes with Content-Disposition: attachment so the
+    // browser saves the file instead of rendering the presigned S3 image
+    if (proxy) s += '&proxy=1&name=' + encodeURIComponent(p.name || ('photo-' + p.image_id + '.jpg'));
+    return s;
   }
   function renderPhotos(listEl, noteEl, dlBtn, photos){
     if (!photos.length) {
@@ -1155,7 +1385,7 @@
       html += '<figure class="lmph">' +
         '<a class="full" href="' + esc(p.url) + '" target="_blank" rel="noopener"></a>' +
         '<img loading="lazy" src="' + esc(p.url) + '" alt="' + esc(p.name || 'listing photo') + '">';
-      if (p.image_id != null) html += '<a class="dl" target="_blank" rel="noopener" href="' + dlHref(p) + '">&#8595; save</a>';
+      if (p.image_id != null) html += '<a class="dl" href="' + dlHref(p, true) + '" download>&#8595; save</a>';
       html += '</figure>';
     });
     listEl.innerHTML = html;
@@ -1173,11 +1403,17 @@
         noteEl.textContent = list.length + ' downloads started.';
         return;
       }
-      var f = document.createElement('iframe');
-      f.style.display = 'none';
-      f.src = dlHref(list[i]);
-      document.body.appendChild(f);
-      setTimeout(function(){ if (f.parentNode) f.parentNode.removeChild(f); }, 90000);
+      // proxied attachment responses download reliably from a programmatic
+      // anchor click (the old hidden-iframe + 302-to-S3 approach silently
+      // rendered the image instead of saving it)
+      var p = list[i];
+      var a = document.createElement('a');
+      a.href = dlHref(p, true);
+      a.download = p.name || ('photo-' + p.image_id + '.jpg');
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function(){ if (a.parentNode) a.parentNode.removeChild(a); }, 8000);
       i++;
       noteEl.textContent = 'Downloading ' + i + ' of ' + list.length + '…';
     }, 850);
@@ -1212,6 +1448,7 @@
     el('lm-phnote').textContent = 'Loading photos…';
     el('lm-dlall').classList.remove('show');
     curPhotosLm = [];
+    el('lm-apps').textContent = 'Loading…';
     openModal('lmodal');
     authFetch('/photos?unit_id=' + encodeURIComponent(uid))
       .then(function(j){
@@ -1219,6 +1456,11 @@
         renderPhotos(el('lm-photos'), el('lm-phnote'), el('lm-dlall'), curPhotosLm);
       })
       .catch(function(){ el('lm-phnote').textContent = 'Photos unavailable right now.'; });
+    authFetch('/applications?unit_id=' + encodeURIComponent(uid))
+      .then(function(j){
+        renderMiniApps(el('lm-apps'), (j && j.applications) || [], (r.property || '') + ' ' + (r.unit || ''));
+      })
+      .catch(function(){ el('lm-apps').textContent = 'Applications unavailable right now.'; });
   }
   el('vtable').addEventListener('click', function(ev){
     var b = ev.target.closest('.listbtn');
@@ -1232,13 +1474,15 @@
     n.addEventListener('click', function(){ closeModal(n.getAttribute('data-close')); });
   });
   document.addEventListener('keydown', function(ev){
-    if (ev.key === 'Escape') ['lmodal','umodal','omodal'].forEach(closeModal);
+    if (ev.key === 'Escape') ['lmodal','umodal','omodal','amodal'].forEach(closeModal);
   });
 
   /* ── Units directory ──────────────────────── */
   var QFILTERS = [
     { k:'all',      label:'All' },
     { k:'vacant',   label:'Vacant' },
+    { k:'pre',      label:'Pre-leased' },
+    { k:'occ',      label:'Occupied' },
     { k:'exp60',    label:'Expiring ≤60d' },
     { k:'exp90',    label:'Expiring ≤90d' },
     { k:'balance',  label:'Has balance' },
@@ -1258,6 +1502,8 @@
   function qfTest(r, k){
     if (k === 'all') return true;
     if (k === 'vacant') return r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased';
+    if (k === 'pre') return r.occupancy_status === 'pre_leased';
+    if (k === 'occ') return r.occupancy_status === 'occupied';
     if (k === 'exp60') return r.lease_source === 'Active' && r.days_remaining != null && r.days_remaining <= 60;
     if (k === 'exp90') return r.lease_source === 'Active' && r.days_remaining != null && r.days_remaining <= 90;
     if (k === 'balance') return (r.total_balance || 0) > 0;
@@ -1395,6 +1641,12 @@
     el('um-fields').innerHTML = f;
 
     el('um-tenants').textContent = r.lease_id ? 'Loading tenant contacts…' : 'No current lease.';
+    el('um-apps').textContent = 'Loading…';
+    authFetch('/applications?unit_id=' + encodeURIComponent(uid))
+      .then(function(j){
+        renderMiniApps(el('um-apps'), (j && j.applications) || [], (r.property_name || '') + ' ' + (r.unit_number || ''));
+      })
+      .catch(function(){ el('um-apps').textContent = 'Applications unavailable right now.'; });
 
     var links = '';
     links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit in Buildium &rarr;</a>';
@@ -1513,6 +1765,273 @@
     if (curOwner) gotoUnitsWithSearch(curOwner.display_name || '');
   });
 
+  /* ── Applications directory ───────────────── */
+  var A_STATUSES = ['all','Undecided','Deferred','Approved','AddedToDraftLease','AddedToLease','Rejected','Cancelled'];
+  var aPendingSearch = null, aServerCount = null;
+  function appsQuery(){
+    var p = new URLSearchParams();
+    var today = new Date();
+    if (aWin.mode === 'custom' && aWin.from && aWin.to) { p.set('from', aWin.from); p.set('to', aWin.to); }
+    else if (aWin.mode === 'all') { p.set('from', '2000-01-01'); p.set('to', dstr(today)); }
+    else { p.set('from', dstr(new Date(today.getTime() - (parseInt(aWin.mode, 10) || 90) * 86400000))); p.set('to', dstr(today)); }
+    Object.keys(MS).forEach(function(key){
+      var ids = Object.keys(MS[key].sel);
+      if (ids.length) p.set(key, ids.join(','));
+    });
+    return p;
+  }
+  function syncAPresets(){
+    Array.prototype.forEach.call(el('a-presets').children, function(x){
+      x.classList.toggle('on', x.getAttribute('data-days') === aWin.mode);
+    });
+  }
+  function loadApps(){
+    el('veil').classList.remove('hide');
+    authFetch('/applications?' + appsQuery().toString())
+      .then(function(j){
+        appsAll = j.applications || [];
+        aServerCount = j.count != null ? j.count : appsAll.length;
+        if (aPendingSearch !== null) { el('a-search').value = aPendingSearch; aPendingSearch = null; }
+        syncAPresets();
+        drawAppChips(); drawApps();
+        el('veil').classList.add('hide');
+      })
+      .catch(function(){
+        el('veil').classList.add('hide');
+        el('atable').querySelector('tbody').innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center">Could not load applications.</td></tr>';
+      });
+  }
+  function drawAppChips(){
+    var html = '';
+    A_STATUSES.forEach(function(s){
+      var n = (appsAll || []).filter(function(r){ return s === 'all' || r.application_status === s; }).length;
+      if (s !== 'all' && !n) return;
+      html += '<button type="button" class="qchip' + (aFilter === s ? ' on' : '') + '" data-q="' + s + '">' +
+        esc(s === 'all' ? 'All' : (APP_NICE[s] || s)) + ' <span class="qn">' + n + '</span></button>';
+    });
+    el('a-chips').innerHTML = html;
+  }
+  el('a-chips').addEventListener('click', function(e){
+    var b = e.target.closest('.qchip'); if (!b) return;
+    aFilter = b.getAttribute('data-q');
+    drawAppChips(); drawApps();
+  });
+  el('a-presets').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if (!b) return;
+    aWin = { mode: b.getAttribute('data-days'), from:null, to:null };
+    syncAPresets();
+    appsAll = null;
+    loadApps();
+  });
+  function drawApps(){
+    if (appsAll === null) return;
+    var q = (el('a-search').value || '').toLowerCase();
+    var rows = appsAll.filter(function(r){
+      if (aFilter !== 'all' && r.application_status !== aFilter) return false;
+      if (!q) return true;
+      return ((r.applicant_name||'') + ' ' + (r.applicant_email||'') + ' ' + (r.property_name||'') + ' ' +
+              (r.unit_number||'') + ' ' + (r.property_manager_name||'') + ' ' + (r.primary_owner_name||'')).toLowerCase().indexOf(q) >= 0;
+    });
+    rows.sort(function(a,b){
+      var x = a[aSort.k], y = b[aSort.k];
+      if (x == null) return 1; if (y == null) return -1;
+      if (typeof x === 'string') { x = x.toLowerCase(); y = (y||'').toLowerCase(); }
+      return (x < y ? -1 : x > y ? 1 : 0) * aSort.d;
+    });
+    var html = '';
+    rows.forEach(function(r){
+      html += '<tr class="rowlink" data-aid="' + r.application_id + '">' +
+        '<td>' + esc((r.submitted_at||'').slice(0,10)) + '</td>' +
+        '<td><b>' + esc(r.applicant_name || '–') + '</b></td>' +
+        '<td>' + esc(r.property_name || '–') + '</td>' +
+        '<td>' + esc(r.unit_number || '–') + '</td>' +
+        '<td>' + appChip(r.application_status) + '</td>' +
+        '<td class="rt">' + (r.approx_decision_days != null ? r.approx_decision_days + 'd' : '–') + '</td>' +
+        '<td>' + esc(r.property_manager_name || '–') + '</td></tr>';
+    });
+    el('atable').querySelector('tbody').innerHTML = html ||
+      '<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);font-style:italic;padding:24px">Nothing matches</td></tr>';
+    el('a-count').textContent = rows.length + ' of ' + appsAll.length + ' applications' +
+      (aServerCount > appsAll.length ? ' (first ' + appsAll.length + ' of ' + aServerCount + ' loaded)' : '');
+  }
+  el('a-search').addEventListener('input', drawApps);
+  el('atable').querySelector('thead').addEventListener('click', function(e){
+    var th = e.target.closest('th'); if (!th) return;
+    var k = th.getAttribute('data-k'); if (!k) return;
+    if (aSort.k === k) aSort.d = -aSort.d;
+    else aSort = { k:k, d: (k === 'submitted_at' || k === 'approx_decision_days') ? -1 : 1 };
+    drawApps();
+  });
+  el('atable').addEventListener('click', function(e){
+    var tr2 = e.target.closest('tr[data-aid]');
+    if (tr2) openApp(tr2.getAttribute('data-aid'));
+  });
+  function openApp(aid){
+    var r = null;
+    (appsAll || []).forEach(function(x){ if (String(x.application_id) === String(aid)) r = x; });
+    if (!r) return;
+    el('am-title').textContent = r.applicant_name || 'Application';
+    el('am-sub').innerHTML = appChip(r.application_status) + ' &middot; submitted ' + esc((r.submitted_at||'').slice(0,10));
+    var f = '';
+    f += fitem('Property', esc(r.property_name));
+    f += fitem('Unit', esc(r.unit_number));
+    f += fitem('Email', r.applicant_email ? '<a href="mailto:' + esc(r.applicant_email) + '" style="color:var(--clay)">' + esc(r.applicant_email) + '</a>' : null);
+    f += fitem('Phone', esc(r.applicant_phone));
+    f += fitem('Days to decision', r.approx_decision_days != null ? r.approx_decision_days + 'd (approx)' : null);
+    f += fitem('Manager', esc(r.property_manager_name));
+    f += fitem('Owner', esc(r.primary_owner_name));
+    f += fitem('Buildium app ID', esc(r.application_id));
+    el('am-fields').innerHTML = f;
+    var links = '';
+    if (r.property_id && r.unit_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit in Buildium &rarr;</a>';
+    if (r.property_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/summary">Property &rarr;</a>';
+    el('am-links').innerHTML = links || '<span class="noapply">No property link on this application</span>';
+    openModal('amodal');
+  }
+  function renderMiniApps(box, apps, searchText){
+    if (!apps.length) { box.textContent = 'No applications on record for this unit.'; return; }
+    var h = '';
+    apps.slice(0, 8).forEach(function(a){
+      h += '<div class="minirow"><span class="md">' + esc((a.submitted_at || '').slice(0,10)) + '</span>' +
+        '<span class="mn">' + esc(a.applicant_name || 'Applicant') + '</span>' + appChip(a.application_status) +
+        (a.approx_decision_days != null ? '<span class="md">' + a.approx_decision_days + 'd</span>' : '') + '</div>';
+    });
+    if (apps.length > 8) h += '<div class="minirow"><span class="md">+ ' + (apps.length - 8) + ' more</span></div>';
+    h += '<div style="margin-top:8px"><button type="button" class="listbtn" data-appsq="' + esc(searchText) + '">View in Applications tab &#9656;</button></div>';
+    box.innerHTML = h;
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-appsq]'); if (!b) return;
+    ['lmodal','umodal'].forEach(closeModal);
+    aFilter = 'all';
+    aWin = { mode:'all', from:null, to:null };
+    appsAll = null;
+    aPendingSearch = b.getAttribute('data-appsq') || '';
+    showTab('applications');
+  });
+
+  /* ── Tours directory ──────────────────────── */
+  function toursQuery(){
+    var p = new URLSearchParams();
+    var now = Date.now();
+    p.set('from', dstr(new Date(now - 180 * 86400000)));
+    p.set('to', dstr(new Date(now + 90 * 86400000)));
+    Object.keys(MS).forEach(function(key){
+      var ids = Object.keys(MS[key].sel);
+      if (ids.length) p.set(key, ids.join(','));
+    });
+    return p;
+  }
+  function loadTours(){
+    el('veil').classList.remove('hide');
+    authFetch('/tours?' + toursQuery().toString())
+      .then(function(j){
+        toursAll = j.tours || [];
+        drawTours();
+        el('veil').classList.add('hide');
+      })
+      .catch(function(){
+        el('veil').classList.add('hide');
+        el('rtable').querySelector('tbody').innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center">Could not load tours.</td></tr>';
+      });
+  }
+  function inTourRange(r){
+    var t = Date.parse(r.start_time);
+    if (isNaN(t)) return false;
+    var now = Date.now();
+    if (rRange === 'upcoming') return t >= now;
+    if (rRange === 'past30') return t <= now && t >= now - 30 * 86400000;
+    if (rRange === 'past90') return t <= now && t >= now - 90 * 86400000;
+    return true;
+  }
+  function drawTours(){
+    if (toursAll === null) return;
+    var q = (el('r-search').value || '').toLowerCase();
+    var showOnly = el('r-showings').checked;
+    var rows = toursAll.filter(function(r){
+      if (showOnly && !r.counts_as_showing) return false;
+      if (!inTourRange(r)) return false;
+      if (!q) return true;
+      return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.event_name||'')).toLowerCase().indexOf(q) >= 0;
+    });
+    rows.sort(function(a,b){
+      var x = a[rSort.k], y = b[rSort.k];
+      if (x == null) return 1; if (y == null) return -1;
+      if (typeof x === 'string' && rSort.k !== 'start_time') { x = x.toLowerCase(); y = (y||'').toLowerCase(); }
+      return (x < y ? -1 : x > y ? 1 : 0) * rSort.d;
+    });
+    var now = Date.now();
+    var html = '';
+    rows.forEach(function(r){
+      var t = Date.parse(r.start_time);
+      var cls = [];
+      if (r.status === 'canceled') cls.push('r-cxl');
+      else if (t >= now) cls.push('r-upc');
+      var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      var st = r.status === 'canceled' ? '<span class="chip c-hot">canceled</span>'
+             : (t >= now ? '<span class="chip c-warm">upcoming</span>' : '<span class="chip c-ok">done</span>');
+      html += '<tr class="' + cls.join(' ') + '">' +
+        '<td>' + esc(when) + '</td>' +
+        '<td>' + esc(r.event_name || '–') + '</td>' +
+        '<td>' + esc(r.agent || '–') + '</td>' +
+        '<td>' + st + '</td>' +
+        '<td>' + esc(r.location_text || '–') + '</td>' +
+        '<td>' + esc(r.matched_property_name || '–') + '</td></tr>';
+    });
+    el('rtable').querySelector('tbody').innerHTML = html ||
+      '<tr><td colspan="6" style="text-align:center;color:var(--ink-soft);font-style:italic;padding:24px">Nothing matches</td></tr>';
+    el('r-count').textContent = rows.length + ' of ' + toursAll.length + ' events';
+  }
+  el('r-search').addEventListener('input', drawTours);
+  el('r-showings').addEventListener('change', drawTours);
+  el('r-presets').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if (!b) return;
+    Array.prototype.forEach.call(el('r-presets').children, function(x){ x.classList.remove('on'); });
+    b.classList.add('on');
+    rRange = b.getAttribute('data-r');
+    rSort = rRange === 'upcoming' ? { k:'start_time', d:1 } : { k:'start_time', d:-1 };
+    drawTours();
+  });
+  el('rtable').querySelector('thead').addEventListener('click', function(e){
+    var th = e.target.closest('th'); if (!th) return;
+    var k = th.getAttribute('data-k'); if (!k) return;
+    if (rSort.k === k) rSort.d = -rSort.d; else rSort = { k:k, d: k === 'start_time' ? -1 : 1 };
+    drawTours();
+  });
+
+  /* ── drill-down clicks (Ledger → other tabs) ── */
+  function scrollVacantTable(){
+    var tc = document.querySelector('#app .tablecard');
+    if (tc && tc.scrollIntoView) tc.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' });
+  }
+  el('kpi-vacant').addEventListener('click', function(){
+    setBucket(null);
+    el('t-listed').checked = false; el('t-unlisted').checked = false;
+    drawTable();
+    scrollVacantTable();
+  });
+  el('kpi-unlisted').addEventListener('click', function(){
+    setBucket(null);
+    el('t-unlisted').checked = true; el('t-listed').checked = false;
+    drawTable();
+    scrollVacantTable();
+  });
+  el('kpi-pre').addEventListener('click', function(){ gotoUnitsFiltered('pre'); });
+  el('tile-apps').addEventListener('click', function(){ gotoApplications('all', true); });
+  el('tile-mi').addEventListener('click', function(){ gotoUnitsFiltered('mi'); });
+  el('pair-exp').addEventListener('click', function(){ gotoUnitsFiltered('exp90'); });
+  document.querySelectorAll('.pair[data-go="tours"]').forEach(function(n){
+    n.addEventListener('click', gotoTours);
+  });
+  el('funnel').addEventListener('click', function(e){
+    var frow = e.target.closest('.funnel-row.click'); if (!frow) return;
+    gotoApplications(frow.getAttribute('data-status'), true);
+  });
+  el('apptimes').addEventListener('click', function(e){
+    var prow = e.target.closest('.pair.click'); if (!prow) return;
+    gotoApplications(prow.getAttribute('data-status'), true);
+  });
+
   /* ── sync now (poll until BUILDIUM timestamp moves) ── */
   var syncBtn = el('syncbtn');
   function syncDone(label){
@@ -1527,7 +2046,7 @@
       .then(function(d){
         if (!d || !d.ops) return;
         var freshB = (d.ops.last_buildium_sync || null) !== baselineB;
-        if (freshB) { render(d); unitsAll = null; ownersAll = null; syncDone('Fresh data loaded ✓'); }
+        if (freshB) { render(d); unitsAll = null; ownersAll = null; appsAll = null; toursAll = null; syncDone('Fresh data loaded ✓'); }
       })
       .catch(function(){ /* transient; keep polling */ });
   }
@@ -1574,6 +2093,9 @@
     });
   });
   el('t-search').addEventListener('input', drawTable);
+  el('t-beds').addEventListener('change', drawTable);
+  el('t-rmin').addEventListener('input', drawTable);
+  el('t-rmax').addEventListener('input', drawTable);
   el('t-unlisted').addEventListener('change', function(){
     if (this.checked) el('t-listed').checked = false;
     drawTable();
@@ -1594,6 +2116,8 @@
     el('veil').classList.add('hide');
     el('app').style.display = 'none';
     el('page-units').style.display = 'none';
+    el('page-applications').style.display = 'none';
+    el('page-tours').style.display = 'none';
     el('page-owners').style.display = 'none';
     el('login').style.display = 'flex';
     setTimeout(function(){ try { el('loginpw').focus(); } catch (e) {} }, 60);

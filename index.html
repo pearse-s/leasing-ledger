@@ -954,7 +954,7 @@
   var charts = {};
   var tableRows = [];
   var sortKey = 'days_vacant', sortDir = -1;
-  var lastOps = { b:null, c:null };
+  var lastBuildiumSync = null;
   var pollTimer = null, pollStart = 0;
   var loadTimer = null;
   var unitsAll = null, ownersAll = null;
@@ -1036,6 +1036,32 @@
     });
   }
   function dstr(d){ return d.toISOString().slice(0,10); }
+  function msIds(key){ return Object.keys(MS[key].sel); }
+  function appendScope(p){
+    Object.keys(MS).forEach(function(key){
+      var ids = msIds(key);
+      if (ids.length) p.set(key, ids.join(','));
+    });
+    return p;
+  }
+  function rentBasis(r){
+    return (r.is_listed && r.listing_rent != null) ? r.listing_rent
+         : (r.monthly_rent != null ? r.monthly_rent : r.market_rent);
+  }
+  function emptyRow(tableId, msg){
+    var n = el(tableId).querySelectorAll('thead th').length || 1;
+    return '<tr><td colspan="' + n + '" style="text-align:center;color:var(--ink-soft);font-style:italic;padding:24px">' + esc(msg) + '</td></tr>';
+  }
+  // shared null-safe, case-insensitive table sort comparator.
+  // raw=true keeps original casing (e.g. ISO timestamps, where lexical order is already chronological)
+  function cmpRows(key, dir, raw){
+    return function(a, b){
+      var x = a[key], y = b[key];
+      if (x == null) return 1; if (y == null) return -1;
+      if (typeof x === 'string' && !raw) { x = x.toLowerCase(); y = (y||'').toLowerCase(); }
+      return (x < y ? -1 : x > y ? 1 : 0) * dir;
+    };
+  }
   function authFetch(path){
     return fetch(API + path, { headers: { 'Authorization': 'Bearer ' + TOKEN } })
       .then(function(r){
@@ -1123,11 +1149,7 @@
     var w = windowDates();
     var p = new URLSearchParams();
     p.set('from', w.from); p.set('to', w.to);
-    Object.keys(MS).forEach(function(key){
-      var ids = Object.keys(MS[key].sel);
-      if (ids.length) p.set(key, ids.join(','));
-    });
-    return p;
+    return appendScope(p);
   }
 
   function load(){
@@ -1166,7 +1188,7 @@
   /* ── multi-select ─────────────────────────── */
   function msButton(key){
     var m = MS[key];
-    var ids = Object.keys(m.sel);
+    var ids = msIds(key);
     var btn = el('msb-' + key);
     if (!ids.length) { btn.textContent = m.all; btn.classList.remove('has'); }
     else if (ids.length === 1) { btn.textContent = m.sel[ids[0]]; btn.classList.add('has'); }
@@ -1299,8 +1321,7 @@
           if (!els || !els.length) return;
           var idx = els[0].index, ds = els[0].datasetIndex;
           setBucket({ key:BUCKET_KEYS[idx], label:BUCKET_LABELS[idx], klass: ds === 0 ? 'op_vacant' : 'never_leased' });
-          var tc = document.querySelector('#app .tablecard');
-          if (tc && tc.scrollIntoView) tc.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' });
+          scrollVacantTable();
         },
         onHover:function(evt, els){
           evt.native.target.style.cursor = els && els.length ? 'pointer' : 'default';
@@ -1426,8 +1447,8 @@
 
     var oc = d.outcomes || {};
     el('o-ends').textContent = fmtNum(oc.term_ends);
-    el('o-stay').innerHTML = fmtNum(oc.stayed) + ' <small>' + (oc.stayed_pct != null ? oc.stayed_pct + '%' : '–') + '</small>';
-    el('o-move').innerHTML = fmtNum(oc.moved_out) + ' <small>' + (oc.moved_out_pct != null ? oc.moved_out_pct + '%' : '–') + '</small>';
+    el('o-stay').innerHTML = fmtNum(oc.stayed) + ' <small>' + pct(oc.stayed_pct) + '</small>';
+    el('o-move').innerHTML = fmtNum(oc.moved_out) + ' <small>' + pct(oc.moved_out_pct) + '</small>';
 
     var pl = d.pipeline || {};
     el('p-exp').innerHTML = fmtNum(pl.expiring_30) + ' / ' + fmtNum(pl.expiring_60) + ' / ' + fmtNum(pl.expiring_90);
@@ -1455,7 +1476,7 @@
     drawTable();
 
     var ops = d.ops || {};
-    lastOps = { b: ops.last_buildium_sync || null, c: ops.last_calendly_sync || null };
+    lastBuildiumSync = ops.last_buildium_sync || null;
     var badge = el('syncbadge');
     var last = ops.last_buildium_sync ? new Date(ops.last_buildium_sync) : null;
     el('synctext').innerHTML = last
@@ -1535,12 +1556,7 @@
       if (!q) return true;
       return ((r.property||'') + ' ' + (r.unit||'') + ' ' + (r.owner||'') + ' ' + (r.manager||'')).toLowerCase().indexOf(q) >= 0;
     });
-    rows.sort(function(a,b){
-      var x = a[sortKey], y = b[sortKey];
-      if (x == null) return 1; if (y == null) return -1;
-      if (typeof x === 'string') { x = x.toLowerCase(); y = (y||'').toLowerCase(); }
-      return (x < y ? -1 : x > y ? 1 : 0) * sortDir;
-    });
+    rows.sort(cmpRows(sortKey, sortDir));
     var html = '';
     rows.forEach(function(r){
       html += '<tr>' +
@@ -1553,19 +1569,17 @@
         '<td>' + statusChip(r) + '</td>' +
         '<td>' + esc(r.manager || '–') + '</td></tr>';
     });
-    el('vtable').querySelector('tbody').innerHTML = html ||
-      '<tr><td colspan="8" style="text-align:center;color:var(--ink-soft);font-style:italic;padding:24px">Nothing matches</td></tr>';
+    el('vtable').querySelector('tbody').innerHTML = html || emptyRow('vtable', 'Nothing matches');
     el('t-count').textContent = rows.length + ' of ' + tableRows.length + ' marketed units';
   }
 
   /* ── photo helpers (shared) ───────────────── */
-  function dlHref(p, proxy){
-    var s = API + '/photo-dl?token=' + encodeURIComponent(TOKEN) +
-      '&scope=' + esc(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id;
+  function dlHref(p){
     // proxy mode streams the bytes with Content-Disposition: attachment so the
     // browser saves the file instead of rendering the presigned S3 image
-    if (proxy) s += '&proxy=1&name=' + encodeURIComponent(p.name || ('photo-' + p.image_id + '.jpg'));
-    return s;
+    return API + '/photo-dl?token=' + encodeURIComponent(TOKEN) +
+      '&scope=' + esc(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id +
+      '&proxy=1&name=' + encodeURIComponent(p.name || ('photo-' + p.image_id + '.jpg'));
   }
   function renderPhotos(listEl, noteEl, dlBtn, photos){
     if (!photos.length) {
@@ -1579,7 +1593,7 @@
       html += '<figure class="lmph">' +
         '<a class="full" href="' + esc(p.url) + '" target="_blank" rel="noopener"></a>' +
         '<img loading="lazy" src="' + esc(p.url) + '" alt="' + esc(p.name || 'listing photo') + '">';
-      if (p.image_id != null) html += '<a class="dl" href="' + dlHref(p, true) + '" download>&#8595; save</a>';
+      if (p.image_id != null) html += '<a class="dl" href="' + dlHref(p) + '" download>&#8595; save</a>';
       html += '</figure>';
     });
     listEl.innerHTML = html;
@@ -1724,13 +1738,12 @@
     if (k === 'otb') return !!r.is_owner_takeback;
     return true;
   }
-  function nbTest(r){
+  function nbTest(r, nbf){
     if (uFilter !== 'nookbook') return true;
-    var bt = el('nb-bt').value, park = el('nb-park').value, appl = el('nb-appl').value;
-    if (bt && (r.nb_building_type || '') !== bt) return false;
-    if (park && (r.nb_parking || '') !== park) return false;
-    if (appl && (r.nb_appliances || '') !== appl) return false;
-    if (el('nb-notready').checked && !r.is_not_ready) return false;
+    if (nbf.bt && (r.nb_building_type || '') !== nbf.bt) return false;
+    if (nbf.park && (r.nb_parking || '') !== nbf.park) return false;
+    if (nbf.appl && (r.nb_appliances || '') !== nbf.appl) return false;
+    if (nbf.notready && !r.is_not_ready) return false;
     return true;
   }
   function fillNbOptions(){
@@ -1792,16 +1805,16 @@
     if (ev2 === 'Notice to Vacate') return '<span class="chip c-warm">notice</span>';
     return '<span class="chip c-cold">' + esc(ev2) + '</span>';
   }
-  // global entity scope, applied client-side to the Units + Owners directories
-  function scopeTestUnit(r){
-    var mg = Object.keys(MS.managers.sel), ow = Object.keys(MS.owners.sel), pr = Object.keys(MS.properties.sel);
+  // global entity scope, applied client-side to the Units + Owners directories.
+  // The caller passes the already-extracted selection-id arrays so we don't
+  // re-derive Object.keys(MS.*.sel) for every row.
+  function scopeTestUnit(r, mg, ow, pr){
     if (mg.length && mg.indexOf(String(r.property_manager_id)) < 0) return false;
     if (ow.length && ow.indexOf(String(r.primary_owner_id)) < 0) return false;
     if (pr.length && pr.indexOf(String(r.property_id)) < 0) return false;
     return true;
   }
-  function scopeTestOwner(r){
-    var ow = Object.keys(MS.owners.sel), pr = Object.keys(MS.properties.sel);
+  function scopeTestOwner(r, ow, pr){
     if (ow.length && ow.indexOf(String(r.buildium_id)) < 0) return false;
     if (pr.length) {
       var pids = (r.property_ids || []).map(String);
@@ -1815,17 +1828,20 @@
     var bed = el('u-beds').value;
     var rmax = parseFloat(el('u-rmax').value);
     var amen = el('u-amen').value;
+    var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
+    var nbf = uFilter === 'nookbook'
+      ? { bt: el('nb-bt').value, park: el('nb-park').value, appl: el('nb-appl').value, notready: el('nb-notready').checked }
+      : null;
     var rows = unitsAll.filter(function(r){
-      if (!scopeTestUnit(r)) return false;
+      if (!scopeTestUnit(r, mg, ow, pr)) return false;
       if (!qfTest(r, uFilter)) return false;
-      if (!nbTest(r)) return false;
+      if (!nbTest(r, nbf)) return false;
       if (bed) {
         if (bed === '4') { if (!(parseInt(r.unit_bedrooms, 10) >= 4)) return false; }
         else if (String(r.unit_bedrooms || '') !== bed) return false;
       }
       if (!isNaN(rmax)) {
-        var rent = (r.is_listed && r.listing_rent != null) ? r.listing_rent
-                 : (r.monthly_rent != null ? r.monthly_rent : r.market_rent);
+        var rent = rentBasis(r);
         if (rent == null || rent > rmax) return false;
       }
       if (!amenMatch(r.amenities, amen)) return false;
@@ -1834,12 +1850,7 @@
               (r.primary_owner_name||'') + ' ' + (r.address_line1||'') + ' ' + (r.property_manager_name||'') + ' ' +
               (r.nb_building_type||'') + ' ' + (r.nb_parking||'')).toLowerCase().indexOf(q) >= 0;
     });
-    rows.sort(function(a,b){
-      var x = a[uSort.k], y = b[uSort.k];
-      if (x == null) return 1; if (y == null) return -1;
-      if (typeof x === 'string') { x = x.toLowerCase(); y = (y||'').toLowerCase(); }
-      return (x < y ? -1 : x > y ? 1 : 0) * uSort.d;
-    });
+    rows.sort(cmpRows(uSort.k, uSort.d));
     var html = '';
     rows.forEach(function(r){
       var cls = [];
@@ -1865,8 +1876,7 @@
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
         '<td>' + (r.is_listed ? '<span class="chip c-ok">listed</span>' : '–') + '</td></tr>';
     });
-    el('utable').querySelector('tbody').innerHTML = html ||
-      '<tr><td colspan="10" style="text-align:center;color:var(--ink-soft);font-style:italic;padding:24px">Nothing matches</td></tr>';
+    el('utable').querySelector('tbody').innerHTML = html || emptyRow('utable', 'Nothing matches');
     var note = rows.length + ' of ' + unitsAll.length + ' units';
     if (uView === 'map') {
       var unmapped = rows.filter(function(r){ return r.lat == null; }).length;
@@ -1908,8 +1918,7 @@
         '<div class="mapsub">' + g.units.length + ' unit' + (g.units.length === 1 ? '' : 's') + ' in current filter</div>' +
         '<div class="maplist">';
       g.units.slice(0, 14).forEach(function(r){
-        var rent = (r.is_listed && r.listing_rent != null) ? r.listing_rent
-                 : (r.monthly_rent != null ? r.monthly_rent : r.market_rent);
+        var rent = rentBasis(r);
         ph += '<div class="maprow"><span class="mu">' + esc(r.unit_number) + '</span>' +
           (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '')) +
           '<span class="mr">' + (rent != null ? fmtMoney(rent) : '–') + '</span>' +
@@ -2063,17 +2072,13 @@
   function drawOwners(){
     if (ownersAll === null) return;
     var q = (el('o-search').value || '').toLowerCase();
+    var ow = msIds('owners'), pr = msIds('properties');
     var rows = ownersAll.filter(function(r){
-      if (!scopeTestOwner(r)) return false;
+      if (!scopeTestOwner(r, ow, pr)) return false;
       if (!q) return true;
       return ((r.display_name||'') + ' ' + (r.email||'') + ' ' + ((r.property_names||[]).join(' '))).toLowerCase().indexOf(q) >= 0;
     });
-    rows.sort(function(a,b){
-      var x = a[oSort.k], y = b[oSort.k];
-      if (x == null) return 1; if (y == null) return -1;
-      if (typeof x === 'string') { x = x.toLowerCase(); y = (y||'').toLowerCase(); }
-      return (x < y ? -1 : x > y ? 1 : 0) * oSort.d;
-    });
+    rows.sort(cmpRows(oSort.k, oSort.d));
     var html = '';
     rows.forEach(function(r){
       html += '<tr class="rowlink" data-oid="' + r.buildium_id + '">' +
@@ -2085,8 +2090,7 @@
         '<td>' + esc(r.management_agreement_start_date || '–') + '</td>' +
         '<td>' + esc(r.management_agreement_end_date || '–') + '</td></tr>';
     });
-    el('otable').querySelector('tbody').innerHTML = html ||
-      '<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);font-style:italic;padding:24px">Nothing matches</td></tr>';
+    el('otable').querySelector('tbody').innerHTML = html || emptyRow('otable', 'Nothing matches');
     el('o-count').textContent = rows.length + ' of ' + ownersAll.length + ' owners';
   }
   el('o-search').addEventListener('input', drawOwners);
@@ -2132,11 +2136,7 @@
     if (aWin.mode === 'custom' && aWin.from && aWin.to) { p.set('from', aWin.from); p.set('to', aWin.to); }
     else if (aWin.mode === 'all') { p.set('from', '2000-01-01'); p.set('to', dstr(today)); }
     else { p.set('from', dstr(new Date(today.getTime() - (parseInt(aWin.mode, 10) || 90) * 86400000))); p.set('to', dstr(today)); }
-    Object.keys(MS).forEach(function(key){
-      var ids = Object.keys(MS[key].sel);
-      if (ids.length) p.set(key, ids.join(','));
-    });
-    return p;
+    return appendScope(p);
   }
   function syncAPresets(){
     Array.prototype.forEach.call(el('a-presets').children, function(x){
@@ -2190,12 +2190,7 @@
       return ((r.applicant_name||'') + ' ' + (r.applicant_email||'') + ' ' + (r.property_name||'') + ' ' +
               (r.unit_number||'') + ' ' + (r.property_manager_name||'') + ' ' + (r.primary_owner_name||'')).toLowerCase().indexOf(q) >= 0;
     });
-    rows.sort(function(a,b){
-      var x = a[aSort.k], y = b[aSort.k];
-      if (x == null) return 1; if (y == null) return -1;
-      if (typeof x === 'string') { x = x.toLowerCase(); y = (y||'').toLowerCase(); }
-      return (x < y ? -1 : x > y ? 1 : 0) * aSort.d;
-    });
+    rows.sort(cmpRows(aSort.k, aSort.d));
     var html = '';
     rows.forEach(function(r){
       html += '<tr class="rowlink" data-aid="' + r.application_id + '">' +
@@ -2207,8 +2202,7 @@
         '<td class="rt">' + (r.approx_decision_days != null ? r.approx_decision_days + 'd' : '–') + '</td>' +
         '<td>' + esc(r.property_manager_name || '–') + '</td></tr>';
     });
-    el('atable').querySelector('tbody').innerHTML = html ||
-      '<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);font-style:italic;padding:24px">Nothing matches</td></tr>';
+    el('atable').querySelector('tbody').innerHTML = html || emptyRow('atable', 'Nothing matches');
     el('a-count').textContent = rows.length + ' of ' + appsAll.length + ' applications' +
       (aServerCount > appsAll.length ? ' (first ' + appsAll.length + ' of ' + aServerCount + ' loaded)' : '');
   }
@@ -2279,11 +2273,7 @@
     var now = Date.now();
     p.set('from', dstr(new Date(now - 180 * 86400000)));
     p.set('to', dstr(new Date(now + 90 * 86400000)));
-    Object.keys(MS).forEach(function(key){
-      var ids = Object.keys(MS[key].sel);
-      if (ids.length) p.set(key, ids.join(','));
-    });
-    return p;
+    return appendScope(p);
   }
   function loadTours(){
     el('veil').classList.remove('hide');
@@ -2317,12 +2307,7 @@
       if (!q) return true;
       return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.event_name||'')).toLowerCase().indexOf(q) >= 0;
     });
-    rows.sort(function(a,b){
-      var x = a[rSort.k], y = b[rSort.k];
-      if (x == null) return 1; if (y == null) return -1;
-      if (typeof x === 'string' && rSort.k !== 'start_time') { x = x.toLowerCase(); y = (y||'').toLowerCase(); }
-      return (x < y ? -1 : x > y ? 1 : 0) * rSort.d;
-    });
+    rows.sort(cmpRows(rSort.k, rSort.d, rSort.k === 'start_time'));
     var now = Date.now();
     var html = '';
     rows.forEach(function(r){
@@ -2341,8 +2326,7 @@
         '<td>' + esc(r.location_text || '–') + '</td>' +
         '<td>' + esc(r.matched_property_name || '–') + '</td></tr>';
     });
-    el('rtable').querySelector('tbody').innerHTML = html ||
-      '<tr><td colspan="6" style="text-align:center;color:var(--ink-soft);font-style:italic;padding:24px">Nothing matches</td></tr>';
+    el('rtable').querySelector('tbody').innerHTML = html || emptyRow('rtable', 'Nothing matches');
     el('r-count').textContent = rows.length + ' of ' + toursAll.length + ' events';
   }
   el('r-search').addEventListener('input', drawTours);
@@ -2425,7 +2409,7 @@
   syncBtn.addEventListener('click', function(){
     syncBtn.disabled = true;
     syncBtn.innerHTML = '<span class="whirl">&#8635;</span> Starting&hellip;';
-    var baselineB = lastOps.b;
+    var baselineB = lastBuildiumSync;
     fetch(API + '/sync', { method: 'POST', headers: { 'Authorization': 'Bearer ' + TOKEN } })
       .then(function(r){ return r.json(); })
       .then(function(res){

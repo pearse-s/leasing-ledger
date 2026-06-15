@@ -1120,6 +1120,8 @@
       <div class="lmphotos" id="lm-photos"></div>
       <div class="sect">Applications</div>
       <div id="lm-apps" class="minirows lmphnote" style="margin-bottom:12px">&nbsp;</div>
+      <div class="sect">Key</div>
+      <div id="lm-keys" class="lmphnote" data-keypanel style="margin-bottom:12px">&nbsp;</div>
       <div class="lmdesc" id="lm-desc"></div>
       <div class="lmamen" id="lm-amen"></div>
     </div>
@@ -1140,6 +1142,8 @@
     </div>
     <div class="lmbody">
       <div class="fgrid" id="um-fields"></div>
+      <div class="sect">Key</div>
+      <div id="um-keys" class="lmphnote" data-keypanel>&nbsp;</div>
       <div class="sect">Tenants</div>
       <div id="um-tenants" class="lmphnote">&nbsp;</div>
       <div class="sect">Applications</div>
@@ -1339,6 +1343,7 @@
   var uView = 'list', umap = null, umapLayer = null, umapSig = '';
   var keysAll = null, kSort = { k:'property_name', d:1 }, kFilter = 'all', kCur = null;
   var historyAll = null, hSort = { k:'created_at', d:-1 }, hFilter = 'all';
+  var keyModalOnChange = null;   // callback to refresh the embedded key panel after a write
 
   var COL = {
     moss:'#9DBE86', amber:'#E6B65C', clay:'#E8B43E', plum:'#A6C0D2',
@@ -1712,7 +1717,12 @@
 
   /* key detail + write actions */
   function findKey(kid){ var r = null; (keysAll || []).forEach(function(x){ if (String(x.key_id) === String(kid)) r = x; }); return r; }
-  function openKey(kid){ var r = findKey(kid); if (!r) return; kCur = r; renderKey(); el('km-form').style.display = 'none'; openModal('kmodal'); loadKeyHistory(r.key_id); }
+  function openKey(kid){ var r = findKey(kid); if (r) openKeyRow(r, null); }
+  function openKeyRow(r, onChange){
+    if (!r) return;
+    kCur = r; keyModalOnChange = onChange || null;
+    renderKey(); el('km-form').style.display = 'none'; openModal('kmodal'); loadKeyHistory(r.key_id);
+  }
   function renderKey(){
     var r = kCur; if (!r) return;
     el('km-title').textContent = r.property_name ? (r.property_name + ' · ' + (r.unit_number || '')) : r.label;
@@ -1799,9 +1809,14 @@
     else { route = '/key/note'; if (!note) { errEl.textContent = 'Enter a note.'; return; } }
     var btn = el('km-form').querySelector('[data-ksubmit]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     postJSON(route, body).then(function(j){
-      if (j && j.key) { for (var i = 0; i < keysAll.length; i++) { if (keysAll[i].key_id === j.key.key_id) { keysAll[i] = j.key; break; } } kCur = j.key; }
+      if (j && j.key) {
+        if (keysAll) { for (var i = 0; i < keysAll.length; i++) { if (keysAll[i].key_id === j.key.key_id) { keysAll[i] = j.key; break; } } }
+        kCur = j.key;
+      }
       el('km-form').style.display = 'none';
-      renderKey(); loadKeyHistory(r.key_id); drawKeyChips(); drawKeys();
+      renderKey(); loadKeyHistory(r.key_id);
+      if (keysAll) { drawKeyChips(); drawKeys(); }            // Keys tab may not be loaded
+      if (keyModalOnChange) { try { keyModalOnChange(); } catch (e) {} }  // refresh embedded panel
     }).catch(function(err){ if (errEl) errEl.textContent = (err && err.message) || 'Save failed.'; if (btn) { btn.disabled = false; btn.textContent = 'Save'; } });
   }
   function khDetail(e){
@@ -1823,6 +1838,43 @@
       el('km-history').innerHTML = ev.length ? ev.map(khRow).join('') : 'No history yet.';
     }).catch(function(){ el('km-history').textContent = 'History unavailable right now.'; });
   }
+
+  // ── key panel embedded in the unit + marketed-listing popups ──
+  // Shows the key(s) for a unit with status, and Sign-out / Check-in / manage
+  // buttons that open the full key modal (reusing its verified actions) and
+  // refresh this panel afterward.
+  function mountKeyPanel(box, unitId){
+    if (!box) return;
+    box.setAttribute('data-keypanel', '1');
+    box._unitId = unitId; box._keys = [];
+    if (!unitId) { box.innerHTML = '<span class="lmphnote">No linked unit — find this key on the Keys tab.</span>'; return; }
+    box.textContent = 'Loading key…';
+    authFetch('/keys?unit_id=' + encodeURIComponent(unitId)).then(function(j){
+      var keys = (j && j.keys) || []; box._keys = keys;
+      if (!keys.length) { box.innerHTML = '<span class="lmphnote">No key on file for this unit.</span>'; return; }
+      box.innerHTML = keys.map(function(k){
+        var meta = [];
+        if (k.bin) meta.push('Bin ' + esc(k.bin));
+        if (k.status === 'out_of_office') meta.push('held by <b>' + esc(k.holder || '?') + '</b>' +
+          (k.date_expected ? ', due ' + esc(k.date_expected) + (k.is_overdue ? ' <span class="ovr">overdue</span>' : '') : ''));
+        var act = (k.status === 'out_of_office')
+          ? '<button type="button" class="listbtn" data-keyact="checkin" data-kid="' + k.key_id + '">Check in</button>'
+          : '<button type="button" class="listbtn" data-keyact="checkout" data-kid="' + k.key_id + '">Sign out</button>';
+        return '<div class="trow"><span class="tn">' + keyChip(k.status) + '</span>' +
+          '<span>' + (meta.join(' &middot; ') || '&nbsp;') + '</span>' + act +
+          '<button type="button" class="listbtn" data-keyfull="' + k.key_id + '">manage &#9656;</button></div>';
+      }).join('');
+    }).catch(function(){ box.textContent = 'Key status unavailable right now.'; });
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-keyact],[data-keyfull]'); if (!b) return;
+    var box = b.closest('[data-keypanel]'); if (!box) return;
+    var kid = b.getAttribute('data-keyfull') || b.getAttribute('data-kid');
+    var row = null; (box._keys || []).forEach(function(k){ if (String(k.key_id) === String(kid)) row = k; });
+    if (!row) return;
+    openKeyRow(row, function(){ mountKeyPanel(box, box._unitId); });
+    var act = b.getAttribute('data-keyact'); if (act) showKeyForm(act);   // jump straight to the sign-out / check-in form
+  });
 
   /* history feed tab */
   var H_CHIPS = [['all','All'],['checkout','Check-outs'],['checkin','Check-ins'],['status_change','Status'],['note','Notes'],['import','Imports']];
@@ -2373,6 +2425,7 @@
     curPhotosLm = [];
     el('lm-apps').textContent = 'Loading…';
     openModal('lmodal');
+    mountKeyPanel(el('lm-keys'), uid);
     authFetch('/photos?unit_id=' + encodeURIComponent(uid))
       .then(function(j){
         curPhotosLm = (j && j.photos) || [];
@@ -2795,6 +2848,7 @@
     el('um-photo-sect').style.display = 'none';
     el('um-phbar').style.display = 'none';
     openModal('umodal');
+    mountKeyPanel(el('um-keys'), uid);
 
     if (r.lease_id) {
       authFetch('/unit?unit_id=' + encodeURIComponent(uid))

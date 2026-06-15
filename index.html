@@ -428,6 +428,8 @@
     background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:11px 12px;outline:none;margin-bottom:12px;
   }
   .loginbox input:focus{border-color:var(--clay)}
+  .loginbox select{width:100%;font-family:var(--sans);font-size:.92rem;text-align:center;color:var(--ink);background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:10px 12px;outline:none;margin-bottom:12px;cursor:pointer}
+  .loginbox select:focus{border-color:var(--clay)}
   .loginbtn{
     width:100%;font-family:var(--sans);font-size:.85rem;font-weight:700;letter-spacing:.04em;cursor:pointer;
     background:var(--accent-grad);color:var(--on-accent);border:none;border-radius:var(--r-sm);padding:11px;box-shadow:var(--accent-glow);transition:filter .2s ease;
@@ -674,8 +676,9 @@
   <form class="loginbox" id="loginform">
     <div class="eyebrow">Live Furnished &middot; Portfolio Operations</div>
     <h1>The Leasing <em>Ledger</em></h1>
-    <div class="loginhint">Enter the team password to continue.</div>
+    <div class="loginhint">Enter the team password, and pick your name (used for the key log).</div>
     <input type="password" id="loginpw" placeholder="Password" autocomplete="current-password">
+    <select id="actorsel" title="Your name — attached to every key action you log"></select>
     <button type="submit" class="loginbtn">Open dashboard &rarr;</button>
     <div class="loginerr" id="loginerr"></div>
   </form>
@@ -739,8 +742,6 @@
       </div>
     </div>
     <div class="sidefoot">
-      <div class="kactor"><label class="eyebrow sf-label" style="margin-bottom:2px">Acting as &middot; for key log</label>
-        <select id="actorsel" title="Your name is attached to every key action you take"></select></div>
       <div class="sync" id="syncbadge"><span class="dot"></span><span id="synctext">Connecting&hellip;</span></div>
       <button type="button" class="syncbtn" id="syncbtn">&#8635; Sync now</button>
       <button type="button" class="signout" id="signout">sign out</button>
@@ -933,7 +934,14 @@
       <div class="qchips" id="u-chips"></div>
       <div class="tablebar" id="u-nbfilters" style="display:none;margin:0 0 10px;padding:8px 10px;background:var(--paper-deep);border-radius:3px">
         <span style="font-size:.66rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)">Nookbook</span>
-        <select id="nb-bt" title="Building type"><option value="">Any building type</option></select>
+        <select id="nb-bt" title="Building type">
+          <option value="">Any building type</option>
+          <option value="Rowhouse">Rowhouse</option>
+          <option value="Single Detached">Single detached</option>
+          <option value="Euro Design">Euro Design</option>
+          <option value="Space Squared">Space Squared</option>
+          <option value="FB Duplex">FB duplex (Euro + Space)</option>
+        </select>
         <select id="nb-park" title="Parking"><option value="">Any parking</option></select>
         <select id="nb-appl" title="Appliances">
           <option value="">Appliances: any</option>
@@ -1623,7 +1631,11 @@
       if (n && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; out.push(n); } });
     return out;
   }
-  function getActor(){ var v = el('actorsel'); return (v && v.value && v.value !== '__add__') ? v.value : ''; }
+  function getActor(){
+    var v = el('actorsel');
+    if (v && v.value && v.value !== '__add__') return v.value;
+    try { return localStorage.getItem(ACT_KEY) || ''; } catch (e) { return ''; }
+  }
   function buildActorSel(){
     if (!el('actorsel')) return;
     var cur = ''; try { cur = localStorage.getItem(ACT_KEY) || ''; } catch (e) {}
@@ -1797,7 +1809,11 @@
     var r = kCur; if (!r) return;
     var errEl = el('kf-err');
     var actor = getActor();
-    if (!actor) { if (errEl) errEl.textContent = 'Pick your name (Acting as) in the sidebar first.'; return; }
+    if (!actor) {
+      actor = (window.prompt('Your name (for the key log):') || '').trim();
+      if (!actor) { if (errEl) errEl.textContent = 'A name is required to log this action.'; return; }
+      try { localStorage.setItem(ACT_KEY, actor); } catch (e) {}
+    }
     var note = ((el('kf-note') && el('kf-note').value) || '').trim() || null;
     var route, body = { key_id: r.key_id, actor: actor, note: note };
     if (kind === 'checkout') {
@@ -2519,7 +2535,7 @@
   }
   function nbTest(r, nbf){
     if (uFilter !== 'nookbook') return true;
-    if (nbf.bt && (r.nb_building_type || '') !== nbf.bt) return false;
+    if (nbf.bt && (r.nb_building_type || '').toLowerCase().indexOf(nbf.bt.toLowerCase()) < 0) return false;
     if (nbf.park && (r.nb_parking || '') !== nbf.park) return false;
     if (nbf.appl && (r.nb_appliances || '') !== nbf.appl) return false;
     if (nbf.notready && !r.is_not_ready) return false;
@@ -2527,21 +2543,15 @@
   }
   function fillNbOptions(){
     if (unitsAll === null) return;
-    var bts = {}, parks = {};
-    unitsAll.forEach(function(r){
-      if (!r.is_nookbook) return;
-      if (r.nb_building_type) bts[r.nb_building_type] = 1;
-      if (r.nb_parking) parks[r.nb_parking] = 1;
-    });
-    function fill(id, vals, anyLabel){
-      var cur = el(id).value;
-      var h = '<option value="">' + anyLabel + '</option>';
-      Object.keys(vals).sort().forEach(function(v){ h += '<option value="' + esc(v) + '">' + esc(v) + '</option>'; });
-      el(id).innerHTML = h;
-      el(id).value = cur;
-    }
-    fill('nb-bt', bts, 'Any building type');
-    fill('nb-park', parks, 'Any parking');
+    // building type is a fixed 5-bucket list in the markup (keyword match in nbTest);
+    // only the parking select is populated from the data.
+    var parks = {};
+    unitsAll.forEach(function(r){ if (r.is_nookbook && r.nb_parking) parks[r.nb_parking] = 1; });
+    var cur = el('nb-park').value;
+    var h = '<option value="">Any parking</option>';
+    Object.keys(parks).sort().forEach(function(v){ h += '<option value="' + esc(v) + '">' + esc(v) + '</option>'; });
+    el('nb-park').innerHTML = h;
+    el('nb-park').value = cur;
   }
   function drawChips(){
     var html = '';
@@ -3339,6 +3349,7 @@
       if (ok) {
         TOKEN = pw;
         try { localStorage.setItem(STORE_KEY, pw); } catch (e) {}
+        var an = el('actorsel'); if (an && an.value && an.value !== '__add__') { try { localStorage.setItem(ACT_KEY, an.value); } catch (e) {} }
         el('loginerr').textContent = '';
         el('loginpw').value = '';
         startApp();

@@ -739,6 +739,8 @@
       </div>
     </div>
     <div class="sidefoot">
+      <div class="kactor"><label class="eyebrow sf-label" style="margin-bottom:2px">Acting as &middot; for key log</label>
+        <select id="actorsel" title="Your name is attached to every key action you take"></select></div>
       <div class="sync" id="syncbadge"><span class="dot"></span><span id="synctext">Connecting&hellip;</span></div>
       <button type="button" class="syncbtn" id="syncbtn">&#8635; Sync now</button>
       <button type="button" class="signout" id="signout">sign out</button>
@@ -1616,15 +1618,26 @@
       if (n && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; out.push(n); } });
     return out;
   }
-  // person picker now lives inside each action form (the sidebar picker was removed);
-  // the last-used name is remembered and pre-selected.
-  function personOpts(hint){
-    var cur = hint;
-    if (!cur) { try { cur = localStorage.getItem(ACT_KEY) || ''; } catch (e) {} }
+  function getActor(){ var v = el('actorsel'); return (v && v.value && v.value !== '__add__') ? v.value : ''; }
+  function buildActorSel(){
+    if (!el('actorsel')) return;
+    var cur = ''; try { cur = localStorage.getItem(ACT_KEY) || ''; } catch (e) {}
     var h = '<option value="">— pick name —</option>';
     actorList().forEach(function(n){ h += '<option' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>'; });
     h += '<option value="__add__">+ Add name…</option>';
-    return h;
+    el('actorsel').innerHTML = h;
+  }
+  if (el('actorsel')) {
+    buildActorSel();
+    el('actorsel').addEventListener('change', function(){
+      if (this.value === '__add__') {
+        var nm = (prompt('Add your name for the key log:') || '').trim();
+        if (nm) { var ex = actorExtra(); ex.push(nm);
+          try { localStorage.setItem(ACTLIST_KEY, JSON.stringify(ex)); localStorage.setItem(ACT_KEY, nm); } catch (e) {} }
+        buildActorSel(); return;
+      }
+      try { localStorage.setItem(ACT_KEY, this.value); } catch (e) {}
+    });
   }
 
   /* keys directory */
@@ -1745,23 +1758,20 @@
   function showKeyForm(kind){
     var r = kCur; if (!r) return;
     var box = el('km-form'); box.style.display = 'block';
-    var person = '<label>' + (kind === 'checkout' ? 'Who has it' : 'Done by') + '</label>' +
-      '<select id="kf-person" data-person="1">' + personOpts() + '</select>';
     var h = '';
     if (kind === 'checkout') {
       h = '<div class="kfh">Check this key out</div>' +
-        '<div class="kfrow"><div>' + person + '</div>' +
+        '<div class="kfrow"><div><label>Who has it</label><input id="kf-holder" placeholder="Name of person taking the key"></div>' +
         '<div><label>Expected back</label><input id="kf-exp" type="date" value="' + kPlus2() + '"></div></div>' +
         '<label>Note (optional)</label><textarea id="kf-note" placeholder="e.g. showing, contractor, owner…"></textarea>';
     } else if (kind === 'checkin') {
-      h = '<div class="kfh">Check this key back in</div>' + person +
-        '<label>Note (optional)</label><textarea id="kf-note" placeholder="anything worth recording"></textarea>';
+      h = '<div class="kfh">Check this key back in</div><label>Note (optional)</label><textarea id="kf-note" placeholder="anything worth recording"></textarea>';
     } else if (kind === 'status') {
       var opts = ''; KEY_STATUS_OPTS.forEach(function(o){ opts += '<option value="' + o[0] + '"' + (o[0] === r.status ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; });
       h = '<div class="kfh">Change status</div><label>Status</label><select id="kf-status">' + opts + '</select>' +
-        person + '<label>Note (optional)</label><textarea id="kf-note" placeholder="why is the status changing?"></textarea>';
+        '<label>Note (optional)</label><textarea id="kf-note" placeholder="why is the status changing?"></textarea>';
     } else {
-      h = '<div class="kfh">Add a note</div><label>Note</label><textarea id="kf-note" placeholder="timestamped note on this key’s history"></textarea>' + person;
+      h = '<div class="kfh">Add a note</div><label>Note</label><textarea id="kf-note" placeholder="timestamped note on this key’s history"></textarea>';
     }
     h += '<div class="kfbtns"><span class="kferr" id="kf-err"></span>' +
       '<button type="button" class="btn" data-kcancel="1">Cancel</button>' +
@@ -1773,27 +1783,17 @@
     if (e.target.closest('[data-kcancel]')) { el('km-form').style.display = 'none'; return; }
     var s = e.target.closest('[data-ksubmit]'); if (s) submitKey(s.getAttribute('data-ksubmit'));
   });
-  el('km-form').addEventListener('change', function(e){
-    var s = e.target.closest('[data-person]'); if (!s) return;
-    if (s.value === '__add__') {
-      var nm = (prompt('Add a name:') || '').trim();
-      if (nm) { var ex = actorExtra(); ex.push(nm);
-        try { localStorage.setItem(ACTLIST_KEY, JSON.stringify(ex)); } catch (e2) {}
-        s.innerHTML = personOpts(nm);
-      } else { s.value = ''; }
-    }
-  });
   function submitKey(kind){
     var r = kCur; if (!r) return;
     var errEl = el('kf-err');
-    var pe = el('kf-person');
-    var actor = (pe && pe.value && pe.value !== '__add__') ? pe.value : '';
-    if (!actor) { if (errEl) errEl.textContent = 'Pick a name first.'; return; }
-    try { localStorage.setItem(ACT_KEY, actor); } catch (e) {}
+    var actor = getActor();
+    if (!actor) { if (errEl) errEl.textContent = 'Pick your name (Acting as) in the sidebar first.'; return; }
     var note = ((el('kf-note') && el('kf-note').value) || '').trim() || null;
     var route, body = { key_id: r.key_id, actor: actor, note: note };
     if (kind === 'checkout') {
-      route = '/key/checkout'; body.holder = actor; body.expected = (el('kf-exp') && el('kf-exp').value) || null;
+      var holder = ((el('kf-holder') && el('kf-holder').value) || '').trim();
+      if (!holder) { errEl.textContent = 'Enter who is taking the key.'; return; }
+      route = '/key/checkout'; body.holder = holder; body.expected = (el('kf-exp') && el('kf-exp').value) || null;
     } else if (kind === 'checkin') { route = '/key/checkin'; }
     else if (kind === 'status') { route = '/key/status'; body.status = el('kf-status').value; }
     else { route = '/key/note'; if (!note) { errEl.textContent = 'Enter a note.'; return; } }

@@ -520,6 +520,32 @@
   .propchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .propchips span{font-size:.72rem;background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:10px;padding:3px 10px}
 
+  /* ── Key Manager ── */
+  .c-bad{background:rgba(223,47,74,.16);color:#FF9DA6}
+  .ovr{font-size:.6rem;font-weight:800;letter-spacing:.03em;color:#FF9DA6;background:rgba(223,47,74,.18);border-radius:8px;padding:1px 6px;margin-left:6px;text-transform:uppercase}
+  tr.r-over td{background:rgba(223,47,74,.12)}
+  .kactor select{font-family:var(--sans);font-size:.76rem;color:var(--ink);background:var(--glass-2);
+    border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:6px 8px;outline:none;width:100%;cursor:pointer}
+  .kactor select:focus{border-color:var(--clay)}
+  .kactions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 2px}
+  .kform{background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:13px 15px;margin:8px 0 2px;animation:pop .15s ease}
+  .kform .kfh{font-family:var(--serif);font-style:italic;font-size:.95rem;color:var(--ink);margin-bottom:6px}
+  .kform label{display:block;font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:8px 0 3px}
+  .kform input,.kform select,.kform textarea{width:100%;font-family:var(--sans);font-size:.85rem;color:var(--ink);
+    background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:8px 10px;outline:none;box-sizing:border-box}
+  .kform textarea{min-height:54px;resize:vertical}
+  .kform input:focus,.kform select:focus,.kform textarea:focus{border-color:var(--clay)}
+  .kfrow{display:flex;gap:12px;flex-wrap:wrap}
+  .kfrow>div{flex:1;min-width:150px}
+  .kfbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:13px;align-items:center}
+  .kferr{color:#FF9DA6;font-size:.74rem;margin-right:auto}
+  .khist{display:flex;flex-direction:column}
+  .khrow{display:flex;gap:12px;align-items:baseline;padding:7px 0;border-bottom:1px dotted var(--hairline-dark);font-size:.8rem}
+  .khrow:last-child{border-bottom:none}
+  .khrow .khd{color:var(--ink-soft);font-size:.72rem;white-space:nowrap;min-width:120px;font-variant-numeric:tabular-nums}
+  .khrow .khw{font-weight:700;min-width:92px}
+  .khrow .kht{flex:1;color:var(--ink)}
+
   /* v5: clickable sections, app/tour tabs, vacant filters */
   /* ── clickable affordances — make it obvious what's interactive ── */
   .kpi.click,.tile.click,.funnel-row.click,.pair.click{cursor:pointer}
@@ -668,6 +694,8 @@
       <button type="button" class="navitem" data-tab="applications"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg><span>Applications</span></button>
       <button type="button" class="navitem" data-tab="tours"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Tours</span></button>
       <button type="button" class="navitem" data-tab="owners"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Owners</span></button>
+      <button type="button" class="navitem" data-tab="keys"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 19 4m-3 0 3 3-2.5 2.5L14 7"/></svg><span>Keys</span></button>
+      <button type="button" class="navitem" data-tab="history"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>History</span></button>
     </nav>
     <div class="sidefilters">
       <div class="eyebrow sf-label">Scope &middot; all tabs</div>
@@ -711,6 +739,8 @@
       </div>
     </div>
     <div class="sidefoot">
+      <div class="kactor"><label class="eyebrow sf-label" style="margin-bottom:2px">Acting as &middot; for key log</label>
+        <select id="actorsel" title="Your name is attached to every key action you take"></select></div>
       <div class="sync" id="syncbadge"><span class="dot"></span><span id="synctext">Connecting&hellip;</span></div>
       <button type="button" class="syncbtn" id="syncbtn">&#8635; Sync now</button>
       <button type="button" class="signout" id="signout">sign out</button>
@@ -1021,6 +1051,56 @@
       </div>
     </div>
   </div>
+
+  <div id="page-keys" style="display:none">
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar">
+        <h2>Key manager</h2>
+        <input type="text" id="k-search" placeholder="Search property, unit, bin, holder, label&hellip;">
+        <span class="count-note" id="k-count"></span>
+      </div>
+      <div class="qchips" id="k-chips"></div>
+      <div class="scrolly tallscroll">
+        <table id="ktable">
+          <thead><tr>
+            <th data-k="property_name">Property &middot; Unit</th>
+            <th data-k="bin">Bin</th>
+            <th data-k="status">Status</th>
+            <th data-k="holder">Holder</th>
+            <th data-k="date_out">Out</th>
+            <th data-k="date_expected">Due back</th>
+            <th data-k="last_event_at">Last activity</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="note" style="margin-top:10px">Migrated from the Monday Key Ledger &mdash; this is now the system of record. Click a key to check it out / in, change status, or add a note; every action is logged in <b>History</b>. Sidebar scope filters apply to matched keys. Set <b>Acting as</b> in the sidebar before making changes.</div>
+    </div>
+  </div>
+
+  <div id="page-history" style="display:none">
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar">
+        <h2>Key history</h2>
+        <input type="text" id="h-search" placeholder="Search key, actor, note&hellip;">
+        <span class="count-note" id="h-count"></span>
+      </div>
+      <div class="qchips" id="h-chips"></div>
+      <div class="scrolly tallscroll">
+        <table id="htable">
+          <thead><tr>
+            <th data-k="created_at">When</th>
+            <th data-k="event_type">Event</th>
+            <th data-k="label">Key</th>
+            <th data-k="actor">Who</th>
+            <th>Detail</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="note" style="margin-top:10px">Append-only audit trail of every key action (and the one-time import). Sidebar scope filters apply to matched keys.</div>
+    </div>
+  </div>
   </main>
 </div>
 
@@ -1106,6 +1186,26 @@
       <div class="fgrid" id="am-fields"></div>
     </div>
     <div class="lmfoot" id="am-links"></div>
+  </div>
+</div>
+
+<div class="lmodal" id="kmodal">
+  <div class="lmback" data-close="kmodal"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="kmodal">&times;</button>
+    <div class="lmhead">
+      <h3 id="km-title"></h3>
+      <div class="lmsub" id="km-sub"></div>
+    </div>
+    <div class="lmbody">
+      <div class="fgrid" id="km-fields"></div>
+      <div class="note" id="km-standing" style="display:none"></div>
+      <div class="kactions" id="km-actions"></div>
+      <div class="kform" id="km-form" style="display:none"></div>
+      <div class="sect">History</div>
+      <div id="km-history" class="khist lmphnote">&nbsp;</div>
+    </div>
+    <div class="lmfoot" id="km-links"></div>
   </div>
 </div>
 
@@ -1237,6 +1337,8 @@
   var aWin = { mode:'global', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 }, rRange = 'past30';
   var uView = 'list', umap = null, umapLayer = null, umapSig = '';
+  var keysAll = null, kSort = { k:'property_name', d:1 }, kFilter = 'all', kCur = null;
+  var historyAll = null, hSort = { k:'created_at', d:-1 }, hFilter = 'all';
 
   var COL = {
     moss:'#9DBE86', amber:'#E6B65C', clay:'#E8B43E', plum:'#A6C0D2',
@@ -1341,6 +1443,19 @@
         return r.json();
       });
   }
+  function postJSON(path, body){
+    return fetch(API + path, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(r){
+      if (r.status === 401) { onAuthFail(); throw new Error('AUTH'); }
+      return r.json().then(function(j){
+        if (!r.ok) throw new Error(j && j.error ? j.error : ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
 
   function countUp(id, value, formatter){
     var node = el(id);
@@ -1362,7 +1477,7 @@
   }
 
   /* ── tabs ─────────────────────────────────── */
-  var PAGES = { ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', owners:'page-owners' };
+  var PAGES = { ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', owners:'page-owners', keys:'page-keys', history:'page-history' };
   function showTab(key){
     document.querySelectorAll('#tabs .navitem').forEach(function(t){
       t.classList.toggle('on', t.getAttribute('data-tab') === key);
@@ -1376,6 +1491,8 @@
     if (key === 'owners' && ownersAll === null) loadOwners();
     if (key === 'applications' && appsAll === null) loadApps();
     if (key === 'tours' && toursAll === null) loadTours();
+    if (key === 'keys' && keysAll === null) loadKeys();
+    if (key === 'history' && historyAll === null) loadHistory();
   }
   el('tabs').addEventListener('click', function(e){
     var b = e.target.closest('.navitem'); if (!b) return;
@@ -1456,7 +1573,307 @@
     if (ownersAll !== null) drawOwners();
     if (el('page-applications').style.display === 'block') { appsAll = null; loadApps(); }
     if (el('page-tours').style.display === 'block') { toursAll = null; loadTours(); }
+    if (keysAll !== null) { drawKeyChips(); drawKeys(); }
+    if (el('page-history').style.display === 'block') { historyAll = null; loadHistory(); }
   }
+
+  /* ════════════ Key Manager + History ════════════ */
+  var KEY_CHIP = {
+    in_office:'<span class="chip c-ok">In office</span>',
+    out_of_office:'<span class="chip c-hot">Out</span>',
+    available:'<span class="chip c-warm">Available</span>',
+    missing:'<span class="chip c-bad">Missing</span>',
+    not_received:'<span class="chip c-cold">Not received</span>',
+    master_swish:'<span class="chip c-new">Master · SWISH</span>',
+    construction_master:'<span class="chip c-new">Constr. master</span>',
+    realtor_lockbox:'<span class="chip c-cold">Realtor lockbox</span>',
+    tenant_has:'<span class="chip c-cold">Tenant/owner has</span>'
+  };
+  var KEY_STATUS_OPTS = [
+    ['in_office','In office'],['out_of_office','Out of Office'],['available','AVAILABLE'],
+    ['missing','Missing/cannot find'],['not_received','Not Received'],['master_swish','Master Key (SWISH)'],
+    ['construction_master','Construction Master'],['realtor_lockbox','In office/realtor lock box'],
+    ['tenant_has','Tenant or owner has all keys/fobs']
+  ];
+  function keyChip(s){ return KEY_CHIP[s] || '<span class="chip c-cold">' + esc(s || '?') + '</span>'; }
+  function KEYLBL(s){
+    var m = { in_office:'In office', out_of_office:'Out of Office', available:'AVAILABLE', missing:'Missing',
+      not_received:'Not Received', master_swish:'Master (SWISH)', construction_master:'Construction Master',
+      realtor_lockbox:'Realtor lockbox', tenant_has:'Tenant/owner has' };
+    return m[s] || s || '';
+  }
+  function evChipK(t){
+    var c = { checkout:'c-hot', checkin:'c-ok', status_change:'c-warm', note:'c-cold', import:'c-cold' }[t] || 'c-cold';
+    var l = { import:'Imported', checkout:'Checked out', checkin:'Checked in', status_change:'Status', note:'Note' }[t] || t;
+    return '<span class="chip ' + c + '">' + esc(l) + '</span>';
+  }
+
+  /* staff picker — self-attested actor, persisted per browser */
+  var STAFF_BASE = ['Connor','Pearse','Sarah','Miranda','Tristan','Jashan','Noor','Adam'];
+  var ACT_KEY = 'ledger_actor_v1', ACTLIST_KEY = 'ledger_actors_v1';
+  function actorExtra(){ try { return JSON.parse(localStorage.getItem(ACTLIST_KEY) || '[]') || []; } catch (e) { return []; } }
+  function actorList(){
+    var seen = {}, out = [];
+    STAFF_BASE.concat(actorExtra()).forEach(function(n){ n = (n || '').trim();
+      if (n && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; out.push(n); } });
+    return out;
+  }
+  function getActor(){ var v = el('actorsel'); return (v && v.value && v.value !== '__add__') ? v.value : ''; }
+  function buildActorSel(){
+    if (!el('actorsel')) return;
+    var cur = ''; try { cur = localStorage.getItem(ACT_KEY) || ''; } catch (e) {}
+    var h = '<option value="">— pick name —</option>';
+    actorList().forEach(function(n){ h += '<option' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>'; });
+    h += '<option value="__add__">+ Add name…</option>';
+    el('actorsel').innerHTML = h;
+  }
+  if (el('actorsel')) {
+    buildActorSel();
+    el('actorsel').addEventListener('change', function(){
+      if (this.value === '__add__') {
+        var nm = (prompt('Add your name for the key log:') || '').trim();
+        if (nm) { var ex = actorExtra(); ex.push(nm);
+          try { localStorage.setItem(ACTLIST_KEY, JSON.stringify(ex)); localStorage.setItem(ACT_KEY, nm); } catch (e) {} }
+        buildActorSel(); return;
+      }
+      try { localStorage.setItem(ACT_KEY, this.value); } catch (e) {}
+    });
+  }
+
+  /* keys directory */
+  var K_CHIPS = [['all','All'],['out','Out'],['overdue','Overdue'],['missing','Missing'],['available','Available'],['in_office','In office']];
+  function keyMatchesFilter(r, f){
+    if (f === 'all') return true;
+    if (f === 'out') return r.status === 'out_of_office';
+    if (f === 'overdue') return !!r.is_overdue;
+    return r.status === f;
+  }
+  function scopedKeys(){
+    var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
+    return (keysAll || []).filter(function(r){
+      if (mg.length && mg.indexOf(String(r.property_manager_id)) < 0) return false;
+      if (ow.length && ow.indexOf(String(r.primary_owner_id)) < 0) return false;
+      if (pr.length && pr.indexOf(String(r.property_id)) < 0) return false;
+      return true;
+    });
+  }
+  function loadKeys(){
+    el('veil').classList.remove('hide');
+    authFetch('/keys').then(function(j){
+      keysAll = j.keys || []; drawKeyChips(); drawKeys(); el('veil').classList.add('hide');
+    }).catch(function(){ el('veil').classList.add('hide');
+      el('ktable').querySelector('tbody').innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center">Could not load keys.</td></tr>'; });
+  }
+  function drawKeyChips(){
+    var base = scopedKeys(), html = '';
+    K_CHIPS.forEach(function(c){
+      var n = base.filter(function(r){ return keyMatchesFilter(r, c[0]); }).length;
+      html += '<button type="button" class="qchip' + (kFilter === c[0] ? ' on' : '') + '" data-q="' + c[0] + '">' +
+        esc(c[1]) + ' <span class="qn">' + n + '</span></button>';
+    });
+    el('k-chips').innerHTML = html;
+  }
+  function drawKeys(){
+    if (keysAll === null) return;
+    var q = (el('k-search').value || '').toLowerCase();
+    var base = scopedKeys();
+    var rows = base.filter(function(r){
+      if (!keyMatchesFilter(r, kFilter)) return false;
+      if (!q) return true;
+      return ((r.property_name||'') + ' ' + (r.unit_number||'') + ' ' + (r.label||'') + ' ' +
+              (r.bin||'') + ' ' + (r.holder||'') + ' ' + (r.status_label||'')).toLowerCase().indexOf(q) >= 0;
+    });
+    rows.sort(cmpRows(kSort.k, kSort.d));
+    var html = '';
+    rows.forEach(function(r){
+      var nm = r.property_name ? (esc(r.property_name) + (r.unit_number ? ' · ' + esc(r.unit_number) : '')) : esc(r.label);
+      var due = r.date_expected ? (esc(r.date_expected) + (r.is_overdue ? ' <span class="ovr">overdue</span>' : '')) : '–';
+      html += '<tr class="rowlink' + (r.is_overdue ? ' r-over' : '') + '" data-kid="' + r.key_id + '" title="' + esc(r.label) + '">' +
+        '<td><b>' + nm + '</b></td>' +
+        '<td>' + esc(r.bin || '–') + '</td>' +
+        '<td>' + keyChip(r.status) + '</td>' +
+        '<td>' + esc(r.holder || '–') + '</td>' +
+        '<td>' + esc(r.date_out || '–') + '</td>' +
+        '<td>' + due + '</td>' +
+        '<td>' + (esc((r.last_event_at || '').slice(0,10)) || '–') + '</td></tr>';
+    });
+    el('ktable').querySelector('tbody').innerHTML = html || emptyRow('ktable', 'Nothing matches');
+    el('k-count').textContent = rows.length + ' of ' + base.length + ' keys';
+  }
+  el('k-search').addEventListener('input', deb(drawKeys));
+  el('k-chips').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return;
+    kFilter = b.getAttribute('data-q'); drawKeyChips(); drawKeys(); });
+  el('ktable').querySelector('thead').addEventListener('click', function(e){
+    var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;
+    if (kSort.k === k) kSort.d = -kSort.d; else kSort = { k:k, d:(k === 'date_out' || k === 'date_expected' || k === 'last_event_at') ? -1 : 1 };
+    drawKeys();
+  });
+  el('ktable').addEventListener('click', function(e){ var tr2 = e.target.closest('tr[data-kid]'); if (tr2) openKey(tr2.getAttribute('data-kid')); });
+
+  /* key detail + write actions */
+  function findKey(kid){ var r = null; (keysAll || []).forEach(function(x){ if (String(x.key_id) === String(kid)) r = x; }); return r; }
+  function openKey(kid){ var r = findKey(kid); if (!r) return; kCur = r; renderKey(); el('km-form').style.display = 'none'; openModal('kmodal'); loadKeyHistory(r.key_id); }
+  function renderKey(){
+    var r = kCur; if (!r) return;
+    el('km-title').textContent = r.property_name ? (r.property_name + ' · ' + (r.unit_number || '')) : r.label;
+    var sub = [keyChip(r.status)];
+    if (r.property_name && r.label) sub.push('Monday: ' + esc(r.label));
+    if (r.holder) sub.push('held by <b>' + esc(r.holder) + '</b>');
+    el('km-sub').innerHTML = sub.join(' &middot; ');
+    var f = '';
+    f += fitem('Bin', esc(r.bin));
+    f += fitem('Status', keyChip(r.status));
+    if (r.status === 'out_of_office') {
+      f += fitem('Holder', esc(r.holder));
+      f += fitem('Date out', esc(r.date_out));
+      f += fitem('Due back', r.date_expected ? (esc(r.date_expected) + (r.is_overdue ? ' (overdue)' : '')) : null, r.is_overdue);
+    }
+    f += fitem('Building fob 1', esc(r.building_fob_1));
+    f += fitem('Building fob 2', esc(r.building_fob_2));
+    f += fitem('Parking stall', esc(r.parking_stall));
+    f += fitem('Parking pass', esc(r.parking_pass));
+    f += fitem('Garage opener', esc(r.garage_opener));
+    f += fitem('Mailbox', esc(r.mailbox));
+    if (r.property_name) {
+      f += fitem('Occupancy', r.occupancy_status ? (STATUS_CHIP[r.occupancy_status] || esc(r.occupancy_status)) : null);
+      f += fitem('Tenant', esc(r.tenant_names));
+      f += fitem('Lease end', esc(r.lease_to_date));
+      f += fitem('Manager', esc(r.property_manager_name));
+    }
+    el('km-fields').innerHTML = f;
+    if (r.standing_note) { el('km-standing').style.display = 'block'; el('km-standing').innerHTML = '<b>Standing note:</b> ' + esc(r.standing_note); }
+    else el('km-standing').style.display = 'none';
+    var a = '';
+    if (r.status === 'out_of_office') a += '<button type="button" class="btn primary" data-kact="checkin">Check in</button>';
+    else a += '<button type="button" class="btn primary" data-kact="checkout">Check out</button>';
+    a += '<button type="button" class="btn" data-kact="status">Change status</button>';
+    a += '<button type="button" class="btn" data-kact="note">Add note</button>';
+    el('km-actions').innerHTML = a;
+    var links = '';
+    if (r.unit_id && r.property_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit in Buildium &rarr;</a>';
+    el('km-links').innerHTML = links;
+  }
+  function kToday(){ var d = new Date(); return d.toISOString().slice(0,10); }
+  el('km-actions').addEventListener('click', function(e){ var b = e.target.closest('[data-kact]'); if (b) showKeyForm(b.getAttribute('data-kact')); });
+  function showKeyForm(kind){
+    var r = kCur; if (!r) return;
+    var box = el('km-form'); box.style.display = 'block';
+    var h = '';
+    if (kind === 'checkout') {
+      h = '<div class="kfh">Check this key out</div>' +
+        '<div class="kfrow"><div><label>Who has it</label><input id="kf-holder" placeholder="Name of person taking the key"></div>' +
+        '<div><label>Expected back</label><input id="kf-exp" type="date" value="' + kToday() + '"></div></div>' +
+        '<label>Note (optional)</label><textarea id="kf-note" placeholder="e.g. showing, contractor, owner…"></textarea>';
+    } else if (kind === 'checkin') {
+      h = '<div class="kfh">Check this key back in</div><label>Note (optional)</label><textarea id="kf-note" placeholder="anything worth recording"></textarea>';
+    } else if (kind === 'status') {
+      var opts = ''; KEY_STATUS_OPTS.forEach(function(o){ opts += '<option value="' + o[0] + '"' + (o[0] === r.status ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; });
+      h = '<div class="kfh">Change status</div><label>Status</label><select id="kf-status">' + opts + '</select>' +
+        '<label>Note (optional)</label><textarea id="kf-note" placeholder="why is the status changing?"></textarea>';
+    } else {
+      h = '<div class="kfh">Add a note</div><label>Note</label><textarea id="kf-note" placeholder="timestamped note on this key’s history"></textarea>';
+    }
+    h += '<div class="kfbtns"><span class="kferr" id="kf-err"></span>' +
+      '<button type="button" class="btn" data-kcancel="1">Cancel</button>' +
+      '<button type="button" class="btn primary" data-ksubmit="' + kind + '">Save</button></div>';
+    box.innerHTML = h;
+    var first = box.querySelector('input,select,textarea'); if (first) first.focus();
+  }
+  el('km-form').addEventListener('click', function(e){
+    if (e.target.closest('[data-kcancel]')) { el('km-form').style.display = 'none'; return; }
+    var s = e.target.closest('[data-ksubmit]'); if (s) submitKey(s.getAttribute('data-ksubmit'));
+  });
+  function submitKey(kind){
+    var r = kCur; if (!r) return;
+    var errEl = el('kf-err');
+    var actor = getActor();
+    if (!actor) { if (errEl) errEl.textContent = 'Pick your name (Acting as) in the sidebar first.'; return; }
+    var note = ((el('kf-note') && el('kf-note').value) || '').trim() || null;
+    var route, body = { key_id: r.key_id, actor: actor, note: note };
+    if (kind === 'checkout') {
+      var holder = ((el('kf-holder') && el('kf-holder').value) || '').trim();
+      if (!holder) { errEl.textContent = 'Enter who is taking the key.'; return; }
+      route = '/key/checkout'; body.holder = holder; body.expected = (el('kf-exp') && el('kf-exp').value) || null;
+    } else if (kind === 'checkin') { route = '/key/checkin'; }
+    else if (kind === 'status') { route = '/key/status'; body.status = el('kf-status').value; }
+    else { route = '/key/note'; if (!note) { errEl.textContent = 'Enter a note.'; return; } }
+    var btn = el('km-form').querySelector('[data-ksubmit]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    postJSON(route, body).then(function(j){
+      if (j && j.key) { for (var i = 0; i < keysAll.length; i++) { if (keysAll[i].key_id === j.key.key_id) { keysAll[i] = j.key; break; } } kCur = j.key; }
+      el('km-form').style.display = 'none';
+      renderKey(); loadKeyHistory(r.key_id); drawKeyChips(); drawKeys();
+    }).catch(function(err){ if (errEl) errEl.textContent = (err && err.message) || 'Save failed.'; if (btn) { btn.disabled = false; btn.textContent = 'Save'; } });
+  }
+  function khDetail(e){
+    if (e.event_type === 'checkout') return 'to ' + esc(e.holder || '?') + (e.date_expected ? ', due ' + esc(e.date_expected) : '') + (e.note ? ' — ' + esc(e.note) : '');
+    if (e.event_type === 'status_change') return esc(KEYLBL(e.from_status)) + ' → ' + esc(KEYLBL(e.to_status)) + (e.note ? ' — ' + esc(e.note) : '');
+    if (e.event_type === 'checkin') return 'returned' + (e.note ? ' — ' + esc(e.note) : '');
+    if (e.event_type === 'import') return 'as ' + esc(KEYLBL(e.to_status)) + (e.note ? ' — ' + esc(e.note) : '');
+    return esc(e.note || '');
+  }
+  function khRow(e){
+    return '<div class="khrow"><span class="khd">' + esc((e.created_at || '').slice(0,16).replace('T',' ')) + '</span>' +
+      '<span class="khw">' + evChipK(e.event_type) + '</span>' +
+      '<span class="kht">' + (e.actor ? '<b>' + esc(e.actor) + '</b> · ' : '') + khDetail(e) + '</span></div>';
+  }
+  function loadKeyHistory(kid){
+    el('km-history').textContent = 'Loading…';
+    authFetch('/key-events?key_id=' + encodeURIComponent(kid)).then(function(j){
+      var ev = (j && j.events) || [];
+      el('km-history').innerHTML = ev.length ? ev.map(khRow).join('') : 'No history yet.';
+    }).catch(function(){ el('km-history').textContent = 'History unavailable right now.'; });
+  }
+
+  /* history feed tab */
+  var H_CHIPS = [['all','All'],['checkout','Check-outs'],['checkin','Check-ins'],['status_change','Status'],['note','Notes'],['import','Imports']];
+  function loadHistory(){
+    el('veil').classList.remove('hide');
+    var p = new URLSearchParams(); p.set('limit','800'); appendScope(p);
+    authFetch('/key-events?' + p.toString()).then(function(j){
+      historyAll = j.events || []; drawHistoryChips(); drawHistory(); el('veil').classList.add('hide');
+    }).catch(function(){ el('veil').classList.add('hide');
+      el('htable').querySelector('tbody').innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center">Could not load history.</td></tr>'; });
+  }
+  function drawHistoryChips(){
+    var html = '';
+    H_CHIPS.forEach(function(c){
+      var n = (historyAll || []).filter(function(r){ return c[0] === 'all' || r.event_type === c[0]; }).length;
+      html += '<button type="button" class="qchip' + (hFilter === c[0] ? ' on' : '') + '" data-q="' + c[0] + '">' +
+        esc(c[1]) + ' <span class="qn">' + n + '</span></button>';
+    });
+    el('h-chips').innerHTML = html;
+  }
+  function drawHistory(){
+    if (historyAll === null) return;
+    var q = (el('h-search').value || '').toLowerCase();
+    var rows = historyAll.filter(function(r){
+      if (hFilter !== 'all' && r.event_type !== hFilter) return false;
+      if (!q) return true;
+      return ((r.label||'') + ' ' + (r.property_name||'') + ' ' + (r.unit_number||'') + ' ' +
+              (r.actor||'') + ' ' + (r.note||'') + ' ' + (r.holder||'')).toLowerCase().indexOf(q) >= 0;
+    });
+    rows.sort(cmpRows(hSort.k, hSort.d, hSort.k === 'created_at'));
+    var html = '';
+    rows.forEach(function(e){
+      var nm = e.property_name ? (esc(e.property_name) + (e.unit_number ? ' · ' + esc(e.unit_number) : '')) : esc(e.label);
+      html += '<tr>' +
+        '<td>' + esc((e.created_at || '').slice(0,16).replace('T',' ')) + '</td>' +
+        '<td>' + evChipK(e.event_type) + '</td>' +
+        '<td title="' + esc(e.label || '') + '">' + nm + '</td>' +
+        '<td>' + esc(e.actor || '–') + '</td>' +
+        '<td>' + khDetail(e) + '</td></tr>';
+    });
+    el('htable').querySelector('tbody').innerHTML = html || emptyRow('htable', 'Nothing matches');
+    el('h-count').textContent = rows.length + ' of ' + historyAll.length + ' events';
+  }
+  el('h-search').addEventListener('input', deb(drawHistory));
+  el('h-chips').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return;
+    hFilter = b.getAttribute('data-q'); drawHistoryChips(); drawHistory(); });
+  el('htable').querySelector('thead').addEventListener('click', function(e){
+    var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;
+    if (hSort.k === k) hSort.d = -hSort.d; else hSort = { k:k, d: k === 'created_at' ? -1 : 1 };
+    drawHistory();
+  });
 
   /* ── multi-select ─────────────────────────── */
   function msButton(key){

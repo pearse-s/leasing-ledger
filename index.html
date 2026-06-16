@@ -2325,10 +2325,10 @@
     thtml += '<div class="pair click" data-status="AddedToDraftLease" title="See draft-lease applications"><span class="pl">On a draft lease &rarr;</span><span class="pv">' + fmtNum(tl.draft_lease_n) + '</span></div>';
     thtml += '<div class="pair"><span class="pl">Still open (undecided/deferred)</span><span class="pv">' + fmtNum(tlO.n) +
       (tlO.oldest_days != null ? ' <small>oldest ' + tlO.oldest_days + 'd</small>' : '') + '</span></div>';
-    if (leads && leads.conversion_pct !== undefined) {
-      thtml += '<div class="pair"><span class="pl">Lead &rarr; lease conversion</span><span class="pv">' + pct(leads.conversion_pct) +
-        ' <small>' + fmtNum(leads.leases_signed) + ' signed / ' + fmtNum(leads.filtered ? leads.matched : leads.in_window) + ' leads</small></span></div>';
-    }
+    var shConvDen = (act.showings || {}).completed || 0;
+    var shConvPct = shConvDen > 0 ? Math.round(1000 * (act.leases_signed || 0) / shConvDen) / 10 : null;
+    thtml += '<div class="pair"><span class="pl">Showing &rarr; lease conversion</span><span class="pv">' + pct(shConvPct) +
+      ' <small>' + fmtNum(act.leases_signed) + ' signed / ' + fmtNum(shConvDen) + ' showings (completed)</small></span></div>';
     el('apptimes').innerHTML = thtml;
 
     var sh = act.showings || {};

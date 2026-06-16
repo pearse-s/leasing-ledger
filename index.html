@@ -110,27 +110,37 @@
   .sidefilters .fgroup{flex:none;width:100%;min-width:0;max-width:none;position:relative}
   .sidefilters label{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);display:block;margin-bottom:4px}
   .sidefilters .msbtn{font-size:.8rem;padding:6px 24px 6px 8px}
-  /* activity-window slider (sidebar) */
+  /* activity-window control (sidebar summary + click-in popover) */
   .sidewindow{display:flex;flex-direction:column;gap:8px;position:relative;padding-top:2px}
-  .winrange{width:100%;accent-color:var(--clay);cursor:pointer;height:7px}
-  .winrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .winval{font-size:.82rem;font-weight:700;color:var(--ink)}
-  .winlink{font-family:var(--sans);font-size:.7rem;font-weight:700;color:var(--clay);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
-  .winlink:hover{color:var(--amber)}
-  .sidewindow .range-note{font-size:.64rem;color:var(--ink-soft);font-style:italic;margin:0;line-height:1.4}
-  .winpop{display:none;position:absolute;z-index:31;top:calc(100% + 6px);left:0;right:0;flex-direction:column;gap:5px;
+  .winsummary{width:100%;text-align:left;cursor:pointer;background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:11px;padding:10px 11px;display:flex;align-items:center;gap:8px;transition:border-color .15s ease,background .15s ease}
+  .winsummary:hover{border-color:rgba(232,180,62,.5);background:var(--clay-soft)}
+  .wsum-big{font-size:.86rem;font-weight:600;color:var(--ink);line-height:1.2;display:block}
+  .wsum-sub{font-size:.66rem;color:var(--ink-soft);margin-top:3px;display:block}
+  .wsum-ic{margin-left:auto;color:var(--clay);display:flex;flex:none}
+  .wsum-ic svg{width:16px;height:16px;stroke:currentColor;fill:none}
+  .winpop{display:none;position:absolute;z-index:31;top:calc(100% + 6px);left:0;width:264px;flex-direction:column;gap:13px;
     background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0) 30%),rgba(25,19,14,.985);
     backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);
-    border:1px solid rgba(255,255,255,.14);border-radius:12px;box-shadow:0 22px 50px rgba(0,0,0,.55),var(--rim);padding:12px}
+    border:1px solid rgba(255,255,255,.14);border-radius:13px;box-shadow:0 22px 50px rgba(0,0,0,.55),var(--rim);padding:15px}
   .winpop.open{display:flex;animation:mspop .26s var(--spring)}
-  .winpop label{font-size:.56rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
-  .winpop input[type=date]{width:100%}
-  .winpopfoot{display:flex;justify-content:space-between;margin-top:6px}
-  .winpopfoot button{font-family:var(--sans);font-size:.74rem;font-weight:700;cursor:pointer;border:none;background:none;padding:2px}
-  .winclear{color:var(--ink-soft)}
-  .winclear:hover{color:var(--ink)}
-  .winapply{color:var(--clay)}
-  .winapply:hover{color:var(--amber)}
+  .windone{position:absolute;top:12px;right:13px;font-family:var(--sans);font-size:.66rem;font-weight:700;color:var(--clay);background:none;border:none;cursor:pointer;letter-spacing:.04em}
+  .windone:hover{color:var(--amber)}
+  .windates{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .winlbl{display:block;font-size:.54rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:3px}
+  .winpop input[type=date]{width:100%;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:8px;padding:5px 6px;font-size:.7rem;color-scheme:dark;outline:none}
+  .winpop input[type=date]:focus{border-color:var(--clay)}
+  .winstepwrap{display:flex;align-items:center;justify-content:center;gap:9px}
+  .winsteplab{font-size:.78rem;color:var(--ink-soft)}
+  .winstep{width:38px;height:38px;flex:none;border-radius:11px;border:1.5px solid var(--clay);background:var(--clay-soft);color:var(--clay);font-size:1.5rem;font-weight:600;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .14s ease,transform .1s ease}
+  .winstep:hover{background:var(--clay);color:var(--on-accent)}
+  .winstep:active{transform:scale(.92)}
+  .winnum{width:48px;text-align:center;font-size:1.4rem;font-weight:600;color:var(--ink);background:transparent;border:none;border-bottom:1.5px solid var(--hairline-dark);padding:2px 0;outline:none;font-family:var(--sans)}
+  .winnum:focus{border-color:var(--clay)}
+  .winnum::-webkit-outer-spin-button,.winnum::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .winchips{display:flex;gap:6px}
+  .winchip{flex:1;font-family:var(--sans);font-size:.74rem;font-weight:600;padding:7px 0;border-radius:999px;border:1px solid var(--hairline-dark);background:var(--glass-2);color:var(--ink-soft);cursor:pointer;transition:border-color .15s ease,background .15s ease,color .15s ease}
+  .winchip:hover{border-color:rgba(232,180,62,.5);color:var(--ink)}
+  .winchip.on{background:var(--clay);border-color:var(--clay);color:var(--on-accent)}
   .sidefoot{margin-top:auto;display:flex;flex-direction:column;gap:10px;padding-top:16px;border-top:1px solid var(--hairline)}
 
   .sync{display:flex;align-items:center;gap:8px;font-size:.76rem;color:var(--ink-soft);line-height:1.35}
@@ -746,14 +756,31 @@
       </div>
     </div>
     <div class="sidewindow" id="sidewindow">
-      <div class="eyebrow sf-label">Activity window &middot; Ledger</div>
-      <input type="range" class="winrange" id="winrange" min="1" max="365" step="1" value="30" aria-label="Activity window in days">
-      <div class="winrow"><span class="winval" id="winval">Last 30 days</span><button type="button" class="winlink" id="wincustom">Custom range</button></div>
-      <div class="range-note" id="rangenote"></div>
+      <div class="eyebrow sf-label">Activity window &middot; all tabs</div>
+      <button type="button" class="winsummary" id="winsummary">
+        <span><span class="wsum-big" id="wsum-big">&ndash;</span><span class="wsum-sub" id="wsum-sub">&ndash;</span></span>
+        <span class="wsum-ic"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="10" cy="8" r="2.4" fill="var(--bg-1)"/><circle cx="15" cy="16" r="2.4" fill="var(--bg-1)"/></svg></span>
+      </button>
       <div class="winpop" id="winpop">
-        <label>From</label><input type="date" id="f-from">
-        <label>To</label><input type="date" id="f-to">
-        <div class="winpopfoot"><button type="button" class="winclear" id="winclear">Clear</button><button type="button" class="winapply" id="winapply">Apply range</button></div>
+        <button type="button" class="windone" id="windone">Done</button>
+        <div class="sf-label">Set range</div>
+        <div class="windates">
+          <div><span class="winlbl">From</span><input type="date" id="f-from"></div>
+          <div><span class="winlbl">To</span><input type="date" id="f-to"></div>
+        </div>
+        <div class="winstepwrap">
+          <span class="winsteplab">Last</span>
+          <button type="button" class="winstep" id="winminus" aria-label="Fewer days">&minus;</button>
+          <input type="number" class="winnum" id="winnum" min="1" max="730" value="7">
+          <button type="button" class="winstep" id="winplus" aria-label="More days">+</button>
+          <span class="winsteplab">days</span>
+        </div>
+        <div class="winchips" id="winchips">
+          <button type="button" class="winchip" data-d="7">1w</button>
+          <button type="button" class="winchip" data-d="30">1mo</button>
+          <button type="button" class="winchip" data-d="182">6mo</button>
+          <button type="button" class="winchip" data-d="365">1y</button>
+        </div>
       </div>
     </div>
     <div class="sidefoot">
@@ -1359,7 +1386,7 @@
     window.addEventListener('resize', fxNavPill);
   }
 
-  var state = { preset:30, from:null, to:null, bucket:null };
+  var state = { preset:7, from:dstr(new Date(Date.now()-7*86400000)), to:dstr(new Date()), bucket:null };
   // Multi-select popovers. scope:true entries are global entity filters that also drive
   // server queries (via appendScope); scope:false entries are local table facets (amenity,
   // parking) filtered client-side. cb() is the per-popover refresh, run on every change.
@@ -1640,13 +1667,7 @@
     showTab('tours');
   }
 
-  function windowDates(){
-    var to = new Date();
-    if (state.preset === 'custom') {
-      return { from: state.from || dstr(new Date(to.getTime()-30*86400000)), to: state.to || dstr(to) };
-    }
-    return { from: dstr(new Date(to.getTime() - state.preset*86400000)), to: dstr(to) };
-  }
+  function windowDates(){ return { from: state.from, to: state.to }; }
 
   function buildQuery(){
     var w = windowDates();
@@ -2368,7 +2389,6 @@
 
     var m = d.meta || {};
     var tb = m.takebacks_excluded;
-    el('rangenote').textContent = 'Activity window: ' + (m.date_from||'') + ' → ' + (m.date_to||'');
     el('foot').innerHTML =
       (tb ? '<b>' + fmtNum(tb) + ' owner take-back unit' + (tb === 1 ? '' : 's') + ' excluded from all stats</b> (visible on the Units tab). ' : '') +
       (m.not_ready_excluded ? '<b>' + fmtNum(m.not_ready_excluded) + ' Nookbook not-ready (construction) unit' + (m.not_ready_excluded === 1 ? '' : 's') + ' also excluded</b>. ' : '') +
@@ -3234,7 +3254,7 @@
     var w = windowDates();
     // global window sets the lookback; presets keep upcoming visible, custom honours its exact range
     p.set('from', w.from);
-    p.set('to', state.preset === 'custom' ? w.to : dstr(new Date(now + 90 * 86400000)));
+    p.set('to', state.to !== dstr(new Date()) ? w.to : dstr(new Date(now + 90 * 86400000)));
     return appendScope(p);
   }
   function loadTours(){
@@ -3381,45 +3401,65 @@
   });
 
   /* ── filter events (Ledger) ───────────────── */
-  function winLabel(n){ return n === 1 ? 'Last 1 day' : 'Last ' + n + ' days'; }
   // the sidebar window drives every time-based tab (Ledger / Applications / Tours)
   function onWindowChange(){
-    aWin = { mode:'global', from:null, to:null };   // drop any per-drill override; follow the slider
+    aWin = { mode:'global', from:null, to:null };   // drop any per-drill override; follow the window
     load();   // reloads the ledger and invalidates appsAll/toursAll
     if (el('page-applications').style.display === 'block') loadApps();
     if (el('page-tours').style.display === 'block') loadTours();
   }
-  // drag the slider → live label; release (change) → apply the window everywhere
-  el('winrange').addEventListener('input', function(){ el('winval').textContent = winLabel(parseInt(this.value, 10)); });
-  el('winrange').addEventListener('change', function(){
-    state.preset = parseInt(this.value, 10); state.from = null; state.to = null;
-    el('winval').textContent = winLabel(state.preset);
+  // ── activity window: explicit From/To range with a "Last N days" stepper ──
+  // The sidebar summary shows the range; clicking opens the popover. ±/typing N
+  // resize the window by moving the START (end stays put); chips snap to a window
+  // ending today. Changes apply on close (Done / click-away) so a run of ± clicks
+  // triggers a single reload.
+  var WMON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var winDirty = false;
+  function winToday(){ return dstr(new Date()); }
+  function winDays(){ return Math.max(1, Math.round((Date.parse(state.to) - Date.parse(state.from)) / 86400000)); }
+  function winWLabel(n){ var w = n / 7; if (n % 7 === 0) return w + (w === 1 ? ' wk' : ' wks'); return '~' + (Math.round(w * 10) / 10) + ' wks'; }
+  function winFmt(s){ var d = new Date(s); return WMON[d.getUTCMonth()] + ' ' + d.getUTCDate(); }
+  function winRender(){
+    var n = winDays(), label = winFmt(state.from) + ' – ' + winFmt(state.to);
+    el('wsum-big').textContent = label;
+    el('wsum-sub').textContent = n + ' days · ' + winWLabel(n);
+    el('f-from').value = state.from; el('f-to').value = state.to; el('winnum').value = n;
+    var endsToday = state.to === winToday();
+    Array.prototype.forEach.call(el('winchips').children, function(c){
+      c.classList.toggle('on', endsToday && n === parseInt(c.getAttribute('data-d'), 10));
+    });
+  }
+  function winSetDays(n){
+    n = Math.max(1, Math.min(730, Math.round(n)));
+    state.from = dstr(new Date(Date.parse(state.to) - n * 86400000));
+    winDirty = true; winRender();
+  }
+  function winClose(){
+    if (!el('winpop').classList.contains('open')) return;
     el('winpop').classList.remove('open');
-    onWindowChange();
-  });
-  el('wincustom').addEventListener('click', function(ev){
+    if (winDirty) { winDirty = false; onWindowChange(); }
+  }
+  el('winsummary').addEventListener('click', function(ev){
     ev.stopPropagation();
-    var p = el('winpop'), opening = !p.classList.contains('open');
-    p.classList.toggle('open', opening);
-    if (opening) {
-      var w = windowDates();
-      if (!el('f-from').value) el('f-from').value = w.from;
-      if (!el('f-to').value) el('f-to').value = w.to;
-    }
+    if (el('winpop').classList.contains('open')) winClose();
+    else { winRender(); el('winpop').classList.add('open'); }
   });
   el('winpop').addEventListener('click', function(ev){ ev.stopPropagation(); });
-  el('winclear').addEventListener('click', function(){ el('f-from').value = ''; el('f-to').value = ''; });
-  el('winapply').addEventListener('click', function(){
-    state.from = el('f-from').value || null;
-    state.to = el('f-to').value || null;
-    if (state.from && state.to) {
-      state.preset = 'custom';
-      el('winval').textContent = 'Custom range';
-      el('winpop').classList.remove('open');
-      onWindowChange();
-    }
+  el('windone').addEventListener('click', function(ev){ ev.stopPropagation(); winClose(); });
+  el('winminus').addEventListener('click', function(){ winSetDays(winDays() - 1); });
+  el('winplus').addEventListener('click', function(){ winSetDays(winDays() + 1); });
+  el('winnum').addEventListener('input', function(){ var v = parseInt(this.value, 10); if (v > 0) winSetDays(v); });
+  Array.prototype.forEach.call(el('winchips').children, function(c){
+    c.addEventListener('click', function(){ state.to = winToday(); winSetDays(parseInt(c.getAttribute('data-d'), 10)); });
   });
-  document.addEventListener('click', function(){ el('winpop').classList.remove('open'); });
+  el('f-from').addEventListener('change', function(){
+    var v = this.value; if (v && v < state.to) { state.from = v; winDirty = true; } winRender();
+  });
+  el('f-to').addEventListener('change', function(){
+    var v = this.value; if (v && v > state.from && v <= winToday()) { state.to = v; winDirty = true; } winRender();
+  });
+  document.addEventListener('click', winClose);
+  winRender();
   el('t-search').addEventListener('input', deb(drawTable));
   // t-beds / t-status are chip groups (CG_ONCHANGE), t-amen is a popover (MS.cb) — they wire themselves
   el('t-rmin').addEventListener('input', drawTable);

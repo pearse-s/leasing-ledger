@@ -2439,7 +2439,9 @@
     rows.sort(cmpRows(sortKey, sortDir));
     var html = '';
     rows.forEach(function(r){
-      html += '<tr>' +
+      // whole row opens the unit popup (like the Units tab); the listed button still opens the listing modal
+      var uattr = r.unit_id != null ? ' class="rowlink" data-uid="' + r.unit_id + '"' : '';
+      html += '<tr' + uattr + '>' +
         '<td>' + esc(r.property) + '</td>' +
         '<td>' + esc(r.unit) + '</td>' +
         '<td>' + esc(r.bedrooms || '–') + '</td>' +
@@ -2566,7 +2568,9 @@
   }
   el('vtable').addEventListener('click', function(ev){
     var b = ev.target.closest('.listbtn');
-    if (b) openListing(b.getAttribute('data-uid'));
+    if (b) { openListing(b.getAttribute('data-uid')); return; }
+    var tr = ev.target.closest('tr[data-uid]');
+    if (tr) openUnitEnsure(tr.getAttribute('data-uid'));
   });
 
   /* ── modals (generic open/close) ──────────── */
@@ -2917,6 +2921,12 @@
   /* ── unit detail popup ────────────────────── */
   function fitem(label, value, neg){
     return '<div class="fitem"><div class="fl">' + esc(label) + '</div><div class="fv' + (neg ? ' neg' : '') + '">' + (value == null || value === '' ? '–' : value) + '</div></div>';
+  }
+  // the Ledger's Marketed-units table can open the unit popup before the Units
+  // tab has loaded; fetch the directory first if needed, then open.
+  function openUnitEnsure(uid){
+    if (unitsAll === null) loadUnits(function(){ openUnit(uid); });
+    else openUnit(uid);
   }
   function openUnit(uid){
     var r = null;

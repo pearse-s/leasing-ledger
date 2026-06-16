@@ -847,7 +847,7 @@
     <div class="grid g2">
       <div class="card">
         <h2>Vacancy aging</h2>
-        <div class="note">listed units only &middot; click a bar to see those units below &middot; operational ages from last lease end, new inventory from listing date</div>
+        <div class="note">all vacant units &middot; click a bar to see every unit in that age band below &middot; operational ages from last lease end, never-leased from listing date</div>
         <div class="chartbox tall"><canvas id="ch-aging"></canvas></div>
       </div>
       <div class="card">
@@ -2167,7 +2167,7 @@
     state.bucket = b;
     var chipEl = el('bucketchip');
     if (b) {
-      el('bucketlabel').textContent = 'Aging: ' + b.label + (b.klass ? (b.klass === 'op_vacant' ? ' · operational' : ' · never leased') : '');
+      el('bucketlabel').textContent = 'Aging: ' + b.label;
       chipEl.classList.add('show');
     } else {
       chipEl.classList.remove('show');
@@ -2228,8 +2228,13 @@
       options:{ responsive:true, maintainAspectRatio:false, layout:{ padding:{ top:16 } },
         onClick:function(evt, els){
           if (!els || !els.length) return;
-          var idx = els[0].index, ds = els[0].datasetIndex;
-          setBucket({ key:BUCKET_KEYS[idx], label:BUCKET_LABELS[idx], klass: ds === 0 ? 'op_vacant' : 'never_leased' });
+          var idx = els[0].index;
+          // clicking any segment drills the WHOLE age band (operational + never-leased);
+          // clear conflicting table filters so the band's vacant units always show
+          // (inBucket already restricts to vacant rows, so status resets to "all")
+          el('t-listed').checked = false; el('t-unlisted').checked = false;
+          cgReplace('t-status', []);
+          setBucket({ key:BUCKET_KEYS[idx], label:BUCKET_LABELS[idx] });
           scrollVacantTable();
         },
         onHover:function(evt, els){
@@ -2432,11 +2437,9 @@
   function inBucket(r){
     var b = state.bucket;
     if (!b) return true;
-    if (r.occupancy_status && r.occupancy_status !== 'op_vacant' && r.occupancy_status !== 'never_leased') return false; // aging is vacant-only
-    if (b.klass === 'op_vacant' && r.never_leased) return false;
-    if (b.klass === 'never_leased' && !r.never_leased) return false;
+    if (statusOf(r) !== 'vacant') return false;        // aging is vacant-only (operational + never-leased together)
     var range = BUCKET_RANGE[b.key];
-    if (range === null) return r.days_vacant == null;
+    if (range === null) return r.days_vacant == null;  // the "age unknown" bucket
     return r.days_vacant != null && r.days_vacant >= range[0] && r.days_vacant <= range[1];
   }
   function drawTable(){

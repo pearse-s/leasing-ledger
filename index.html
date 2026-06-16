@@ -193,6 +193,21 @@
   .msfoot button{font-family:var(--sans);font-size:.72rem;font-weight:700;border:none;background:none;cursor:pointer;color:var(--clay)}
   .msfoot .msdone{color:var(--ink)}
 
+  /* inline multi-select popover (table-bar amenity / parking) — same component as the sidebar scope filters */
+  .msinline{position:relative;display:inline-block;vertical-align:middle}
+  .msinline .msbtn{width:auto;min-width:140px;font-size:.82rem;padding:7px 26px 7px 10px}
+  .msinline .mspanel{left:0;right:auto;min-width:210px}
+  .msinline.msopen .msbtn{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft)}
+  .msinline.msopen .msbtn::after{transform:translateY(-50%) rotate(180deg);color:var(--clay)}
+
+  /* multi-toggle chip group (beds / status / building type / appliances) */
+  .chipset{display:inline-flex;flex-wrap:wrap;gap:5px;align-items:center;vertical-align:middle}
+  .chipset .cslabel{font-size:.6rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-soft);margin-right:1px}
+  .chip-mini{font-family:var(--sans);font-size:.74rem;line-height:1;padding:5px 10px;border:1px solid var(--hairline-dark);border-radius:999px;
+    background:var(--glass-2);color:var(--ink-soft);cursor:pointer;user-select:none;transition:border-color .15s ease,background .2s ease,color .15s ease}
+  .chip-mini:hover{border-color:var(--clay);color:var(--ink)}
+  .chip-mini.on{background:var(--accent-grad);border-color:transparent;color:var(--on-accent);font-weight:600}
+
   .presets{display:flex;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);overflow:hidden;background:var(--glass-2)}
   .presets button{
     font-family:var(--sans);font-size:.78rem;font-weight:600;padding:7px 13px;border:none;background:transparent;
@@ -866,24 +881,29 @@
         <h2>Marketed units</h2>
         <button type="button" class="bucketchip" id="bucketchip"><span id="bucketlabel"></span>&nbsp;&#10005;</button>
         <input type="text" id="t-search" placeholder="Search property, unit, owner&hellip;">
-        <select id="t-beds" title="Bedrooms">
-          <option value="">Any beds</option>
-          <option value="Studio">Studio</option>
-          <option value="1">1 bed</option>
-          <option value="2">2 bed</option>
-          <option value="3">3 bed</option>
-          <option value="4">4+ bed</option>
-        </select>
+        <span class="chipset" data-cg="t-beds" title="Bedrooms — pick any number">
+          <span class="cslabel">Beds</span>
+          <button type="button" class="chip-mini" data-v="Studio">Studio</button>
+          <button type="button" class="chip-mini" data-v="1">1</button>
+          <button type="button" class="chip-mini" data-v="2">2</button>
+          <button type="button" class="chip-mini" data-v="3">3</button>
+          <button type="button" class="chip-mini" data-v="4">4+</button>
+        </span>
         <input type="number" id="t-rmin" placeholder="Min rent" min="0" step="50" title="Minimum rent (listed rent, market rent if unlisted)">
         <input type="number" id="t-rmax" placeholder="Max rent" min="0" step="50" title="Maximum rent (listed rent, market rent if unlisted)">
-        <select id="t-amen" title="Amenity (from active listings — unlisted units have no amenity data)">
-          <option value="">Any amenity</option>
-        </select>
-        <select id="t-status" title="Status: vacant units vs. occupied units already being marketed (upcoming turnover)">
-          <option value="">All marketed</option>
-          <option value="vacant">Vacant only</option>
-          <option value="occupied">Occupied &middot; listed</option>
-        </select>
+        <span class="msinline" id="fg-t_amen">
+          <button type="button" class="msbtn" id="msb-t_amen" title="Amenity (from active listings — unlisted units have no amenity data). Pick one or more.">Any amenity</button>
+          <div class="mspanel" id="msp-t_amen">
+            <input type="text" class="mssearch" id="mss-t_amen" placeholder="Search amenities&hellip;">
+            <div class="mslist" id="msl-t_amen"></div>
+            <div class="msfoot"><button type="button" class="msclear" data-key="t_amen">Clear</button><button type="button" class="msdone" data-key="t_amen">Done</button></div>
+          </div>
+        </span>
+        <span class="chipset" data-cg="t-status" title="Vacant vs. occupied-but-listed (upcoming turnover). Pick either or both.">
+          <span class="cslabel">Status</span>
+          <button type="button" class="chip-mini" data-v="vacant">Vacant</button>
+          <button type="button" class="chip-mini" data-v="occupied">Occupied &middot; listed</button>
+        </span>
         <label class="toggle"><input type="checkbox" id="t-listed"> listed only</label>
         <label class="toggle"><input type="checkbox" id="t-unlisted"> unlisted only</label>
         <span class="count-note" id="t-count"></span>
@@ -917,37 +937,49 @@
           <button data-v="map">Map</button>
         </div>
         <input type="text" id="u-search" placeholder="Search property, unit, tenant, owner&hellip;">
-        <select id="u-beds" title="Bedrooms">
-          <option value="">Any beds</option>
-          <option value="Studio">Studio</option>
-          <option value="1">1 bed</option>
-          <option value="2">2 bed</option>
-          <option value="3">3 bed</option>
-          <option value="4">4+ bed</option>
-        </select>
+        <span class="chipset" data-cg="u-beds" title="Bedrooms — pick any number">
+          <span class="cslabel">Beds</span>
+          <button type="button" class="chip-mini" data-v="Studio">Studio</button>
+          <button type="button" class="chip-mini" data-v="1">1</button>
+          <button type="button" class="chip-mini" data-v="2">2</button>
+          <button type="button" class="chip-mini" data-v="3">3</button>
+          <button type="button" class="chip-mini" data-v="4">4+</button>
+        </span>
         <input type="number" id="u-rmax" placeholder="Max rent" min="0" step="50" title="Maximum rent (listed rent if listed, else lease rent, else market rent)">
-        <select id="u-amen" title="Amenity (from active listings — unlisted units have no amenity data)">
-          <option value="">Any amenity</option>
-        </select>
+        <span class="msinline" id="fg-u_amen">
+          <button type="button" class="msbtn" id="msb-u_amen" title="Amenity (from active listings — unlisted units have no amenity data). Pick one or more.">Any amenity</button>
+          <div class="mspanel" id="msp-u_amen">
+            <input type="text" class="mssearch" id="mss-u_amen" placeholder="Search amenities&hellip;">
+            <div class="mslist" id="msl-u_amen"></div>
+            <div class="msfoot"><button type="button" class="msclear" data-key="u_amen">Clear</button><button type="button" class="msdone" data-key="u_amen">Done</button></div>
+          </div>
+        </span>
         <span class="count-note" id="u-count"></span>
       </div>
       <div class="qchips" id="u-chips"></div>
       <div class="tablebar" id="u-nbfilters" style="display:none;margin:0 0 10px;padding:8px 10px;background:var(--paper-deep);border-radius:3px">
         <span style="font-size:.66rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)">Nookbook</span>
-        <select id="nb-bt" title="Building type">
-          <option value="">Any building type</option>
-          <option value="Rowhouse">Rowhouse</option>
-          <option value="Single Detached">Single detached</option>
-          <option value="Euro Design">Euro Design</option>
-          <option value="Space Squared">Space Squared</option>
-          <option value="FB Duplex">FB duplex (Euro + Space)</option>
-        </select>
-        <select id="nb-park" title="Parking"><option value="">Any parking</option></select>
-        <select id="nb-appl" title="Appliances">
-          <option value="">Appliances: any</option>
-          <option value="Yes">Appliances: yes</option>
-          <option value="No">Appliances: no</option>
-        </select>
+        <span class="chipset" data-cg="nb-bt" title="Building type — pick one or more">
+          <span class="cslabel">Building</span>
+          <button type="button" class="chip-mini" data-v="Rowhouse">Rowhouse</button>
+          <button type="button" class="chip-mini" data-v="Single Detached">Single detached</button>
+          <button type="button" class="chip-mini" data-v="Euro Design">Euro Design</button>
+          <button type="button" class="chip-mini" data-v="Space Squared">Space Squared</button>
+          <button type="button" class="chip-mini" data-v="FB Duplex">FB duplex</button>
+        </span>
+        <span class="msinline" id="fg-nb_park">
+          <button type="button" class="msbtn" id="msb-nb_park" title="Parking — pick one or more">Any parking</button>
+          <div class="mspanel" id="msp-nb_park">
+            <input type="text" class="mssearch" id="mss-nb_park" placeholder="Search parking&hellip;">
+            <div class="mslist" id="msl-nb_park"></div>
+            <div class="msfoot"><button type="button" class="msclear" data-key="nb_park">Clear</button><button type="button" class="msdone" data-key="nb_park">Done</button></div>
+          </div>
+        </span>
+        <span class="chipset" data-cg="nb-appl" title="Appliances included">
+          <span class="cslabel">Appliances</span>
+          <button type="button" class="chip-mini" data-v="Yes">Yes</button>
+          <button type="button" class="chip-mini" data-v="No">No</button>
+        </span>
         <label class="toggle"><input type="checkbox" id="nb-notready"> not ready only</label>
       </div>
       <div id="umap"></div>
@@ -1328,10 +1360,16 @@
   }
 
   var state = { preset:30, from:null, to:null, bucket:null };
+  // Multi-select popovers. scope:true entries are global entity filters that also drive
+  // server queries (via appendScope); scope:false entries are local table facets (amenity,
+  // parking) filtered client-side. cb() is the per-popover refresh, run on every change.
   var MS = {
-    managers:   { sel:{}, items:[], all:'All managers' },
-    owners:     { sel:{}, items:[], all:'All owners' },
-    properties: { sel:{}, items:[], all:'All properties' }
+    managers:   { sel:{}, items:[], all:'All managers',   scope:true,  cb:function(){ onScopeChange(); } },
+    owners:     { sel:{}, items:[], all:'All owners',      scope:true,  cb:function(){ onScopeChange(); } },
+    properties: { sel:{}, items:[], all:'All properties',  scope:true,  cb:function(){ onScopeChange(); } },
+    t_amen:     { sel:{}, items:[], all:'Any amenity',     scope:false, cb:function(){ drawTable(); } },
+    u_amen:     { sel:{}, items:[], all:'Any amenity',     scope:false, cb:function(){ drawUnits(); } },
+    nb_park:    { sel:{}, items:[], all:'Any parking',     scope:false, cb:function(){ drawUnits(); } }
   };
   var charts = {};
   var tableRows = [];
@@ -1342,15 +1380,15 @@
   var unitsAll = null, ownersAll = null;
   var uSort = { k:'property_name', d:1 }, oSort = { k:'display_name', d:1 };
   var uPage = 0, uSig = '', U_PER = 200;
-  var uFilter = 'all';
+  var uSel = {};   // Units quick-chip multi-select (empty = All)
   var curPhotosLm = [], curPhotosUm = [];
   var dlBusy = false;
-  var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aFilter = 'all';
+  var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aSel = {};
   var aWin = { mode:'global', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 }, rRange = 'past30';
   var uView = 'list', umap = null, umapLayer = null, umapSig = '';
-  var keysAll = null, kSort = { k:'property_name', d:1 }, kFilter = 'all', kCur = null;
-  var historyAll = null, hSort = { k:'created_at', d:-1 }, hFilter = 'all';
+  var keysAll = null, kSort = { k:'property_name', d:1 }, kSel = {}, kCur = null;
+  var historyAll = null, hSort = { k:'created_at', d:-1 }, hSel = {};
   var keyModalOnChange = null;   // callback to refresh the embedded key panel after a write
 
   var COL = {
@@ -1384,23 +1422,82 @@
     if (s === 'FURNISHED_ANY') return 'Furnished (any)';
     return String(s).replace(/_/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
   }
-  function amenMatch(arr, val){
-    if (!val) return true;
-    if (!arr || !arr.length) return false;
-    if (val === 'FURNISHED_ANY') return arr.indexOf('Furnished') >= 0 || arr.indexOf('FurnishedAvailable') >= 0;
-    return arr.indexOf(val) >= 0;
+  // multi-bed match: empty selection = pass all; the '4' chip means 4+
+  function bedMatch(bedrooms, sels){
+    if (!sels.length) return true;
+    var b = String(bedrooms == null ? '' : bedrooms), n = parseInt(bedrooms, 10);
+    for (var i = 0; i < sels.length; i++){
+      if (sels[i] === '4') { if (n >= 4) return true; }
+      else if (b === sels[i]) return true;
+    }
+    return false;
   }
-  function fillAmenSelect(id, rows, getter){
+  // OR-match: a row passes if it has ANY of the selected amenities (empty selection = pass all)
+  function amenMatchMulti(arr, sels){
+    if (!sels.length) return true;
+    if (!arr || !arr.length) return false;
+    for (var i = 0; i < sels.length; i++){
+      var v = sels[i];
+      if (v === 'FURNISHED_ANY') { if (arr.indexOf('Furnished') >= 0 || arr.indexOf('FurnishedAvailable') >= 0) return true; }
+      else if (arr.indexOf(v) >= 0) return true;
+    }
+    return false;
+  }
+  // populate an amenity multi-select popover from the rows' active-listing amenities,
+  // preserving any still-valid current selection
+  function fillAmenMS(key, rows, getter){
     var seen = {};
     rows.forEach(function(r){ (getter(r) || []).forEach(function(a){ seen[a] = 1; }); });
-    var keys = Object.keys(seen).sort();
-    var cur = el(id).value;
-    var h = '<option value="">Any amenity</option>';
-    if (seen['Furnished'] || seen['FurnishedAvailable']) h += '<option value="FURNISHED_ANY">' + amenLabel('FURNISHED_ANY') + '</option>';
-    keys.forEach(function(k){ h += '<option value="' + esc(k) + '">' + esc(amenLabel(k)) + '</option>'; });
-    el(id).innerHTML = h;
-    el(id).value = cur;
+    var items = [];
+    if (seen['Furnished'] || seen['FurnishedAvailable']) items.push({ id:'FURNISHED_ANY', name:amenLabel('FURNISHED_ANY') });
+    Object.keys(seen).sort().forEach(function(k){ items.push({ id:k, name:amenLabel(k) }); });
+    var keep = {}, sel = MS[key].sel;
+    Object.keys(sel).forEach(function(id){ if (seen[id] || id === 'FURNISHED_ANY') keep[id] = sel[id]; });
+    MS[key].sel = keep;
+    msSetItems(key, items);
   }
+  function fillParkMS(){
+    var seen = {};
+    (unitsAll || []).forEach(function(r){ if (r.is_nookbook && r.nb_parking) seen[r.nb_parking] = 1; });
+    var items = Object.keys(seen).sort().map(function(v){ return { id:v, name:v }; });
+    var keep = {}, sel = MS.nb_park.sel;
+    Object.keys(sel).forEach(function(id){ if (seen[id]) keep[id] = sel[id]; });
+    MS.nb_park.sel = keep;
+    msSetItems('nb_park', items);
+  }
+
+  /* ── multi-toggle chip groups (beds / status / building type / appliances) ──
+     Markup: <span class="chipset" data-cg="NAME"><button class="chip-mini" data-v="V">…</button></span>
+     State is a plain object used as a Set; empty = no constraint. One delegated handler. */
+  var CG = {};
+  var CG_ONCHANGE = {
+    't-beds':  function(){ drawTable(); },
+    't-status':function(){ drawTable(); },
+    'u-beds':  function(){ drawUnits(); },
+    'nb-bt':   function(){ drawUnits(); },
+    'nb-appl': function(){ drawUnits(); }
+  };
+  function cgSelOf(name){ if (!CG[name]) CG[name] = {}; return CG[name]; }
+  function cgArr(name){ return Object.keys(cgSelOf(name)); }
+  function cgPaint(name){
+    var box = document.querySelector('[data-cg="' + name + '"]'); if (!box) return;
+    Array.prototype.forEach.call(box.querySelectorAll('.chip-mini'), function(b){
+      b.classList.toggle('on', !!cgSelOf(name)[b.getAttribute('data-v')]);
+    });
+  }
+  function cgReplace(name, vals){   // drill-downs: replace the selection wholesale
+    CG[name] = {};
+    (vals || []).forEach(function(v){ CG[name][String(v)] = 1; });
+    cgPaint(name);
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('.chip-mini'); if (!b) return;
+    var box = b.closest('[data-cg]'); if (!box) return;
+    var name = box.getAttribute('data-cg'), v = b.getAttribute('data-v'), s = cgSelOf(name);
+    if (s[v]) delete s[v]; else s[v] = 1;
+    b.classList.toggle('on', !!s[v]);
+    if (CG_ONCHANGE[name]) CG_ONCHANGE[name]();
+  });
 
   if (window.Chart) {
     Chart.defaults.font.family = "'Schibsted Grotesk', Verdana, sans-serif";
@@ -1425,6 +1522,7 @@
   function msIds(key){ return Object.keys(MS[key].sel); }
   function appendScope(p){
     Object.keys(MS).forEach(function(key){
+      if (!MS[key].scope) return;   // local table facets (amenity/parking) never hit the server
       var ids = msIds(key);
       if (ids.length) p.set(key, ids.join(','));
     });
@@ -1513,21 +1611,23 @@
   });
   function gotoUnitsWithSearch(q){
     showTab('units');
-    var go = function(){ el('u-search').value = q || ''; uFilter = 'all'; drawChips(); drawUnits(); };
+    var go = function(){ el('u-search').value = q || ''; uSel = {}; el('u-nbfilters').style.display = 'none'; drawChips(); drawUnits(); };
     if (unitsAll === null) loadUnits(go); else go();
   }
   function gotoUnitsFiltered(filterKey){
     showTab('units');
     var go = function(){
       el('u-search').value = '';
-      uFilter = filterKey;
+      uSel = {}; uSel[filterKey] = 1;
       if (filterKey === 'exp60' || filterKey === 'exp90') uSort = { k:'days_remaining', d:1 };
+      if (filterKey === 'balance') uSort = { k:'total_balance', d:-1 };
+      el('u-nbfilters').style.display = uSel['nookbook'] ? 'flex' : 'none';
       drawChips(); drawUnits();
     };
     if (unitsAll === null) loadUnits(go); else go();
   }
   function gotoApplications(status, useLedgerWindow){
-    aFilter = status || 'all';
+    aSel = {}; if (status && status !== 'all') aSel[status] = 1;
     if (useLedgerWindow) {
       var w = windowDates();
       aWin = { mode:'custom', from:w.from, to:w.to };
@@ -1665,6 +1765,11 @@
     if (f === 'overdue') return !!r.is_overdue;
     return r.status === f;
   }
+  // OR across the selected key chips (empty = all)
+  function kChipPass(r, ksel){
+    for (var i = 0; i < ksel.length; i++){ if (keyMatchesFilter(r, ksel[i])) return true; }
+    return false;
+  }
   function scopedKeys(){
     var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
     return (keysAll || []).filter(function(r){
@@ -1682,10 +1787,11 @@
       el('ktable').querySelector('tbody').innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center">Could not load keys.</td></tr>'; });
   }
   function drawKeyChips(){
-    var base = scopedKeys(), html = '';
+    var base = scopedKeys(), html = '', empty = Object.keys(kSel).length === 0;
     K_CHIPS.forEach(function(c){
       var n = base.filter(function(r){ return keyMatchesFilter(r, c[0]); }).length;
-      html += '<button type="button" class="qchip' + (kFilter === c[0] ? ' on' : '') + '" data-q="' + c[0] + '">' +
+      var on = c[0] === 'all' ? empty : !!kSel[c[0]];
+      html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + c[0] + '">' +
         esc(c[1]) + ' <span class="qn">' + n + '</span></button>';
     });
     el('k-chips').innerHTML = html;
@@ -1694,8 +1800,9 @@
     if (keysAll === null) return;
     var q = (el('k-search').value || '').toLowerCase();
     var base = scopedKeys();
+    var ksel = Object.keys(kSel);
     var rows = base.filter(function(r){
-      if (!keyMatchesFilter(r, kFilter)) return false;
+      if (ksel.length && !kChipPass(r, ksel)) return false;
       if (!q) return true;
       return ((r.property_name||'') + ' ' + (r.unit_number||'') + ' ' + (r.label||'') + ' ' +
               (r.bin||'') + ' ' + (r.holder||'') + ' ' + (r.status_label||'')).toLowerCase().indexOf(q) >= 0;
@@ -1719,7 +1826,9 @@
   }
   el('k-search').addEventListener('input', deb(drawKeys));
   el('k-chips').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return;
-    kFilter = b.getAttribute('data-q'); drawKeyChips(); drawKeys(); });
+    var k = b.getAttribute('data-q');
+    if (k === 'all') kSel = {}; else if (kSel[k]) delete kSel[k]; else kSel[k] = 1;
+    drawKeyChips(); drawKeys(); });
   el('ktable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;
     if (kSort.k === k) kSort.d = -kSort.d; else kSort = { k:k, d:(k === 'date_out' || k === 'date_expected' || k === 'last_event_at') ? -1 : 1 };
@@ -1903,10 +2012,11 @@
       el('htable').querySelector('tbody').innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center">Could not load history.</td></tr>'; });
   }
   function drawHistoryChips(){
-    var html = '';
+    var html = '', empty = Object.keys(hSel).length === 0;
     H_CHIPS.forEach(function(c){
       var n = (historyAll || []).filter(function(r){ return c[0] === 'all' || r.event_type === c[0]; }).length;
-      html += '<button type="button" class="qchip' + (hFilter === c[0] ? ' on' : '') + '" data-q="' + c[0] + '">' +
+      var on = c[0] === 'all' ? empty : !!hSel[c[0]];
+      html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + c[0] + '">' +
         esc(c[1]) + ' <span class="qn">' + n + '</span></button>';
     });
     el('h-chips').innerHTML = html;
@@ -1914,8 +2024,9 @@
   function drawHistory(){
     if (historyAll === null) return;
     var q = (el('h-search').value || '').toLowerCase();
+    var hsel = Object.keys(hSel);
     var rows = historyAll.filter(function(r){
-      if (hFilter !== 'all' && r.event_type !== hFilter) return false;
+      if (hsel.length && hsel.indexOf(r.event_type) < 0) return false;
       if (!q) return true;
       return ((r.label||'') + ' ' + (r.property_name||'') + ' ' + (r.unit_number||'') + ' ' +
               (r.actor||'') + ' ' + (r.note||'') + ' ' + (r.holder||'')).toLowerCase().indexOf(q) >= 0;
@@ -1936,7 +2047,9 @@
   }
   el('h-search').addEventListener('input', deb(drawHistory));
   el('h-chips').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return;
-    hFilter = b.getAttribute('data-q'); drawHistoryChips(); drawHistory(); });
+    var k = b.getAttribute('data-q');
+    if (k === 'all') hSel = {}; else if (hSel[k]) delete hSel[k]; else hSel[k] = 1;
+    drawHistoryChips(); drawHistory(); });
   el('htable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;
     if (hSort.k === k) hSort.d = -hSort.d; else hSort = { k:k, d: k === 'created_at' ? -1 : 1 };
@@ -1993,14 +2106,14 @@
         row.classList.add('on');
       }
       msButton(key);
-      onScopeChange();
+      MS[key].cb();
     });
   });
   document.querySelectorAll('.msclear').forEach(function(b){
     b.addEventListener('click', function(){
       var key = b.getAttribute('data-key');
       MS[key].sel = {};
-      msList(key); msButton(key); onScopeChange();
+      msList(key); msButton(key); MS[key].cb();
     });
   });
   document.querySelectorAll('.msdone').forEach(function(b){
@@ -2241,7 +2354,7 @@
     // vacant units + occupied-but-listed (upcoming turnover) share one table.
     // Headline vacancy KPIs/rates/aging stay vacant-only (server-side).
     tableRows = (d.vacant_units || []).concat(d.marketed_occupied || []);
-    fillAmenSelect('t-amen', tableRows, function(r){ return r.listing_amenities; });
+    fillAmenMS('t_amen', tableRows, function(r){ return r.listing_amenities; });
     drawTable();
 
     var ops = d.ops || {};
@@ -2305,24 +2418,21 @@
     var q = (el('t-search').value || '').toLowerCase();
     var onlyUnlisted = el('t-unlisted').checked;
     var onlyListed = el('t-listed').checked;
-    var bed = el('t-beds').value;
+    var beds = cgArr('t-beds');
     var rmin = parseFloat(el('t-rmin').value);
     var rmax = parseFloat(el('t-rmax').value);
-    var status = el('t-status') ? el('t-status').value : '';
+    var statusSel = cgArr('t-status');
+    var amenSel = msIds('t_amen');
     var rows = tableRows.filter(function(r){
       if (!inBucket(r)) return false;
-      if (status === 'vacant' && statusOf(r) !== 'vacant') return false;
-      if (status === 'occupied' && statusOf(r) !== 'occupied') return false;
+      if (statusSel.length && statusSel.indexOf(statusOf(r)) < 0) return false;
       if (onlyUnlisted && r.is_listed) return false;
       if (onlyListed && !r.is_listed) return false;
-      if (bed) {
-        if (bed === '4') { if (!(parseInt(r.bedrooms, 10) >= 4)) return false; }
-        else if (String(r.bedrooms || '') !== bed) return false;
-      }
+      if (!bedMatch(r.bedrooms, beds)) return false;
       var rent = r.listing_rent != null ? r.listing_rent : r.market_rent;
       if (!isNaN(rmin) && (rent == null || rent < rmin)) return false;
       if (!isNaN(rmax) && (rent == null || rent > rmax)) return false;
-      if (!amenMatch(r.listing_amenities, el('t-amen').value)) return false;
+      if (!amenMatchMulti(r.listing_amenities, amenSel)) return false;
       if (!q) return true;
       return ((r.property||'') + ' ' + (r.unit||'') + ' ' + (r.owner||'') + ' ' + (r.manager||'')).toLowerCase().indexOf(q) >= 0;
     });
@@ -2534,51 +2644,57 @@
     return true;
   }
   function nbTest(r, nbf){
-    if (uFilter !== 'nookbook') return true;
-    if (nbf.bt && (r.nb_building_type || '').toLowerCase().indexOf(nbf.bt.toLowerCase()) < 0) return false;
-    if (nbf.park && (r.nb_parking || '') !== nbf.park) return false;
-    if (nbf.appl && (r.nb_appliances || '') !== nbf.appl) return false;
+    if (!nbf) return true;            // nookbook context not active
+    if (!r.is_nookbook) return true;  // OR-selected non-nookbook rows aren't constrained by nb facets
+    if (nbf.bt.length){
+      var bt = (r.nb_building_type || '').toLowerCase(), ok = false;
+      for (var i = 0; i < nbf.bt.length; i++){ if (bt.indexOf(nbf.bt[i].toLowerCase()) >= 0){ ok = true; break; } }
+      if (!ok) return false;
+    }
+    if (nbf.park.length && nbf.park.indexOf(r.nb_parking || '') < 0) return false;
+    if (nbf.appl.length && nbf.appl.indexOf(r.nb_appliances || '') < 0) return false;
     if (nbf.notready && !r.is_not_ready) return false;
     return true;
   }
-  function fillNbOptions(){
-    if (unitsAll === null) return;
-    // building type is a fixed 5-bucket list in the markup (keyword match in nbTest);
-    // only the parking select is populated from the data.
-    var parks = {};
-    unitsAll.forEach(function(r){ if (r.is_nookbook && r.nb_parking) parks[r.nb_parking] = 1; });
-    var cur = el('nb-park').value;
-    var h = '<option value="">Any parking</option>';
-    Object.keys(parks).sort().forEach(function(v){ h += '<option value="' + esc(v) + '">' + esc(v) + '</option>'; });
-    el('nb-park').innerHTML = h;
-    el('nb-park').value = cur;
+  // Units quick-chip multi-select: a row passes if it matches ANY selected chip (empty = all)
+  function uChipPass(r){
+    var keys = Object.keys(uSel);
+    if (!keys.length) return true;
+    for (var i = 0; i < keys.length; i++){ if (qfTest(r, keys[i])) return true; }
+    return false;
   }
   function drawChips(){
-    var html = '';
+    var html = '', empty = Object.keys(uSel).length === 0;
     QFILTERS.forEach(function(f){
       var n = (unitsAll || []).filter(function(r){ return qfTest(r, f.k); }).length;
-      html += '<button type="button" class="qchip' + (uFilter === f.k ? ' on' : '') + '" data-q="' + f.k + '">' +
+      var on = f.k === 'all' ? empty : !!uSel[f.k];
+      html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + f.k + '">' +
         esc(f.label) + ' <span class="qn">' + n + '</span></button>';
     });
     el('u-chips').innerHTML = html;
   }
   el('u-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return;
-    uFilter = b.getAttribute('data-q');
-    if (uFilter === 'exp60' || uFilter === 'exp90') { uSort = { k:'days_remaining', d:1 }; }
-    if (uFilter === 'balance') { uSort = { k:'total_balance', d:-1 }; }
-    el('u-nbfilters').style.display = uFilter === 'nookbook' ? 'flex' : 'none';
+    var k = b.getAttribute('data-q');
+    if (k === 'all') { uSel = {}; }
+    else if (uSel[k]) { delete uSel[k]; }
+    else {
+      uSel[k] = 1;
+      if (k === 'exp60' || k === 'exp90') uSort = { k:'days_remaining', d:1 };
+      if (k === 'balance') uSort = { k:'total_balance', d:-1 };
+    }
+    el('u-nbfilters').style.display = uSel['nookbook'] ? 'flex' : 'none';
     drawChips(); drawUnits();
   });
-  ['nb-bt','nb-park','nb-appl'].forEach(function(id){ el(id).addEventListener('change', drawUnits); });
+  // nb-bt / nb-appl are chip groups (CG_ONCHANGE), nb-park is a popover (MS.cb) — they wire themselves
   el('nb-notready').addEventListener('change', drawUnits);
   function loadUnits(after){
     el('veil').classList.remove('hide');
     authFetch('/units')
       .then(function(j){
         unitsAll = j.units || [];
-        fillNbOptions();
-        fillAmenSelect('u-amen', unitsAll, function(r){ return r.amenities; });
+        fillParkMS();
+        fillAmenMS('u_amen', unitsAll, function(r){ return r.amenities; });
         drawChips(); drawUnits();
         el('veil').classList.add('hide');
         if (after) after();
@@ -2614,26 +2730,23 @@
   function drawUnits(){
     if (unitsAll === null) return;
     var q = (el('u-search').value || '').toLowerCase();
-    var bed = el('u-beds').value;
+    var beds = cgArr('u-beds');
     var rmax = parseFloat(el('u-rmax').value);
-    var amen = el('u-amen').value;
+    var amenSel = msIds('u_amen');
     var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
-    var nbf = uFilter === 'nookbook'
-      ? { bt: el('nb-bt').value, park: el('nb-park').value, appl: el('nb-appl').value, notready: el('nb-notready').checked }
+    var nbf = uSel['nookbook']
+      ? { bt: cgArr('nb-bt'), park: msIds('nb_park'), appl: cgArr('nb-appl'), notready: el('nb-notready').checked }
       : null;
     var rows = unitsAll.filter(function(r){
       if (!scopeTestUnit(r, mg, ow, pr)) return false;
-      if (!qfTest(r, uFilter)) return false;
+      if (!uChipPass(r)) return false;
       if (!nbTest(r, nbf)) return false;
-      if (bed) {
-        if (bed === '4') { if (!(parseInt(r.unit_bedrooms, 10) >= 4)) return false; }
-        else if (String(r.unit_bedrooms || '') !== bed) return false;
-      }
+      if (!bedMatch(r.unit_bedrooms, beds)) return false;
       if (!isNaN(rmax)) {
         var rent = rentBasis(r);
         if (rent == null || rent > rmax) return false;
       }
-      if (!amenMatch(r.amenities, amen)) return false;
+      if (!amenMatchMulti(r.amenities, amenSel)) return false;
       if (!q) return true;
       return ((r.property_name||'') + ' ' + (r.unit_number||'') + ' ' + (r.tenant_names||'') + ' ' +
               (r.primary_owner_name||'') + ' ' + (r.address_line1||'') + ' ' + (r.property_manager_name||'') + ' ' +
@@ -2641,7 +2754,7 @@
     });
     rows.sort(cmpRows(uSort.k, uSort.d));
     // reset to page 1 whenever the filter/sort/scope changes (but not on paging)
-    var sig = [q, bed, el('u-rmax').value, amen, uFilter, JSON.stringify(nbf), mg.join(','), ow.join(','), pr.join(','), uSort.k, uSort.d, uView].join('|');
+    var sig = [q, beds.join(','), el('u-rmax').value, amenSel.join(','), Object.keys(uSel).sort().join(','), JSON.stringify(nbf), mg.join(','), ow.join(','), pr.join(','), uSort.k, uSort.d, uView].join('|');
     if (sig !== uSig) { uSig = sig; uPage = 0; }
     var pageCount = Math.max(1, Math.ceil(rows.length / U_PER));
     if (uPage >= pageCount) uPage = pageCount - 1;
@@ -2777,7 +2890,7 @@
     var b = e.target.closest('.mapopen'); if (!b) return;
     openUnit(b.getAttribute('data-uid'));
   });
-  ['u-beds','u-amen'].forEach(function(id){ el(id).addEventListener('change', drawUnits); });
+  // u-beds is a chip group (CG_ONCHANGE), u-amen is a popover (MS.cb) — they wire themselves
   el('u-rmax').addEventListener('input', deb(drawUnits));
   el('u-search').addEventListener('input', deb(drawUnits));
   el('u-pager').addEventListener('click', function(e){
@@ -2994,18 +3107,20 @@
       });
   }
   function drawAppChips(){
-    var html = '';
+    var html = '', empty = Object.keys(aSel).length === 0;
     A_STATUSES.forEach(function(s){
       var n = (appsAll || []).filter(function(r){ return s === 'all' || r.application_status === s; }).length;
       if (s !== 'all' && !n) return;
-      html += '<button type="button" class="qchip' + (aFilter === s ? ' on' : '') + '" data-q="' + s + '">' +
+      var on = s === 'all' ? empty : !!aSel[s];
+      html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + s + '">' +
         esc(s === 'all' ? 'All' : (APP_NICE[s] || s)) + ' <span class="qn">' + n + '</span></button>';
     });
     el('a-chips').innerHTML = html;
   }
   el('a-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return;
-    aFilter = b.getAttribute('data-q');
+    var s = b.getAttribute('data-q');
+    if (s === 'all') aSel = {}; else if (aSel[s]) delete aSel[s]; else aSel[s] = 1;
     drawAppChips(); drawApps();
   });
   el('a-presets').addEventListener('click', function(e){
@@ -3018,8 +3133,9 @@
   function drawApps(){
     if (appsAll === null) return;
     var q = (el('a-search').value || '').toLowerCase();
+    var asel = Object.keys(aSel);
     var rows = appsAll.filter(function(r){
-      if (aFilter !== 'all' && r.application_status !== aFilter) return false;
+      if (asel.length && asel.indexOf(r.application_status) < 0) return false;
       if (!q) return true;
       return ((r.applicant_name||'') + ' ' + (r.applicant_email||'') + ' ' + (r.property_name||'') + ' ' +
               (r.unit_number||'') + ' ' + (r.property_manager_name||'') + ' ' + (r.primary_owner_name||'')).toLowerCase().indexOf(q) >= 0;
@@ -3094,7 +3210,7 @@
   document.addEventListener('click', function(e){
     var b = e.target.closest('[data-appsq]'); if (!b) return;
     ['lmodal','umodal'].forEach(closeModal);
-    aFilter = 'all';
+    aSel = {};
     aWin = { mode:'all', from:null, to:null };
     appsAll = null;
     aPendingSearch = b.getAttribute('data-appsq') || '';
@@ -3185,20 +3301,20 @@
   el('kpi-vacant').addEventListener('click', function(){
     setBucket(null);
     el('t-listed').checked = false; el('t-unlisted').checked = false;
-    el('t-status').value = 'vacant';
+    cgReplace('t-status', ['vacant']);
     drawTable();
     scrollVacantTable();
   });
   el('kpi-unlisted').addEventListener('click', function(){
     setBucket(null);
     el('t-unlisted').checked = true; el('t-listed').checked = false;
-    el('t-status').value = '';
+    cgReplace('t-status', []);
     drawTable();
     scrollVacantTable();
   });
   el('kpi-turnover').addEventListener('click', function(){
     setBucket(null);
-    el('t-status').value = 'occupied';
+    cgReplace('t-status', ['occupied']);
     el('t-listed').checked = false; el('t-unlisted').checked = false;
     drawTable();
     scrollVacantTable();
@@ -3295,9 +3411,7 @@
   });
   document.addEventListener('click', function(){ el('winpop').classList.remove('open'); });
   el('t-search').addEventListener('input', deb(drawTable));
-  el('t-beds').addEventListener('change', drawTable);
-  el('t-amen').addEventListener('change', drawTable);
-  el('t-status').addEventListener('change', drawTable);
+  // t-beds / t-status are chip groups (CG_ONCHANGE), t-amen is a popover (MS.cb) — they wire themselves
   el('t-rmin').addEventListener('input', drawTable);
   el('t-rmax').addEventListener('input', drawTable);
   el('t-unlisted').addEventListener('change', function(){

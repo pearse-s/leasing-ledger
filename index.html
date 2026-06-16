@@ -2399,7 +2399,7 @@
       (tb ? '<b>' + fmtNum(tb) + ' owner take-back unit' + (tb === 1 ? '' : 's') + ' excluded from all stats</b> (visible on the Units tab). ' : '') +
       (m.not_ready_excluded ? '<b>' + fmtNum(m.not_ready_excluded) + ' Nookbook not-ready (construction) unit' + (m.not_ready_excluded === 1 ? '' : 's') + ' also excluded</b>. ' : '') +
       'Vacancy is live state from the last Buildium sync; the activity window only affects applications, leases, move-ins, showings, tours, leads and term-end outcomes. ' +
-      'The vacancy-aging chart counts <b>listed</b> vacant units only; the Vacant &amp; unlisted KPI tracks the rest. ' +
+      'The vacancy-aging chart counts <b>all</b> vacant units (listed and unlisted), excluding not-ready and take-back; turnover ages from the lease end date, never-leased from the listed date, and never-leased units with no listing show as <b>age unknown</b>. ' +
       'Pre-leased units (signed future lease) count as <b>occupied</b> in both rates. ' +
       '“Leases signed” = lease records created in Buildium in the window; the future-start portion is pre-leasing. ' +
       '“Stayed / renewed” = lease still active past its recorded end date (renewal or month-to-month). ' +
@@ -2433,7 +2433,6 @@
     var b = state.bucket;
     if (!b) return true;
     if (r.occupancy_status && r.occupancy_status !== 'op_vacant' && r.occupancy_status !== 'never_leased') return false; // aging is vacant-only
-    if (!r.is_listed) return false; // aging chart counts listed units only
     if (b.klass === 'op_vacant' && r.never_leased) return false;
     if (b.klass === 'never_leased' && !r.never_leased) return false;
     var range = BUCKET_RANGE[b.key];

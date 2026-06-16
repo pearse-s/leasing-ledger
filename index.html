@@ -1430,7 +1430,7 @@
   };
   var BUCKET_KEYS = ['d0_30','d31_60','d61_90','d90_plus','unknown'];
   var BUCKET_LABELS = ['0–30 days','31–60','61–90','90+','age unknown'];
-  var BUCKET_RANGE = { d0_30:[0,30], d31_60:[31,60], d61_90:[61,90], d90_plus:[91,100000], unknown:null };
+  var BUCKET_RANGE = { d0_30:[-100000,30], d31_60:[31,60], d61_90:[61,90], d90_plus:[91,100000], unknown:null };
   var STATUS_CHIP = {
     occupied:    '<span class="chip c-ok">occupied</span>',
     pre_leased:  '<span class="chip c-warm">pre-leased</span>',
@@ -2404,7 +2404,7 @@
       (tb ? '<b>' + fmtNum(tb) + ' owner take-back unit' + (tb === 1 ? '' : 's') + ' excluded from all stats</b> (visible on the Units tab). ' : '') +
       (m.not_ready_excluded ? '<b>' + fmtNum(m.not_ready_excluded) + ' Nookbook not-ready (construction) unit' + (m.not_ready_excluded === 1 ? '' : 's') + ' also excluded</b>. ' : '') +
       'Vacancy is live state from the last Buildium sync; the activity window only affects applications, leases, move-ins, showings, tours, leads and term-end outcomes. ' +
-      'The vacancy-aging chart counts <b>all</b> vacant units (listed and unlisted), excluding not-ready and take-back; turnover ages from the lease end date, never-leased from the listed date, and never-leased units with no listing show as <b>age unknown</b>. ' +
+      'The vacancy-aging chart counts <b>all</b> vacant units (listed and unlisted), excluding not-ready and take-back. Listed units age from their <b>available date</b> (units available in the future show <b>negative</b> days and sit in the 0&ndash;30 bucket); unlisted turnover ages from the lease end date, and unlisted never-leased from the listed/complex date or show as <b>age unknown</b>. ' +
       'Pre-leased units (signed future lease) count as <b>occupied</b> in both rates. ' +
       '“Leases signed” = lease records created in Buildium in the window; the future-start portion is pre-leasing. ' +
       '“Stayed / renewed” = lease still active past its recorded end date (renewal or month-to-month). ' +

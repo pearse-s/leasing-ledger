@@ -123,8 +123,9 @@
     backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);
     border:1px solid rgba(255,255,255,.14);border-radius:13px;box-shadow:0 22px 50px rgba(0,0,0,.55),var(--rim);padding:15px}
   .winpop.open{display:flex;animation:mspop .26s var(--spring)}
-  .windone{position:absolute;top:12px;right:13px;font-family:var(--sans);font-size:.66rem;font-weight:700;color:var(--clay);background:none;border:none;cursor:pointer;letter-spacing:.04em}
-  .windone:hover{color:var(--amber)}
+  .windone{position:absolute;top:9px;right:10px;z-index:2;font-family:var(--sans);font-size:.7rem;font-weight:700;color:var(--clay);background:var(--clay-soft);border:1px solid rgba(232,180,62,.42);border-radius:9px;cursor:pointer;letter-spacing:.04em;padding:6px 13px;line-height:1}
+  .windone:hover{background:var(--clay);color:var(--on-accent);border-color:var(--clay)}
+  .windone:active{transform:scale(.94)}
   .windates{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .winlbl{display:block;font-size:.54rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:3px}
   .winpop input[type=date]{width:100%;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:8px;padding:5px 6px;font-size:.7rem;color-scheme:dark;outline:none}

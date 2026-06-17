@@ -1020,7 +1020,7 @@
         <span class="count-note" id="u-count"></span>
       </div>
       <div class="qchips" id="u-chips"></div>
-      <div class="tablebar" id="u-nbfilters" style="display:none;margin:0 0 10px;padding:8px 10px;background:var(--paper-deep);border-radius:3px">
+      <div class="tablebar" id="u-nbfilters" style="margin:0 0 10px;padding:8px 10px;background:var(--paper-deep);border-radius:3px">
         <span style="font-size:.66rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)">Nookbook</span>
         <span class="chipset" data-cg="nb-bt" title="Building type — pick one or more">
           <span class="cslabel">Building</span>
@@ -1682,7 +1682,7 @@
   });
   function gotoUnitsWithSearch(q){
     showTab('units');
-    var go = function(){ el('u-search').value = q || ''; uSel = {}; el('u-nbfilters').style.display = 'none'; drawChips(); drawUnits(); };
+    var go = function(){ el('u-search').value = q || ''; uSel = {}; drawChips(); drawUnits(); };
     if (unitsAll === null) loadUnits(go); else go();
   }
   function gotoUnitsFiltered(filterKey){
@@ -1692,7 +1692,6 @@
       uSel = {}; uSel[filterKey] = 1;
       if (filterKey === 'exp60' || filterKey === 'exp90') uSort = { k:'days_remaining', d:1 };
       if (filterKey === 'balance') uSort = { k:'total_balance', d:-1 };
-      el('u-nbfilters').style.display = uSel['nookbook'] ? 'flex' : 'none';
       drawChips(); drawUnits();
     };
     if (unitsAll === null) loadUnits(go); else go();
@@ -1702,7 +1701,7 @@
     showTab('units');
     var go = function(){
       el('u-search').value = '';
-      uSel = {}; el('u-nbfilters').style.display = 'none';
+      uSel = {};
       COLF['utable'] = {};
       apply();
       refreshFunnels(); drawChips(); drawUnits();
@@ -2356,7 +2355,8 @@
     ktable: { get:function(){ return kSort; }, set:function(c,d){ kSort={k:c,d:d}; drawKeys(); } },
     htable: { get:function(){ return hSort; }, set:function(c,d){ hSort={k:c,d:d}; drawHistory(); } }
   };
-  function colDef(tid, col){ return (COLF_DEF[tid] && COLF_DEF[tid].cols[col]) || { t:'text' }; }
+  var AUTO_MAX = 300;   // an unconfigured header with <= this many distinct values shows a value checklist; else text search
+  function colDef(tid, col){ return (COLF_DEF[tid] && COLF_DEF[tid].cols[col]) || { t:'auto' }; }
   function colfState(tid, col){ if (!COLF[tid]) COLF[tid] = {}; if (!COLF[tid][col]) COLF[tid][col] = { sel:{}, min:null, max:null, q:'' }; return COLF[tid][col]; }
   function colVal(tid, col, row){ var d = colDef(tid, col); return d && d.get ? d.get(row) : row[col]; }
   function colKeyOf(raw){ return raw == null || raw === '' ? ' blank' : String(raw); }
@@ -2364,7 +2364,7 @@
   function colActive(tid, col){
     var d = colDef(tid, col), s = COLF[tid] && COLF[tid][col]; if (!s) return false;
     if (d.t === 'enum') return Object.keys(s.sel).length > 0;
-    if (d.t === 'text') return !!(s.q && s.q.length);
+    if (d.t === 'text' || d.t === 'auto') return Object.keys(s.sel).length > 0 || !!(s.q && s.q.length);
     return s.min != null || s.max != null || !!s.min || !!s.max;
   }
   function colfPass(tid, row){
@@ -2374,7 +2374,10 @@
       var d = colDef(tid, col);
       var raw = colVal(tid, col, row), s = st[col];
       if (d.t === 'enum'){ if (!s.sel[colKeyOf(raw)]) return false; }
-      else if (d.t === 'text'){ if (s.q && String(raw == null ? '' : raw).toLowerCase().indexOf(s.q) < 0) return false; }
+      else if (d.t === 'text' || d.t === 'auto'){
+        if (Object.keys(s.sel).length){ if (!s.sel[colKeyOf(raw)]) return false; }
+        else if (s.q && String(raw == null ? '' : raw).toLowerCase().indexOf(s.q) < 0) return false;
+      }
       else if (d.t === 'num'){ var n = (raw == null || raw === '') ? null : Number(raw);
         if (s.min != null && (n == null || n < s.min)) return false;
         if (s.max != null && (n == null || n > s.max)) return false; }
@@ -2427,14 +2430,17 @@
     var srt = COLF_SORT[tid] ? COLF_SORT[tid].get() : null;
     var ascOn = srt && srt.k === col && srt.d === 1, descOn = srt && srt.k === col && srt.d === -1;
     var sw = d.t === 'num' ? ['Low → High','High → Low'] : d.t === 'date' ? ['Oldest first','Newest first'] : ['A → Z','Z → A'];
+    // resolve "auto" columns: show a value checklist when the distinct count is enumerable, else a text search
+    var mode = d.t;
+    if (mode === 'auto'){ var nDistinct = colEnumItems(tid, col).length; mode = (nDistinct > 0 && nDistinct <= AUTO_MAX) ? 'enum' : 'text'; }
     var h = '';
     if (COLF_SORT[tid]) h += '<div class="cfsort"><button type="button" class="cfsortb' + (ascOn ? ' on' : '') + '" data-dir="1">▲ ' + sw[0] + '</button>' +
       '<button type="button" class="cfsortb' + (descOn ? ' on' : '') + '" data-dir="-1">▼ ' + sw[1] + '</button></div>';
-    if (d.t === 'enum'){
+    if (mode === 'enum'){
       h += '<input type="text" class="cfsearch" id="cf-q" placeholder="Search ' + esc(d.label || col) + '…"><div class="cflist" id="cf-list"></div>';
-    } else if (d.t === 'text'){
+    } else if (mode === 'text'){
       h += '<div class="cfnum"><input type="text" id="cf-text" placeholder="Contains…" value="' + esc(s.q || '') + '"></div>';
-    } else if (d.t === 'num'){
+    } else if (mode === 'num'){
       h += '<div class="cfnum"><input type="number" id="cf-min" placeholder="Min" value="' + (s.min != null ? s.min : '') + '">' +
            '<input type="number" id="cf-max" placeholder="Max" value="' + (s.max != null ? s.max : '') + '"></div>';
     } else {
@@ -2446,19 +2452,19 @@
     Array.prototype.forEach.call(colfPop.querySelectorAll('.cfsortb'), function(b){
       b.onclick = function(){ if (COLF_SORT[tid]) COLF_SORT[tid].set(col, parseInt(b.getAttribute('data-dir'), 10)); colfClose(); };
     });
-    if (d.t === 'enum'){
+    if (mode === 'enum'){
       renderEnumList();
       cfEl('cf-q').oninput = renderEnumList;
       cfEl('cf-list').onclick = function(e){ var row = e.target.closest('.cfrow'); if (!row) return;
         var k = row.getAttribute('data-k');
         if (s.sel[k]){ delete s.sel[k]; row.classList.remove('on'); } else { s.sel[k] = 1; row.classList.add('on'); }
         refreshFunnels(); COLF_DEF[tid].redraw(); };
-    } else if (d.t === 'text'){
+    } else if (mode === 'text'){
       cfEl('cf-text').oninput = function(){ s.q = (this.value || '').toLowerCase(); refreshFunnels(); COLF_DEF[tid].redraw(); };
     } else {
       var mn = cfEl('cf-min'), mx = cfEl('cf-max');
       var upd = function(){
-        if (d.t === 'num'){ s.min = mn.value === '' ? null : Number(mn.value); s.max = mx.value === '' ? null : Number(mx.value); }
+        if (mode === 'num'){ s.min = mn.value === '' ? null : Number(mn.value); s.max = mx.value === '' ? null : Number(mx.value); }
         else { s.min = mn.value || null; s.max = mx.value || null; }
         refreshFunnels(); COLF_DEF[tid].redraw(); };
       mn.oninput = upd; mx.oninput = upd;
@@ -3067,8 +3073,10 @@
     return true;
   }
   function nbTest(r, nbf){
-    if (!nbf) return true;            // nookbook context not active
-    if (!r.is_nookbook) return true;  // OR-selected non-nookbook rows aren't constrained by nb facets
+    if (!nbf) return true;
+    var anyNb = nbf.bt.length || nbf.park.length || nbf.appl.length || nbf.notready;
+    if (!anyNb) return true;          // no nookbook facet selected → no constraint
+    if (!r.is_nookbook) return false; // a nookbook facet is active → only nookbook units can match
     if (nbf.bt.length){
       var bt = (r.nb_building_type || '').toLowerCase(), ok = false;
       for (var i = 0; i < nbf.bt.length; i++){ if (bt.indexOf(nbf.bt[i].toLowerCase()) >= 0){ ok = true; break; } }
@@ -3110,7 +3118,6 @@
       if (k === 'exp60' || k === 'exp90') uSort = { k:'days_remaining', d:1 };
       if (k === 'balance') uSort = { k:'total_balance', d:-1 };
     }
-    el('u-nbfilters').style.display = uSel['nookbook'] ? 'flex' : 'none';
     drawChips(); drawUnits();
   });
   // nb-bt / nb-appl are chip groups (CG_ONCHANGE), nb-park is a popover (MS.cb) — they wire themselves
@@ -3160,9 +3167,7 @@
     var rmax = parseFloat(el('u-rmax').value);
     var amenSel = msIds('u_amen');
     var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
-    var nbf = uSel['nookbook']
-      ? { bt: cgArr('nb-bt'), park: msIds('nb_park'), appl: cgArr('nb-appl'), notready: el('nb-notready').checked }
-      : null;
+    var nbf = { bt: cgArr('nb-bt'), park: msIds('nb_park'), appl: cgArr('nb-appl'), notready: el('nb-notready').checked };
     var rows = unitsAll.filter(function(r){
       if (r.is_owner_takeback && !uSel['otb']) return false;   // take-backs hidden unless the chip is on
       if (!colfPass('utable', r)) return false;
@@ -3181,7 +3186,7 @@
     });
     rows.sort(cmpRows(uSort.k, uSort.d));
     // reset to page 1 whenever the filter/sort/scope changes (but not on paging)
-    var sig = [q, beds.join(','), el('u-rmax').value, amenSel.join(','), Object.keys(uSel).sort().join(','), JSON.stringify(nbf), mg.join(','), ow.join(','), pr.join(','), uSort.k, uSort.d, uView].join('|');
+    var sig = [q, el('u-rmax').value, amenSel.join(','), Object.keys(uSel).sort().join(','), JSON.stringify(nbf), JSON.stringify(COLF['utable']||{}), mg.join(','), ow.join(','), pr.join(','), uSort.k, uSort.d, uView].join('|');
     if (sig !== uSig) { uSig = sig; uPage = 0; }
     var pageCount = Math.max(1, Math.ceil(rows.length / U_PER));
     if (uPage >= pageCount) uPage = pageCount - 1;

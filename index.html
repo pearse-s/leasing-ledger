@@ -1768,11 +1768,21 @@
     if (key === 'tours' && toursAll === null) loadTours();
     if (key === 'keys' && keysAll === null) loadKeys();
     if (key === 'history' && historyAll === null) loadHistory();
+    // keep the URL hash in sync so the current tab is shareable/bookmarkable
+    // (replaceState, not location.hash, so back/forward still leaves the app cleanly)
+    try { if (('#' + key) !== location.hash) history.replaceState(null, '', location.pathname + location.search + '#' + key); } catch (e) {}
+  }
+  // a valid tab key from the URL hash (e.g. #keys), or '' if none/unknown
+  function tabFromHash(){
+    var h = (location.hash || '').replace(/^#/, '').toLowerCase();
+    return PAGES[h] ? h : '';
   }
   el('tabs').addEventListener('click', function(e){
     var b = e.target.closest('.navitem'); if (!b) return;
     showTab(b.getAttribute('data-tab'));
   });
+  // honour back/forward and manual hash edits while signed in
+  window.addEventListener('hashchange', function(){ if (!TOKEN) return; var t = tabFromHash(); if (t) showTab(t); });
   function gotoUnitsWithSearch(q){
     showTab('units');
     var go = function(){ el('u-search').value = q || ''; uSel = {}; drawChips(); drawUnits(); };
@@ -4273,6 +4283,8 @@
   function startApp(){
     el('login').style.display = 'none';
     load();
+    // deep link: if the URL points at a specific tab (e.g. #keys), open it
+    var t = tabFromHash(); if (t) showTab(t);
   }
   function checkToken(tok){
     return fetch(API + '/check', { headers: { 'Authorization': 'Bearer ' + tok } })
@@ -4306,7 +4318,7 @@
   setupFX();
 
   // boot: strip any ?token= from the URL bar, then verify what we have
-  if (urlToken) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+  if (urlToken) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {} }
   if (TOKEN) {
     checkToken(TOKEN).then(function(res){
       if (res.ok) { applyRole(res.role); try { localStorage.setItem(STORE_KEY, TOKEN); } catch (e) {} startApp(); }

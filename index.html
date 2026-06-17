@@ -67,6 +67,20 @@
   @keyframes drift1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-7vw,6vh,0) scale(1.14)}}
   @keyframes drift2{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(8vw,-5vh,0) scale(1.1)}}
   @keyframes drift3{0%,100%{transform:translate3d(0,0,0) scale(1.05)}50%{transform:translate3d(-6vw,-7vh,0) scale(.92)}}
+  /* branded skeleton shimmer for async tile loads */
+  .skel{position:relative;display:inline-block;overflow:hidden;border-radius:6px;background:rgba(244,236,225,.08);vertical-align:middle}
+  .skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(232,180,62,.18),transparent);animation:skelpass 1.4s ease-in-out infinite}
+  .skel-num{width:64px;height:30px}
+  .skel-line{width:120px;height:11px;border-radius:4px}
+  @keyframes skelpass{to{transform:translateX(100%)}}
+  @media (prefers-reduced-motion: reduce){ .skel::after{animation:none} }
+  /* glass map markers + legend (Units → Map) */
+  .lfmap-wrap{background:none;border:0}
+  .lfmap-marker{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:800 .76rem "Schibsted Grotesk",Verdana,sans-serif;color:#15110D;border:1px solid rgba(255,255,255,.35)}
+  .lfmap-hot{background:linear-gradient(135deg,#F4CB63,#C9912A);box-shadow:0 0 0 4px rgba(232,180,62,.15),0 8px 20px rgba(0,0,0,.42)}
+  .lfmap-ok{background:linear-gradient(135deg,#B9D79D,#7FA76B);box-shadow:0 0 0 4px rgba(157,190,134,.15),0 8px 20px rgba(0,0,0,.42)}
+  .lfmap-legend{background:rgba(26,20,16,.86);border:1px solid var(--hairline-dark);border-radius:8px;padding:7px 10px;font:600 .72rem "Schibsted Grotesk",Verdana,sans-serif;color:var(--ink);line-height:1.7}
+  .lfmap-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
   .wrap{max-width:1340px;margin:0 auto;padding:20px;position:relative;z-index:2;
         display:grid;grid-template-columns:236px minmax(0,1fr);gap:20px;align-items:start}
   *::-webkit-scrollbar{width:10px;height:10px}
@@ -2804,6 +2818,49 @@
     };
   }
 
+  // dashed horizontal target line for rate charts (op-vacancy target)
+  var targetBand = {
+    id:'targetBand',
+    afterDatasetsDraw:function(chart, args, opts){
+      if (!opts || opts.value == null) return;
+      var y = chart.scales.y; if (!y) return;
+      var py = y.getPixelForValue(opts.value); if (py == null || isNaN(py)) return;
+      var ctx = chart.ctx, ca = chart.chartArea;
+      ctx.save();
+      ctx.strokeStyle = opts.color || 'rgba(232,180,62,.6)';
+      ctx.lineWidth = 1; ctx.setLineDash([5,5]);
+      ctx.beginPath(); ctx.moveTo(ca.left, py); ctx.lineTo(ca.right, py); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = opts.color || 'rgba(232,180,62,.9)';
+      ctx.font = '700 10px "Schibsted Grotesk", Verdana, sans-serif';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+      ctx.fillText(opts.label || ('target ' + opts.value), ca.right - 4, py - 2);
+      ctx.restore();
+    }
+  };
+  // brand-styled (glassy) Chart.js tooltips across every chart
+  if (window.Chart) {
+    var _tt = Chart.defaults.plugins.tooltip;
+    _tt.backgroundColor = 'rgba(26,20,16,.92)';
+    _tt.borderColor = 'rgba(232,180,62,.45)';
+    _tt.borderWidth = 1;
+    _tt.titleColor = '#F4ECE1';
+    _tt.bodyColor = '#D9CDBE';
+    _tt.padding = 10; _tt.cornerRadius = 8; _tt.boxPadding = 4;
+  }
+  // data-reactive aurora — gold blob intensifies with operational vacancy, moss
+  // with health, the cool blob with a stale Buildium sync.
+  function setAura(d){
+    var v = (d && d.vacancy) || {}; var op = v.op_vacancy_rate || 0;
+    var stale = !!(d && d.ops && d.ops.buildium_stale);
+    var b1 = document.querySelector('.fx-aurora .b1');
+    var b2 = document.querySelector('.fx-aurora .b2');
+    var b3 = document.querySelector('.fx-aurora .b3');
+    if (b1) b1.style.opacity = (op >= 13 ? 0.85 : op >= 8 ? 0.6 : 0.4).toFixed(2);
+    if (b3) b3.style.opacity = (op < 8 ? 0.6 : 0.32).toFixed(2);
+    if (b2) b2.style.opacity = (stale ? 0.62 : 0.34).toFixed(2);
+  }
+
   function setBucket(b){
     state.bucket = b;
     var chipEl = el('bucketchip');
@@ -2820,6 +2877,7 @@
   function render(d){
     el('errbox').classList.remove('show');
     el('app').style.display = 'block';
+    setAura(d);
 
     var v = d.vacancy || {};
     countUp('k-vacant', v.vacant_total, fmtNum);
@@ -2893,12 +2951,13 @@
       if (!el('ch-trend')) el('trendbox').innerHTML = '<canvas id="ch-trend"></canvas>';
       mkChart('ch-trend', {
         type:'line',
+        plugins:[targetBand],
         data:{ labels: tr.map(function(t){return t.date;}), datasets:[
           { label:'Operational %', data:tr.map(function(t){return t.op_vacancy_rate;}), borderColor:COL.clay, backgroundColor:vgrad('rgba(232,180,62,.34)','rgba(232,180,62,0)'), fill:true, tension:.25, pointRadius:0, borderWidth:2 },
           { label:'Total %', data:tr.map(function(t){return t.total_vacancy_rate;}), borderColor:COL.ink, borderDash:[5,4], fill:false, tension:.25, pointRadius:0, borderWidth:1.5 }
         ]},
         options:{ responsive:true, maintainAspectRatio:false,
-          plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, boxHeight:10 } } },
+          plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, boxHeight:10 } }, targetBand:{ value:8, label:'op target 8%' } },
           scales:{ x:{ grid:{ display:false }, ticks:{ maxTicksLimit:7 } },
                    y:{ grid:{ color:COL.hairline }, ticks:{ callback:function(val){return val+'%';} } } } }
       });
@@ -2939,8 +2998,8 @@
     // Inbound leads come from /leads (async, post-paint) so the slow Aptly sweep
     // never blocks /stats. Show a loading state now; loadLeads()/paintLeads() fill it.
     lastSigned = act.leases_signed || 0;
-    el('s-leads').textContent = '…';
-    el('s-leads-sub').textContent = 'loading leads…';
+    el('s-leads').innerHTML = '<span class="skel skel-num"></span>';
+    el('s-leads-sub').innerHTML = '<span class="skel skel-line"></span>';
 
     // conversion rates — showing→lease is from get_stats (set now); lead→lease is
     // filled by paintLeads once /leads resolves (#lead-conv).
@@ -2950,7 +3009,7 @@
     var rhtml = '<div class="sect">Conversion</div>';
     rhtml += '<div class="pair" title="Leases signed ÷ completed showings in this window"><span class="pl">Showing &rarr; lease conversion</span><span class="pv">' + pct(shPct) +
       ' <small>' + fmtNum(convSigned) + ' signed / ' + fmtNum(shDen) + ' showings</small></span></div>';
-    rhtml += '<div class="pair" title="Leases signed ÷ inbound leads in this window"><span class="pl">Lead &rarr; lease conversion</span><span class="pv" id="lead-conv">…</span></div>';
+    rhtml += '<div class="pair" title="Leases signed ÷ inbound leads in this window"><span class="pl">Lead &rarr; lease conversion</span><span class="pv" id="lead-conv"><span class="skel skel-line"></span></span></div>';
     el('activity-rates').innerHTML = rhtml;
     loadLeads(d);
 
@@ -3509,6 +3568,14 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
       }).addTo(umap);
       umapLayer = L.layerGroup().addTo(umap);
+      var legend = L.control({ position:'bottomright' });
+      legend.onAdd = function(){
+        var div = L.DomUtil.create('div', 'lfmap-legend');
+        div.innerHTML = '<div><i style="background:linear-gradient(135deg,#B9D79D,#7FA76B)"></i>All occupied</div>' +
+          '<div><i style="background:linear-gradient(135deg,#F4CB63,#C9912A)"></i>Has vacant</div>';
+        return div;
+      };
+      legend.addTo(umap);
     }
     umapLayer.clearLayers();
     var groups = {};
@@ -3522,11 +3589,9 @@
     pids.forEach(function(pid){
       var g = groups[pid];
       var hasVacant = g.units.some(function(r){ return r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'; });
-      var color = hasVacant ? '#E8B43E' : '#9DBE86';
-      var radius = Math.min(7 + Math.sqrt(g.units.length) * 2.5, 16);
-      var mk = L.circleMarker([g.lat, g.lng], {
-        radius: radius, color: '#15110D', weight: 1.5, fillColor: color, fillOpacity: 0.9
-      });
+      var mstatus = hasVacant ? 'hot' : 'ok';
+      var icon = L.divIcon({ className:'lfmap-wrap', html:'<span class="lfmap-marker lfmap-' + mstatus + '">' + g.units.length + '</span>', iconSize:[34,34], iconAnchor:[17,17] });
+      var mk = L.marker([g.lat, g.lng], { icon: icon });
       var ph = '<div class="maptitle">' + esc(g.name) + '</div>' +
         '<div class="mapsub">' + g.units.length + ' unit' + (g.units.length === 1 ? '' : 's') + ' in current filter</div>' +
         '<div class="maplist">';

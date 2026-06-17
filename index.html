@@ -1753,7 +1753,13 @@
 
   /* ── tabs ─────────────────────────────────── */
   var PAGES = { ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', owners:'page-owners', keys:'page-keys', history:'page-history' };
+  var ACTIVE_TAB = 'ledger';   // which tab is showing; render() only reveals the Ledger (#app) when this is 'ledger'
+  var statsLoaded = false;     // a /stats load has succeeded at least once (Ledger DOM is populated)
+  var statsLoading = false;    // a /stats load is currently in flight
   function showTab(key){
+    ACTIVE_TAB = key;
+    // #errbox is a Ledger-only artifact (sibling of #app); never let it linger over another tab
+    if (key !== 'ledger') el('errbox').classList.remove('show');
     document.querySelectorAll('#tabs .navitem').forEach(function(t){
       t.classList.toggle('on', t.getAttribute('data-tab') === key);
     });
@@ -1768,6 +1774,9 @@
     if (key === 'tours' && toursAll === null) loadTours();
     if (key === 'keys' && keysAll === null) loadKeys();
     if (key === 'history' && historyAll === null) loadHistory();
+    // if a prior /stats load failed (e.g. first load errored while deep-linked elsewhere),
+    // retry when the user actually opens the Ledger so it can never sit blank
+    if (key === 'ledger' && !statsLoaded && !statsLoading) load();
     // keep the URL hash in sync so the current tab is shareable/bookmarkable
     // (replaceState, not location.hash, so back/forward still leaves the app cleanly)
     try { if (('#' + key) !== location.hash) history.replaceState(null, '', location.pathname + location.search + '#' + key); } catch (e) {}
@@ -1867,6 +1876,7 @@
   }
 
   function load(){
+    statsLoading = true;
     appsAll = null; toursAll = null; // entity filters / window changed → lazy-reload those tabs
     el('veil').classList.remove('hide');
     fetch(API + '/stats?' + buildQuery().toString(), { headers: { 'Authorization': 'Bearer ' + TOKEN } })
@@ -1877,8 +1887,14 @@
       })
       .then(render)
       .catch(function(e){
+        statsLoading = false;
         el('veil').classList.add('hide');
         if (e.message === 'AUTH') { onAuthFail(); return; }
+        // a Ledger /stats failure is only meaningful on the Ledger tab. #errbox is a
+        // SIBLING of #app, so showing it while on another tab would stack the error
+        // over that tab's content. Stay quiet off-Ledger; the (hidden) Ledger just
+        // doesn't update until the user is actually looking at it.
+        if (ACTIVE_TAB !== 'ledger') return;
         el('app').style.display = 'none';
         el('errbox').classList.add('show');
         el('errmsg').innerHTML = 'The stats API returned an error: <code>' + esc(e.message) + '</code>';
@@ -2946,8 +2962,13 @@
   el('bucketchip').addEventListener('click', function(){ setBucket(null); });
 
   function render(d){
+    statsLoaded = true; statsLoading = false;
     el('errbox').classList.remove('show');
-    el('app').style.display = 'block';
+    // only reveal the Ledger page if it is the active tab — otherwise a stats
+    // reload (filter reset, window change, sync, or the deep-link's initial load)
+    // would yank the user off whatever tab they're on. render still updates the
+    // (hidden) Ledger DOM so it's fresh when they switch back.
+    if (ACTIVE_TAB === 'ledger') el('app').style.display = 'block';
     setAura(d);
 
     var v = d.vacancy || {};
@@ -4272,6 +4293,9 @@
     el('page-applications').style.display = 'none';
     el('page-tours').style.display = 'none';
     el('page-owners').style.display = 'none';
+    el('page-keys').style.display = 'none';
+    el('page-history').style.display = 'none';
+    ACTIVE_TAB = 'ledger';   // clean slate so the next login (or deep link) lands deterministically
     el('login').style.display = 'flex';
     setTimeout(function(){ try { el('loginpw').focus(); } catch (e) {} }, 60);
   }

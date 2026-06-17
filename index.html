@@ -402,6 +402,51 @@
   .qchip.on{background:var(--accent-grad);border-color:transparent;color:var(--on-accent)}
   .qchip .qn{font-weight:400;opacity:.75}
 
+  /* Excel-style column filters: funnel in the header + one shared fixed popover */
+  /* caret on every header — the whole header is clickable; caret is a hint + active-filter dot */
+  .colf-funnel{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;margin-left:5px;
+    border-radius:4px;color:var(--ink-soft);font-size:.55rem;line-height:1;pointer-events:none;vertical-align:middle;
+    border:1px solid transparent;transition:color .12s ease,background .12s ease,border-color .12s ease}
+  thead th:hover .colf-funnel{color:var(--ink)}
+  .colf-funnel.on{color:var(--on-accent);background:var(--accent-grad);border-color:transparent}
+  .colfback{position:fixed;inset:0;z-index:58;display:none;background:transparent}
+  .colfback.show{display:block}
+  .colfpop{position:fixed;z-index:59;display:none;width:244px;max-width:calc(100vw - 24px);
+    background:rgba(20,15,11,.99);border:1px solid rgba(255,255,255,.16);border-radius:12px;
+    box-shadow:0 22px 50px rgba(0,0,0,.6),var(--rim);overflow:hidden;color:var(--ink)}
+  .colfpop.show{display:block;animation:mspop .2s var(--spring)}
+  .colfpop .cfsearch{width:100%;border:none;border-bottom:1px solid var(--hairline);padding:9px 12px;
+    font-family:var(--sans);font-size:.82rem;outline:none;background:rgba(0,0,0,.28);color:var(--ink)}
+  .colfpop .cfsearch::placeholder{color:var(--ink-soft)}
+  .colfpop .cflist{max-height:248px;overflow:auto;padding:5px}
+  .colfpop .cfrow{display:flex;align-items:center;gap:9px;padding:7px 9px;font-size:.82rem;color:var(--ink);
+    cursor:pointer;user-select:none;border-radius:8px;transition:background .12s ease}
+  .colfpop .cfrow:hover{background:rgba(232,180,62,.14)}
+  .colfpop .cfrow.on{color:var(--clay);font-weight:600}
+  .colfpop .cfrow.on::after{content:'✓';margin-left:auto;font-weight:800;color:var(--clay)}
+  .colfpop .cfnum{display:flex;gap:8px;padding:11px 12px}
+  .colfpop .cfnum input{width:100%;font-family:var(--sans);font-size:.82rem;padding:6px 8px;
+    border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:rgba(0,0,0,.28);color:var(--ink)}
+  .colfpop .cfnum input::placeholder{color:var(--ink-soft)}
+  .colfpop .cfmeta{padding:9px 12px;font-size:.74rem;color:var(--ink-soft);font-style:italic}
+  .colfpop .cffoot{display:flex;justify-content:space-between;border-top:1px solid var(--hairline);padding:7px 11px}
+  .colfpop .cffoot button{font-family:var(--sans);font-size:.74rem;font-weight:700;border:none;background:none;cursor:pointer;color:var(--clay)}
+  .colfpop .cffoot .cfdone{color:var(--ink)}
+  .colfpop .cfsort{display:flex;gap:6px;padding:9px 10px 5px;border-bottom:1px solid var(--hairline)}
+  .colfpop .cfsortb{flex:1;font-family:var(--sans);font-size:.73rem;font-weight:600;cursor:pointer;color:var(--ink-soft);
+    background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:8px;padding:6px 7px;transition:all .15s ease;white-space:nowrap}
+  .colfpop .cfsortb:hover{border-color:var(--clay);color:var(--ink)}
+  .colfpop .cfsortb.on{background:var(--accent-grad);border-color:transparent;color:var(--on-accent)}
+  /* key manager: multi-set badge + modal set-switcher */
+  .setbadge{display:inline-block;font-size:.62rem;font-weight:700;color:var(--clay);background:var(--clay-soft);
+    border:1px solid var(--clay);border-radius:9px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  .ksetbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:11px;grid-column:1/-1}
+  .ksetchip{font-family:var(--sans);font-size:.74rem;font-weight:600;cursor:pointer;color:var(--ink-soft);
+    background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:999px;padding:4px 11px;transition:all .15s ease}
+  .ksetchip:hover{border-color:var(--clay);color:var(--ink)}
+  .ksetchip.on{background:var(--accent-grad);border-color:transparent;color:var(--on-accent)}
+  .kfctx{font-size:.78rem;color:var(--ink-soft);margin-bottom:8px}
+
   /* directory row tints */
   tr.r-bal td{background:rgba(232,180,62,.13)}
   tr.r-exp td{background:rgba(230,182,92,.12)}
@@ -830,7 +875,7 @@
       <div class="kpi">
         <div class="lbl">Rent at risk</div>
         <div class="num" id="k-risk">&ndash;</div>
-        <div class="sub">market rent of vacant units, per month</div>
+        <div class="sub">listed/lease rent of vacant units, per month</div>
       </div>
       <div class="kpi alert click" id="kpi-unlisted" title="See unlisted vacant units below">
         <div class="lbl">Vacant &amp; unlisted</div>
@@ -860,7 +905,7 @@
     <div class="grid g3">
       <div class="card">
         <h2>Leasing activity</h2>
-        <div class="note">chart: last 8 weeks, always &middot; counters: selected window only</div>
+        <div class="note">chart: 8 weeks weekly, or monthly when the window &gt; 8 weeks &middot; counters: selected window only</div>
         <div class="chartbox"><canvas id="ch-activity"></canvas></div>
         <div class="tiles">
           <div class="tile click" id="tile-apps" title="Open the Applications tab">
@@ -884,6 +929,7 @@
             <div class="ts" id="s-leads-sub">Aptly Leads board</div>
           </div>
         </div>
+        <div id="activity-rates"></div>
       </div>
       <div class="card">
         <h2>Application funnel</h2>
@@ -914,14 +960,6 @@
         <h2>Marketed units</h2>
         <button type="button" class="bucketchip" id="bucketchip"><span id="bucketlabel"></span>&nbsp;&#10005;</button>
         <input type="text" id="t-search" placeholder="Search property, unit, owner&hellip;">
-        <span class="chipset" data-cg="t-beds" title="Bedrooms — pick any number">
-          <span class="cslabel">Beds</span>
-          <button type="button" class="chip-mini" data-v="Studio">Studio</button>
-          <button type="button" class="chip-mini" data-v="1">1</button>
-          <button type="button" class="chip-mini" data-v="2">2</button>
-          <button type="button" class="chip-mini" data-v="3">3</button>
-          <button type="button" class="chip-mini" data-v="4">4+</button>
-        </span>
         <input type="number" id="t-rmin" placeholder="Min rent" min="0" step="50" title="Minimum rent (listed rent, market rent if unlisted)">
         <input type="number" id="t-rmax" placeholder="Max rent" min="0" step="50" title="Maximum rent (listed rent, market rent if unlisted)">
         <span class="msinline" id="fg-t_amen">
@@ -947,7 +985,7 @@
             <th data-k="property">Property</th>
             <th data-k="unit">Unit</th>
             <th data-k="bedrooms">Bed</th>
-            <th data-k="listing_rent" class="rt">Listed rent</th>
+            <th data-k="listing_rent" class="rt">Rent</th>
             <th data-k="days_vacant" class="rt">Days vacant</th>
             <th data-k="is_listed">Listed</th>
             <th data-k="occupancy_status">Status</th>
@@ -970,14 +1008,6 @@
           <button data-v="map">Map</button>
         </div>
         <input type="text" id="u-search" placeholder="Search property, unit, tenant, owner&hellip;">
-        <span class="chipset" data-cg="u-beds" title="Bedrooms — pick any number">
-          <span class="cslabel">Beds</span>
-          <button type="button" class="chip-mini" data-v="Studio">Studio</button>
-          <button type="button" class="chip-mini" data-v="1">1</button>
-          <button type="button" class="chip-mini" data-v="2">2</button>
-          <button type="button" class="chip-mini" data-v="3">3</button>
-          <button type="button" class="chip-mini" data-v="4">4+</button>
-        </span>
         <input type="number" id="u-rmax" placeholder="Max rent" min="0" step="50" title="Maximum rent (listed rent if listed, else lease rent, else market rent)">
         <span class="msinline" id="fg-u_amen">
           <button type="button" class="msbtn" id="msb-u_amen" title="Amenity (from active listings — unlisted units have no amenity data). Pick one or more.">Any amenity</button>
@@ -1130,6 +1160,7 @@
       <div class="tablebar">
         <h2>Key manager</h2>
         <input type="text" id="k-search" placeholder="Search property, unit, bin, holder, label&hellip;">
+        <button type="button" class="btn" id="k-addkey" title="Add a new key set (e.g. a second set of keys in a bin)">+ Add key set</button>
         <span class="count-note" id="k-count"></span>
       </div>
       <div class="qchips" id="k-chips"></div>
@@ -1423,6 +1454,9 @@
   var keysAll = null, kSort = { k:'property_name', d:1 }, kSel = {}, kCur = null;
   var historyAll = null, hSort = { k:'created_at', d:-1 }, hSel = {};
   var keyModalOnChange = null;   // callback to refresh the embedded key panel after a write
+  var kGroup = null;             // when a bin holds multiple key sets, the modal shows a set-switcher
+  var kCreateCtx = null;         // context for "Add key set" when opened without a current key
+  var keyGroups = [];            // current Keys-tab rows, grouped by bin (one visual row per bin)
 
   var COL = {
     moss:'#9DBE86', amber:'#E6B65C', clay:'#E8B43E', plum:'#A6C0D2',
@@ -1504,9 +1538,7 @@
      State is a plain object used as a Set; empty = no constraint. One delegated handler. */
   var CG = {};
   var CG_ONCHANGE = {
-    't-beds':  function(){ drawTable(); },
     't-status':function(){ drawTable(); },
-    'u-beds':  function(){ drawUnits(); },
     'nb-bt':   function(){ drawUnits(); },
     'nb-appl': function(){ drawUnits(); }
   };
@@ -1562,8 +1594,14 @@
     return p;
   }
   function rentBasis(r){
+    // listed -> listed rent; occupied/turnover -> lease rent; never show market rent
     return (r.is_listed && r.listing_rent != null) ? r.listing_rent
-         : (r.monthly_rent != null ? r.monthly_rent : r.market_rent);
+         : (r.monthly_rent != null ? r.monthly_rent : null);
+  }
+  // marketed/vacant payload rows carry lease_rent (last lease) instead of monthly_rent
+  function marketedRent(r){
+    return (r.is_listed && r.listing_rent != null) ? r.listing_rent
+         : (r.lease_rent != null ? r.lease_rent : null);
   }
   function emptyRow(tableId, msg){
     var n = el(tableId).querySelectorAll('thead th').length || 1;
@@ -1659,6 +1697,18 @@
     };
     if (unitsAll === null) loadUnits(go); else go();
   }
+  // drill to the Units tab applying a column filter (used where the old quick-chip was removed)
+  function gotoUnitsColFilter(apply){
+    showTab('units');
+    var go = function(){
+      el('u-search').value = '';
+      uSel = {}; el('u-nbfilters').style.display = 'none';
+      COLF['utable'] = {};
+      apply();
+      refreshFunnels(); drawChips(); drawUnits();
+    };
+    if (unitsAll === null) loadUnits(go); else go();
+  }
   function gotoApplications(status, useLedgerWindow){
     aSel = {}; if (status && status !== 'all') aSel[status] = 1;
     if (useLedgerWindow) {
@@ -1743,8 +1793,8 @@
     return m[s] || s || '';
   }
   function evChipK(t){
-    var c = { checkout:'c-hot', checkin:'c-ok', status_change:'c-warm', note:'c-cold', import:'c-cold' }[t] || 'c-cold';
-    var l = { import:'Imported', checkout:'Checked out', checkin:'Checked in', status_change:'Status', note:'Note' }[t] || t;
+    var c = { checkout:'c-hot', checkin:'c-ok', status_change:'c-warm', note:'c-cold', import:'c-cold', create:'c-ok' }[t] || 'c-cold';
+    var l = { import:'Imported', checkout:'Checked out', checkin:'Checked in', status_change:'Status', note:'Note', create:'Added' }[t] || t;
     return '<span class="chip ' + c + '">' + esc(l) + '</span>';
   }
 
@@ -1829,47 +1879,83 @@
     var base = scopedKeys();
     var ksel = Object.keys(kSel);
     var rows = base.filter(function(r){
+      if (!colfPass('ktable', r)) return false;
       if (ksel.length && !kChipPass(r, ksel)) return false;
       if (!q) return true;
       return ((r.property_name||'') + ' ' + (r.unit_number||'') + ' ' + (r.label||'') + ' ' +
               (r.bin||'') + ' ' + (r.holder||'') + ' ' + (r.status_label||'')).toLowerCase().indexOf(q) >= 0;
     });
     rows.sort(cmpRows(kSort.k, kSort.d));
-    var html = '';
+    // group by bin (+unit) — multiple key sets in one bin collapse to a single row
+    keyGroups = []; var gmap = {};
     rows.forEach(function(r){
+      var gk = (r.bin != null && r.bin !== '') ? ('b:' + r.bin + '|' + (r.unit_id == null ? '' : r.unit_id)) : ('k:' + r.key_id);
+      if (gmap[gk] == null) { gmap[gk] = keyGroups.length; keyGroups.push([]); }
+      keyGroups[gmap[gk]].push(r);
+    });
+    var html = '';
+    keyGroups.forEach(function(sets, gi){
+      var r = sets[0], multi = sets.length > 1;
+      var anyOver = sets.some(function(s){ return s.is_overdue; });
       var nm = r.property_name ? (esc(r.property_name) + (r.unit_number ? ' · ' + esc(r.unit_number) : '')) : esc(r.label);
-      var due = r.date_expected ? (esc(r.date_expected) + (r.is_overdue ? ' <span class="ovr">overdue</span>' : '')) : '–';
-      html += '<tr class="rowlink' + (r.is_overdue ? ' r-over' : '') + '" data-kid="' + r.key_id + '" title="' + esc(r.label) + '">' +
+      if (multi) nm += ' <span class="setbadge">' + sets.length + ' sets</span>';
+      var out = sets.filter(function(s){ return s.status === 'out_of_office'; });
+      var statusCell = multi ? sets.map(function(s){ return keyChip(s.status); }).join(' ') : keyChip(r.status);
+      var holderCell = multi ? (out.length ? esc(out.map(function(s){ return s.holder || '?'; }).join(', ')) : '–') : esc(r.holder || '–');
+      var dateOut = multi ? (out.length === 1 ? esc(out[0].date_out || '–') : (out.length ? 'multiple' : '–')) : esc(r.date_out || '–');
+      var due = multi
+        ? (out.length === 1 && out[0].date_expected ? esc(out[0].date_expected) + (out[0].is_overdue ? ' <span class="ovr">overdue</span>' : '') : (out.length ? 'multiple' : '–'))
+        : (r.date_expected ? (esc(r.date_expected) + (r.is_overdue ? ' <span class="ovr">overdue</span>' : '')) : '–');
+      var last = sets.map(function(s){ return s.last_event_at || ''; }).sort().slice(-1)[0];
+      html += '<tr class="rowlink' + (anyOver ? ' r-over' : '') + '" data-gi="' + gi + '" title="' + esc(r.label) + '">' +
         '<td><b>' + nm + '</b></td>' +
         '<td>' + esc(r.bin || '–') + '</td>' +
-        '<td>' + keyChip(r.status) + '</td>' +
-        '<td>' + esc(r.holder || '–') + '</td>' +
-        '<td>' + esc(r.date_out || '–') + '</td>' +
+        '<td>' + statusCell + '</td>' +
+        '<td>' + holderCell + '</td>' +
+        '<td>' + dateOut + '</td>' +
         '<td>' + due + '</td>' +
-        '<td>' + (esc((r.last_event_at || '').slice(0,10)) || '–') + '</td></tr>';
+        '<td>' + (esc((last || '').slice(0,10)) || '–') + '</td></tr>';
     });
     el('ktable').querySelector('tbody').innerHTML = html || emptyRow('ktable', 'Nothing matches');
-    el('k-count').textContent = rows.length + ' of ' + base.length + ' keys';
+    el('k-count').textContent = rows.length + ' of ' + base.length + ' keys' +
+      (keyGroups.length !== rows.length ? ' · ' + keyGroups.length + ' bins' : '');
   }
   el('k-search').addEventListener('input', deb(drawKeys));
+  el('k-addkey').addEventListener('click', function(){ openCreateKey({}, null); });
   el('k-chips').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return;
     var k = b.getAttribute('data-q');
     if (k === 'all') kSel = {}; else if (kSel[k]) delete kSel[k]; else kSel[k] = 1;
     drawKeyChips(); drawKeys(); });
   el('ktable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;
-    if (kSort.k === k) kSort.d = -kSort.d; else kSort = { k:k, d:(k === 'date_out' || k === 'date_expected' || k === 'last_event_at') ? -1 : 1 };
-    drawKeys();
+    openCol('ktable', k, th);
   });
-  el('ktable').addEventListener('click', function(e){ var tr2 = e.target.closest('tr[data-kid]'); if (tr2) openKey(tr2.getAttribute('data-kid')); });
+  el('ktable').addEventListener('click', function(e){ var tr2 = e.target.closest('tr[data-gi]'); if (tr2) openKeyGroup(keyGroups[+tr2.getAttribute('data-gi')], null); });
 
   /* key detail + write actions */
   function findKey(kid){ var r = null; (keysAll || []).forEach(function(x){ if (String(x.key_id) === String(kid)) r = x; }); return r; }
   function openKey(kid){ var r = findKey(kid); if (r) openKeyRow(r, null); }
-  function openKeyRow(r, onChange){
+  function openKeyGroup(sets, onChange){ if (sets && sets.length) openKeyRow(sets[0], onChange, sets); }
+  // all keysAll sets sharing this key's bin+unit (for the modal set-switcher after an add)
+  function keyGroupOf(r){
+    if (!keysAll || r.bin == null || r.bin === '') return null;
+    var g = keysAll.filter(function(x){ return x.bin === r.bin && (x.unit_id || '') === (r.unit_id || ''); });
+    return g.length > 1 ? g : null;
+  }
+  function openKeyRow(r, onChange, group){
     if (!r) return;
-    kCur = r; keyModalOnChange = onChange || null;
+    kCur = r; kCreateCtx = null;
+    kGroup = (group && group.length > 1) ? group.slice() : null;
+    keyModalOnChange = onChange || null;
     renderKey(); el('km-form').style.display = 'none'; openModal('kmodal'); loadKeyHistory(r.key_id);
+  }
+  function openCreateKey(ctx, onChange){
+    kCur = null; kGroup = null; kCreateCtx = ctx || {}; keyModalOnChange = onChange || null;
+    el('km-title').textContent = 'Add a key set';
+    el('km-sub').innerHTML = (ctx && ctx.property_name) ? (esc(ctx.property_name) + (ctx.unit_number ? ' · ' + esc(ctx.unit_number) : '')) : 'New key set';
+    el('km-fields').innerHTML = ''; el('km-standing').style.display = 'none';
+    el('km-actions').innerHTML = ''; el('km-links').innerHTML = ''; el('km-history').innerHTML = '&nbsp;';
+    openModal('kmodal'); showKeyForm('create');
   }
   function renderKey(){
     var r = kCur; if (!r) return;
@@ -1898,7 +1984,13 @@
       f += fitem('Lease end', esc(r.lease_to_date));
       f += fitem('Manager', esc(r.property_manager_name));
     }
-    el('km-fields').innerHTML = f;
+    var sw = '';
+    if (kGroup && kGroup.length > 1) {
+      sw = '<div class="ksetbar"><span class="cslabel">Sets in this bin</span>';
+      kGroup.forEach(function(s, i){ sw += '<button type="button" class="ksetchip' + (s.key_id === r.key_id ? ' on' : '') + '" data-setid="' + s.key_id + '">Set ' + (i + 1) + ' &middot; ' + esc(KEYLBL(s.status)) + '</button>'; });
+      sw += '</div>';
+    }
+    el('km-fields').innerHTML = sw + f;
     if (r.standing_note) { el('km-standing').style.display = 'block'; el('km-standing').innerHTML = '<b>Standing note:</b> ' + esc(r.standing_note); }
     else el('km-standing').style.display = 'none';
     var a = '';
@@ -1906,6 +1998,7 @@
     else a += '<button type="button" class="btn primary" data-kact="checkout">Check out</button>';
     a += '<button type="button" class="btn" data-kact="status">Change status</button>';
     a += '<button type="button" class="btn" data-kact="note">Add note</button>';
+    a += '<button type="button" class="btn" data-kact="create" title="Add another key set in this bin">Add key set</button>';
     el('km-actions').innerHTML = a;
     var links = '';
     if (r.unit_id && r.property_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit in Buildium &rarr;</a>';
@@ -1913,8 +2006,14 @@
   }
   function kPlus2(){ var d = new Date(); d.setDate(d.getDate() + 2); return d.toISOString().slice(0,10); }
   el('km-actions').addEventListener('click', function(e){ var b = e.target.closest('[data-kact]'); if (b) showKeyForm(b.getAttribute('data-kact')); });
+  el('km-fields').addEventListener('click', function(e){
+    var c = e.target.closest('.ksetchip'); if (!c) return;
+    var id = c.getAttribute('data-setid'), s = null;
+    (kGroup || []).forEach(function(x){ if (String(x.key_id) === id) s = x; });
+    if (s) { kCur = s; el('km-form').style.display = 'none'; renderKey(); loadKeyHistory(s.key_id); }
+  });
   function showKeyForm(kind){
-    var r = kCur; if (!r) return;
+    var r = kCur; if (kind !== 'create' && !r) return;
     var box = el('km-form'); box.style.display = 'block';
     var h = '';
     if (kind === 'checkout') {
@@ -1928,6 +2027,14 @@
       var opts = ''; KEY_STATUS_OPTS.forEach(function(o){ opts += '<option value="' + o[0] + '"' + (o[0] === r.status ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; });
       h = '<div class="kfh">Change status</div><label>Status</label><select id="kf-status">' + opts + '</select>' +
         '<label>Note (optional)</label><textarea id="kf-note" placeholder="why is the status changing?"></textarea>';
+    } else if (kind === 'create') {
+      var ctx = kCreateCtx || kCur || {};
+      h = '<div class="kfh">Add a key set' + (ctx.bin ? ' to bin ' + esc(ctx.bin) : '') + '</div>' +
+        (ctx.unit_id ? '<div class="kfctx">Linked to <b>' + esc(ctx.property_name || 'this unit') + (ctx.unit_number ? ' · ' + esc(ctx.unit_number) : '') + '</b></div>' : '') +
+        '<div class="kfrow"><div><label>Who is picking it up</label><input id="kf-holder" placeholder="Name — leave blank if it stays in the office"></div>' +
+        '<div><label>Expected back</label><input id="kf-exp" type="date" value="' + kPlus2() + '"></div></div>' +
+        '<label>Label (optional)</label><input id="kf-label" placeholder="auto-named if blank, e.g. Set 2">' +
+        '<label>Note (optional)</label><textarea id="kf-note" placeholder="anything worth recording"></textarea>';
     } else {
       h = '<div class="kfh">Add a note</div><label>Note</label><textarea id="kf-note" placeholder="timestamped note on this key’s history"></textarea>';
     }
@@ -1942,7 +2049,6 @@
     var s = e.target.closest('[data-ksubmit]'); if (s) submitKey(s.getAttribute('data-ksubmit'));
   });
   function submitKey(kind){
-    var r = kCur; if (!r) return;
     var errEl = el('kf-err');
     var actor = getActor();
     if (!actor) {
@@ -1951,25 +2057,48 @@
       try { localStorage.setItem(ACT_KEY, actor); } catch (e) {}
     }
     var note = ((el('kf-note') && el('kf-note').value) || '').trim() || null;
+    var btn = el('km-form').querySelector('[data-ksubmit]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var fail = function(err){ if (errEl) errEl.textContent = (err && err.message) || 'Save failed.'; if (btn) { btn.disabled = false; btn.textContent = 'Save'; } };
+
+    if (kind === 'create') {
+      var ctx = kCreateCtx || kCur || {};
+      var cHolder = ((el('kf-holder') && el('kf-holder').value) || '').trim();
+      var cbody = { actor: actor, note: note,
+        unit_id: ctx.unit_id || null, property_id: ctx.property_id || null,
+        bin: ctx.bin || null,
+        label: ((el('kf-label') && el('kf-label').value) || '').trim() || null,
+        holder: cHolder || null,
+        expected: cHolder ? ((el('kf-exp') && el('kf-exp').value) || null) : null };
+      postJSON('/key/create', cbody).then(function(j){
+        if (j && j.key) { if (keysAll) keysAll.push(j.key); kCur = j.key; kCreateCtx = null; kGroup = keyGroupOf(j.key); }
+        el('km-form').style.display = 'none';
+        if (kCur) { renderKey(); loadKeyHistory(kCur.key_id); }
+        if (keysAll) { drawKeyChips(); drawKeys(); }
+        if (keyModalOnChange) { try { keyModalOnChange(); } catch (e) {} }
+      }).catch(fail);
+      return;
+    }
+
+    var r = kCur; if (!r) { fail(); return; }
     var route, body = { key_id: r.key_id, actor: actor, note: note };
     if (kind === 'checkout') {
       var holder = ((el('kf-holder') && el('kf-holder').value) || '').trim();
-      if (!holder) { errEl.textContent = 'Enter who is taking the key.'; return; }
+      if (!holder) { fail({ message:'Enter who is taking the key.' }); return; }
       route = '/key/checkout'; body.holder = holder; body.expected = (el('kf-exp') && el('kf-exp').value) || null;
     } else if (kind === 'checkin') { route = '/key/checkin'; }
     else if (kind === 'status') { route = '/key/status'; body.status = el('kf-status').value; }
-    else { route = '/key/note'; if (!note) { errEl.textContent = 'Enter a note.'; return; } }
-    var btn = el('km-form').querySelector('[data-ksubmit]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    else { route = '/key/note'; if (!note) { fail({ message:'Enter a note.' }); return; } }
     postJSON(route, body).then(function(j){
       if (j && j.key) {
         if (keysAll) { for (var i = 0; i < keysAll.length; i++) { if (keysAll[i].key_id === j.key.key_id) { keysAll[i] = j.key; break; } } }
+        if (kGroup) { for (var g = 0; g < kGroup.length; g++) { if (kGroup[g].key_id === j.key.key_id) { kGroup[g] = j.key; break; } } }
         kCur = j.key;
       }
       el('km-form').style.display = 'none';
       renderKey(); loadKeyHistory(r.key_id);
       if (keysAll) { drawKeyChips(); drawKeys(); }            // Keys tab may not be loaded
       if (keyModalOnChange) { try { keyModalOnChange(); } catch (e) {} }  // refresh embedded panel
-    }).catch(function(err){ if (errEl) errEl.textContent = (err && err.message) || 'Save failed.'; if (btn) { btn.disabled = false; btn.textContent = 'Save'; } });
+    }).catch(fail);
   }
   function khDetail(e){
     if (e.event_type === 'checkout') return 'to ' + esc(e.holder || '?') + (e.date_expected ? ', due ' + esc(e.date_expected) : '') + (e.note ? ' — ' + esc(e.note) : '');
@@ -2003,7 +2132,8 @@
     box.textContent = 'Loading key…';
     authFetch('/keys?unit_id=' + encodeURIComponent(unitId)).then(function(j){
       var keys = (j && j.keys) || []; box._keys = keys;
-      if (!keys.length) { box.innerHTML = '<span class="lmphnote">No key on file for this unit.</span>'; return; }
+      var addRow = '<div class="trow"><button type="button" class="listbtn" data-keyadd="1">+ Add key set</button></div>';
+      if (!keys.length) { box.innerHTML = '<span class="lmphnote">No key on file for this unit.</span>' + addRow; return; }
       box.innerHTML = keys.map(function(k){
         var meta = [];
         if (k.bin) meta.push('Bin ' + esc(k.bin));
@@ -2015,10 +2145,19 @@
         return '<div class="trow"><span class="tn">' + keyChip(k.status) + '</span>' +
           '<span>' + (meta.join(' &middot; ') || '&nbsp;') + '</span>' + act +
           '<button type="button" class="listbtn" data-keyfull="' + k.key_id + '">manage &#9656;</button></div>';
-      }).join('');
+      }).join('') + addRow;
     }).catch(function(){ box.textContent = 'Key status unavailable right now.'; });
   }
   document.addEventListener('click', function(e){
+    var addb = e.target.closest('[data-keyadd]');
+    if (addb) {
+      var pbox = addb.closest('[data-keypanel]'); if (!pbox) return;
+      var first = (pbox._keys || [])[0] || {};
+      openCreateKey({ unit_id: pbox._unitId, property_id: first.property_id || null,
+        property_name: first.property_name || null, unit_number: first.unit_number || null, bin: first.bin || null },
+        function(){ mountKeyPanel(pbox, pbox._unitId); });
+      return;
+    }
     var b = e.target.closest('[data-keyact],[data-keyfull]'); if (!b) return;
     var box = b.closest('[data-keypanel]'); if (!box) return;
     var kid = b.getAttribute('data-keyfull') || b.getAttribute('data-kid');
@@ -2029,7 +2168,7 @@
   });
 
   /* history feed tab */
-  var H_CHIPS = [['all','All'],['checkout','Check-outs'],['checkin','Check-ins'],['status_change','Status'],['note','Notes'],['import','Imports']];
+  var H_CHIPS = [['all','All'],['checkout','Check-outs'],['checkin','Check-ins'],['status_change','Status'],['note','Notes'],['create','Added'],['import','Imports']];
   function loadHistory(){
     el('veil').classList.remove('hide');
     var p = new URLSearchParams(); p.set('limit','800'); appendScope(p);
@@ -2053,6 +2192,7 @@
     var q = (el('h-search').value || '').toLowerCase();
     var hsel = Object.keys(hSel);
     var rows = historyAll.filter(function(r){
+      if (!colfPass('htable', r)) return false;
       if (hsel.length && hsel.indexOf(r.event_type) < 0) return false;
       if (!q) return true;
       return ((r.label||'') + ' ' + (r.property_name||'') + ' ' + (r.unit_number||'') + ' ' +
@@ -2079,8 +2219,7 @@
     drawHistoryChips(); drawHistory(); });
   el('htable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;
-    if (hSort.k === k) hSort.d = -hSort.d; else hSort = { k:k, d: k === 'created_at' ? -1 : 1 };
-    drawHistory();
+    openCol('htable', k, th);
   });
 
   /* ── multi-select ─────────────────────────── */
@@ -2114,6 +2253,13 @@
   Object.keys(MS).forEach(function(key){
     el('msb-' + key).addEventListener('click', function(ev){
       ev.stopPropagation();
+      // inline (table-bar) amenity/parking dropdowns open in the robust fixed popover
+      // (the sidebar scope filters keep their own anchored panel)
+      if (key === 't_amen' || key === 'u_amen' || key === 'nb_park') {
+        if (popCtx && popCtx.key === key) { colfClose(); }
+        else { if (popCtx) colfClose(); openMsFilter(key, this); }
+        return;
+      }
       var panel = el('msp-' + key);
       var was = panel.classList.contains('open');
       msCloseAll();
@@ -2147,6 +2293,239 @@
     b.addEventListener('click', function(){ msCloseAll(); });
   });
   document.addEventListener('click', msCloseAll);
+
+  /* ── Excel-style column filters ─────────────────────────────
+     One shared fixed-overlay popover (escapes card stacking contexts, so no
+     click-through and full contrast) drives both per-column header filters and
+     the inline amenity/parking dropdowns. Column state: COLF[tableId][col]. */
+  function cf_cap(s){ s = String(s); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function cf_yesno(v){ return v ? 'Yes' : 'No'; }
+  var CF_OCC = { occupied:'Occupied', pre_leased:'Pre-leased', op_vacant:'Vacant', never_leased:'Never leased' };
+  var CF_EVT = { import:'Import', checkout:'Check-out', checkin:'Check-in', status_change:'Status change', note:'Note', create:'Created' };
+  var COLF_DEF = {
+    vtable: { rows:function(){ return tableRows || []; }, redraw:function(){ drawTable(); }, cols:{
+      bedrooms:{ t:'enum', label:'Bed' },
+      listing_rent:{ t:'num', label:'Rent', get:marketedRent },
+      days_vacant:{ t:'num', label:'Days vacant' },
+      is_listed:{ t:'enum', label:'Listed', disp:cf_yesno },
+      occupancy_status:{ t:'enum', label:'Status', get:statusOf, disp:cf_cap }
+    }},
+    utable: { rows:function(){ return unitsAll || []; }, redraw:function(){ drawUnits(); }, cols:{
+      unit_bedrooms:{ t:'enum', label:'Beds' },
+      occupancy_status:{ t:'enum', label:'Status', disp:function(v){ return CF_OCC[v] || v; } },
+      unit_event:{ t:'enum', label:'Event' },
+      lease_to_date:{ t:'date', label:'Lease end' },
+      monthly_rent:{ t:'num', label:'Rent', get:rentBasis },
+      total_balance:{ t:'num', label:'Balance' },
+      is_listed:{ t:'enum', label:'Listed', disp:cf_yesno }
+    }},
+    atable: { rows:function(){ return appsAll || []; }, redraw:function(){ drawApps(); }, cols:{
+      submitted_at:{ t:'date', label:'Submitted', get:function(r){ return (r.submitted_at||'').slice(0,10); } },
+      application_status:{ t:'enum', label:'Status' },
+      approx_decision_days:{ t:'num', label:'Days to decision' }
+    }},
+    rtable: { rows:function(){ return toursAll || []; }, redraw:function(){ drawTours(); }, cols:{
+      start_time:{ t:'date', label:'When', get:function(r){ return (r.start_time||'').slice(0,10); } },
+      agent:{ t:'enum', label:'Agent' },
+      status:{ t:'enum', label:'Status', disp:cf_cap }
+    }},
+    otable: { rows:function(){ return ownersAll || []; }, redraw:function(){ drawOwners(); }, cols:{
+      is_company:{ t:'enum', label:'Type', disp:function(v){ return v ? 'Company' : 'Individual'; } },
+      property_count:{ t:'num', label:'Props' },
+      management_agreement_start_date:{ t:'date', label:'Mgmt start' },
+      management_agreement_end_date:{ t:'date', label:'Mgmt end' }
+    }},
+    ktable: { rows:function(){ return scopedKeys(); }, redraw:function(){ drawKeys(); }, cols:{
+      status:{ t:'enum', label:'Status', get:function(r){ return r.status_label || r.status; } },
+      date_out:{ t:'date', label:'Out' },
+      date_expected:{ t:'date', label:'Due back' }
+    }},
+    htable: { rows:function(){ return historyAll || []; }, redraw:function(){ drawHistory(); }, cols:{
+      event_type:{ t:'enum', label:'Event', disp:function(v){ return CF_EVT[v] || v; } },
+      created_at:{ t:'date', label:'When', get:function(r){ return (r.created_at||'').slice(0,10); } }
+    }}
+  };
+  var COLF = {};
+  // per-table sort wiring — the popover's A→Z / Z→A buttons drive these
+  var COLF_SORT = {
+    vtable: { get:function(){ return { k:sortKey, d:sortDir }; }, set:function(c,d){ sortKey=c; sortDir=d; drawTable(); } },
+    utable: { get:function(){ return uSort; }, set:function(c,d){ uSort={k:c,d:d}; drawUnits(); } },
+    atable: { get:function(){ return aSort; }, set:function(c,d){ aSort={k:c,d:d}; drawApps(); } },
+    rtable: { get:function(){ return rSort; }, set:function(c,d){ rSort={k:c,d:d}; drawTours(); } },
+    otable: { get:function(){ return oSort; }, set:function(c,d){ oSort={k:c,d:d}; drawOwners(); } },
+    ktable: { get:function(){ return kSort; }, set:function(c,d){ kSort={k:c,d:d}; drawKeys(); } },
+    htable: { get:function(){ return hSort; }, set:function(c,d){ hSort={k:c,d:d}; drawHistory(); } }
+  };
+  function colDef(tid, col){ return (COLF_DEF[tid] && COLF_DEF[tid].cols[col]) || { t:'text' }; }
+  function colfState(tid, col){ if (!COLF[tid]) COLF[tid] = {}; if (!COLF[tid][col]) COLF[tid][col] = { sel:{}, min:null, max:null, q:'' }; return COLF[tid][col]; }
+  function colVal(tid, col, row){ var d = colDef(tid, col); return d && d.get ? d.get(row) : row[col]; }
+  function colKeyOf(raw){ return raw == null || raw === '' ? ' blank' : String(raw); }
+  function colDisp(d, raw){ if (raw == null || raw === '') return '(blank)'; if (d.disp) return d.disp(raw); return String(raw); }
+  function colActive(tid, col){
+    var d = colDef(tid, col), s = COLF[tid] && COLF[tid][col]; if (!s) return false;
+    if (d.t === 'enum') return Object.keys(s.sel).length > 0;
+    if (d.t === 'text') return !!(s.q && s.q.length);
+    return s.min != null || s.max != null || !!s.min || !!s.max;
+  }
+  function colfPass(tid, row){
+    var st = COLF[tid]; if (!st) return true;
+    for (var col in st){
+      if (!colActive(tid, col)) continue;
+      var d = colDef(tid, col);
+      var raw = colVal(tid, col, row), s = st[col];
+      if (d.t === 'enum'){ if (!s.sel[colKeyOf(raw)]) return false; }
+      else if (d.t === 'text'){ if (s.q && String(raw == null ? '' : raw).toLowerCase().indexOf(s.q) < 0) return false; }
+      else if (d.t === 'num'){ var n = (raw == null || raw === '') ? null : Number(raw);
+        if (s.min != null && (n == null || n < s.min)) return false;
+        if (s.max != null && (n == null || n > s.max)) return false; }
+      else if (d.t === 'date'){ var ds = raw == null ? '' : String(raw).slice(0,10);
+        if (s.min && (ds === '' || ds < s.min)) return false;
+        if (s.max && (ds === '' || ds > s.max)) return false; }
+    }
+    return true;
+  }
+  function colEnumItems(tid, col){
+    var d = colDef(tid, col), seen = {}, out = [];
+    (COLF_DEF[tid].rows() || []).forEach(function(r){
+      var raw = colVal(tid, col, r), k = colKeyOf(raw);
+      if (!(k in seen)) seen[k] = { k:k, label:colDisp(d, raw), raw:raw };
+    });
+    Object.keys(seen).forEach(function(k){ out.push(seen[k]); });
+    out.sort(function(a, b){ if (a.raw == null) return 1; if (b.raw == null) return -1;
+      var x = a.label.toLowerCase(), y = b.label.toLowerCase(); return x < y ? -1 : x > y ? 1 : 0; });
+    return out;
+  }
+  // shared popover DOM (top-level, fixed — no card stacking context can trap it)
+  var colfBack = document.createElement('div'); colfBack.className = 'colfback';
+  var colfPop = document.createElement('div'); colfPop.className = 'colfpop';
+  document.body.appendChild(colfBack); document.body.appendChild(colfPop);
+  var popCtx = null;
+  function cfEl(id){ return colfPop.querySelector('#' + id); }
+  function placePop(anchor){
+    var r = anchor.getBoundingClientRect();
+    colfPop.style.left = '-9999px'; colfPop.style.top = '0px'; colfPop.classList.add('show');
+    var pw = colfPop.offsetWidth, ph = colfPop.offsetHeight;
+    var left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 12));
+    var top = r.bottom + 6; if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+    colfPop.style.left = left + 'px'; colfPop.style.top = top + 'px';
+  }
+  function refreshFunnels(){
+    document.querySelectorAll('.colf-funnel').forEach(function(f){
+      f.classList.toggle('on', colActive(f.getAttribute('data-tid'), f.getAttribute('data-col')));
+    });
+  }
+  function colfClose(){ colfPop.classList.remove('show'); colfBack.classList.remove('show'); refreshFunnels(); popCtx = null; }
+  // toggle/open the header popover (whole header is clickable: sort + filter)
+  function openCol(tid, col, anchor){
+    if (popCtx && popCtx.tid === tid && popCtx.col === col) { colfClose(); return; }
+    if (popCtx) colfClose();
+    openColumnFilter(tid, col, anchor);
+  }
+  function openColumnFilter(tid, col, anchor){
+    var d = colDef(tid, col); var s = colfState(tid, col);
+    popCtx = { kind:d.t, tid:tid, col:col };
+    var srt = COLF_SORT[tid] ? COLF_SORT[tid].get() : null;
+    var ascOn = srt && srt.k === col && srt.d === 1, descOn = srt && srt.k === col && srt.d === -1;
+    var sw = d.t === 'num' ? ['Low → High','High → Low'] : d.t === 'date' ? ['Oldest first','Newest first'] : ['A → Z','Z → A'];
+    var h = '';
+    if (COLF_SORT[tid]) h += '<div class="cfsort"><button type="button" class="cfsortb' + (ascOn ? ' on' : '') + '" data-dir="1">▲ ' + sw[0] + '</button>' +
+      '<button type="button" class="cfsortb' + (descOn ? ' on' : '') + '" data-dir="-1">▼ ' + sw[1] + '</button></div>';
+    if (d.t === 'enum'){
+      h += '<input type="text" class="cfsearch" id="cf-q" placeholder="Search ' + esc(d.label || col) + '…"><div class="cflist" id="cf-list"></div>';
+    } else if (d.t === 'text'){
+      h += '<div class="cfnum"><input type="text" id="cf-text" placeholder="Contains…" value="' + esc(s.q || '') + '"></div>';
+    } else if (d.t === 'num'){
+      h += '<div class="cfnum"><input type="number" id="cf-min" placeholder="Min" value="' + (s.min != null ? s.min : '') + '">' +
+           '<input type="number" id="cf-max" placeholder="Max" value="' + (s.max != null ? s.max : '') + '"></div>';
+    } else {
+      h += '<div class="cfnum"><input type="date" id="cf-min" value="' + (s.min || '') + '">' +
+           '<input type="date" id="cf-max" value="' + (s.max || '') + '"></div>';
+    }
+    h += '<div class="cffoot"><button type="button" id="cf-clear">Clear</button><button type="button" class="cfdone" id="cf-done">Done</button></div>';
+    colfPop.innerHTML = h;
+    Array.prototype.forEach.call(colfPop.querySelectorAll('.cfsortb'), function(b){
+      b.onclick = function(){ if (COLF_SORT[tid]) COLF_SORT[tid].set(col, parseInt(b.getAttribute('data-dir'), 10)); colfClose(); };
+    });
+    if (d.t === 'enum'){
+      renderEnumList();
+      cfEl('cf-q').oninput = renderEnumList;
+      cfEl('cf-list').onclick = function(e){ var row = e.target.closest('.cfrow'); if (!row) return;
+        var k = row.getAttribute('data-k');
+        if (s.sel[k]){ delete s.sel[k]; row.classList.remove('on'); } else { s.sel[k] = 1; row.classList.add('on'); }
+        refreshFunnels(); COLF_DEF[tid].redraw(); };
+    } else if (d.t === 'text'){
+      cfEl('cf-text').oninput = function(){ s.q = (this.value || '').toLowerCase(); refreshFunnels(); COLF_DEF[tid].redraw(); };
+    } else {
+      var mn = cfEl('cf-min'), mx = cfEl('cf-max');
+      var upd = function(){
+        if (d.t === 'num'){ s.min = mn.value === '' ? null : Number(mn.value); s.max = mx.value === '' ? null : Number(mx.value); }
+        else { s.min = mn.value || null; s.max = mx.value || null; }
+        refreshFunnels(); COLF_DEF[tid].redraw(); };
+      mn.oninput = upd; mx.oninput = upd;
+    }
+    // Clear resets this column and closes (per UX: Clear/Done both close)
+    cfEl('cf-clear').onclick = function(){ s.sel = {}; s.min = null; s.max = null; s.q = '';
+      refreshFunnels(); COLF_DEF[tid].redraw(); colfClose(); };
+    cfEl('cf-done').onclick = colfClose;
+    colfBack.classList.add('show'); placePop(anchor);
+    var qi = cfEl('cf-q') || cfEl('cf-text'); if (qi) qi.focus();
+  }
+  function renderEnumList(){
+    var c = popCtx, d = colDef(c.tid, c.col), s = colfState(c.tid, c.col);
+    var q = ((cfEl('cf-q') && cfEl('cf-q').value) || '').toLowerCase();
+    var items = colEnumItems(c.tid, c.col), html = '';
+    items.forEach(function(it){ if (q && it.label.toLowerCase().indexOf(q) < 0) return;
+      html += '<div class="cfrow' + (s.sel[it.k] ? ' on' : '') + '" data-k="' + esc(it.k) + '">' + esc(it.label) + '</div>'; });
+    cfEl('cf-list').innerHTML = html || '<div class="cfmeta">No values</div>';
+  }
+  // inline amenity/parking dropdowns reuse the same popover but read/write MS[key]
+  function openMsFilter(key, anchor){
+    popCtx = { kind:'ms', key:key };
+    colfPop.innerHTML = '<input type="text" class="cfsearch" id="cf-q" placeholder="Search…">' +
+      '<div class="cflist" id="cf-list"></div>' +
+      '<div class="cffoot"><button type="button" id="cf-clear">Clear</button><button type="button" class="cfdone" id="cf-done">Done</button></div>';
+    renderMsList();
+    cfEl('cf-q').oninput = renderMsList;
+    cfEl('cf-list').onclick = function(e){ var row = e.target.closest('.cfrow'); if (!row) return;
+      var id = row.getAttribute('data-k'), m = MS[key];
+      if (m.sel[id]) { delete m.sel[id]; } else {
+        var found = null; m.items.forEach(function(it){ if (String(it.id) === id) found = it; });
+        m.sel[id] = found ? (found.name || ('#' + id)) : ('#' + id);
+      }
+      renderMsList(); msButton(key); m.cb(); };
+    cfEl('cf-clear').onclick = function(){ MS[key].sel = {}; msButton(key); MS[key].cb(); colfClose(); };
+    cfEl('cf-done').onclick = colfClose;
+    colfBack.classList.add('show'); placePop(anchor);
+    cfEl('cf-q').focus();
+  }
+  function renderMsList(){
+    var m = MS[popCtx.key], q = ((cfEl('cf-q') && cfEl('cf-q').value) || '').toLowerCase(), html = '';
+    m.items.forEach(function(it){ var name = it.name || ('#' + it.id); if (q && name.toLowerCase().indexOf(q) < 0) return;
+      html += '<div class="cfrow' + (m.sel[it.id] ? ' on' : '') + '" data-k="' + esc(String(it.id)) + '">' + esc(name) + '</div>'; });
+    cfEl('cf-list').innerHTML = html || '<div class="cfmeta">No matches</div>';
+  }
+  colfBack.addEventListener('click', colfClose);
+  // scrolling anywhere outside the popover closes it (the list inside still scrolls,
+  // since wheel over the popover never reaches the backdrop)
+  colfBack.addEventListener('wheel', function(){ colfClose(); }, { passive:true });
+  window.addEventListener('resize', function(){ if (popCtx) colfClose(); });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && popCtx) colfClose(); });
+  // a caret on every header — clicking ANYWHERE on the header opens the sort+filter popover
+  // (the caret itself is pointer-events:none; the per-table thead handlers call openCol)
+  function initColFilters(){
+    Object.keys(COLF_DEF).forEach(function(tid){
+      var t = el(tid); if (!t) return;
+      Array.prototype.forEach.call(t.querySelectorAll('thead th[data-k]'), function(th){
+        var col = th.getAttribute('data-k'); if (th.querySelector('.colf-funnel')) return;
+        var b = document.createElement('span');
+        b.className = 'colf-funnel'; b.setAttribute('data-tid', tid); b.setAttribute('data-col', col);
+        b.textContent = '▾';
+        th.appendChild(b);
+      });
+    });
+    refreshFunnels();
+  }
+  initColFilters();
 
   function mkChart(id, cfg){
     if (charts[id]) charts[id].destroy();
@@ -2264,13 +2643,21 @@
     }
 
     var act = d.activity || {};
-    var wk = act.weekly || [];
+    // chart floor is 8 weeks (weekly); for a window over 8 weeks switch to one bar per month
+    var actMonthly = winDays() > 56;
+    var actSeries = actMonthly ? (act.monthly || []) : (act.weekly || []);
+    var MOABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var actLabels = actSeries.map(function(w){
+      if (actMonthly) { var p = (w.month||'').split('-'); return (MOABBR[(parseInt(p[1],10)||1)-1]||'') + " '" + (p[0]||'').slice(2); }
+      return (w.week||'').slice(5);
+    });
+    var actVal = function(w, kind){ return (w.counts && w.counts[kind]) || 0; };
     mkChart('ch-activity', {
       type:'bar',
-      data:{ labels: wk.map(function(w){return (w.week||'').slice(5);}), datasets:[
-        { type:'bar', label:'Applications', data:wk.map(function(w){return (w.counts&&w.counts.applications)||0;}), backgroundColor:vgrad('rgba(157,190,134,.65)','rgba(157,190,134,.12)'), borderRadius:2 },
-        { type:'line', label:'Leases signed', data:wk.map(function(w){return (w.counts&&w.counts.leases_signed)||0;}), borderColor:COL.clay, tension:.3, pointRadius:2, borderWidth:2 },
-        { type:'line', label:'Move-ins', data:wk.map(function(w){return (w.counts&&w.counts.move_ins)||0;}), borderColor:COL.amber, tension:.3, pointRadius:2, borderWidth:2, borderDash:[4,3] }
+      data:{ labels: actLabels, datasets:[
+        { type:'bar', label:'Applications', data:actSeries.map(function(w){return actVal(w,'applications');}), backgroundColor:vgrad('rgba(157,190,134,.65)','rgba(157,190,134,.12)'), borderRadius:2 },
+        { type:'line', label:'Leases signed', data:actSeries.map(function(w){return actVal(w,'leases_signed');}), borderColor:COL.clay, tension:.3, pointRadius:2, borderWidth:2 },
+        { type:'line', label:'Move-ins', data:actSeries.map(function(w){return actVal(w,'move_ins');}), borderColor:COL.amber, tension:.3, pointRadius:2, borderWidth:2, borderDash:[4,3] }
       ]},
       options:{ responsive:true, maintainAspectRatio:false,
         plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, boxHeight:10 } } },
@@ -2301,6 +2688,19 @@
       el('s-leads-sub').innerHTML = '<span title="Add the APTLY_API_KEY edge-function secret to connect">connect Aptly</span>';
     }
 
+    // conversion rates — live in the leasing-activity card (window-scoped like the counters)
+    var convSigned = act.leases_signed || 0;
+    var shDen = (act.showings || {}).completed || 0;
+    var shPct = shDen > 0 ? Math.round(1000 * convSigned / shDen) / 10 : null;
+    var leadDen = leads ? ((leads.filtered && leads.matched != null) ? leads.matched : leads.in_window) : null;
+    var leadPct = (leadDen != null && leadDen > 0) ? Math.round(1000 * convSigned / leadDen) / 10 : null;
+    var rhtml = '<div class="sect">Conversion</div>';
+    rhtml += '<div class="pair" title="Leases signed ÷ completed showings in this window"><span class="pl">Showing &rarr; lease conversion</span><span class="pv">' + pct(shPct) +
+      ' <small>' + fmtNum(convSigned) + ' signed / ' + fmtNum(shDen) + ' showings</small></span></div>';
+    rhtml += '<div class="pair" title="Leases signed ÷ inbound leads in this window"><span class="pl">Lead &rarr; lease conversion</span><span class="pv">' + pct(leadPct) +
+      ' <small>' + fmtNum(convSigned) + ' signed / ' + (leadDen != null ? fmtNum(leadDen) : '–') + ' leads</small></span></div>';
+    el('activity-rates').innerHTML = rhtml;
+
     var ORDER = ['New','Undecided','Deferred','Approved','AddedToDraftLease','AddedToLease','Rejected','Cancelled','Unknown'];
     var NICE = { AddedToDraftLease:'Draft lease', AddedToLease:'Added to lease', Unknown:'Other' };
     var NEG = { Rejected:1, Cancelled:1 };
@@ -2330,10 +2730,6 @@
     thtml += '<div class="pair click" data-status="AddedToDraftLease" title="See draft-lease applications"><span class="pl">On a draft lease &rarr;</span><span class="pv">' + fmtNum(tl.draft_lease_n) + '</span></div>';
     thtml += '<div class="pair"><span class="pl">Still open (undecided/deferred)</span><span class="pv">' + fmtNum(tlO.n) +
       (tlO.oldest_days != null ? ' <small>oldest ' + tlO.oldest_days + 'd</small>' : '') + '</span></div>';
-    var shConvDen = (act.showings || {}).completed || 0;
-    var shConvPct = shConvDen > 0 ? Math.round(1000 * (act.leases_signed || 0) / shConvDen) / 10 : null;
-    thtml += '<div class="pair"><span class="pl">Showing &rarr; lease conversion</span><span class="pv">' + pct(shConvPct) +
-      ' <small>' + fmtNum(act.leases_signed) + ' signed / ' + fmtNum(shConvDen) + ' showings (completed)</small></span></div>';
     el('apptimes').innerHTML = thtml;
 
     var sh = act.showings || {};
@@ -2446,18 +2842,17 @@
     var q = (el('t-search').value || '').toLowerCase();
     var onlyUnlisted = el('t-unlisted').checked;
     var onlyListed = el('t-listed').checked;
-    var beds = cgArr('t-beds');
     var rmin = parseFloat(el('t-rmin').value);
     var rmax = parseFloat(el('t-rmax').value);
     var statusSel = cgArr('t-status');
     var amenSel = msIds('t_amen');
     var rows = tableRows.filter(function(r){
+      if (!colfPass('vtable', r)) return false;
       if (!inBucket(r)) return false;
       if (statusSel.length && statusSel.indexOf(statusOf(r)) < 0) return false;
       if (onlyUnlisted && r.is_listed) return false;
       if (onlyListed && !r.is_listed) return false;
-      if (!bedMatch(r.bedrooms, beds)) return false;
-      var rent = r.listing_rent != null ? r.listing_rent : r.market_rent;
+      var rent = marketedRent(r);
       if (!isNaN(rmin) && (rent == null || rent < rmin)) return false;
       if (!isNaN(rmax) && (rent == null || rent > rmax)) return false;
       if (!amenMatchMulti(r.listing_amenities, amenSel)) return false;
@@ -2473,7 +2868,7 @@
         '<td>' + esc(r.property) + '</td>' +
         '<td>' + esc(r.unit) + '</td>' +
         '<td>' + esc(r.bedrooms || '–') + '</td>' +
-        '<td class="rt">' + (r.is_listed && r.listing_rent != null ? fmtMoney(r.listing_rent) : '–') + '</td>' +
+        '<td class="rt">' + (marketedRent(r) != null ? fmtMoney(marketedRent(r)) : '–') + '</td>' +
         '<td class="rt">' + (statusOf(r) === 'vacant' ? chipFor(r.days_vacant, r.days_vacant == null) : '<span style="color:var(--ink-soft)">—</span>') + '</td>' +
         '<td>' + (r.is_listed ? '<button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '<span class="nolist">NO</span>') + '</td>' +
         '<td>' + statusChip(r) + '</td>' +
@@ -2636,20 +3031,16 @@
   });
 
   /* ── Units directory ──────────────────────── */
+  // Slim chip bar — granular facets (beds, status values, dates, …) live in the column
+  // filters now. Take-backs are hidden by default; the chip reveals them.
   var QFILTERS = [
     { k:'all',      label:'All' },
+    { k:'listed',   label:'Listed' },
     { k:'vacant',   label:'Vacant' },
-    { k:'pre',      label:'Pre-leased' },
-    { k:'occ',      label:'Occupied' },
-    { k:'exp60',    label:'Expiring ≤60d' },
-    { k:'exp90',    label:'Expiring ≤90d' },
-    { k:'balance',  label:'Has balance' },
-    { k:'notice',   label:'Notice to vacate' },
-    { k:'eviction', label:'Eviction' },
     { k:'mi',       label:'Move-ins this month' },
     { k:'mo',       label:'Move-outs this month' },
-    { k:'listed',   label:'Listed' },
-    { k:'nookbook', label:'Nookbook' },
+    { k:'eviction', label:'Evictions' },
+    { k:'balance',  label:'Has balance' },
     { k:'otb',      label:'Take-backs' }
   ];
   function sameMonth(dstr2){
@@ -2698,7 +3089,11 @@
   function drawChips(){
     var html = '', empty = Object.keys(uSel).length === 0;
     QFILTERS.forEach(function(f){
-      var n = (unitsAll || []).filter(function(r){ return qfTest(r, f.k); }).length;
+      var n = (unitsAll || []).filter(function(r){
+        if (f.k === 'otb') return !!r.is_owner_takeback;
+        if (r.is_owner_takeback) return false;               // hidden by default → don't count elsewhere
+        return qfTest(r, f.k);
+      }).length;
       var on = f.k === 'all' ? empty : !!uSel[f.k];
       html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + f.k + '">' +
         esc(f.label) + ' <span class="qn">' + n + '</span></button>';
@@ -2762,7 +3157,6 @@
   function drawUnits(){
     if (unitsAll === null) return;
     var q = (el('u-search').value || '').toLowerCase();
-    var beds = cgArr('u-beds');
     var rmax = parseFloat(el('u-rmax').value);
     var amenSel = msIds('u_amen');
     var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
@@ -2770,10 +3164,11 @@
       ? { bt: cgArr('nb-bt'), park: msIds('nb_park'), appl: cgArr('nb-appl'), notready: el('nb-notready').checked }
       : null;
     var rows = unitsAll.filter(function(r){
+      if (r.is_owner_takeback && !uSel['otb']) return false;   // take-backs hidden unless the chip is on
+      if (!colfPass('utable', r)) return false;
       if (!scopeTestUnit(r, mg, ow, pr)) return false;
       if (!uChipPass(r)) return false;
       if (!nbTest(r, nbf)) return false;
-      if (!bedMatch(r.unit_bedrooms, beds)) return false;
       if (!isNaN(rmax)) {
         var rent = rentBasis(r);
         if (rent == null || rent > rmax) return false;
@@ -2814,7 +3209,7 @@
         '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + '</td>' +
         '<td>' + evChip(r.unit_event) + '</td>' +
         '<td>' + leaseEnd + '</td>' +
-        '<td class="rt">' + (r.monthly_rent != null ? fmtMoney(r.monthly_rent) : '–') + '</td>' +
+        '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
         '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>' : '–') + '</td>' +
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
         '<td>' + (r.is_listed ? '<span class="chip c-ok">listed</span>' : '–') + '</td></tr>';
@@ -2937,9 +3332,7 @@
   el('utable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return;
     var k = th.getAttribute('data-k'); if (!k) return;
-    if (uSort.k === k) uSort.d = -uSort.d;
-    else uSort = { k:k, d: (k === 'monthly_rent' || k === 'total_balance' || k === 'days_remaining') ? -1 : 1 };
-    drawUnits();
+    openCol('utable', k, th);
   });
   el('utable').addEventListener('click', function(e){
     var tr2 = e.target.closest('tr[data-uid]');
@@ -2980,10 +3373,9 @@
     f += fitem('Lease start', esc(r.lease_from_date));
     f += fitem('Lease end', r.lease_to_date ? esc(r.lease_to_date) + (r.days_remaining != null ? ' (' + r.days_remaining + 'd)' : '') : null);
     f += fitem('Next move-out', esc(r.next_move_out));
-    f += fitem('Monthly rent', r.monthly_rent != null ? fmtMoney(r.monthly_rent) : null);
+    f += fitem('Lease rent', r.monthly_rent != null ? fmtMoney(r.monthly_rent) : null);
     f += fitem('Deposit', r.security_deposit != null ? fmtMoney(r.security_deposit) : null);
     f += fitem('Balance', (r.total_balance || 0) > 0 ? fmtMoney(r.total_balance) : '$0', (r.total_balance || 0) > 0);
-    f += fitem('Market rent', r.market_rent != null ? fmtMoney(r.market_rent) : null);
     f += fitem('Listed rent', r.is_listed && r.listing_rent != null ? fmtMoney(r.listing_rent) : null);
     f += fitem('Days vacant', r.days_vacant != null ? r.days_vacant + 'd' : null);
     f += fitem('Available', esc(r.listing_available_date));
@@ -3058,6 +3450,7 @@
     var q = (el('o-search').value || '').toLowerCase();
     var ow = msIds('owners'), pr = msIds('properties');
     var rows = ownersAll.filter(function(r){
+      if (!colfPass('otable', r)) return false;
       if (!scopeTestOwner(r, ow, pr)) return false;
       if (!q) return true;
       return ((r.display_name||'') + ' ' + (r.email||'') + ' ' + ((r.property_names||[]).join(' '))).toLowerCase().indexOf(q) >= 0;
@@ -3081,8 +3474,7 @@
   el('otable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return;
     var k = th.getAttribute('data-k'); if (!k) return;
-    if (oSort.k === k) oSort.d = -oSort.d; else oSort = { k:k, d: k === 'property_count' ? -1 : 1 };
-    drawOwners();
+    openCol('otable', k, th);
   });
   var curOwner = null;
   el('otable').addEventListener('click', function(e){
@@ -3173,6 +3565,7 @@
     var q = (el('a-search').value || '').toLowerCase();
     var asel = Object.keys(aSel);
     var rows = appsAll.filter(function(r){
+      if (!colfPass('atable', r)) return false;
       if (asel.length && asel.indexOf(r.application_status) < 0) return false;
       if (!q) return true;
       return ((r.applicant_name||'') + ' ' + (r.applicant_email||'') + ' ' + (r.property_name||'') + ' ' +
@@ -3198,9 +3591,7 @@
   el('atable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return;
     var k = th.getAttribute('data-k'); if (!k) return;
-    if (aSort.k === k) aSort.d = -aSort.d;
-    else aSort = { k:k, d: (k === 'submitted_at' || k === 'approx_decision_days') ? -1 : 1 };
-    drawApps();
+    openCol('atable', k, th);
   });
   el('atable').addEventListener('click', function(e){
     var tr2 = e.target.closest('tr[data-aid]');
@@ -3287,6 +3678,7 @@
     var q = (el('r-search').value || '').toLowerCase();
     var showOnly = el('r-showings').checked;
     var rows = toursAll.filter(function(r){
+      if (!colfPass('rtable', r)) return false;
       if (showOnly && !r.counts_as_showing) return false;
       if (!inTourRange(r)) return false;
       if (!q) return true;
@@ -3327,8 +3719,7 @@
   el('rtable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return;
     var k = th.getAttribute('data-k'); if (!k) return;
-    if (rSort.k === k) rSort.d = -rSort.d; else rSort = { k:k, d: k === 'start_time' ? -1 : 1 };
-    drawTours();
+    openCol('rtable', k, th);
   });
 
   /* ── drill-down clicks (Ledger → other tabs) ── */
@@ -3357,10 +3748,10 @@
     drawTable();
     scrollVacantTable();
   });
-  el('kpi-pre').addEventListener('click', function(){ gotoUnitsFiltered('pre'); });
+  el('kpi-pre').addEventListener('click', function(){ gotoUnitsColFilter(function(){ colfState('utable','occupancy_status').sel = { pre_leased:1 }; }); });
   el('tile-apps').addEventListener('click', function(){ gotoApplications('all', true); });
   el('tile-mi').addEventListener('click', function(){ gotoUnitsFiltered('mi'); });
-  el('pair-exp').addEventListener('click', function(){ gotoUnitsFiltered('exp90'); });
+  el('pair-exp').addEventListener('click', function(){ gotoUnitsColFilter(function(){ var s = colfState('utable','lease_to_date'); s.min = winToday(); s.max = dstr(new Date(Date.parse(winToday()) + 90*86400000)); }); });
   document.querySelectorAll('.pair[data-go="tours"]').forEach(function(n){
     n.addEventListener('click', gotoTours);
   });
@@ -3483,8 +3874,7 @@
   el('vtable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return;
     var k = th.getAttribute('data-k'); if (!k) return;
-    if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === 'property' || k === 'manager') ? 1 : -1; }
-    drawTable();
+    openCol('vtable', k, th);
   });
 
   /* ── auth / login ─────────────────────────── */

@@ -1431,7 +1431,7 @@
   function setupFX(){
     if (FXON){
       document.addEventListener('pointermove', fxSheen, { passive:true });
-      if (TILT){ try { TILT.init(document.querySelectorAll('.kpi'), { max:5, speed:480, glare:true, 'max-glare':0.16, scale:1.012, gyroscope:false }); } catch (e) {} }
+      if (TILT){ try { TILT.init(document.querySelectorAll('.kpi.gauge, .kpi.alert, .loginbox'), { max:3, speed:480, glare:true, 'max-glare':0.12, scale:1.008, gyroscope:false }); } catch (e) {} }
       fxMagnet(el('syncbtn'), 0.16);
     }
     fxNavPill();
@@ -1747,6 +1747,38 @@
     var p = new URLSearchParams();
     p.set('from', w.from); p.set('to', w.to);
     return appendScope(p);
+  }
+
+  // Inbound Aptly leads load AFTER first paint (see /leads in index.ts) so the slow
+  // board sweep never blocks /stats. render() shows a loading state then calls
+  // loadLeads(); paintLeads() fills the leads tile + the lead→lease conversion line.
+  var lastSigned = 0, leadReq = 0;
+  function loadLeads(d){
+    var my = ++leadReq;
+    var w = windowDates();
+    var body = { from: w.from, to: w.to, match_keys: (d && d.meta && d.meta.lead_match_keys) || null };
+    fetch(API + '/leads', { method:'POST', headers:{ 'Authorization':'Bearer ' + TOKEN, 'Content-Type':'application/json' }, body: JSON.stringify(body) })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(res){ if (my !== leadReq) return; paintLeads(res ? res.leads : null); })
+      .catch(function(){ if (my !== leadReq) return; paintLeads(null); });
+  }
+  function paintLeads(leads){
+    if (leads && leads.in_window != null) {
+      if (leads.filtered && leads.matched != null) {
+        el('s-leads').textContent = fmtNum(leads.matched);
+        el('s-leads-sub').innerHTML = fmtNum(leads.matched_active) + ' active &middot; ' + fmtNum(leads.matched_lost) + ' lost &middot; matched to filters';
+      } else {
+        el('s-leads').textContent = fmtNum(leads.in_window);
+        el('s-leads-sub').innerHTML = fmtNum(leads.active) + ' active &middot; ' + fmtNum(leads.lost) + ' lost/archived';
+      }
+    } else {
+      el('s-leads').textContent = '–';
+      el('s-leads-sub').innerHTML = '<span title="Add the APTLY_API_KEY edge-function secret to connect">connect Aptly</span>';
+    }
+    var leadDen = leads ? ((leads.filtered && leads.matched != null) ? leads.matched : leads.in_window) : null;
+    var leadPct = (leadDen != null && leadDen > 0) ? Math.round(1000 * lastSigned / leadDen) / 10 : null;
+    var lc = el('lead-conv');
+    if (lc) lc.innerHTML = pct(leadPct) + ' <small>' + fmtNum(lastSigned) + ' signed / ' + (leadDen != null ? fmtNum(leadDen) : '–') + ' leads</small>';
   }
 
   function load(){
@@ -2583,7 +2615,7 @@
   function colDef(tid, col){ return (COLF_DEF[tid] && COLF_DEF[tid].cols[col]) || { t:'auto' }; }
   function colfState(tid, col){ if (!COLF[tid]) COLF[tid] = {}; if (!COLF[tid][col]) COLF[tid][col] = { sel:{}, min:null, max:null, q:'' }; return COLF[tid][col]; }
   function colVal(tid, col, row){ var d = colDef(tid, col); return d && d.get ? d.get(row) : row[col]; }
-  function colKeyOf(raw){ return raw == null || raw === '' ? ' blank' : String(raw); }
+  function colKeyOf(raw){ return raw == null || raw === '' ? '__blank__' : String(raw); }
   function colDisp(d, raw){ if (raw == null || raw === '') return '(blank)'; if (d.disp) return d.disp(raw); return String(raw); }
   function colActive(tid, col){
     var d = colDef(tid, col), s = COLF[tid] && COLF[tid][col]; if (!s) return false;
@@ -2904,32 +2936,23 @@
       : '';
     el('s-movein').textContent = fmtNum(act.move_ins);
 
-    var leads = d.leads;
-    if (leads && leads.in_window != null) {
-      if (leads.filtered && leads.matched != null) {
-        el('s-leads').textContent = fmtNum(leads.matched);
-        el('s-leads-sub').innerHTML = fmtNum(leads.matched_active) + ' active &middot; ' + fmtNum(leads.matched_lost) + ' lost &middot; matched to filters';
-      } else {
-        el('s-leads').textContent = fmtNum(leads.in_window);
-        el('s-leads-sub').innerHTML = fmtNum(leads.active) + ' active &middot; ' + fmtNum(leads.lost) + ' lost/archived';
-      }
-    } else {
-      el('s-leads').textContent = '–';
-      el('s-leads-sub').innerHTML = '<span title="Add the APTLY_API_KEY edge-function secret to connect">connect Aptly</span>';
-    }
+    // Inbound leads come from /leads (async, post-paint) so the slow Aptly sweep
+    // never blocks /stats. Show a loading state now; loadLeads()/paintLeads() fill it.
+    lastSigned = act.leases_signed || 0;
+    el('s-leads').textContent = '…';
+    el('s-leads-sub').textContent = 'loading leads…';
 
-    // conversion rates — live in the leasing-activity card (window-scoped like the counters)
+    // conversion rates — showing→lease is from get_stats (set now); lead→lease is
+    // filled by paintLeads once /leads resolves (#lead-conv).
     var convSigned = act.leases_signed || 0;
     var shDen = (act.showings || {}).completed || 0;
     var shPct = shDen > 0 ? Math.round(1000 * convSigned / shDen) / 10 : null;
-    var leadDen = leads ? ((leads.filtered && leads.matched != null) ? leads.matched : leads.in_window) : null;
-    var leadPct = (leadDen != null && leadDen > 0) ? Math.round(1000 * convSigned / leadDen) / 10 : null;
     var rhtml = '<div class="sect">Conversion</div>';
     rhtml += '<div class="pair" title="Leases signed ÷ completed showings in this window"><span class="pl">Showing &rarr; lease conversion</span><span class="pv">' + pct(shPct) +
       ' <small>' + fmtNum(convSigned) + ' signed / ' + fmtNum(shDen) + ' showings</small></span></div>';
-    rhtml += '<div class="pair" title="Leases signed ÷ inbound leads in this window"><span class="pl">Lead &rarr; lease conversion</span><span class="pv">' + pct(leadPct) +
-      ' <small>' + fmtNum(convSigned) + ' signed / ' + (leadDen != null ? fmtNum(leadDen) : '–') + ' leads</small></span></div>';
+    rhtml += '<div class="pair" title="Leases signed ÷ inbound leads in this window"><span class="pl">Lead &rarr; lease conversion</span><span class="pv" id="lead-conv">…</span></div>';
     el('activity-rates').innerHTML = rhtml;
+    loadLeads(d);
 
     var ORDER = ['New','Undecided','Deferred','Approved','AddedToDraftLease','AddedToLease','Rejected','Cancelled','Unknown'];
     var NICE = { AddedToDraftLease:'Draft lease', AddedToLease:'Added to lease', Unknown:'Other' };
@@ -3109,12 +3132,20 @@
   }
 
   /* ── photo helpers (shared) ───────────────── */
-  function dlHref(p){
-    // proxy mode streams the bytes with Content-Disposition: attachment so the
-    // browser saves the file instead of rendering the presigned S3 image
-    return API + '/photo-dl?token=' + encodeURIComponent(TOKEN) +
-      '&scope=' + esc(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id +
-      '&proxy=1&name=' + encodeURIComponent(p.name || ('photo-' + p.image_id + '.jpg'));
+  function blobDownload(p){
+    // Fetch with the Bearer header (NOT a ?token= URL — tokens in URLs leak via
+    // history/referer/logs/screenshots) → blob → temporary object-URL anchor → revoke.
+    // proxy=1 streams the bytes with Content-Disposition: attachment.
+    return fetch(API + '/photo-dl?scope=' + encodeURIComponent(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id + '&proxy=1',
+          { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .then(function(blob){
+        var u = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = u; a.download = p.name || ('photo-' + p.image_id + '.jpg');
+        a.style.display = 'none'; document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(u); if (a.parentNode) a.parentNode.removeChild(a); }, 5000);
+      });
   }
   function renderPhotos(listEl, noteEl, dlBtn, photos){
     if (!photos.length) {
@@ -3128,7 +3159,7 @@
       html += '<figure class="lmph">' +
         '<a class="full" href="' + esc(p.url) + '" target="_blank" rel="noopener"></a>' +
         '<img loading="lazy" src="' + esc(p.url) + '" alt="' + esc(p.name || 'listing photo') + '">';
-      if (p.image_id != null) html += '<a class="dl" href="' + dlHref(p) + '" download>&#8595; save</a>';
+      if (p.image_id != null) html += '<a class="dl" href="#" data-scope="' + esc(p.scope) + '" data-eid="' + p.entity_id + '" data-iid="' + p.image_id + '" data-name="' + esc(p.name || ('photo-' + p.image_id + '.jpg')) + '">&#8595; save</a>';
       html += '</figure>';
     });
     listEl.innerHTML = html;
@@ -3151,31 +3182,21 @@
       }
       var p = list[i];
       noteEl.textContent = 'Downloading ' + (i + 1) + ' of ' + list.length + '… (each file finishes before the next starts)';
-      fetch(API + '/photo-dl?scope=' + p.scope + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id + '&proxy=1',
-            { headers: { 'Authorization': 'Bearer ' + TOKEN } })
-        .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
-        .then(function(blob){
-          var u = URL.createObjectURL(blob);
-          var a = document.createElement('a');
-          a.href = u;
-          a.download = p.name || ('photo-' + p.image_id + '.jpg');
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(function(){ URL.revokeObjectURL(u); if (a.parentNode) a.parentNode.removeChild(a); }, 5000);
-          i++;
-          next();
-        })
-        .catch(function(){
-          failed++;
-          i++;
-          next();
-        });
+      blobDownload(p)
+        .then(function(){ i++; next(); })
+        .catch(function(){ failed++; i++; next(); });
     }
     next();
   }
   el('lm-dlall').addEventListener('click', function(){ downloadAll(curPhotosLm, this, el('lm-phnote')); });
   el('um-dlall').addEventListener('click', function(){ downloadAll(curPhotosUm, this, el('um-phnote')); });
+  // per-photo "save" links download via authenticated fetch→blob (no token in URL)
+  document.addEventListener('click', function(ev){
+    var a = ev.target && ev.target.closest ? ev.target.closest('a.dl[data-iid]') : null;
+    if (!a) return;
+    ev.preventDefault();
+    blobDownload({ scope: a.getAttribute('data-scope'), entity_id: a.getAttribute('data-eid'), image_id: a.getAttribute('data-iid'), name: a.getAttribute('data-name') });
+  });
 
   /* ── listing modal (Ledger vacant table) ──── */
   function openListing(uid){

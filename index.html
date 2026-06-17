@@ -17,8 +17,8 @@
 <style>
   :root{
     /* dark warm-glass surfaces */
-    --bg-0:#16110D; --bg-1:#1E1712; --bg-2:#2A211B;
-    --paper:#1F1813; --paper-deep:rgba(244,236,225,.06);
+    --bg-0:#0d1018; --bg-1:#141826; --bg-2:#1c2334;
+    --paper:#141826; --paper-deep:rgba(244,236,225,.06);
     --ink:#F4ECE1; --ink-soft:rgba(244,236,225,.60);
     --hairline:rgba(244,236,225,.10); --hairline-dark:rgba(244,236,225,.22);
     --glass:rgba(18,22,34,.48); --glass-2:rgba(28,34,50,.44);
@@ -83,7 +83,7 @@
   .lfmap-marker{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:800 .76rem "Schibsted Grotesk",Verdana,sans-serif;color:#15110D;border:1px solid rgba(255,255,255,.35)}
   .lfmap-hot{background:linear-gradient(135deg,#F4CB63,#C9912A);box-shadow:0 0 0 4px rgba(232,180,62,.15),0 8px 20px rgba(0,0,0,.42)}
   .lfmap-ok{background:linear-gradient(135deg,#B9D79D,#7FA76B);box-shadow:0 0 0 4px rgba(157,190,134,.15),0 8px 20px rgba(0,0,0,.42)}
-  .lfmap-legend{background:rgba(26,20,16,.86);border:1px solid var(--hairline-dark);border-radius:8px;padding:7px 10px;font:600 .72rem "Schibsted Grotesk",Verdana,sans-serif;color:var(--ink);line-height:1.7}
+  .lfmap-legend{background:rgba(16,19,30,.86);border:1px solid var(--hairline-dark);border-radius:8px;padding:7px 10px;font:600 .72rem "Schibsted Grotesk",Verdana,sans-serif;color:var(--ink);line-height:1.7}
   .lfmap-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
   .wrap{max-width:1340px;margin:0 auto;padding:20px;position:relative;z-index:2;
         display:grid;grid-template-columns:236px minmax(0,1fr);gap:20px;align-items:start}
@@ -137,7 +137,7 @@
   .wsum-ic{margin-left:auto;color:var(--clay);display:flex;flex:none}
   .wsum-ic svg{width:16px;height:16px;stroke:currentColor;fill:none}
   .winpop{display:none;position:absolute;z-index:31;top:calc(100% + 6px);left:0;width:264px;flex-direction:column;gap:13px;
-    background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0) 30%),rgba(25,19,14,.985);
+    background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0) 30%),rgba(15,18,28,.985);
     backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);
     border:1px solid rgba(255,255,255,.14);border-radius:13px;box-shadow:0 22px 50px rgba(0,0,0,.55),var(--rim);padding:15px}
   .winpop.open{display:flex;animation:mspop .26s var(--spring)}
@@ -203,7 +203,7 @@
   .fgroup.msopen .msbtn::after{transform:translateY(-50%) rotate(180deg);color:var(--clay)}
   .mspanel{
     display:none;position:absolute;z-index:30;top:calc(100% + 6px);left:0;right:0;
-    background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0) 30%),rgba(25,19,14,.985);
+    background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0) 30%),rgba(15,18,28,.985);
     backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);
     border:1px solid rgba(255,255,255,.14);border-radius:12px;box-shadow:0 22px 50px rgba(0,0,0,.55),var(--rim);overflow:hidden;
   }
@@ -364,7 +364,7 @@
   /* big table cards skip backdrop-filter — blur is invisible behind a dense table
      and re-blurring this large area every aurora frame was the main Units-tab lag */
   .tablecard{margin-top:18px;animation-delay:.1s;
-    background:rgba(31,24,19,.97);backdrop-filter:none;-webkit-backdrop-filter:none}
+    background:rgba(16,19,30,.97);backdrop-filter:none;-webkit-backdrop-filter:none}
   .tablebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
   .tablebar h2{font-family:var(--serif);font-weight:600;font-size:1.05rem}
   .tablebar input[type=text]{font-family:var(--sans);font-size:.82rem;padding:7px 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2);color:var(--ink);min-width:210px}
@@ -484,7 +484,7 @@
   /* compact glowing glass loader — floats, never blocks the whole page */
   #veil{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(1);z-index:55;
     display:flex;flex-direction:column;align-items:center;gap:13px;padding:24px 38px;
-    background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,0) 34%),linear-gradient(158deg,rgba(50,41,32,.74),rgba(26,20,16,.86));
+    background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,0) 34%),linear-gradient(158deg,rgba(30,36,52,.74),rgba(16,19,30,.86));
     backdrop-filter:blur(26px) saturate(165%) brightness(1.05);-webkit-backdrop-filter:blur(26px) saturate(165%) brightness(1.05);
     border:1px solid rgba(255,255,255,.15);border-radius:18px;
     transition:opacity .4s var(--ease-out),transform .4s var(--ease-out);
@@ -509,7 +509,7 @@
     background-image:
       radial-gradient(1000px 560px at 80% -10%, rgba(232,180,62,.2) 0%, rgba(232,180,62,0) 60%),
       radial-gradient(800px 460px at 10% 110%, rgba(96,116,134,.15) 0%, rgba(96,116,134,0) 55%),
-      linear-gradient(160deg, #1E1712 0%, #16110D 60%, #110D09 100%);
+      linear-gradient(160deg, #141826 0%, #0d1018 60%, #090b14 100%);
   }
   .loginbox{
     width:min(380px,calc(100vw - 40px));text-align:center;
@@ -555,7 +555,7 @@
     width:min(720px, calc(100vw - 32px));max-height:88vh;display:flex;flex-direction:column;
     background:
       linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,0) 32%),
-      linear-gradient(158deg, rgba(50,41,32,.80), rgba(26,20,16,.88));
+      linear-gradient(158deg, rgba(30,36,52,.80), rgba(16,19,30,.88));
     backdrop-filter:blur(30px) saturate(165%) brightness(1.06);-webkit-backdrop-filter:blur(30px) saturate(165%) brightness(1.06);
     border:1px solid rgba(255,255,255,.15);border-radius:18px;overflow:hidden;
     box-shadow:0 40px 95px rgba(0,0,0,.62), var(--rim-strong), 0 0 70px rgba(232,180,62,.07);
@@ -2897,7 +2897,7 @@
   // brand-styled (glassy) Chart.js tooltips across every chart
   if (window.Chart) {
     var _tt = Chart.defaults.plugins.tooltip;
-    _tt.backgroundColor = 'rgba(26,20,16,.92)';
+    _tt.backgroundColor = 'rgba(16,19,30,.92)';
     _tt.borderColor = 'rgba(232,180,62,.45)';
     _tt.borderWidth = 1;
     _tt.titleColor = '#F4ECE1';

@@ -19,6 +19,7 @@
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vanilla-tilt@1.8.1/dist/vanilla-tilt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <style>
   :root{
     /* dark warm-glass surfaces */
@@ -728,6 +729,29 @@
 
   /* map view */
   #umap{height:660px;display:none;border-radius:var(--r);overflow:hidden;border:1px solid var(--glass-brd);background:#15110D}
+  /* ── Tours calendar + map ── */
+  #rmap{height:600px;display:none;border-radius:var(--r);overflow:hidden;border:1px solid var(--glass-brd);background:#15110D}
+  .rfreshbtn{background:var(--paper-deep);border:1px solid var(--hairline-dark);color:var(--ink);border-radius:999px;padding:5px 14px;font:600 .76rem "Schibsted Grotesk",Verdana,sans-serif;cursor:pointer;transition:background .15s}
+  .rfreshbtn:hover{background:rgba(232,180,62,.18)}
+  .rfreshbtn:disabled{opacity:.6;cursor:default}
+  .rfreshbtn.okflash{background:var(--clay);color:#15110D;border-color:var(--clay)}
+  #rcal{--fc-border-color:var(--hairline-dark);--fc-page-bg-color:transparent;--fc-neutral-bg-color:rgba(255,255,255,.03);--fc-neutral-text-color:var(--ink-soft);--fc-today-bg-color:rgba(232,180,62,.10);--fc-now-indicator-color:#E8B43E;--fc-list-event-hover-bg-color:rgba(232,180,62,.10);--fc-small-font-size:.74em;color:var(--ink);min-height:560px}
+  #rcal a{color:inherit;text-decoration:none}
+  .fc .fc-toolbar-title{font-family:"Fraunces",Georgia,serif;font-size:1.04rem;color:var(--ink)}
+  .fc .fc-col-header-cell-cushion,.fc .fc-daygrid-day-number,.fc .fc-timegrid-axis-cushion,.fc .fc-timegrid-slot-label-cushion,.fc .fc-list-day-text,.fc .fc-list-day-side-text{color:var(--ink-soft)}
+  .fc .fc-button{background:var(--paper-deep);border:1px solid var(--hairline-dark);color:var(--ink);text-transform:none;font:600 .74rem "Schibsted Grotesk",Verdana,sans-serif;box-shadow:none;padding:5px 10px}
+  .fc .fc-button:hover{background:rgba(232,180,62,.16)}
+  .fc .fc-button-primary:not(:disabled).fc-button-active,.fc .fc-button-primary:not(:disabled):active{background:var(--clay);border-color:var(--clay);color:#15110D}
+  .fc .fc-button:focus,.fc .fc-button-primary:focus{box-shadow:none;outline:none}
+  .fc .fc-button:disabled{opacity:.45}
+  .fc-event{cursor:pointer;border:none}
+  .fc-ev-t{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fcloc{font-size:.66rem;opacity:.92;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fc-list-event td{cursor:pointer}
+  .rmrow{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--hairline-dark);font-size:.84rem}
+  .rmrow:last-child{border-bottom:none}
+  .rmk{color:var(--ink-soft);font-weight:600}
+  .rmv{color:var(--ink);text-align:right}
   .maptitle{font-family:var(--serif);font-weight:600;font-size:.95rem;margin-bottom:4px}
   .mapsub{font-size:.7rem;color:var(--ink-soft);margin-bottom:6px}
   .maplist{min-width:240px;max-height:230px;overflow:auto}
@@ -1146,7 +1170,20 @@
   <div id="page-tours" style="display:none">
     <div class="card tablecard" style="margin-top:18px">
       <div class="tablebar">
+        <h2>Tours calendar</h2>
+        <button type="button" id="r-refresh" class="rfreshbtn" title="Pull the latest tours from Calendly">&#8635; Refresh</button>
+        <span class="count-note" id="r-cal-note"></span>
+      </div>
+      <div id="rcal"></div>
+      <div class="note" style="margin-top:10px">Live from Calendly. New bookings &amp; cancellations land within seconds via webhook &mdash; click <b>Refresh</b> to pull the latest. Times are shown in your local timezone. The same search / showings / scope filters below drive this calendar.</div>
+    </div>
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar">
         <h2>Tours &amp; showings</h2>
+        <div class="presets" id="r-view">
+          <button data-v="table" class="on">Table</button>
+          <button data-v="map">Map</button>
+        </div>
         <div class="presets" id="r-presets">
           <button data-r="upcoming">Upcoming</button>
           <button data-r="past30" class="on">Past 30d</button>
@@ -1157,7 +1194,8 @@
         <label class="toggle"><input type="checkbox" id="r-showings" checked> showings only</label>
         <span class="count-note" id="r-count"></span>
       </div>
-      <div class="scrolly tallscroll">
+      <div id="rmap"></div>
+      <div class="scrolly tallscroll" id="r-listwrap">
         <table id="rtable">
           <thead><tr>
             <th data-k="start_time">When</th>
@@ -1170,7 +1208,7 @@
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">From Calendly (synced hourly, trailing 90 days + future). &ldquo;Property&rdquo; is a best-effort address match &mdash; tours at addresses outside the managed portfolio stay unmatched. Entity filters from the Ledger tab apply here too.</div>
+      <div class="note" style="margin-top:10px">From Calendly. &ldquo;Property&rdquo; is a best-effort address match &mdash; tours at addresses outside the managed portfolio stay unmatched (and have no map pin). Entity filters from the Ledger tab apply here too.</div>
     </div>
   </div>
 
@@ -1249,6 +1287,21 @@
     </div>
   </div>
   </main>
+</div>
+
+<div class="lmodal" id="rmodal">
+  <div class="lmback" data-close="rmodal"></div>
+  <div class="lmcard" style="max-width:440px">
+    <button type="button" class="lmclose" data-close="rmodal">&times;</button>
+    <div class="lmhead">
+      <h3 id="rm-title"></h3>
+      <div class="lmsub" id="rm-sub"></div>
+    </div>
+    <div class="lmbody"><div id="rm-body"></div></div>
+    <div class="lmfoot">
+      <a id="rm-map" class="btn primary" target="_blank" rel="noopener">Open in Google Maps &rarr;</a>
+    </div>
+  </div>
 </div>
 
 <div class="lmodal" id="lmodal">
@@ -1502,6 +1555,7 @@
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aSel = {};
   var aWin = { mode:'global', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 }, rRange = 'past30';
+  var rView = 'table', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [];
   var uView = 'list', umap = null, umapLayer = null, umapSig = '';
   var keysAll = null, kSort = { k:'property_name', d:1 }, kSel = {}, kCur = null;
   var historyAll = null, hSort = { k:'created_at', d:-1 }, hSel = {};
@@ -1771,7 +1825,7 @@
     if (key === 'units' && unitsAll === null) loadUnits();
     if (key === 'owners' && ownersAll === null) loadOwners();
     if (key === 'applications' && appsAll === null) loadApps();
-    if (key === 'tours' && toursAll === null) loadTours();
+    if (key === 'tours') { if (toursAll === null) loadTours(); else if (rcal) setTimeout(function(){ rcal.updateSize(); }, 50); }
     if (key === 'keys' && keysAll === null) loadKeys();
     if (key === 'history' && historyAll === null) loadHistory();
     // if a prior /stats load failed (e.g. first load errored while deep-linked elsewhere),
@@ -3430,7 +3484,7 @@
     n.addEventListener('click', function(){ closeModal(n.getAttribute('data-close')); });
   });
   document.addEventListener('keydown', function(ev){
-    if (ev.key === 'Escape') ['lmodal','umodal','omodal','amodal'].forEach(closeModal);
+    if (ev.key === 'Escape') ['lmodal','umodal','omodal','amodal','rmodal'].forEach(closeModal);
   });
 
   /* ── Units directory ──────────────────────── */
@@ -4064,25 +4118,45 @@
     p.set('to', state.to !== dstr(new Date()) ? w.to : dstr(new Date(now + 90 * 86400000)));
     return appendScope(p);
   }
+  function fetchTours(){
+    return authFetch('/tours?' + toursQuery().toString()).then(function(j){
+      toursAll = j.tours || [];
+      drawTours();
+    });
+  }
   function loadTours(){
     el('veil').classList.remove('hide');
-    authFetch('/tours?' + toursQuery().toString())
-      .then(function(j){
-        toursAll = j.tours || [];
-        drawTours();
-        el('veil').classList.add('hide');
-      })
+    fetchTours()
+      .then(function(){ el('veil').classList.add('hide'); })
       .catch(function(){
         el('veil').classList.add('hide');
-        el('rtable').querySelector('tbody').innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center">Could not load tours.</td></tr>';
+        el('rtable').querySelector('tbody').innerHTML = emptyRow('rtable', 'Could not load tours.');
+      });
+  }
+  // Manual, tours-scoped re-pull (the Refresh button). No veil — feedback is on the
+  // button only — and existing data stays put on failure, so the calendar/table/map
+  // never flash or lose their view state. Webhooks keep the DB fresh in seconds, so
+  // a click instantly surfaces the newest tours.
+  function refreshTours(){
+    var btn = el('r-refresh');
+    if (!btn || btn.disabled) return;
+    var label = btn.innerHTML;
+    btn.disabled = true; btn.classList.remove('okflash'); btn.innerHTML = 'Refreshing…';
+    fetchTours()
+      .then(function(){
+        btn.classList.add('okflash'); btn.innerHTML = 'Updated ✓';
+        setTimeout(function(){ btn.classList.remove('okflash'); btn.innerHTML = label; btn.disabled = false; }, 1200);
+      })
+      .catch(function(){
+        btn.innerHTML = label; btn.disabled = false;
+        var n = el('r-cal-note'); if (n) { n.textContent = 'Refresh failed — showing last load'; setTimeout(function(){ n.textContent = ''; }, 2600); }
       });
   }
   function inTourRange(r){
     // the global sidebar window now bounds the tours fetch, so just keep valid-dated events
     return !isNaN(Date.parse(r.start_time));
   }
-  function drawTours(){
-    if (toursAll === null) return;
+  function tourRows(){
     var q = (el('r-search').value || '').toLowerCase();
     var showOnly = el('r-showings').checked;
     var rows = toursAll.filter(function(r){
@@ -4093,6 +4167,12 @@
       return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.event_name||'')).toLowerCase().indexOf(q) >= 0;
     });
     rows.sort(cmpRows(rSort.k, rSort.d, rSort.k === 'start_time'));
+    return rows;
+  }
+  function drawTours(){
+    if (toursAll === null) return;
+    var rows = tourRows();
+    rLastRows = rows;
     var now = Date.now();
     var html = '';
     rows.forEach(function(r){
@@ -4113,9 +4193,140 @@
     });
     el('rtable').querySelector('tbody').innerHTML = html || emptyRow('rtable', 'Nothing matches');
     el('r-count').textContent = rows.length + ' of ' + toursAll.length + ' events';
+    drawCalendar(rows);
+    if (rView === 'map') drawTourMap(rows);
+  }
+  /* ── tours calendar (FullCalendar) — same filtered set as the table ── */
+  function drawCalendar(rows){
+    if (!window.FullCalendar) return;
+    var now = Date.now();
+    var events = rows.map(function(r){
+      var t = Date.parse(r.start_time);
+      var canceled = r.status === 'canceled';
+      var col = canceled ? '#C75D5D' : (t >= now ? '#E8B43E' : '#7FA76B');
+      return {
+        id: r.uri,
+        title: (r.agent && r.agent !== 'Unknown') ? r.agent : (r.event_name || 'Tour'),
+        start: r.start_time,
+        end: r.end_time || undefined,
+        backgroundColor: col, borderColor: col,
+        textColor: (canceled || t < now) ? '#0c0f18' : '#15110D',
+        classNames: [canceled ? 'fc-ev-cxl' : (t >= now ? 'fc-ev-upc' : 'fc-ev-done')],
+        extendedProps: { loc: r.matched_property_name || r.location_text || '' }
+      };
+    });
+    if (!rcal) {
+      rcal = new FullCalendar.Calendar(el('rcal'), {
+        initialView: 'timeGridWeek',
+        headerToolbar: { left:'prev,next today', center:'title', right:'dayGridMonth,timeGridWeek,listWeek' },
+        height: 600, nowIndicator: true, firstDay: 0, expandRows: true, dayMaxEvents: true,
+        slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
+        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); openTourDetail(info.event.id); },
+        eventContent: function(arg){
+          var loc = arg.event.extendedProps.loc || '';
+          var wrap = document.createElement('div');
+          wrap.innerHTML = '<div class="fc-ev-t">' + esc(arg.event.title || '') + '</div>' + (loc ? '<div class="fcloc">' + esc(loc) + '</div>' : '');
+          return { domNodes: [wrap] };
+        }
+      });
+      rcal.render();
+    }
+    rcal.getEventSources().forEach(function(s){ s.remove(); });
+    rcal.addEventSource(events);
+  }
+  function openTourDetail(uri){
+    var r = (toursAll || []).filter(function(x){ return x.uri === uri; })[0];
+    if (!r) return;
+    var t = Date.parse(r.start_time);
+    var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+    var endTxt = r.end_time ? new Date(Date.parse(r.end_time)).toLocaleTimeString('en-CA', { hour:'numeric', minute:'2-digit' }) : '';
+    var stt = r.status === 'canceled' ? 'Canceled' : (t >= Date.now() ? 'Upcoming' : 'Completed');
+    el('rm-title').textContent = r.event_name || 'Tour';
+    el('rm-sub').textContent = when + (endTxt ? ' – ' + endTxt : '') + '  ·  ' + stt;
+    function rowH(lab, val){ return '<div class="rmrow"><span class="rmk">' + lab + '</span><span class="rmv">' + esc(val || '–') + '</span></div>'; }
+    var body = rowH('Agent', r.agent);
+    if (r.matched_property_name) body += rowH('Property', r.matched_property_name);
+    body += rowH('Location', r.location_text);
+    body += rowH('Counts as showing', r.counts_as_showing ? 'Yes' : 'No');
+    el('rm-body').innerHTML = body;
+    var addr = r.matched_property_name || r.location_text || '';
+    var mapA = el('rm-map');
+    if (addr) { mapA.style.display = ''; mapA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr); }
+    else mapA.style.display = 'none';
+    openModal('rmodal');
+  }
+  /* ── tours map (Leaflet, mirrors the Units map) ── */
+  function drawTourMap(rows){
+    if (!window.L) return;
+    if (!rmap) {
+      rmap = L.map('rmap', { scrollWheelZoom: true }).setView([53.5461, -113.4938], 11);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19, subdomains: 'abcd',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      }).addTo(rmap);
+      rmapLayer = L.layerGroup().addTo(rmap);
+      var legend = L.control({ position:'bottomright' });
+      legend.onAdd = function(){
+        var div = L.DomUtil.create('div', 'lfmap-legend');
+        div.innerHTML = '<div><i style="background:linear-gradient(135deg,#F4CB63,#C9912A)"></i>Has upcoming</div>' +
+          '<div><i style="background:linear-gradient(135deg,#B9D79D,#7FA76B)"></i>Past only</div>';
+        return div;
+      };
+      legend.addTo(rmap);
+    }
+    rmapLayer.clearLayers();
+    var now = Date.now();
+    var groups = {};
+    rows.forEach(function(r){
+      if (r.lat == null || r.lng == null || r.matched_property_id == null) return;
+      var g = groups[r.matched_property_id] || (groups[r.matched_property_id] = { lat:r.lat, lng:r.lng, name:r.matched_property_name, tours:[] });
+      g.tours.push(r);
+    });
+    var pids = Object.keys(groups);
+    var bounds = [];
+    pids.forEach(function(pid){
+      var g = groups[pid];
+      var upc = g.tours.some(function(r){ return r.status !== 'canceled' && Date.parse(r.start_time) >= now; });
+      var mstatus = upc ? 'hot' : 'ok';
+      var icon = L.divIcon({ className:'lfmap-wrap', html:'<span class="lfmap-marker lfmap-' + mstatus + '">' + g.tours.length + '</span>', iconSize:[34,34], iconAnchor:[17,17] });
+      var mk = L.marker([g.lat, g.lng], { icon: icon });
+      var sorted = g.tours.slice().sort(function(a, b){ return Date.parse(b.start_time) - Date.parse(a.start_time); });
+      var ph = '<div class="maptitle">' + esc(g.name || '') + '</div>' +
+        '<div class="mapsub">' + g.tours.length + ' tour' + (g.tours.length === 1 ? '' : 's') + ' in current filter</div>' +
+        '<div class="maplist">';
+      sorted.slice(0, 16).forEach(function(r){
+        var t = Date.parse(r.start_time);
+        var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+        var chip = r.status === 'canceled' ? '<span class="chip c-hot">cxl</span>' : (t >= now ? '<span class="chip c-warm">upc</span>' : '<span class="chip c-ok">done</span>');
+        ph += '<div class="maprow"><span class="mu">' + esc(when) + '</span>' + chip + '<span class="mr">' + esc(r.agent || '') + '</span></div>';
+      });
+      if (g.tours.length > 16) ph += '<div class="maprow"><span class="mu">+ ' + (g.tours.length - 16) + ' more</span></div>';
+      ph += '</div>';
+      mk.bindPopup(ph, { maxWidth: 320 });
+      rmapLayer.addLayer(mk);
+      bounds.push([g.lat, g.lng]);
+    });
+    var sig = pids.sort().join(',');
+    if (bounds.length && sig !== rmapSig) {
+      rmap.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+      rmapSig = sig;
+    }
   }
   el('r-search').addEventListener('input', deb(drawTours));
   el('r-showings').addEventListener('change', drawTours);
+  el('r-refresh').addEventListener('click', refreshTours);
+  el('r-view').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if (!b) return;
+    Array.prototype.forEach.call(el('r-view').children, function(x){ x.classList.remove('on'); });
+    b.classList.add('on');
+    rView = b.getAttribute('data-v');
+    el('rmap').style.display = rView === 'map' ? 'block' : 'none';
+    el('r-listwrap').style.display = rView === 'map' ? 'none' : 'block';
+    if (rView === 'map') {
+      drawTourMap(rLastRows);
+      setTimeout(function(){ if (rmap) rmap.invalidateSize(); drawTourMap(rLastRows); }, 60);
+    }
+  });
   el('r-presets').addEventListener('click', function(e){
     var b = e.target.closest('button'); if (!b) return;
     Array.prototype.forEach.call(el('r-presets').children, function(x){ x.classList.remove('on'); });

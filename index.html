@@ -2734,7 +2734,7 @@
       (tlR.median_days != null ? tlR.median_days + 'd' : '–') + ' <small>' + fmtNum(tlR.n) + ' apps</small></span></div>';
     thtml += '<div class="pair"><span class="pl">Approval rate (of decided)</span><span class="pv">' + pct(tl.approval_rate_pct) + '</span></div>';
     thtml += '<div class="pair click" data-status="AddedToDraftLease" title="See draft-lease applications"><span class="pl">On a draft lease &rarr;</span><span class="pv">' + fmtNum(tl.draft_lease_n) + '</span></div>';
-    thtml += '<div class="pair"><span class="pl">Still open (undecided/deferred)</span><span class="pv">' + fmtNum(tlO.n) +
+    thtml += '<div class="pair"><span class="pl">Still open (new/undecided/approved)</span><span class="pv">' + fmtNum(tlO.n) +
       (tlO.oldest_days != null ? ' <small>oldest ' + tlO.oldest_days + 'd</small>' : '') + '</span></div>';
     el('apptimes').innerHTML = thtml;
 

@@ -46,27 +46,31 @@
   *{box-sizing:border-box;margin:0;padding:0}
   html{font-size:16px}
   body{
-    font-family:var(--sans);color:var(--ink);background:var(--bg-0);
+    font-family:var(--sans);color:var(--ink);background:#0b0e18;
     background-image:
-      radial-gradient(1100px 620px at 88% -8%, rgba(232,180,62,.17) 0%, rgba(232,180,62,0) 60%),
-      radial-gradient(900px 520px at -8% 6%, rgba(96,116,134,.14) 0%, rgba(96,116,134,0) 55%),
-      linear-gradient(165deg, #20191300 0%, #16110D 60%, #110D09 100%);
-    background-color:var(--bg-1);background-attachment:fixed;
+      radial-gradient(1100px 620px at 86% -8%, rgba(247,217,130,.10) 0%, rgba(247,217,130,0) 60%),
+      radial-gradient(900px 520px at -8% 6%, rgba(72,96,205,.16) 0%, rgba(72,96,205,0) 55%),
+      linear-gradient(165deg, #0c0f1a 0%, #0b0e18 60%, #090b14 100%);
+    background-color:#0b0e18;background-attachment:fixed;
     -webkit-font-smoothing:antialiased;padding:0 0 40px;min-height:100vh;
   }
   body::after{
-    content:'';position:fixed;inset:0;pointer-events:none;opacity:.045;z-index:1;
+    content:'';position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:1;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   }
-  /* ── liquid aurora — slow GPU-cheap drifting light blobs ── */
-  .fx-aurora{position:fixed;inset:-15%;z-index:0;pointer-events:none;overflow:hidden;filter:blur(38px);opacity:.9}
-  .fx-aurora i{position:absolute;display:block;border-radius:50%;mix-blend-mode:screen;will-change:transform;opacity:.55}
-  .fx-aurora .b1{width:46vw;height:46vw;left:62%;top:-12%;background:radial-gradient(circle at 30% 30%, rgba(232,180,62,.5), rgba(232,180,62,0) 66%);animation:drift1 26s ease-in-out infinite}
-  .fx-aurora .b2{width:40vw;height:40vw;left:-10%;top:8%;background:radial-gradient(circle at 50% 50%, rgba(150,178,200,.4), rgba(150,178,200,0) 66%);animation:drift2 34s ease-in-out infinite}
-  .fx-aurora .b3{width:38vw;height:38vw;left:34%;top:64%;background:radial-gradient(circle at 50% 50%, rgba(157,190,134,.34), rgba(157,190,134,0) 66%);animation:drift3 30s ease-in-out infinite}
-  @keyframes drift1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-7vw,6vh,0) scale(1.14)}}
-  @keyframes drift2{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(8vw,-5vh,0) scale(1.1)}}
-  @keyframes drift3{0%,100%{transform:translate3d(0,0,0) scale(1.05)}50%{transform:translate3d(-6vw,-7vh,0) scale(.92)}}
+  /* ── indigo giant-bokeh field — big soft masses, mixed drift + fade, no rotation ── */
+  .fx-aurora{position:fixed;inset:-20%;z-index:0;pointer-events:none;overflow:hidden;filter:blur(42px) saturate(118%)}
+  .fx-aurora i{position:absolute;display:block;border-radius:50%;mix-blend-mode:screen;will-change:transform,opacity;opacity:.5}
+  .fx-aurora .b1{width:80vw;height:80vw;left:-16%;top:-24%;background:radial-gradient(circle at 45% 45%, rgba(247,210,120,.5), rgba(247,210,120,0) 60%);animation:bk1 26s ease-in-out infinite, bkf1 17s ease-in-out infinite}
+  .fx-aurora .b2{width:72vw;height:72vw;left:40%;top:-8%;background:radial-gradient(circle at 50% 50%, rgba(80,140,240,.46), rgba(80,140,240,0) 60%);animation:bk2 33s ease-in-out infinite, bkf2 21s ease-in-out infinite}
+  .fx-aurora .b3{width:52vw;height:52vw;left:16%;top:42%;background:radial-gradient(circle at 50% 50%, rgba(200,222,255,.4), rgba(200,222,255,0) 62%);animation:bk3 29s ease-in-out infinite, bkf3 15s ease-in-out infinite}
+  @keyframes bk1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(6vw,5vh,0) scale(1.08)}}
+  @keyframes bk2{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-6vw,4vh,0) scale(1.1)}}
+  @keyframes bk3{0%,100%{transform:translate3d(0,0,0) scale(1.04)}50%{transform:translate3d(5vw,-5vh,0) scale(1.12)}}
+  @keyframes bkf1{0%,100%{opacity:.6}50%{opacity:.34}}
+  @keyframes bkf2{0%,100%{opacity:.5}50%{opacity:.28}}
+  @keyframes bkf3{0%,100%{opacity:.55}50%{opacity:.32}}
+  .fx-spot{position:fixed;inset:0;z-index:0;pointer-events:none;mix-blend-mode:screen;background:radial-gradient(560px circle at var(--sx,60%) var(--sy,30%), rgba(255,224,150,.14), rgba(232,180,62,.05) 30%, transparent 60%);transition:background .1s linear}
   /* branded skeleton shimmer for async tile loads */
   .skel{position:relative;display:inline-block;overflow:hidden;border-radius:6px;background:rgba(244,236,225,.08);vertical-align:middle}
   .skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(232,180,62,.18),transparent);animation:skelpass 1.4s ease-in-out infinite}
@@ -205,10 +209,8 @@
   }
   .mspanel.open{display:block;animation:mspop .34s var(--spring)}
   @keyframes mspop{
-    0%{opacity:0;transform:translateY(-8px) scale(.97) rotate(0)}
-    55%{opacity:1;transform:translateY(0) scale(1) rotate(-1.5deg)}
-    78%{transform:translateY(0) scale(1) rotate(.8deg)}
-    100%{opacity:1;transform:none}}
+    0%{opacity:0;transform:translateY(-6px) scale(.94)}
+    100%{opacity:1;transform:translateY(0) scale(1)}}
   .mssearch{width:100%;border:none;border-bottom:1px solid var(--hairline);padding:9px 12px;font-family:var(--sans);font-size:.82rem;outline:none;background:rgba(0,0,0,.16);color:var(--ink)}
   .mssearch:focus{background:rgba(0,0,0,.26);border-bottom-color:var(--clay)}
   .mslist{max-height:240px;overflow:auto;padding:5px}
@@ -285,6 +287,14 @@
   .kpi .sub{font-size:.7rem;color:var(--ink-soft);margin-top:8px;line-height:1.45}
   .kpi.alert .num{color:var(--clay)}
   .kpi .sub b{color:var(--ink)}
+  /* KPI "vs last week" delta chip + weekly sparkline */
+  .kx{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;position:relative;z-index:2}
+  .kdelta{display:inline-block;font-size:.6rem;font-weight:700;letter-spacing:.03em;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .kdelta.kgood{color:var(--moss);background:var(--moss-soft)}
+  .kdelta.kbad{color:var(--clay);background:var(--clay-soft)}
+  .kdelta.kflat{color:var(--ink-soft);background:var(--paper-deep)}
+  .kspark{flex:none;opacity:.92}
+  .tile .kx{margin-top:7px}
   /* gauge KPI — operational vacancy ring */
   .kpi.gauge{grid-column:span 2;display:flex;align-items:center;gap:16px}
   .kpi.gauge .lbl{margin-bottom:4px}
@@ -771,6 +781,7 @@
 </head>
 <body>
 <div class="fx-aurora" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
+<div class="fx-spot" id="fxspot" aria-hidden="true"></div>
 <div id="veil"><div class="vspin"></div><div class="vtxt">Opening the ledger&hellip;</div><div class="vrule"></div></div>
 
 <div class="login" id="login">
@@ -1445,7 +1456,14 @@
   function setupFX(){
     if (FXON){
       document.addEventListener('pointermove', fxSheen, { passive:true });
-      if (TILT){ try { TILT.init(document.querySelectorAll('.kpi.gauge, .kpi.alert, .loginbox'), { max:3, speed:480, glare:true, 'max-glare':0.12, scale:1.008, gyroscope:false }); } catch (e) {} }
+      // cursor-tracked spotlight that glides across the indigo bokeh field
+      var spotEl = el('fxspot'), spRAF = 0, spX = 60, spY = 30;
+      document.addEventListener('pointermove', function(ev){
+        spX = ev.clientX / window.innerWidth * 100; spY = ev.clientY / window.innerHeight * 100;
+        if (spotEl && !spRAF) spRAF = requestAnimationFrame(function(){ spRAF = 0;
+          spotEl.style.setProperty('--sx', spX.toFixed(1) + '%'); spotEl.style.setProperty('--sy', spY.toFixed(1) + '%'); });
+      }, { passive:true });
+      if (TILT){ try { TILT.init(document.querySelectorAll('.kpi, .loginbox'), { max:4, speed:480, glare:true, 'max-glare':0.12, scale:1.008, gyroscope:false }); } catch (e) {} }
       fxMagnet(el('syncbtn'), 0.16);
     }
     fxNavPill();
@@ -1688,6 +1706,44 @@
       if (p < 1) requestAnimationFrame(step); else node.textContent = formatter(value);
     }
     requestAnimationFrame(step);
+  }
+  // ── KPI "vs last week" delta chip + weekly sparkline (from payload.kpis) ──
+  function sparkSVG(arr, color){
+    if (!arr || arr.length < 2) return '';
+    var w = 68, h = 22, pad = 2, i, mn = arr[0], mx = arr[0];
+    for (i = 1; i < arr.length; i++){ if (arr[i] < mn) mn = arr[i]; if (arr[i] > mx) mx = arr[i]; }
+    var rg = (mx - mn) || 1, line = '', lx = 0, ly = 0;
+    for (i = 0; i < arr.length; i++){
+      var x = pad + i * (w - 2 * pad) / (arr.length - 1);
+      var y = h - pad - (arr[i] - mn) / rg * (h - 2 * pad);
+      line += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' '; lx = x; ly = y;
+    }
+    return '<svg class="kspark" viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h + '" aria-hidden="true">'
+      + '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="1.9" fill="' + color + '"/></svg>';
+  }
+  function deltaChip(o, isPct){
+    if (!o || o.delta == null) return '<span class="kdelta kflat">vs last wk: tracking</span>';
+    var improving = (o.good === 'down') ? (o.delta < 0) : (o.delta > 0);
+    var cls = (o.delta === 0) ? 'kflat' : (improving ? 'kgood' : 'kbad');
+    var arrow = (o.delta === 0) ? '' : (o.delta > 0 ? '&#9650; ' : '&#9660; ');
+    var mag = Math.abs(o.delta);
+    var txt = isPct ? (mag.toFixed(1) + ' pts') : fmtNum(mag);
+    return '<span class="kdelta ' + cls + '">' + arrow + txt + ' vs last wk</span>';
+  }
+  function setKpiExtra(host, html){
+    if (!host) return;
+    var box = host.querySelector('.kx');
+    if (!box){ box = document.createElement('div'); box.className = 'kx'; host.appendChild(box); }
+    box.innerHTML = html;
+  }
+  function renderKpiExtras(k){
+    if (!k) return;
+    var GOLD = '#F7D982';
+    if (k.vacant_units) setKpiExtra(el('kpi-vacant'), deltaChip(k.vacant_units, false) + sparkSVG(k.vacant_units.series, GOLD));
+    if (k.op_vacancy)   setKpiExtra(el('kpi-oprate'), deltaChip(k.op_vacancy, true));
+    if (k.leases_signed){ var sg = el('s-signed'); setKpiExtra(sg ? sg.parentNode : null, deltaChip(k.leases_signed, false) + sparkSVG(k.leases_signed.series, GOLD)); }
+    if (k.move_ins){ var mi = el('tile-mi'); setKpiExtra(mi, deltaChip(k.move_ins, false) + sparkSVG(k.move_ins.series, GOLD)); }
   }
 
   /* ── tabs ─────────────────────────────────── */
@@ -2894,6 +2950,7 @@
     countUp('k-risk', d.money && d.money.rent_at_risk, fmtMoney);
     countUp('k-unlisted', d.vacant_not_listed, fmtNum);
     countUp('k-turnover', d.listed_occupied_n, fmtNum);
+    if (d.kpis) renderKpiExtras(d.kpis);
 
     var ag = d.aging || {}; var op = ag.op_vacant || {}; var nl = ag.never_leased || {};
     var stackTotals = {

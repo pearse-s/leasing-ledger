@@ -3405,9 +3405,32 @@
   });
 
   /* ── listing modal (Ledger vacant table) ──── */
-  function openListing(uid){
+  // Resolve a listing-modal row for a unit. Prefer the Ledger marketed-units payload
+  // (carries the full listing description + amenities); fall back to the unit directory
+  // so the listing modal still opens for units outside the current Ledger scope (e.g.
+  // opened from the Units tab). The directory has amenities but no listing description.
+  function listingRowFor(uid){
     var r = null;
     tableRows.forEach(function(x){ if (String(x.unit_id) === String(uid)) r = x; });
+    if (r) return r;
+    var u = null;
+    (unitsAll || []).forEach(function(x){ if (String(x.unit_id) === String(uid)) u = x; });
+    if (!u) return null;
+    return {
+      unit_id: u.unit_id,
+      property: u.property_name,
+      unit: u.unit_number,
+      listing_rent: u.listing_rent,
+      bedrooms: u.unit_bedrooms,
+      available_date: u.listing_available_date,
+      manager: u.property_manager_name,
+      listing_description: null,
+      listing_amenities: u.amenities || [],
+      listing_url: u.listing_url
+    };
+  }
+  function openListing(uid){
+    var r = listingRowFor(uid);
     if (!r) return;
     el('lm-title').textContent = (r.property || '') + ' — ' + (r.unit || '');
     var sub = [];
@@ -3854,7 +3877,7 @@
     var links = '';
     links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit in Buildium &rarr;</a>';
     links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/summary">Property &rarr;</a>';
-    if (r.is_listed) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/leasing/units/' + r.property_id + '/listings/summary">Listing &rarr;</a>';
+    if (r.is_listed) links += '<button type="button" class="btn" data-listing-uid="' + r.unit_id + '">Listing &rarr;</button>';
     if (r.listing_url) links += '<a class="btn primary" target="_blank" rel="noopener" href="' + esc(r.listing_url) + '">Apply link &rarr;</a>';
     el('um-links').innerHTML = links;
 
@@ -3892,6 +3915,16 @@
         .catch(function(){ el('um-phnote').textContent = 'Photos unavailable right now.'; });
     }
   }
+  // Unit modal "Listing" button → open the in-page listing modal (not Buildium).
+  // umodal and lmodal share a z-index and lmodal is earlier in the DOM, so we close the
+  // unit modal before opening the listing modal rather than stacking (both animate from
+  // the clicked button → a clean morph).
+  el('um-links').addEventListener('click', function(ev){
+    var b = ev.target.closest('[data-listing-uid]');
+    if (!b) return;
+    closeModal('umodal');
+    openListing(b.getAttribute('data-listing-uid'));
+  });
 
   /* ── Owners directory ─────────────────────── */
   function loadOwners(){

@@ -769,6 +769,15 @@
   .rm-bigbtn{flex:1 1 auto;text-align:center;padding:13px 16px;font-size:.92rem}
   .rmpicklab{font-size:.72rem;color:var(--ink-soft);font-weight:700;margin:10px 0 4px;flex:1 1 100%}
   #rm-pick{display:flex;flex-wrap:wrap;gap:6px}
+  /* prospect contact card (the person viewing) */
+  .rmcontact{margin:11px 0 2px;padding:11px 13px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  .rmclab{font-size:.6rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-soft)}
+  .rmcname{font-weight:700;font-size:.98rem;margin-top:2px}
+  .rmcdet{font-size:.78rem;color:var(--ink-soft);margin-top:2px;word-break:break-word}
+  .rmcbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .ccbtn{font-family:var(--sans);font-size:.82rem;font-weight:700;text-decoration:none;cursor:pointer;color:#15110D;background:var(--accent-grad);border:1px solid transparent;border-radius:999px;padding:8px 14px}
+  .ccbtn:hover{filter:brightness(1.08)}
+  @media(max-width:768px){ .ccbtn{flex:1 1 auto;text-align:center;padding:12px 14px;font-size:.9rem} }
   @media(max-width:768px){
     .agchip,.chip-mini,.mybtn{padding:8px 13px;font-size:.82rem}
     .presets button{padding:9px 13px;font-size:.82rem}
@@ -1331,6 +1340,7 @@
     </div>
     <div class="lmbody">
       <div id="rm-body"></div>
+      <div id="rm-contact"></div>
       <div id="rm-pick"></div>
     </div>
     <div class="lmfoot rmfoot">
@@ -4378,6 +4388,25 @@
     body += rowH('Location', esc(r.location_text));
     body += rowH('Counts as showing', r.counts_as_showing ? 'Yes' : 'No');
     el('rm-body').innerHTML = body;
+    // prospect (the person viewing) — name + tap-to-call/text/email
+    var cc = '';
+    if (r.invitee_name || r.invitee_email || r.invitee_phone) {
+      cc += '<div class="rmcontact"><div class="rmclab">Prospect</div>';
+      cc += '<div class="rmcname">' + esc(r.invitee_name || 'Prospect') + '</div>';
+      var det = [];
+      if (r.invitee_phone) det.push(esc(r.invitee_phone));
+      if (r.invitee_email) det.push(esc(r.invitee_email));
+      if (det.length) cc += '<div class="rmcdet">' + det.join(' · ') + '</div>';
+      cc += '<div class="rmcbtns">';
+      if (r.invitee_phone) {
+        var tel = r.invitee_phone.replace(/[^0-9+]/g, '');
+        cc += '<a class="ccbtn" href="tel:' + esc(tel) + '">&#128222; Call</a>';
+        cc += '<a class="ccbtn" href="sms:' + esc(tel) + '">&#128172; Text</a>';
+      }
+      if (r.invitee_email) cc += '<a class="ccbtn" href="mailto:' + esc(r.invitee_email) + '">&#9993;&#65039; Email</a>';
+      cc += '</div></div>';
+    }
+    el('rm-contact').innerHTML = cc;
     el('rm-pick').innerHTML = '';
     var addr = r.location_text || r.matched_property_name || '';
     var mapA = el('rm-map');

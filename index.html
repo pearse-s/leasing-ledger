@@ -1336,6 +1336,7 @@
     <div class="lmfoot rmfoot">
       <a id="rm-map" class="btn primary rm-bigbtn" target="_blank" rel="noopener">&#129517; Open in Maps</a>
       <button type="button" id="rm-listing" class="btn primary rm-bigbtn">View listing &rarr;</button>
+      <button type="button" id="rm-unit" class="btn rm-bigbtn">View unit &rarr;</button>
     </div>
   </div>
 </div>
@@ -1363,6 +1364,7 @@
     </div>
     <div class="lmfoot">
       <span class="noapply" id="lm-noapply" style="display:none">No application link on this listing</span>
+      <button type="button" id="lm-unit" class="btn">View unit &rarr;</button>
       <a id="lm-apply" class="btn primary" target="_blank" rel="noopener">Open application page &rarr;</a>
     </div>
   </div>
@@ -1591,7 +1593,7 @@
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aSel = {};
   var aWin = { mode:'global', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 };
-  var rView = 'cal', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [], curTour = null;
+  var rView = 'cal', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [], curTour = null, tourPickMode = 'listing';
   var rAgents = {}, rStatus = {}, agentColorMap = {};
   var AGENT_PALETTE = ['#E8B43E','#6CA0DC','#7FA76B','#C77DAE','#E0875F','#5BC0BE','#B59CE0','#D4A24E','#8FB996','#5FA8D3','#CDA434','#79C0A6'];
   var uView = 'list', umap = null, umapLayer = null, umapSig = '';
@@ -3493,6 +3495,7 @@
     el('lm-dlall').classList.remove('show');
     curPhotosLm = [];
     el('lm-apps').textContent = 'Loading…';
+    el('lm-unit').setAttribute('data-uid', uid);
     openModal('lmodal');
     mountKeyPanel(el('lm-keys'), uid, (r.property || '') + (r.unit ? ' · ' + r.unit : ''));
     authFetch('/photos?unit_id=' + encodeURIComponent(uid))
@@ -3913,6 +3916,8 @@
       .catch(function(){ el('um-apps').textContent = 'Applications unavailable right now.'; });
 
     var links = '';
+    var umaddr = r.address_line1 ? (r.address_line1 + (r.city ? ', ' + r.city : '')) : (r.property_name || '');
+    if (umaddr) links += '<a class="btn primary" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(umaddr) + '">&#129517; Open in Maps</a>';
     links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit in Buildium &rarr;</a>';
     links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/summary">Property &rarr;</a>';
     if (r.is_listed) links += '<button type="button" class="btn" data-listing-uid="' + r.unit_id + '">Listing &rarr;</button>';
@@ -3962,6 +3967,12 @@
     if (!b) return;
     closeModal('umodal');
     openListing(b.getAttribute('data-listing-uid'));
+  });
+  // Listing modal → unit popup (symmetric to the unit modal's "Listing" button).
+  el('lm-unit').addEventListener('click', function(){
+    var uid = this.getAttribute('data-uid'); if (!uid) return;
+    closeModal('lmodal');
+    openUnitEnsure(uid);
   });
 
   /* ── Owners directory ─────────────────────── */
@@ -4372,10 +4383,12 @@
     var mapA = el('rm-map');
     if (addr) { mapA.style.display = ''; mapA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr); }
     else mapA.style.display = 'none';
-    var lb = el('rm-listing');
-    if (r.matched_unit_id) { lb.style.display = ''; lb.innerHTML = (r.unit_is_listed ? 'View listing &rarr;' : 'View unit &rarr;'); }
-    else if (r.matched_property_id) { lb.style.display = ''; lb.innerHTML = 'Listings at this property &rarr;'; }
-    else { lb.style.display = 'none'; }
+    var lb = el('rm-listing'), ub = el('rm-unit');
+    // "View unit" whenever a property matched (we can resolve or pick a unit);
+    // "View listing" when the exact unit is listed, or the property may have listed units.
+    ub.style.display = r.matched_property_id ? '' : 'none';
+    var showListing = r.matched_unit_id ? !!r.unit_is_listed : !!r.matched_property_id;
+    lb.style.display = showListing ? '' : 'none';
     openModal('rmodal');
   }
   // "View listing" from a tour: jump to the precise resolved unit, or fall back to the
@@ -4388,15 +4401,23 @@
     });
     el('rm-pick').innerHTML = h;
   }
-  function tourGotoListing(r){
+  // mode 'listing' → listing modal (unit popup if unlisted); mode 'unit' → unit popup always.
+  function tourGoto(mode){
+    var r = curTour; if (!r) return;
+    tourPickMode = mode;
+    var openOne = function(uid, listed){
+      closeModal('rmodal');
+      if (mode === 'unit') openUnit(uid);
+      else if (listed) openListing(uid);
+      else openUnit(uid);
+    };
     var go = function(){
-      if (r.matched_unit_id) { closeModal('rmodal'); if (r.unit_is_listed) openListing(r.matched_unit_id); else openUnit(r.matched_unit_id); return; }
+      if (r.matched_unit_id) { openOne(r.matched_unit_id, r.unit_is_listed); return; }
       var atProp = (unitsAll || []).filter(function(u){ return String(u.property_id) === String(r.matched_property_id); });
-      var listed = atProp.filter(function(u){ return u.is_listed; });
-      if (listed.length === 1) { closeModal('rmodal'); openListing(listed[0].unit_id); return; }
-      if (listed.length > 1) { renderTourPicker(listed); return; }
-      if (atProp.length === 1) { closeModal('rmodal'); openUnit(atProp[0].unit_id); return; }
-      if (atProp.length > 1) { renderTourPicker(atProp); return; }
+      var pool = mode === 'listing' ? atProp.filter(function(u){ return u.is_listed; }) : atProp;
+      if (!pool.length) pool = atProp;   // listing mode but nothing listed → fall back to all units
+      if (pool.length === 1) { openOne(pool[0].unit_id, pool[0].is_listed); return; }
+      if (pool.length > 1) { renderTourPicker(pool); return; }
       el('rm-pick').innerHTML = '<div class="rmpicklab">No matching unit found for this property.</div>';
     };
     if (unitsAll === null) { el('rm-pick').innerHTML = '<div class="rmpicklab">Loading units…</div>'; loadUnits(go); }
@@ -4520,13 +4541,16 @@
     if (rView !== 'cal') { rView = 'cal'; applyRView(); }
     if (rcal) { rcal.gotoDate(up.start_time); if (isMobile()) rcal.changeView('timeGridDay'); }
   });
-  el('rm-listing').addEventListener('click', function(){ if (curTour) tourGotoListing(curTour); });
+  el('rm-listing').addEventListener('click', function(){ if (curTour) tourGoto('listing'); });
+  el('rm-unit').addEventListener('click', function(){ if (curTour) tourGoto('unit'); });
   el('rm-pick').addEventListener('click', function(e){
     var b = e.target.closest('.listbtn'); if (!b) return;
     var uid = b.getAttribute('data-uid');
     closeModal('rmodal');
     var u = (unitsAll || []).filter(function(x){ return String(x.unit_id) === String(uid); })[0];
-    if (u && u.is_listed) openListing(uid); else openUnit(uid);
+    if (tourPickMode === 'unit') openUnit(uid);
+    else if (u && u.is_listed) openListing(uid);
+    else openUnit(uid);
   });
   el('rtable').querySelector('tbody').addEventListener('click', function(e){
     var tr = e.target.closest('tr[data-uri]'); if (!tr) return;

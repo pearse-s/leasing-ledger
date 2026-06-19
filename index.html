@@ -778,6 +778,16 @@
   .ccbtn{font-family:var(--sans);font-size:.82rem;font-weight:700;text-decoration:none;cursor:pointer;color:#15110D;background:var(--accent-grad);border:1px solid transparent;border-radius:999px;padding:8px 14px}
   .ccbtn:hover{filter:brightness(1.08)}
   @media(max-width:768px){ .ccbtn{flex:1 1 auto;text-align:center;padding:12px 14px;font-size:.9rem} }
+  /* manual tour-link picker */
+  #rm-link:not(:empty){margin:11px 0 2px;padding:11px 13px;border:1px solid var(--clay);border-radius:var(--r-sm);background:var(--glass-2)}
+  #rm-link input{width:100%;box-sizing:border-box;font-family:var(--sans);font-size:.86rem;color:var(--ink);background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:9px 11px;margin:6px 0}
+  #rm-link input:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
+  .rmlinksug,.rmlinkunits{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto;margin-top:4px}
+  #rm-link .listbtn{text-align:left;padding:9px 11px;border-radius:var(--r-sm)}
+  .rmlinksel{font-size:.86rem;margin:4px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .rmlinkback,.rmlinkunlink{font-family:var(--sans);font-size:.74rem;font-weight:700;cursor:pointer;color:var(--ink-soft);background:transparent;border:1px solid var(--hairline-dark);border-radius:999px;padding:5px 11px}
+  .rmlinkback:hover,.rmlinkunlink:hover{border-color:var(--clay);color:var(--ink)}
+  .rmlinkunlink{margin-top:10px;width:100%}
   @media(max-width:768px){
     .agchip,.chip-mini,.mybtn{padding:8px 13px;font-size:.82rem}
     .presets button{padding:9px 13px;font-size:.82rem}
@@ -1342,11 +1352,13 @@
       <div id="rm-body"></div>
       <div id="rm-contact"></div>
       <div id="rm-pick"></div>
+      <div id="rm-link"></div>
     </div>
     <div class="lmfoot rmfoot">
       <a id="rm-map" class="btn primary rm-bigbtn" target="_blank" rel="noopener">&#129517; Open in Maps</a>
       <button type="button" id="rm-listing" class="btn primary rm-bigbtn">View listing &rarr;</button>
       <button type="button" id="rm-unit" class="btn rm-bigbtn">View unit &rarr;</button>
+      <button type="button" id="rm-linkbtn" class="btn rm-bigbtn">&#128279; Link to a unit</button>
     </div>
   </div>
 </div>
@@ -4387,6 +4399,7 @@
     }
     body += rowH('Location', esc(r.location_text));
     body += rowH('Counts as showing', r.counts_as_showing ? 'Yes' : 'No');
+    if (r.is_manual_link) body += rowH('Link', '<span class="chip c-warm">manual</span>' + (r.manual_linked_by ? ' by ' + esc(r.manual_linked_by) : ''));
     el('rm-body').innerHTML = body;
     // prospect (the person viewing) — name + tap-to-call/text/email
     var cc = '';
@@ -4408,6 +4421,8 @@
     }
     el('rm-contact').innerHTML = cc;
     el('rm-pick').innerHTML = '';
+    el('rm-link').innerHTML = ''; el('rm-link').removeAttribute('data-open');
+    el('rm-linkbtn').innerHTML = r.matched_property_id ? '&#128279; Change link' : '&#128279; Link to a unit';
     var addr = r.location_text || r.matched_property_name || '';
     var mapA = el('rm-map');
     if (addr) { mapA.style.display = ''; mapA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr); }
@@ -4452,6 +4467,97 @@
     if (unitsAll === null) { el('rm-pick').innerHTML = '<div class="rmpicklab">Loading units…</div>'; loadUnits(go); }
     else go();
   }
+  /* ── manual tour→unit link (agent picks the property + unit for a missed/wrong match) ── */
+  var linkProp = null;
+  function tourPropList(){
+    var map = {};
+    (unitsAll || []).forEach(function(u){
+      if (u.property_id != null && !map[u.property_id]) map[u.property_id] = { property_id:u.property_id, property_name:u.property_name, addr:(u.address_line1 || '') };
+    });
+    return Object.keys(map).map(function(k){ return map[k]; });
+  }
+  function tourPropScore(p, toks){
+    var hay = ((p.property_name || '') + ' ' + (p.addr || '')).toLowerCase();
+    var s = 0; toks.forEach(function(t){ if (hay.indexOf(t) >= 0) s += (/^[0-9]+$/.test(t) ? t.length + 2 : t.length); });
+    return s;
+  }
+  function openTourLink(){
+    var panel = el('rm-link');
+    if (panel.getAttribute('data-open') === '1') { panel.removeAttribute('data-open'); panel.innerHTML = ''; return; }
+    panel.setAttribute('data-open', '1'); linkProp = null;
+    var build = function(){
+      var h = '<div class="rmpicklab">Link this tour to a unit</div>';
+      h += '<input type="text" id="rm-linksearch" placeholder="Search property or address…" autocomplete="off">';
+      h += '<div id="rm-linkres"></div>';
+      if (curTour && curTour.is_manual_link) h += '<button type="button" class="rmlinkunlink" data-act="unlink">&#8617; Remove manual link (use auto-match)</button>';
+      panel.innerHTML = h;
+      renderLinkResults('');
+    };
+    if (unitsAll === null) { panel.innerHTML = '<div class="rmpicklab">Loading units…</div>'; loadUnits(build); }
+    else build();
+  }
+  function renderLinkResults(q){
+    var r = curTour; if (!r) return;
+    var h = '';
+    if (linkProp) {
+      h += '<div class="rmlinksel"><b>' + esc(linkProp.property_name || ('Property ' + linkProp.property_id)) + '</b> <button type="button" class="rmlinkback" data-act="back">change property</button></div>';
+      h += '<div class="rmpicklab">Pick the unit</div><div class="rmlinkunits">';
+      var units = (unitsAll || []).filter(function(u){ return String(u.property_id) === String(linkProp.property_id); })
+        .sort(function(a, b){ return String(a.unit_number || '').localeCompare(String(b.unit_number || '')); });
+      units.forEach(function(u){
+        var rent = u.is_listed && u.listing_rent != null ? ' · ' + fmtMoney(u.listing_rent) : '';
+        h += '<button type="button" class="listbtn" data-act="unit" data-uid="' + u.unit_id + '">' + esc(u.unit_number || 'unit') + rent + '</button>';
+      });
+      h += '<button type="button" class="listbtn" data-act="whole">Whole property (unknown unit)</button></div>';
+    } else {
+      var props = tourPropList(), list;
+      if (q && q.trim()) {
+        var ql = q.toLowerCase();
+        list = props.filter(function(p){ return ((p.property_name || '') + ' ' + (p.addr || '')).toLowerCase().indexOf(ql) >= 0; }).slice(0, 16);
+      } else {
+        var toks = (r.location_text || '').toLowerCase().split(/[^a-z0-9]+/).filter(function(t){ return t.length >= 3 || /^[0-9]+$/.test(t); });
+        list = props.map(function(p){ return { p:p, s:tourPropScore(p, toks) }; }).filter(function(x){ return x.s > 0; })
+          .sort(function(a, b){ return b.s - a.s; }).slice(0, 6).map(function(x){ return x.p; });
+      }
+      if (!list.length) h += '<span class="count-note">' + (q ? 'No match — try fewer words' : 'No suggestions — type to search') + '</span>';
+      else { h += (q ? '' : '<div class="rmpicklab">Suggested</div>') + '<div class="rmlinksug">';
+        list.forEach(function(p){ h += '<button type="button" class="listbtn" data-act="prop" data-pid="' + p.property_id + '">' + esc(p.property_name || ('Property ' + p.property_id)) + '</button>'; });
+        h += '</div>'; }
+    }
+    el('rm-linkres').innerHTML = h;
+  }
+  function saveTourLink(pid, uid){
+    var r = curTour; if (!r) return;
+    var actor = (getActor() || '').trim();
+    if (!actor) { el('rm-linkres').innerHTML = '<span class="count-note">Pick your name in the sidebar “Acting as” first.</span>'; return; }
+    var uri = r.uri;
+    el('rm-linkres').innerHTML = '<span class="count-note">Saving…</span>';
+    postJSON('/tour/link', { event_uri: uri, property_id: Number(pid), unit_id: uid ? Number(uid) : null, actor: actor })
+      .then(function(){ return fetchTours(); })
+      .then(function(){ if ((toursAll || []).some(function(x){ return x.uri === uri; })) openTourDetail(uri); else closeModal('rmodal'); })
+      .catch(function(err){ el('rm-linkres').innerHTML = '<span class="count-note">Could not save: ' + esc(String((err && err.message) || err)) + '</span>'; });
+  }
+  function unlinkTour(){
+    var r = curTour; if (!r) return;
+    var actor = (getActor() || '').trim() || 'agent';
+    var uri = r.uri;
+    var res = el('rm-linkres'); if (res) res.innerHTML = '<span class="count-note">Removing…</span>';
+    postJSON('/tour/unlink', { event_uri: uri, actor: actor })
+      .then(function(){ return fetchTours(); })
+      .then(function(){ if ((toursAll || []).some(function(x){ return x.uri === uri; })) openTourDetail(uri); else closeModal('rmodal'); })
+      .catch(function(){ if (res) res.innerHTML = '<span class="count-note">Could not remove the link.</span>'; });
+  }
+  el('rm-linkbtn').addEventListener('click', openTourLink);
+  el('rm-link').addEventListener('click', function(e){
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var act = b.getAttribute('data-act');
+    if (act === 'prop') { linkProp = tourPropList().filter(function(x){ return String(x.property_id) === String(b.getAttribute('data-pid')); })[0]; renderLinkResults(''); }
+    else if (act === 'back') { linkProp = null; renderLinkResults((el('rm-linksearch') || {}).value || ''); }
+    else if (act === 'unit') { if (linkProp) saveTourLink(linkProp.property_id, b.getAttribute('data-uid')); }
+    else if (act === 'whole') { if (linkProp) saveTourLink(linkProp.property_id, null); }
+    else if (act === 'unlink') { unlinkTour(); }
+  });
+  el('rm-link').addEventListener('input', function(e){ if (e.target.id === 'rm-linksearch') renderLinkResults(e.target.value); });
   /* ── tours map (Leaflet, mirrors the Units map) ── */
   function drawTourMap(rows){
     if (!window.L) return;

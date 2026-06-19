@@ -748,6 +748,35 @@
   .fc-ev-t{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fcloc{font-size:.66rem;opacity:.92;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fc-list-event td{cursor:pointer}
+  /* tours: view switcher + agent colour legend/filter + cancelled markers + mobile sizing */
+  .toursfilters{display:flex;align-items:center;gap:9px 14px;flex-wrap:wrap;margin:2px 0 12px}
+  .agentlegend{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .agchip{font-family:var(--sans);font-size:.74rem;line-height:1;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid var(--hairline-dark);border-radius:999px;background:var(--glass-2);color:var(--ink-soft);cursor:pointer;user-select:none;transition:border-color .15s,background .2s,color .15s}
+  .agchip:hover{border-color:var(--agc,var(--clay));color:var(--ink)}
+  .agchip.on{background:var(--agc);border-color:transparent;color:#15110D;font-weight:600}
+  .agdot{width:9px;height:9px;border-radius:50%;flex:none}
+  .agchip .agn{opacity:.7;font-variant-numeric:tabular-nums}
+  .agchip.on .agn{opacity:.85}
+  .mybtn{font-family:var(--sans);font-size:.74rem;font-weight:700;cursor:pointer;color:var(--clay);background:var(--clay-soft);border:1px solid var(--clay);border-radius:999px;padding:5px 12px;transition:all .15s}
+  .mybtn:hover,.mybtn.on{background:var(--clay);color:#15110D}
+  .r-calbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+  .toursbar{position:sticky;top:0;z-index:6;background:var(--paper);padding:6px 0;border-radius:var(--r-sm)}
+  .agdotrow{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;flex:none}
+  .fcx{color:#ff6b6b;font-weight:900;margin-right:3px}
+  .fc-ev-cxl .fc-ev-t{text-decoration:line-through}
+  .fc-ev-cxl{opacity:.6!important}
+  .rm-unit{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0}
+  .rm-bigbtn{flex:1 1 auto;text-align:center;padding:13px 16px;font-size:.92rem}
+  .rmpicklab{font-size:.72rem;color:var(--ink-soft);font-weight:700;margin:10px 0 4px;flex:1 1 100%}
+  #rm-pick{display:flex;flex-wrap:wrap;gap:6px}
+  @media(max-width:768px){
+    .agchip,.chip-mini,.mybtn{padding:8px 13px;font-size:.82rem}
+    .presets button{padding:9px 13px;font-size:.82rem}
+    .rfreshbtn{padding:8px 14px;font-size:.82rem}
+    #rtable td,#rtable th{padding-top:11px;padding-bottom:11px}
+    .rm-bigbtn{flex:1 1 100%}
+    .rmfoot{flex-direction:column;gap:8px}
+  }
   .rmrow{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--hairline-dark);font-size:.84rem}
   .rmrow:last-child{border-bottom:none}
   .rmk{color:var(--ink-soft);font-weight:600}
@@ -1169,46 +1198,49 @@
 
   <div id="page-tours" style="display:none">
     <div class="card tablecard" style="margin-top:18px">
-      <div class="tablebar">
-        <h2>Tours calendar</h2>
+      <div class="tablebar toursbar">
+        <h2>Tours &amp; showings</h2>
+        <div class="presets" id="r-view">
+          <button data-v="cal" class="on">&#128197; Calendar</button>
+          <button data-v="list">&#9776; List</button>
+          <button data-v="map">&#128506; Map</button>
+        </div>
         <button type="button" id="r-refresh" class="rfreshbtn" title="Pull the latest tours from Calendly">&#8635; Refresh</button>
+        <input type="text" id="r-search" placeholder="Search agent, address, property&hellip;">
+        <span class="count-note" id="r-count"></span>
+      </div>
+      <div class="toursfilters">
+        <div class="chipset" id="r-status">
+          <span class="cslabel">Show</span>
+          <button type="button" class="chip-mini" data-st="upcoming">Upcoming</button>
+          <button type="button" class="chip-mini" data-st="completed">Completed</button>
+          <button type="button" class="chip-mini" data-st="cancelled">Cancelled</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="r-showings"> showings only</label>
+        <button type="button" class="mybtn" id="r-mine">&#128100; My tours</button>
+        <div class="agentlegend" id="r-agents"></div>
+      </div>
+      <div class="r-calbar" id="r-calbar">
+        <button type="button" id="r-today" class="rfreshbtn">Today</button>
+        <button type="button" id="r-next" class="rfreshbtn">Next tour &rarr;</button>
         <span class="count-note" id="r-cal-note"></span>
       </div>
       <div id="rcal"></div>
-      <div class="note" style="margin-top:10px">Live from Calendly. New bookings &amp; cancellations land within seconds via webhook &mdash; click <b>Refresh</b> to pull the latest. Times are shown in your local timezone. The same search / showings / scope filters below drive this calendar.</div>
-    </div>
-    <div class="card tablecard" style="margin-top:18px">
-      <div class="tablebar">
-        <h2>Tours &amp; showings</h2>
-        <div class="presets" id="r-view">
-          <button data-v="table" class="on">Table</button>
-          <button data-v="map">Map</button>
-        </div>
-        <div class="presets" id="r-presets">
-          <button data-r="upcoming">Upcoming</button>
-          <button data-r="past30" class="on">Past 30d</button>
-          <button data-r="past90">Past 90d</button>
-          <button data-r="all">All</button>
-        </div>
-        <input type="text" id="r-search" placeholder="Search agent, address, property&hellip;">
-        <label class="toggle"><input type="checkbox" id="r-showings" checked> showings only</label>
-        <span class="count-note" id="r-count"></span>
-      </div>
       <div id="rmap"></div>
-      <div class="scrolly tallscroll" id="r-listwrap">
+      <div class="scrolly tallscroll" id="r-listwrap" style="display:none">
         <table id="rtable">
           <thead><tr>
             <th data-k="start_time">When</th>
-            <th data-k="event_name">Event</th>
             <th data-k="agent">Agent</th>
             <th data-k="status">Status</th>
+            <th data-k="matched_unit_number">Unit</th>
             <th data-k="location_text">Location</th>
             <th data-k="matched_property_name">Property</th>
           </tr></thead>
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">From Calendly. &ldquo;Property&rdquo; is a best-effort address match &mdash; tours at addresses outside the managed portfolio stay unmatched (and have no map pin). Entity filters from the Ledger tab apply here too.</div>
+      <div class="note" style="margin-top:10px">Live from Calendly &mdash; new bookings &amp; cancellations land within seconds; tap <b>Refresh</b> to pull the latest. Calendar items are colour-coded by agent (tap a name to filter, or <b>My tours</b> for just yours); a <span style="color:#ff6b6b;font-weight:900">&times;</span> marks a cancelled tour. Tap any tour for details, the unit&rsquo;s live status &amp; rent, directions, and a jump to the listing. &ldquo;Property/Unit&rdquo; is a best-effort address match &mdash; tours outside the managed portfolio stay unmatched. Sidebar scope filters apply here too.</div>
     </div>
   </div>
 
@@ -1291,15 +1323,19 @@
 
 <div class="lmodal" id="rmodal">
   <div class="lmback" data-close="rmodal"></div>
-  <div class="lmcard" style="max-width:440px">
+  <div class="lmcard" style="max-width:460px">
     <button type="button" class="lmclose" data-close="rmodal">&times;</button>
     <div class="lmhead">
       <h3 id="rm-title"></h3>
       <div class="lmsub" id="rm-sub"></div>
     </div>
-    <div class="lmbody"><div id="rm-body"></div></div>
-    <div class="lmfoot">
-      <a id="rm-map" class="btn primary" target="_blank" rel="noopener">Open in Google Maps &rarr;</a>
+    <div class="lmbody">
+      <div id="rm-body"></div>
+      <div id="rm-pick"></div>
+    </div>
+    <div class="lmfoot rmfoot">
+      <a id="rm-map" class="btn primary rm-bigbtn" target="_blank" rel="noopener">&#129517; Open in Maps</a>
+      <button type="button" id="rm-listing" class="btn primary rm-bigbtn">View listing &rarr;</button>
     </div>
   </div>
 </div>
@@ -1554,8 +1590,10 @@
   var dlBusy = false;
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aSel = {};
   var aWin = { mode:'global', from:null, to:null };
-  var toursAll = null, rSort = { k:'start_time', d:-1 }, rRange = 'past30';
-  var rView = 'table', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [];
+  var toursAll = null, rSort = { k:'start_time', d:-1 };
+  var rView = 'cal', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [], curTour = null;
+  var rAgents = {}, rStatus = {}, agentColorMap = {};
+  var AGENT_PALETTE = ['#E8B43E','#6CA0DC','#7FA76B','#C77DAE','#E0875F','#5BC0BE','#B59CE0','#D4A24E','#8FB996','#5FA8D3','#CDA434','#79C0A6'];
   var uView = 'list', umap = null, umapLayer = null, umapSig = '';
   var keysAll = null, kSort = { k:'property_name', d:1 }, kSel = {}, kCur = null;
   var historyAll = null, hSort = { k:'created_at', d:-1 }, hSel = {};
@@ -1825,7 +1863,7 @@
     if (key === 'units' && unitsAll === null) loadUnits();
     if (key === 'owners' && ownersAll === null) loadOwners();
     if (key === 'applications' && appsAll === null) loadApps();
-    if (key === 'tours') { if (toursAll === null) loadTours(); else if (rcal) setTimeout(function(){ rcal.updateSize(); }, 50); }
+    if (key === 'tours') { if (toursAll === null) loadTours(); else applyRView(); }
     if (key === 'keys' && keysAll === null) loadKeys();
     if (key === 'history' && historyAll === null) loadHistory();
     // if a prior /stats load failed (e.g. first load errored while deep-linked elsewhere),
@@ -4151,16 +4189,46 @@
     p.set('to', state.to !== dstr(new Date()) ? w.to : dstr(new Date(now + 90 * 86400000)));
     return appendScope(p);
   }
+  /* stable per-agent colour — assigned in sorted order (Unknown last), so the legend,
+     calendar events and list dots all agree. */
+  function agentNameCounts(){
+    var names = {};
+    (toursAll || []).forEach(function(r){ var a = r.agent || 'Unknown'; names[a] = (names[a] || 0) + 1; });
+    return names;
+  }
+  function agentSorted(names){
+    return Object.keys(names).sort(function(a, b){
+      if (a === 'Unknown') return 1; if (b === 'Unknown') return -1; return a < b ? -1 : 1;
+    });
+  }
+  function buildAgentColors(){
+    agentColorMap = {};
+    agentSorted(agentNameCounts()).forEach(function(a, i){
+      agentColorMap[a] = a === 'Unknown' ? '#7c8597' : AGENT_PALETTE[i % AGENT_PALETTE.length];
+    });
+  }
+  function agentColor(a){ return agentColorMap[a || 'Unknown'] || '#7c8597'; }
+  function drawAgentLegend(){
+    var names = agentNameCounts();
+    var h = '';
+    agentSorted(names).forEach(function(a){
+      h += '<button type="button" class="agchip' + (rAgents[a] ? ' on' : '') + '" data-ag="' + esc(a) + '" style="--agc:' + agentColor(a) + '">'
+        + '<span class="agdot" style="background:' + agentColor(a) + '"></span>' + esc(a) + ' <span class="agn">' + names[a] + '</span></button>';
+    });
+    el('r-agents').innerHTML = h || '<span class="count-note">No tours in range</span>';
+  }
   function fetchTours(){
     return authFetch('/tours?' + toursQuery().toString()).then(function(j){
       toursAll = j.tours || [];
+      buildAgentColors();
+      drawAgentLegend();
       drawTours();
     });
   }
   function loadTours(){
     el('veil').classList.remove('hide');
     fetchTours()
-      .then(function(){ el('veil').classList.add('hide'); })
+      .then(function(){ el('veil').classList.add('hide'); applyRView(); })
       .catch(function(){
         el('veil').classList.add('hide');
         el('rtable').querySelector('tbody').innerHTML = emptyRow('rtable', 'Could not load tours.');
@@ -4185,19 +4253,27 @@
         var n = el('r-cal-note'); if (n) { n.textContent = 'Refresh failed — showing last load'; setTimeout(function(){ n.textContent = ''; }, 2600); }
       });
   }
-  function inTourRange(r){
-    // the global sidebar window now bounds the tours fetch, so just keep valid-dated events
-    return !isNaN(Date.parse(r.start_time));
+  function tourStatusOf(r){
+    return r.status === 'canceled' ? 'cancelled'
+         : (Date.parse(r.start_time) >= Date.now() ? 'upcoming' : 'completed');
+  }
+  // concise place label for calendar items / titles: the matched property + unit, else the raw address
+  function tourAddr(r){
+    if (r.matched_property_name) return r.matched_property_name + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
+    return r.location_text || 'Tour';
   }
   function tourRows(){
     var q = (el('r-search').value || '').toLowerCase();
     var showOnly = el('r-showings').checked;
-    var rows = toursAll.filter(function(r){
+    var anyAg = Object.keys(rAgents).length, anySt = Object.keys(rStatus).length;
+    var rows = (toursAll || []).filter(function(r){
       if (!colfPass('rtable', r)) return false;
       if (showOnly && !r.counts_as_showing) return false;
-      if (!inTourRange(r)) return false;
+      if (isNaN(Date.parse(r.start_time))) return false;
+      if (anyAg && !rAgents[r.agent || 'Unknown']) return false;
+      if (anySt && !rStatus[tourStatusOf(r)]) return false;
       if (!q) return true;
-      return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.event_name||'')).toLowerCase().indexOf(q) >= 0;
+      return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.matched_unit_number||'') + ' ' + (r.event_name||'')).toLowerCase().indexOf(q) >= 0;
     });
     rows.sort(cmpRows(rSort.k, rSort.d, rSort.k === 'start_time'));
     return rows;
@@ -4206,59 +4282,59 @@
     if (toursAll === null) return;
     var rows = tourRows();
     rLastRows = rows;
-    var now = Date.now();
     var html = '';
     rows.forEach(function(r){
       var t = Date.parse(r.start_time);
-      var cls = [];
-      if (r.status === 'canceled') cls.push('r-cxl');
-      else if (t >= now) cls.push('r-upc');
+      var s = tourStatusOf(r);
+      var cls = s === 'cancelled' ? 'r-cxl' : (s === 'upcoming' ? 'r-upc' : '');
       var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-      var st = r.status === 'canceled' ? '<span class="chip c-hot">canceled</span>'
-             : (t >= now ? '<span class="chip c-warm">upcoming</span>' : '<span class="chip c-ok">done</span>');
-      html += '<tr class="' + cls.join(' ') + '">' +
+      var st = s === 'cancelled' ? '<span class="chip c-hot">canceled</span>'
+             : (s === 'upcoming' ? '<span class="chip c-warm">upcoming</span>' : '<span class="chip c-ok">done</span>');
+      html += '<tr class="' + cls + '" data-uri="' + esc(r.uri) + '">' +
         '<td>' + esc(when) + '</td>' +
-        '<td>' + esc(r.event_name || '–') + '</td>' +
-        '<td>' + esc(r.agent || '–') + '</td>' +
+        '<td><span class="agdotrow" style="background:' + agentColor(r.agent) + '"></span>' + esc(r.agent || '–') + '</td>' +
         '<td>' + st + '</td>' +
+        '<td>' + esc(r.matched_unit_number || '–') + '</td>' +
         '<td>' + esc(r.location_text || '–') + '</td>' +
         '<td>' + esc(r.matched_property_name || '–') + '</td></tr>';
     });
     el('rtable').querySelector('tbody').innerHTML = html || emptyRow('rtable', 'Nothing matches');
-    el('r-count').textContent = rows.length + ' of ' + toursAll.length + ' events';
+    el('r-count').textContent = rows.length + ' of ' + (toursAll || []).length + ' events';
     drawCalendar(rows);
     if (rView === 'map') drawTourMap(rows);
   }
-  /* ── tours calendar (FullCalendar) — same filtered set as the table ── */
+  /* ── tours calendar (FullCalendar) — same filtered set as table/map.
+     Coloured by AGENT (the legend is the key); the item shows the address only,
+     with a red ✕ in front when cancelled. Day view is the mobile default. ── */
+  function isMobile(){ return window.matchMedia('(max-width:768px)').matches; }
   function drawCalendar(rows){
     if (!window.FullCalendar) return;
-    var now = Date.now();
     var events = rows.map(function(r){
-      var t = Date.parse(r.start_time);
       var canceled = r.status === 'canceled';
-      var col = canceled ? '#C75D5D' : (t >= now ? '#E8B43E' : '#7FA76B');
+      var col = agentColor(r.agent);
       return {
         id: r.uri,
-        title: (r.agent && r.agent !== 'Unknown') ? r.agent : (r.event_name || 'Tour'),
+        title: tourAddr(r),
         start: r.start_time,
         end: r.end_time || undefined,
-        backgroundColor: col, borderColor: col,
-        textColor: (canceled || t < now) ? '#0c0f18' : '#15110D',
-        classNames: [canceled ? 'fc-ev-cxl' : (t >= now ? 'fc-ev-upc' : 'fc-ev-done')],
-        extendedProps: { loc: r.matched_property_name || r.location_text || '' }
+        backgroundColor: col, borderColor: col, textColor: '#15110D',
+        classNames: canceled ? ['fc-ev-cxl'] : [],
+        extendedProps: { canceled: canceled }
       };
     });
     if (!rcal) {
+      var mob = isMobile();
       rcal = new FullCalendar.Calendar(el('rcal'), {
-        initialView: 'timeGridWeek',
-        headerToolbar: { left:'prev,next today', center:'title', right:'dayGridMonth,timeGridWeek,listWeek' },
-        height: 600, nowIndicator: true, firstDay: 0, expandRows: true, dayMaxEvents: true,
+        initialView: mob ? 'timeGridDay' : 'timeGridWeek',
+        headerToolbar: { left:'prev,next today', center:'title',
+          right: mob ? 'timeGridDay,listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
+        height: 640, nowIndicator: true, firstDay: 0, expandRows: true, dayMaxEvents: true,
         slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
         eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); openTourDetail(info.event.id); },
         eventContent: function(arg){
-          var loc = arg.event.extendedProps.loc || '';
           var wrap = document.createElement('div');
-          wrap.innerHTML = '<div class="fc-ev-t">' + esc(arg.event.title || '') + '</div>' + (loc ? '<div class="fcloc">' + esc(loc) + '</div>' : '');
+          var x = arg.event.extendedProps.canceled ? '<span class="fcx">&#10006;</span>' : '';
+          wrap.innerHTML = x + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>';
           return { domNodes: [wrap] };
         }
       });
@@ -4270,23 +4346,61 @@
   function openTourDetail(uri){
     var r = (toursAll || []).filter(function(x){ return x.uri === uri; })[0];
     if (!r) return;
+    curTour = r;
     var t = Date.parse(r.start_time);
+    var s = tourStatusOf(r);
     var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
     var endTxt = r.end_time ? new Date(Date.parse(r.end_time)).toLocaleTimeString('en-CA', { hour:'numeric', minute:'2-digit' }) : '';
-    var stt = r.status === 'canceled' ? 'Canceled' : (t >= Date.now() ? 'Upcoming' : 'Completed');
-    el('rm-title').textContent = r.event_name || 'Tour';
-    el('rm-sub').textContent = when + (endTxt ? ' – ' + endTxt : '') + '  ·  ' + stt;
-    function rowH(lab, val){ return '<div class="rmrow"><span class="rmk">' + lab + '</span><span class="rmv">' + esc(val || '–') + '</span></div>'; }
-    var body = rowH('Agent', r.agent);
-    if (r.matched_property_name) body += rowH('Property', r.matched_property_name);
-    body += rowH('Location', r.location_text);
+    var stt = s === 'cancelled' ? 'Canceled' : (s === 'upcoming' ? 'Upcoming' : 'Completed');
+    el('rm-title').textContent = tourAddr(r);
+    el('rm-sub').innerHTML = (s === 'cancelled' ? '<span class="fcx">&#10006;</span> ' : '') + esc(when) + (endTxt ? ' – ' + esc(endTxt) : '') + '  ·  ' + stt;
+    function rowH(lab, val){ return '<div class="rmrow"><span class="rmk">' + lab + '</span><span class="rmv">' + (val || '–') + '</span></div>'; }
+    var body = '<div class="rmrow"><span class="rmk">Agent</span><span class="rmv"><span class="agdotrow" style="background:' + agentColor(r.agent) + '"></span>' + esc(r.agent || '–') + '</span></div>';
+    if (r.matched_property_name) body += rowH('Property', esc(r.matched_property_name));
+    if (r.matched_unit_id) {
+      var chip = STATUS_CHIP[r.unit_occupancy_status] || '';
+      var rentTxt = r.unit_is_listed && r.unit_listing_rent != null ? fmtMoney(r.unit_listing_rent) + '/mo listed'
+                  : (r.unit_listing_rent != null ? fmtMoney(r.unit_listing_rent) + '/mo'
+                  : (r.unit_market_rent != null ? fmtMoney(r.unit_market_rent) + '/mo market' : ''));
+      body += '<div class="rmrow"><span class="rmk">Unit</span><span class="rmv">' + esc(r.matched_unit_number || '') + ' ' + chip + (rentTxt ? ' · ' + rentTxt : '') + '</span></div>';
+    }
+    body += rowH('Location', esc(r.location_text));
     body += rowH('Counts as showing', r.counts_as_showing ? 'Yes' : 'No');
     el('rm-body').innerHTML = body;
-    var addr = r.matched_property_name || r.location_text || '';
+    el('rm-pick').innerHTML = '';
+    var addr = r.location_text || r.matched_property_name || '';
     var mapA = el('rm-map');
     if (addr) { mapA.style.display = ''; mapA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr); }
     else mapA.style.display = 'none';
+    var lb = el('rm-listing');
+    if (r.matched_unit_id) { lb.style.display = ''; lb.innerHTML = (r.unit_is_listed ? 'View listing &rarr;' : 'View unit &rarr;'); }
+    else if (r.matched_property_id) { lb.style.display = ''; lb.innerHTML = 'Listings at this property &rarr;'; }
+    else { lb.style.display = 'none'; }
     openModal('rmodal');
+  }
+  // "View listing" from a tour: jump to the precise resolved unit, or fall back to the
+  // matched property's listed/known units (one → open it; several → pick).
+  function renderTourPicker(units){
+    var h = '<div class="rmpicklab">Choose a unit:</div>';
+    units.slice().sort(function(a, b){ return String(a.unit_number||'').localeCompare(String(b.unit_number||'')); }).forEach(function(u){
+      var rent = u.is_listed && u.listing_rent != null ? ' · ' + fmtMoney(u.listing_rent) : '';
+      h += '<button type="button" class="listbtn" data-uid="' + u.unit_id + '">' + esc(u.unit_number || 'unit') + rent + '</button>';
+    });
+    el('rm-pick').innerHTML = h;
+  }
+  function tourGotoListing(r){
+    var go = function(){
+      if (r.matched_unit_id) { closeModal('rmodal'); if (r.unit_is_listed) openListing(r.matched_unit_id); else openUnit(r.matched_unit_id); return; }
+      var atProp = (unitsAll || []).filter(function(u){ return String(u.property_id) === String(r.matched_property_id); });
+      var listed = atProp.filter(function(u){ return u.is_listed; });
+      if (listed.length === 1) { closeModal('rmodal'); openListing(listed[0].unit_id); return; }
+      if (listed.length > 1) { renderTourPicker(listed); return; }
+      if (atProp.length === 1) { closeModal('rmodal'); openUnit(atProp[0].unit_id); return; }
+      if (atProp.length > 1) { renderTourPicker(atProp); return; }
+      el('rm-pick').innerHTML = '<div class="rmpicklab">No matching unit found for this property.</div>';
+    };
+    if (unitsAll === null) { el('rm-pick').innerHTML = '<div class="rmpicklab">Loading units…</div>'; loadUnits(go); }
+    else go();
   }
   /* ── tours map (Leaflet, mirrors the Units map) ── */
   function drawTourMap(rows){
@@ -4345,28 +4459,78 @@
       rmapSig = sig;
     }
   }
+  function setViewBtn(){
+    Array.prototype.forEach.call(el('r-view').children, function(x){ x.classList.toggle('on', x.getAttribute('data-v') === rView); });
+  }
+  function applyRView(){
+    el('rcal').style.display = rView === 'cal' ? '' : 'none';
+    el('rmap').style.display = rView === 'map' ? 'block' : 'none';
+    el('r-listwrap').style.display = rView === 'list' ? 'block' : 'none';
+    el('r-calbar').style.display = rView === 'cal' ? 'flex' : 'none';
+    setViewBtn();
+    if (rView === 'cal' && rcal) setTimeout(function(){ rcal.updateSize(); }, 30);
+    if (rView === 'map') { drawTourMap(rLastRows); setTimeout(function(){ if (rmap) rmap.invalidateSize(); drawTourMap(rLastRows); }, 60); }
+  }
+  function calNote(msg){ var n = el('r-cal-note'); if (n) { n.textContent = msg; setTimeout(function(){ n.textContent = ''; }, 2600); } }
   el('r-search').addEventListener('input', deb(drawTours));
   el('r-showings').addEventListener('change', drawTours);
   el('r-refresh').addEventListener('click', refreshTours);
   el('r-view').addEventListener('click', function(e){
     var b = e.target.closest('button'); if (!b) return;
-    Array.prototype.forEach.call(el('r-view').children, function(x){ x.classList.remove('on'); });
-    b.classList.add('on');
-    rView = b.getAttribute('data-v');
-    el('rmap').style.display = rView === 'map' ? 'block' : 'none';
-    el('r-listwrap').style.display = rView === 'map' ? 'none' : 'block';
-    if (rView === 'map') {
-      drawTourMap(rLastRows);
-      setTimeout(function(){ if (rmap) rmap.invalidateSize(); drawTourMap(rLastRows); }, 60);
-    }
+    rView = b.getAttribute('data-v'); applyRView();
   });
-  el('r-presets').addEventListener('click', function(e){
+  el('r-status').addEventListener('click', function(e){
     var b = e.target.closest('button'); if (!b) return;
-    Array.prototype.forEach.call(el('r-presets').children, function(x){ x.classList.remove('on'); });
-    b.classList.add('on');
-    rRange = b.getAttribute('data-r');
-    rSort = rRange === 'upcoming' ? { k:'start_time', d:1 } : { k:'start_time', d:-1 };
+    var st = b.getAttribute('data-st'); if (!st) return;
+    if (rStatus[st]) delete rStatus[st]; else rStatus[st] = 1;
+    b.classList.toggle('on', !!rStatus[st]);
     drawTours();
+  });
+  el('r-agents').addEventListener('click', function(e){
+    var b = e.target.closest('.agchip'); if (!b) return;
+    var ag = b.getAttribute('data-ag'); if (ag == null) return;
+    if (rAgents[ag]) delete rAgents[ag]; else rAgents[ag] = 1;
+    el('r-mine').classList.remove('on');
+    drawAgentLegend(); drawTours();
+  });
+  el('r-mine').addEventListener('click', function(){
+    var me = (getActor() || '').trim().toLowerCase();
+    if (!me) { calNote('Pick your name in the sidebar “Acting as” first'); return; }
+    var on = el('r-mine').classList.toggle('on');
+    rAgents = {};
+    if (on) {
+      var meTok = me.split(' ')[0];
+      Object.keys(agentNameCounts()).forEach(function(a){
+        var al = a.toLowerCase();
+        if (al.indexOf(me) >= 0 || me.indexOf(al.split(' ')[0]) >= 0 || al.split(' ')[0] === meTok || al.indexOf(meTok) >= 0) rAgents[a] = 1;
+      });
+      if (!Object.keys(rAgents).length) calNote('No tours found under “' + me + '”');
+    }
+    drawAgentLegend(); drawTours();
+  });
+  el('r-today').addEventListener('click', function(){
+    if (rView !== 'cal') { rView = 'cal'; applyRView(); }
+    if (rcal) rcal.today();
+  });
+  el('r-next').addEventListener('click', function(){
+    var now = Date.now();
+    var up = (rLastRows || []).filter(function(r){ return r.status !== 'canceled' && Date.parse(r.start_time) >= now; })
+              .sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); })[0];
+    if (!up) { calNote('No upcoming tours in this filter'); return; }
+    if (rView !== 'cal') { rView = 'cal'; applyRView(); }
+    if (rcal) { rcal.gotoDate(up.start_time); if (isMobile()) rcal.changeView('timeGridDay'); }
+  });
+  el('rm-listing').addEventListener('click', function(){ if (curTour) tourGotoListing(curTour); });
+  el('rm-pick').addEventListener('click', function(e){
+    var b = e.target.closest('.listbtn'); if (!b) return;
+    var uid = b.getAttribute('data-uid');
+    closeModal('rmodal');
+    var u = (unitsAll || []).filter(function(x){ return String(x.unit_id) === String(uid); })[0];
+    if (u && u.is_listed) openListing(uid); else openUnit(uid);
+  });
+  el('rtable').querySelector('tbody').addEventListener('click', function(e){
+    var tr = e.target.closest('tr[data-uri]'); if (!tr) return;
+    openTourDetail(tr.getAttribute('data-uri'));
   });
   el('rtable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return;

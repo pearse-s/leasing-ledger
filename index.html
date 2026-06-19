@@ -744,8 +744,12 @@
   .fc .fc-button-primary:not(:disabled).fc-button-active,.fc .fc-button-primary:not(:disabled):active{background:var(--clay);border-color:var(--clay);color:#15110D}
   .fc .fc-button:focus,.fc .fc-button-primary:focus{box-shadow:none;outline:none}
   .fc .fc-button:disabled{opacity:.45}
-  .fc-event{cursor:pointer;border:none}
-  .fc-ev-t{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fc-event{cursor:pointer;border:none;overflow:hidden}
+  .fc .fc-event-main{overflow:hidden}
+  .fc-daygrid-event,.fc-daygrid-event .fc-event-main{overflow:hidden;min-width:0}
+  /* flex wrapper so the ✕ stays put and the address ellipsis-clips inside the coloured block */
+  .fc-ev-wrap{display:flex;align-items:baseline;gap:1px;width:100%;max-width:100%;overflow:hidden;line-height:1.18}
+  .fc-ev-t{flex:1 1 auto;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fcloc{font-size:.66rem;opacity:.92;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fc-list-event td{cursor:pointer}
   /* tours: view switcher + agent colour legend/filter + cancelled markers + mobile sizing */
@@ -4366,6 +4370,7 @@
         eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); openTourDetail(info.event.id); },
         eventContent: function(arg){
           var wrap = document.createElement('div');
+          wrap.className = 'fc-ev-wrap';
           var x = arg.event.extendedProps.canceled ? '<span class="fcx">&#10006;</span>' : '';
           wrap.innerHTML = x + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>';
           return { domNodes: [wrap] };

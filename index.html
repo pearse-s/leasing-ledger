@@ -4238,10 +4238,28 @@
       if (a === 'Unknown') return 1; if (b === 'Unknown') return -1; return a < b ? -1 : 1;
     });
   }
+  // Fixed brand colours for specific leasing agents (match their Calendly calendar colours).
+  // Matched by first-name contains; agents not listed keep the rotating palette.
+  var AGENT_FIXED = [
+    { m:'adam',    c:'#CB6A5F' },   // coral red
+    { m:'jashan',  c:'#E8951F' },   // orange
+    { m:'laurice', c:'#A7E0D7' },   // light teal
+    { m:'pearse',  c:'#FFFFFF' },   // white / empty
+    { m:'tristan', c:'#B98CE0' }    // purple
+  ];
+  function fixedAgentColor(name){
+    var n = (name || '').toLowerCase();
+    for (var i = 0; i < AGENT_FIXED.length; i++) { if (n.indexOf(AGENT_FIXED[i].m) >= 0) return AGENT_FIXED[i].c; }
+    return null;
+  }
   function buildAgentColors(){
     agentColorMap = {};
-    agentSorted(agentNameCounts()).forEach(function(a, i){
-      agentColorMap[a] = a === 'Unknown' ? '#7c8597' : AGENT_PALETTE[i % AGENT_PALETTE.length];
+    var pi = 0;
+    agentSorted(agentNameCounts()).forEach(function(a){
+      if (a === 'Unknown') { agentColorMap[a] = '#7c8597'; return; }
+      var fx = fixedAgentColor(a);
+      if (fx) { agentColorMap[a] = fx; return; }
+      agentColorMap[a] = AGENT_PALETTE[pi % AGENT_PALETTE.length]; pi++;
     });
   }
   function agentColor(a){ return agentColorMap[a || 'Unknown'] || '#7c8597'; }

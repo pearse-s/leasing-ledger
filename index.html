@@ -792,6 +792,15 @@
   .rmlinkback,.rmlinkunlink{font-family:var(--sans);font-size:.74rem;font-weight:700;cursor:pointer;color:var(--ink-soft);background:transparent;border:1px solid var(--hairline-dark);border-radius:999px;padding:5px 11px}
   .rmlinkback:hover,.rmlinkunlink:hover{border-color:var(--clay);color:var(--ink)}
   .rmlinkunlink{margin-top:10px;width:100%}
+  /* showing notes (ledger-only) */
+  #rm-notes:not(:empty){margin:12px 0 2px;padding:11px 13px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  .rmnotelist{display:flex;flex-direction:column;gap:8px;margin:7px 0;max-height:160px;overflow:auto}
+  .rmnote{border-left:2px solid var(--clay);padding:2px 0 2px 9px}
+  .rmnotetxt{font-size:.86rem;color:var(--ink);white-space:pre-wrap}
+  #rm-noteinput{width:100%;box-sizing:border-box;font-family:var(--sans);font-size:.86rem;color:var(--ink);background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:9px 11px;margin-bottom:7px;resize:vertical}
+  #rm-noteinput:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
+  #rm-cancel{border-color:#d9534f;color:#ff8a85}
+  #rm-cancel:hover{background:#d9534f;color:#fff;border-color:#d9534f}
   @media(max-width:768px){
     .agchip,.chip-mini,.mybtn{padding:8px 13px;font-size:.82rem}
     .presets button{padding:9px 13px;font-size:.82rem}
@@ -1397,6 +1406,7 @@
     <div class="lmbody">
       <div id="rm-body"></div>
       <div id="rm-contact"></div>
+      <div id="rm-notes"></div>
       <div id="rm-pick"></div>
       <div id="rm-link"></div>
     </div>
@@ -1404,6 +1414,9 @@
       <a id="rm-map" class="btn primary rm-bigbtn" target="_blank" rel="noopener">&#129517; Open in Maps</a>
       <button type="button" id="rm-listing" class="btn primary rm-bigbtn">View listing &rarr;</button>
       <button type="button" id="rm-unit" class="btn rm-bigbtn">View unit &rarr;</button>
+      <a id="rm-resched" class="btn rm-bigbtn" target="_blank" rel="noopener">&#8635; Reschedule</a>
+      <button type="button" id="rm-noshow" class="btn rm-bigbtn">&#8856; Mark no-show</button>
+      <a id="rm-cancel" class="btn rm-bigbtn" target="_blank" rel="noopener">&#10006; Cancel showing</a>
       <button type="button" id="rm-linkbtn" class="btn rm-bigbtn">&#128279; Link to a unit</button>
     </div>
   </div>
@@ -4514,6 +4527,16 @@
     return r.status === 'canceled' ? 'cancelled'
          : (Date.parse(r.start_time) >= Date.now() ? 'upcoming' : 'completed');
   }
+  // Display pill — richer than the 3-bucket filter status: surfaces no-show + rescheduled.
+  function tourPill(r){
+    if (r.is_no_show) return '<span class="chip c-hot">no-show</span>';
+    if (r.status === 'canceled') return r.rescheduled
+      ? '<span class="chip c-cold">rescheduled</span>'
+      : '<span class="chip c-hot">canceled</span>';
+    return tourStatusOf(r) === 'upcoming'
+      ? '<span class="chip c-warm">upcoming</span>'
+      : '<span class="chip c-ok">done</span>';
+  }
   // concise place label for calendar items / titles: the matched property + unit, else the raw address
   function tourAddr(r){
     if (r.matched_property_name) return r.matched_property_name + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
@@ -4545,8 +4568,7 @@
       var s = tourStatusOf(r);
       var cls = s === 'cancelled' ? 'r-cxl' : (s === 'upcoming' ? 'r-upc' : '');
       var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-      var st = s === 'cancelled' ? '<span class="chip c-hot">canceled</span>'
-             : (s === 'upcoming' ? '<span class="chip c-warm">upcoming</span>' : '<span class="chip c-ok">done</span>');
+      var st = tourPill(r);
       html += '<tr class="' + cls + '" data-uri="' + esc(r.uri) + '">' +
         '<td>' + esc(when) + '</td>' +
         '<td><span class="agdotrow" style="background:' + agentColor(r.agent) + '"></span>' + esc(r.agent || '–') + '</td>' +
@@ -4576,7 +4598,7 @@
         end: r.end_time || undefined,
         backgroundColor: col, borderColor: col, textColor: '#15110D',
         classNames: canceled ? ['fc-ev-cxl'] : [],
-        extendedProps: { canceled: canceled }
+        extendedProps: { canceled: canceled, noshow: !!r.is_no_show }
       };
     });
     if (!rcal) {
@@ -4591,7 +4613,8 @@
         eventContent: function(arg){
           var wrap = document.createElement('div');
           wrap.className = 'fc-ev-wrap';
-          var x = arg.event.extendedProps.canceled ? '<span class="fcx">&#10006;</span>' : '';
+          var x = arg.event.extendedProps.canceled ? '<span class="fcx">&#10006;</span>'
+                : (arg.event.extendedProps.noshow ? '<span class="fcx">&#8856;</span>' : '');
           wrap.innerHTML = x + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>';
           return { domNodes: [wrap] };
         }
@@ -4609,9 +4632,8 @@
     var s = tourStatusOf(r);
     var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
     var endTxt = r.end_time ? new Date(Date.parse(r.end_time)).toLocaleTimeString('en-CA', { hour:'numeric', minute:'2-digit' }) : '';
-    var stt = s === 'cancelled' ? 'Canceled' : (s === 'upcoming' ? 'Upcoming' : 'Completed');
     el('rm-title').textContent = tourAddr(r);
-    el('rm-sub').innerHTML = (s === 'cancelled' ? '<span class="fcx">&#10006;</span> ' : '') + esc(when) + (endTxt ? ' – ' + esc(endTxt) : '') + '  ·  ' + stt;
+    el('rm-sub').innerHTML = esc(when) + (endTxt ? ' – ' + esc(endTxt) : '') + '  ·  ' + tourPill(r);
     function rowH(lab, val){ return '<div class="rmrow"><span class="rmk">' + lab + '</span><span class="rmv">' + (val || '–') + '</span></div>'; }
     var body = '<div class="rmrow"><span class="rmk">Agent</span><span class="rmv"><span class="agdotrow" style="background:' + agentColor(r.agent) + '"></span>' + esc(r.agent || '–') + '</span></div>';
     if (r.matched_property_name) body += rowH('Property', esc(r.matched_property_name));
@@ -4624,6 +4646,7 @@
     }
     body += rowH('Location', esc(r.location_text));
     body += rowH('Counts as showing', r.counts_as_showing ? 'Yes' : 'No');
+    if (r.is_no_show) body += rowH('No-show', '<span class="chip c-hot">no-show</span>' + (r.no_show_by ? ' marked by ' + esc(r.no_show_by) : ''));
     if (r.is_manual_link) body += rowH('Link', '<span class="chip c-warm">manual</span>' + (r.manual_linked_by ? ' by ' + esc(r.manual_linked_by) : ''));
     el('rm-body').innerHTML = body;
     // prospect (the person viewing) — name + tap-to-call/text/email
@@ -4658,7 +4681,60 @@
     ub.style.display = r.matched_property_id ? '' : 'none';
     var showListing = r.matched_unit_id ? !!r.unit_is_listed : !!r.matched_property_id;
     lb.style.display = showListing ? '' : 'none';
+    // Cancel / Reschedule = Calendly's own hosted links (the prospect/agent confirms on
+    // Calendly; the webhook then updates the mirror). Only meaningful for a live, upcoming
+    // booking. No-show = a real API writeback (post-showing), reversible.
+    var canMod = r.status === 'active' && s === 'upcoming';
+    var cxA = el('rm-cancel'), rsA = el('rm-resched'), nsB = el('rm-noshow');
+    if (canMod && r.cancel_url) { cxA.style.display = ''; cxA.href = r.cancel_url; } else cxA.style.display = 'none';
+    if (canMod && r.reschedule_url) { rsA.style.display = ''; rsA.href = r.reschedule_url; } else rsA.style.display = 'none';
+    if (r.status === 'canceled' || !r.invitee_uri) { nsB.style.display = 'none'; }
+    else { nsB.style.display = ''; nsB.disabled = false; nsB.innerHTML = r.is_no_show ? '&#8617; Undo no-show' : '&#8856; Mark no-show'; }
+    // Showing notes (ledger-only).
+    el('rm-notes').innerHTML =
+      '<div class="rmclab">Showing notes <span class="count-note" style="text-transform:none;letter-spacing:0">(saved here only — Calendly has no notes field)</span></div>' +
+      '<div id="rm-notelist" class="rmnotelist"></div>' +
+      '<textarea id="rm-noteinput" rows="2" placeholder="Add a note about this showing…"></textarea>' +
+      '<button type="button" id="rm-noteadd" class="btn">Add note</button> <span id="rm-notemsg" class="count-note"></span>';
+    loadTourNotes(r.uri);
     openModal('rmodal');
+  }
+  function loadTourNotes(uri){
+    var box = el('rm-notelist'); if (!box) return;
+    box.innerHTML = '<span class="count-note">Loading…</span>';
+    authFetch('/tour-notes?event_uri=' + encodeURIComponent(uri)).then(function(j){
+      var notes = j.notes || [];
+      if (!notes.length) { box.innerHTML = '<span class="count-note">No notes yet.</span>'; return; }
+      box.innerHTML = notes.map(function(n){
+        var w = n.created_at ? new Date(Date.parse(n.created_at)).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+        return '<div class="rmnote"><div class="count-note">' + esc(n.actor || '—') + ' · ' + esc(w) + '</div><div class="rmnotetxt">' + esc(n.note || '') + '</div></div>';
+      }).join('');
+    }).catch(function(){ box.innerHTML = '<span class="count-note">Could not load notes.</span>'; });
+  }
+  function addTourNote(){
+    var r = curTour; if (!r) return;
+    var actor = (getActor() || '').trim();
+    var ta = el('rm-noteinput'), msg = el('rm-notemsg');
+    if (!actor) { if (msg) msg.textContent = 'Pick your name in the sidebar “Acting as” first.'; return; }
+    var txt = (ta && ta.value || '').trim();
+    if (!txt) { if (msg) msg.textContent = 'Type a note first.'; return; }
+    if (msg) msg.textContent = 'Saving…';
+    postJSON('/tour/note', { event_uri: r.uri, invitee_uri: r.invitee_uri || null, note: txt, actor: actor })
+      .then(function(){ if (ta) ta.value = ''; if (msg) msg.textContent = ''; loadTourNotes(r.uri); })
+      .catch(function(err){ if (msg) msg.textContent = 'Could not save: ' + esc(String((err && err.message) || err)); });
+  }
+  function toggleNoShow(){
+    var r = curTour; if (!r || !r.invitee_uri) return;
+    var actor = (getActor() || '').trim();
+    if (!actor) { alert('Pick your name in the sidebar “Acting as” first.'); return; }
+    var undo = !!r.is_no_show;
+    if (!undo && !confirm('Mark ' + (r.invitee_name || 'this prospect') + ' as a no-show? This writes the no-show back to Calendly.')) return;
+    var btn = el('rm-noshow'), lbl = btn.innerHTML, uri = r.uri;
+    btn.disabled = true; btn.innerHTML = undo ? 'Undoing…' : 'Marking…';
+    postJSON(undo ? '/tour/no-show-undo' : '/tour/no-show', { event_uri: uri, invitee_uri: r.invitee_uri, actor: actor })
+      .then(function(){ return fetchTours(); })
+      .then(function(){ if ((toursAll || []).some(function(x){ return x.uri === uri; })) openTourDetail(uri); else closeModal('rmodal'); })
+      .catch(function(err){ btn.disabled = false; btn.innerHTML = lbl; alert('Could not update no-show: ' + String((err && err.message) || err)); });
   }
   // "View listing" from a tour: jump to the precise resolved unit, or fall back to the
   // matched property's listed/known units (one → open it; several → pick).
@@ -4903,6 +4979,8 @@
   });
   el('rm-listing').addEventListener('click', function(){ if (curTour) tourGoto('listing'); });
   el('rm-unit').addEventListener('click', function(){ if (curTour) tourGoto('unit'); });
+  el('rm-noshow').addEventListener('click', toggleNoShow);
+  el('rm-notes').addEventListener('click', function(e){ if (e.target && e.target.id === 'rm-noteadd') addTourNote(); });
   el('rm-pick').addEventListener('click', function(e){
     var b = e.target.closest('.listbtn'); if (!b) return;
     var uid = b.getAttribute('data-uid');

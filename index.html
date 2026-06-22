@@ -1065,15 +1065,19 @@
         <div class="approx">decision timing is approximate &mdash; based on the applicant&rsquo;s last update in Buildium</div>
       </div>
       <div class="card">
-        <h2>Showings &amp; renewals</h2>
+        <h2>Showings</h2>
         <div class="note" id="sh-note">click a row to open the Tours tab</div>
         <div class="pair click" data-go="tours"><span class="pl">Showings booked</span><span class="pv" id="sh-booked">&ndash;</span></div>
         <div class="pair click" data-go="tours"><span class="pl">&mdash; completed / canceled</span><span class="pv" id="sh-dc">&ndash;</span></div>
         <div class="agents" id="sh-agents"></div>
+        <div class="warnchip" id="caly-warn"></div>
+      </div>
+      <div class="card">
+        <h2>Renewals &amp; term-ends</h2>
         <div class="sect">Renewing vs ending &middot; next 90 days</div>
         <div class="pair click" id="pair-rn-signed" title="Open signed renewals"><span class="pl">&#9989; Renewing &mdash; signed</span><span class="pv" id="te-signed">&ndash;</span></div>
         <div class="pair click" id="pair-rn-pending" title="Open pending renewals"><span class="pl">&#9203; Renewal pending</span><span class="pv" id="te-pending">&ndash;</span></div>
-        <div class="pair"><span class="pl">&#128682; Not renewing <small>(notice / cancelled)</small></span><span class="pv" id="te-ending">&ndash;</span></div>
+        <div class="pair click" id="pair-rn-ending" title="See leases with a notice to vacate"><span class="pl">&#128682; Not renewing <small>(notice / cancelled)</small></span><span class="pv" id="te-ending">&ndash;</span></div>
         <div class="pair"><span class="pl">&#10067; Undecided</span><span class="pv" id="te-undecided">&ndash;</span></div>
         <div class="pair"><span class="pl">Expiring &le;90d (total)</span><span class="pv" id="te-total">&ndash;</span></div>
         <div class="note" id="te-foot" style="margin-top:6px">&nbsp;</div>
@@ -1081,7 +1085,6 @@
         <div class="pair" title="A new lease term started in this window (from Buildium renewal history)"><span class="pl">&#128260; Renewed <small>(new term)</small></span><span class="pv" id="o-renewed">&ndash;</span></div>
         <div class="pair" title="Lease still active past its recorded end date, no new term — month-to-month holdover"><span class="pl">&#127968; Held over <small>(MTM)</small></span><span class="pv" id="o-stay">&ndash;</span></div>
         <div class="pair"><span class="pl">&#128682; Moved out</span><span class="pv" id="o-move">&ndash;</span></div>
-        <div class="warnchip" id="caly-warn"></div>
       </div>
     </div>
 
@@ -4413,6 +4416,7 @@
   }
   el('pair-rn-signed').addEventListener('click', function(){ gotoRenewals('Signed'); });
   el('pair-rn-pending').addEventListener('click', function(){ gotoRenewals('Pending'); });
+  el('pair-rn-ending').addEventListener('click', function(){ gotoUnitsColFilter(function(){ colfState('utable','unit_event').sel = { 'Notice to Vacate':1 }; }); });
 
   /* ── Tours directory ──────────────────────── */
   function toursQuery(){

@@ -806,8 +806,8 @@
     .presets button{padding:9px 13px;font-size:.82rem}
     .rfreshbtn{padding:8px 14px;font-size:.82rem}
     #rtable td,#rtable th{padding-top:11px;padding-bottom:11px}
-    .rm-bigbtn{flex:1 1 100%}
-    .rmfoot{flex-direction:column;gap:8px}
+    .rm-bigbtn{flex:1 1 calc(50% - 5px);min-width:0;padding:13px 10px}
+    .rmfoot{flex-flow:row wrap;gap:8px}
   }
   .rmrow{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--hairline-dark);font-size:.84rem}
   .rmrow:last-child{border-bottom:none}
@@ -4692,7 +4692,7 @@
     else { nsB.style.display = ''; nsB.disabled = false; nsB.innerHTML = r.is_no_show ? '&#8617; Undo no-show' : '&#8856; Mark no-show'; }
     // Showing notes (ledger-only).
     el('rm-notes').innerHTML =
-      '<div class="rmclab">Showing notes <span class="count-note" style="text-transform:none;letter-spacing:0">(saved here only — Calendly has no notes field)</span></div>' +
+      '<div class="rmclab">Showing notes</div>' +
       '<div id="rm-notelist" class="rmnotelist"></div>' +
       '<textarea id="rm-noteinput" rows="2" placeholder="Add a note about this showing…"></textarea>' +
       '<button type="button" id="rm-noteadd" class="btn">Add note</button> <span id="rm-notemsg" class="count-note"></span>';

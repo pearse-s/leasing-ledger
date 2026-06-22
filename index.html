@@ -889,6 +889,7 @@
       <button type="button" class="navitem" data-tab="units"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg><span>Units</span></button>
       <button type="button" class="navitem" data-tab="applications"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg><span>Applications</span></button>
       <button type="button" class="navitem" data-tab="tours"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Tours</span></button>
+      <button type="button" class="navitem" data-tab="renewals"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg><span>Renewals</span></button>
       <button type="button" class="navitem" data-tab="owners"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Owners</span></button>
       <button type="button" class="navitem" data-tab="keys"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 19 4m-3 0 3 3-2.5 2.5L14 7"/></svg><span>Keys</span></button>
       <button type="button" class="navitem" data-tab="history"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>History</span></button>
@@ -1005,6 +1006,11 @@
         <div class="lbl">Listed while occupied</div>
         <div class="num" id="k-turnover">&ndash;</div>
         <div class="sub">being marketed before turnover &middot; click to view</div>
+      </div>
+      <div class="kpi click" id="kpi-renewals" title="Lease renewals this cycle — open the Renewals tab">
+        <div class="lbl">Renewals pending</div>
+        <div class="num" id="k-renewals">&ndash;</div>
+        <div class="sub" id="k-renewals-sub">awaiting signature &middot; click to view</div>
       </div>
     </div>
 
@@ -1219,6 +1225,34 @@
     </div>
   </div>
 
+  <div id="page-renewals" style="display:none">
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar">
+        <h2>Lease renewals</h2>
+        <input type="text" id="rn-search" placeholder="Search tenant, property, unit&hellip;">
+        <span class="count-note" id="rn-count"></span>
+      </div>
+      <div class="qchips" id="rn-chips"></div>
+      <div class="scrolly tallscroll">
+        <table id="rntable">
+          <thead><tr>
+            <th data-k="renewal_state">State</th>
+            <th data-k="property_name">Property</th>
+            <th data-k="unit_number">Unit</th>
+            <th data-k="tenant_names">Tenant(s)</th>
+            <th data-k="lease_from_date">New term</th>
+            <th data-k="lease_to_date">Ends</th>
+            <th data-k="rent" class="rt">New rent</th>
+            <th data-k="property_manager_name">Manager</th>
+            <th data-k="last_updated_date_time">Updated</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="note" style="margin-top:10px">Current renewal cycle from Buildium &mdash; <b>Pending</b> = offer sent, awaiting signature; <b>Signed</b> = fully signed; <b>Cancelled</b> = offer cancelled. Scope filters apply. Click a row to open the unit.</div>
+    </div>
+  </div>
+
   <div id="page-tours" style="display:none">
     <div class="card tablecard" style="margin-top:18px">
       <div class="tablebar toursbar">
@@ -1383,6 +1417,8 @@
       <div class="lmphotos" id="lm-photos"></div>
       <div class="sect">Applications</div>
       <div id="lm-apps" class="minirows lmphnote" style="margin-bottom:12px">&nbsp;</div>
+      <div class="sect">Renewal</div>
+      <div id="lm-renewals" class="minirows lmphnote" style="margin-bottom:12px">&nbsp;</div>
       <div class="sect">Key</div>
       <div id="lm-keys" class="lmphnote" data-keypanel style="margin-bottom:12px">&nbsp;</div>
       <div class="lmdesc" id="lm-desc"></div>
@@ -1410,6 +1446,8 @@
       <div id="um-keys" class="lmphnote" data-keypanel>&nbsp;</div>
       <div class="sect">Tenants</div>
       <div id="um-tenants" class="lmphnote">&nbsp;</div>
+      <div class="sect">Renewal</div>
+      <div id="um-renewals" class="minirows lmphnote">&nbsp;</div>
       <div class="sect">Applications</div>
       <div id="um-apps" class="minirows lmphnote">&nbsp;</div>
       <div class="sect" id="um-photo-sect" style="display:none">Listing photos</div>
@@ -1617,6 +1655,7 @@
   var curPhotosLm = [], curPhotosUm = [];
   var dlBusy = false;
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aSel = {};
+  var renewalsAll = null, rnSort = { k:'lease_from_date', d:1 }, rnSel = {}, renewalsLoading = false, rnByUnit = {};
   var aWin = { mode:'global', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 };
   var rView = 'cal', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [], curTour = null, tourPickMode = 'listing';
@@ -1758,6 +1797,11 @@
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
     });
   }
+  // RingCentral deep links — Call/Text ring through the RingCentral app, not the default phone app.
+  // Desktop app = rcapp://  ·  mobile app = rcmobile://  ·  no tel:/sms: fallback (numbers go to RingCentral).
+  var RC_MOBILE = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  function rcCall(num){ return RC_MOBILE ? 'rcmobile://call?number=' + num : 'rcapp://r/call?number=' + num; }
+  function rcText(num){ return RC_MOBILE ? 'rcmobile://sms?number=' + num : 'rcapp://r/sms?type=new&number=' + num; }
   function dstr(d){ return d.toISOString().slice(0,10); }
   function msIds(key){ return Object.keys(MS[key].sel); }
   function appendScope(p){
@@ -1872,7 +1916,7 @@
   }
 
   /* ── tabs ─────────────────────────────────── */
-  var PAGES = { ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', owners:'page-owners', keys:'page-keys', history:'page-history' };
+  var PAGES = { ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', history:'page-history' };
   var ACTIVE_TAB = 'ledger';   // which tab is showing; render() only reveals the Ledger (#app) when this is 'ledger'
   var statsLoaded = false;     // a /stats load has succeeded at least once (Ledger DOM is populated)
   var statsLoading = false;    // a /stats load is currently in flight
@@ -1892,6 +1936,7 @@
     if (key === 'owners' && ownersAll === null) loadOwners();
     if (key === 'applications' && appsAll === null) loadApps();
     if (key === 'tours') { if (toursAll === null) loadTours(); else applyRView(); }
+    if (key === 'renewals' && renewalsAll === null) loadRenewals();
     if (key === 'keys' && keysAll === null) loadKeys();
     if (key === 'history' && historyAll === null) loadHistory();
     // if a prior /stats load failed (e.g. first load errored while deep-linked elsewhere),
@@ -2035,6 +2080,7 @@
     if (el('page-tours').style.display === 'block') { toursAll = null; loadTours(); }
     if (keysAll !== null) { drawKeyChips(); drawKeys(); }
     if (el('page-history').style.display === 'block') { historyAll = null; loadHistory(); }
+    renewalsAll = null; loadRenewals();   // tile + tab are scope-aware
   }
 
   /* ════════════ Key Manager + History ════════════ */
@@ -3225,6 +3271,7 @@
     rhtml += '<div class="pair" title="Leases signed ÷ inbound leads in this window"><span class="pl">Lead &rarr; lease conversion</span><span class="pv" id="lead-conv"><span class="skel skel-line"></span></span></div>';
     el('activity-rates').innerHTML = rhtml;
     loadLeads(d);
+    if (renewalsAll === null) loadRenewals();   // populate the Ledger renewals tile (filter-aware, cached)
 
     var ORDER = ['New','Undecided','Deferred','Approved','AddedToDraftLease','AddedToLease','Rejected','Cancelled','Unknown'];
     var NICE = { AddedToDraftLease:'Draft lease', AddedToLease:'Added to lease', Unknown:'Other' };
@@ -3535,6 +3582,8 @@
         renderMiniApps(el('lm-apps'), (j && j.applications) || [], (r.property || '') + ' ' + (r.unit || ''));
       })
       .catch(function(){ el('lm-apps').textContent = 'Applications unavailable right now.'; });
+    renderMiniRenewals(el('lm-renewals'), rnForUnit(uid));
+    if (renewalsAll === null) loadRenewals();
   }
   el('vtable').addEventListener('click', function(ev){
     var b = ev.target.closest('.listbtn');
@@ -3685,6 +3734,26 @@
     if (ev2 === 'Notice to Vacate') return '<span class="chip c-warm">notice</span>';
     return '<span class="chip c-cold">' + esc(ev2) + '</span>';
   }
+  // Renewal-by-unit map (built from the cached renewals) so the Units board "Event" column
+  // and the unit/listing popups can surface a unit's renewal state without a per-row fetch.
+  function buildRnByUnit(){
+    rnByUnit = {};
+    var rank = function(s){ return s === 'Pending' ? 0 : s === 'Signed' ? 1 : 2; };
+    (renewalsAll || []).forEach(function(r){
+      if (r.unit_id == null) return;
+      var cur = rnByUnit[r.unit_id];
+      if (!cur || rank(r.renewal_state) < rank(cur.renewal_state)) rnByUnit[r.unit_id] = r;
+    });
+  }
+  function rnUnitChip(uid){
+    var r = rnByUnit[uid]; if (!r) return '';
+    var st = r.renewal_state || '';
+    var c = st === 'Signed' ? 'c-ok' : st === 'Pending' ? 'c-warm' : (st === 'Cancelled' || st === 'Failed') ? 'c-bad' : 'c-cold';
+    return '<span class="chip ' + c + '" title="Lease renewal">renewal: ' + esc(st.toLowerCase()) + '</span>';
+  }
+  function rnForUnit(uid){
+    return (renewalsAll || []).filter(function(r){ return String(r.unit_id) === String(uid); });
+  }
   // global entity scope, applied client-side to the Units + Owners directories.
   // The caller passes the already-extracted selection-id arrays so we don't
   // re-derive Object.keys(MS.*.sel) for every row.
@@ -3753,7 +3822,7 @@
         '<td>' + esc(r.unit_number) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
         '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + '</td>' +
-        '<td>' + evChip(r.unit_event) + '</td>' +
+        '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + '</td>' +
         '<td>' + leaseEnd + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
         '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>' : '–') + '</td>' +
@@ -3915,7 +3984,8 @@
 
     var f = '';
     f += fitem('Status', (r.is_not_ready ? '<span class="chip c-otb">not ready</span> ' : '') + (STATUS_CHIP[r.occupancy_status] || '') + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : ''));
-    f += fitem('Unit event', r.unit_event ? evChip(r.unit_event) : '–');
+    var umEv = evChip(r.unit_event) + rnUnitChip(r.unit_id);
+    f += fitem('Unit event', umEv || '–');
     if (r.is_nookbook) {
       f += fitem('Building type', esc(r.nb_building_type));
       f += fitem('Parking', esc(r.nb_parking));
@@ -3940,6 +4010,8 @@
         renderMiniApps(el('um-apps'), (j && j.applications) || [], (r.property_name || '') + ' ' + (r.unit_number || ''));
       })
       .catch(function(){ el('um-apps').textContent = 'Applications unavailable right now.'; });
+    renderMiniRenewals(el('um-renewals'), rnForUnit(uid));
+    if (renewalsAll === null) loadRenewals();
 
     var links = '';
     var umaddr = r.address_line1 ? (r.address_line1 + (r.city ? ', ' + r.city : '')) : (r.property_name || '');
@@ -4216,6 +4288,109 @@
     showTab('applications');
   });
 
+  /* ════════════ Lease renewals ════════════ */
+  var RN_ORDER = ['Pending','Signed','Cancelling','Cancelled','Sent','Not sent','Processing','Failed','Unknown'];
+  function rnChip(s){
+    var c = s === 'Signed' ? 'c-ok' : s === 'Pending' ? 'c-warm' : (s === 'Cancelled' || s === 'Failed') ? 'c-bad' : 'c-cold';
+    return '<span class="chip ' + c + '">' + esc(s || '–') + '</span>';
+  }
+  function renderMiniRenewals(box, list){
+    if (!box) return;
+    if (renewalsAll === null) { box.textContent = 'Loading…'; return; }
+    if (!list.length) { box.textContent = 'No renewal in progress.'; return; }
+    var h = '';
+    list.forEach(function(r){
+      h += '<div class="minirow">' + rnChip(r.renewal_state) +
+        '<span class="mn">' + esc((r.lease_from_date || '').slice(0, 10)) + ' &rarr; ' + esc((r.lease_to_date || '').slice(0, 10)) + '</span>' +
+        (r.rent != null ? '<span class="md">' + fmtMoney(r.rent) + '/mo</span>' : '') +
+        (r.last_updated_date_time ? '<span class="md">upd ' + esc((r.last_updated_date_time || '').slice(0, 10)) + '</span>' : '') +
+        '</div>';
+    });
+    box.innerHTML = h;
+  }
+  function loadRenewals(){
+    if (renewalsLoading) return;
+    renewalsLoading = true;
+    var p = new URLSearchParams(); appendScope(p);
+    authFetch('/renewals?' + p.toString())
+      .then(function(j){
+        renewalsAll = j.renewals || [];
+        renewalsLoading = false;
+        buildRnByUnit();
+        updateRenewalTile(); drawRnChips(); drawRenewals();
+        if (unitsAll !== null) drawUnits();   // refresh the Units board "Event" column with renewal chips
+      })
+      .catch(function(){
+        renewalsLoading = false;
+        var t = el('rntable'); if (t) t.querySelector('tbody').innerHTML = emptyRow('rntable', 'Could not load renewals.');
+      });
+  }
+  function updateRenewalTile(){
+    var rows = renewalsAll || [], pend = 0, sign = 0;
+    rows.forEach(function(r){ if (r.renewal_state === 'Pending') pend++; else if (r.renewal_state === 'Signed') sign++; });
+    el('k-renewals').textContent = pend;
+    el('k-renewals-sub').innerHTML = fmtNum(sign) + ' signed &middot; ' + fmtNum(rows.length) + ' in cycle &middot; click to view';
+  }
+  function drawRnChips(){
+    if (renewalsAll === null) return;
+    var states = [], seen = {};
+    renewalsAll.forEach(function(r){ var s = r.renewal_state || 'Unknown'; if (!seen[s]) { seen[s] = 1; states.push(s); } });
+    states.sort(function(a, b){ var ia = RN_ORDER.indexOf(a), ib = RN_ORDER.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+    var empty = Object.keys(rnSel).length === 0;
+    var html = '<button type="button" class="qchip' + (empty ? ' on' : '') + '" data-q="all">All <span class="qn">' + renewalsAll.length + '</span></button>';
+    states.forEach(function(s){
+      var n = renewalsAll.filter(function(r){ return (r.renewal_state || 'Unknown') === s; }).length;
+      html += '<button type="button" class="qchip' + (rnSel[s] ? ' on' : '') + '" data-q="' + esc(s) + '">' + esc(s) + ' <span class="qn">' + n + '</span></button>';
+    });
+    el('rn-chips').innerHTML = html;
+  }
+  function drawRenewals(){
+    if (renewalsAll === null) return;
+    var q = (el('rn-search').value || '').toLowerCase();
+    var sel = Object.keys(rnSel);
+    var rows = renewalsAll.filter(function(r){
+      if (sel.length && sel.indexOf(r.renewal_state || 'Unknown') < 0) return false;
+      if (!q) return true;
+      return ((r.tenant_names || '') + ' ' + (r.property_name || '') + ' ' + (r.unit_number || '') + ' ' +
+              (r.property_manager_name || '') + ' ' + (r.primary_owner_name || '')).toLowerCase().indexOf(q) >= 0;
+    });
+    var raw = (rnSort.k === 'lease_from_date' || rnSort.k === 'lease_to_date' || rnSort.k === 'last_updated_date_time' || rnSort.k === 'rent');
+    rows.sort(cmpRows(rnSort.k, rnSort.d, raw));
+    var html = '';
+    rows.forEach(function(r){
+      var clk = r.unit_id ? ' class="rowlink" data-uid="' + r.unit_id + '"' : '';
+      html += '<tr' + clk + '>' +
+        '<td>' + rnChip(r.renewal_state) + '</td>' +
+        '<td>' + esc(r.property_name || '–') + '</td>' +
+        '<td>' + esc(r.unit_number || '–') + '</td>' +
+        '<td>' + esc(r.tenant_names || '–') + '</td>' +
+        '<td>' + (esc((r.lease_from_date || '').slice(0, 10)) || '–') + '</td>' +
+        '<td>' + (esc((r.lease_to_date || '').slice(0, 10)) || '–') + '</td>' +
+        '<td class="rt">' + (r.rent != null ? fmtMoney(r.rent) : '–') + '</td>' +
+        '<td>' + esc(r.property_manager_name || '–') + '</td>' +
+        '<td>' + (esc((r.last_updated_date_time || '').slice(0, 10)) || '–') + '</td></tr>';
+    });
+    el('rntable').querySelector('tbody').innerHTML = html || emptyRow('rntable', 'Nothing matches');
+    el('rn-count').textContent = rows.length + ' of ' + renewalsAll.length + ' renewals';
+  }
+  el('rn-chips').addEventListener('click', function(e){
+    var b = e.target.closest('.qchip'); if (!b) return;
+    var s = b.getAttribute('data-q');
+    if (s === 'all') rnSel = {}; else if (rnSel[s]) delete rnSel[s]; else rnSel[s] = 1;
+    drawRnChips(); drawRenewals();
+  });
+  el('rn-search').addEventListener('input', deb(drawRenewals));
+  el('rntable').querySelector('thead').addEventListener('click', function(e){
+    var th = e.target.closest('th'); if (!th) return;
+    var k = th.getAttribute('data-k'); if (!k) return;
+    if (rnSort.k === k) rnSort.d = -rnSort.d; else { rnSort.k = k; rnSort.d = 1; }
+    drawRenewals();
+  });
+  el('rntable').addEventListener('click', function(e){
+    var tr = e.target.closest('tr[data-uid]'); if (tr) openUnitEnsure(tr.getAttribute('data-uid'));
+  });
+  el('kpi-renewals').addEventListener('click', function(){ showTab('renewals'); });
+
   /* ── Tours directory ──────────────────────── */
   function toursQuery(){
     var p = new URLSearchParams();
@@ -4436,8 +4611,8 @@
       cc += '<div class="rmcbtns">';
       if (r.invitee_phone) {
         var tel = r.invitee_phone.replace(/[^0-9+]/g, '');
-        cc += '<a class="ccbtn" href="tel:' + esc(tel) + '">&#128222; Call</a>';
-        cc += '<a class="ccbtn" href="sms:' + esc(tel) + '">&#128172; Text</a>';
+        cc += '<a class="ccbtn" href="' + rcCall(esc(tel)) + '">&#128222; Call</a>';
+        cc += '<a class="ccbtn" href="' + rcText(esc(tel)) + '">&#128172; Text</a>';
       }
       if (r.invitee_email) cc += '<a class="ccbtn" href="mailto:' + esc(r.invitee_email) + '">&#9993;&#65039; Email</a>';
       cc += '</div></div>';

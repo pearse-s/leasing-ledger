@@ -1070,12 +1070,17 @@
         <div class="pair click" data-go="tours"><span class="pl">Showings booked</span><span class="pv" id="sh-booked">&ndash;</span></div>
         <div class="pair click" data-go="tours"><span class="pl">&mdash; completed / canceled</span><span class="pv" id="sh-dc">&ndash;</span></div>
         <div class="agents" id="sh-agents"></div>
-        <div class="sect">Term-end outcomes (window)</div>
+        <div class="sect">Renewing vs ending &middot; next 90 days</div>
+        <div class="pair click" id="pair-rn-signed" title="Open signed renewals"><span class="pl">&#9989; Renewing &mdash; signed</span><span class="pv" id="te-signed">&ndash;</span></div>
+        <div class="pair click" id="pair-rn-pending" title="Open pending renewals"><span class="pl">&#9203; Renewal pending</span><span class="pv" id="te-pending">&ndash;</span></div>
+        <div class="pair"><span class="pl">&#128682; Not renewing <small>(notice / cancelled)</small></span><span class="pv" id="te-ending">&ndash;</span></div>
+        <div class="pair"><span class="pl">&#10067; Undecided</span><span class="pv" id="te-undecided">&ndash;</span></div>
+        <div class="pair"><span class="pl">Expiring &le;90d (total)</span><span class="pv" id="te-total">&ndash;</span></div>
+        <div class="note" id="te-foot" style="margin-top:6px">&nbsp;</div>
+        <div class="sect">Past term-ends (window)</div>
         <div class="pair"><span class="pl">Lease terms ended</span><span class="pv" id="o-ends">&ndash;</span></div>
-        <div class="pair"><span class="pl">Stayed / renewed</span><span class="pv" id="o-stay">&ndash;</span></div>
+        <div class="pair" title="Renewal vs month-to-month split needs Buildium renewal history (not yet mirrored)"><span class="pl">Retained <small>(type unknown)</small></span><span class="pv" id="o-stay">&ndash;</span></div>
         <div class="pair"><span class="pl">Moved out</span><span class="pv" id="o-move">&ndash;</span></div>
-        <div class="sect">Upcoming expiries</div>
-        <div class="pair click" id="pair-exp" title="See expiring leases on the Units tab"><span class="pl">Expiring &le;30 / &le;60 / &le;90d</span><span class="pv" id="p-exp">&ndash;</span></div>
         <div class="warnchip" id="caly-warn"></div>
       </div>
     </div>
@@ -3334,7 +3339,14 @@
     el('o-move').innerHTML = fmtNum(oc.moved_out) + ' <small>' + pct(oc.moved_out_pct) + '</small>';
 
     var pl = d.pipeline || {};
-    el('p-exp').innerHTML = fmtNum(pl.expiring_30) + ' / ' + fmtNum(pl.expiring_60) + ' / ' + fmtNum(pl.expiring_90);
+    var teTot = pl.expiring_90d || 0;
+    var tePct = function(n){ return teTot ? Math.round(100 * (n || 0) / teTot) + '%' : '–'; };
+    el('te-signed').innerHTML    = fmtNum(pl.renewing_signed) + ' <small>' + tePct(pl.renewing_signed) + '</small>';
+    el('te-pending').innerHTML   = fmtNum(pl.renewal_pending) + ' <small>' + tePct(pl.renewal_pending) + '</small>';
+    el('te-ending').innerHTML    = fmtNum(pl.not_renewing) + ' <small>' + tePct(pl.not_renewing) + '</small>';
+    el('te-undecided').innerHTML = fmtNum(pl.undecided) + ' <small>' + tePct(pl.undecided) + '</small>';
+    el('te-total').textContent   = fmtNum(teTot);
+    el('te-foot').innerHTML = 'Undecided = no renewal offer recorded yet and no notice &mdash; near-term undecided are usually holdovers not yet processed, not at-risk.';
 
     var warn = el('caly-warn');
     if (sh.unclassified_event_types > 0) {
@@ -3376,7 +3388,7 @@
       'The vacancy-aging chart counts <b>all</b> vacant units (listed and unlisted), excluding not-ready and take-back. Listed units age from their <b>available date</b> (units available in the future show <b>negative</b> days and sit in the 0&ndash;30 bucket); unlisted turnover ages from the lease end date, and unlisted never-leased from the listed/complex date or show as <b>age unknown</b>. ' +
       'Pre-leased units (signed future lease) count as <b>occupied</b> in both rates. ' +
       '“Leases signed” = lease records created in Buildium in the window; the future-start portion is pre-leasing. ' +
-      '“Stayed / renewed” = lease still active past its recorded end date (renewal or month-to-month). ' +
+      '“Retained” = lease still active past its end date (renewal or month-to-month; splitting the two needs Buildium renewal history). “Renewing vs ending” (next 90d) uses the live renewal e-signature status: signed / pending / not-renewing (notice given or renewal cancelled) / undecided. ' +
       'Applications count individual applicants; the households figure collapses co-applicants. ' +
       'Showings and trend ignore the entity filters. ' +
       'Generated ' + (m.generated_at ? new Date(m.generated_at).toLocaleString('en-CA') : '') + '.';
@@ -4391,6 +4403,13 @@
     var tr = e.target.closest('tr[data-uid]'); if (tr) openUnitEnsure(tr.getAttribute('data-uid'));
   });
   el('kpi-renewals').addEventListener('click', function(){ showTab('renewals'); });
+  function gotoRenewals(state){
+    rnSel = {}; if (state) rnSel[state] = 1;
+    showTab('renewals');
+    if (renewalsAll !== null) { drawRnChips(); drawRenewals(); }
+  }
+  el('pair-rn-signed').addEventListener('click', function(){ gotoRenewals('Signed'); });
+  el('pair-rn-pending').addEventListener('click', function(){ gotoRenewals('Pending'); });
 
   /* ── Tours directory ──────────────────────── */
   function toursQuery(){

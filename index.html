@@ -4688,8 +4688,11 @@
     var cxA = el('rm-cancel'), rsA = el('rm-resched'), nsB = el('rm-noshow');
     if (canMod && r.cancel_url) { cxA.style.display = ''; cxA.href = r.cancel_url; } else cxA.style.display = 'none';
     if (canMod && r.reschedule_url) { rsA.style.display = ''; rsA.href = r.reschedule_url; } else rsA.style.display = 'none';
-    if (r.status === 'canceled' || !r.invitee_uri) { nsB.style.display = 'none'; }
-    else { nsB.style.display = ''; nsB.disabled = false; nsB.innerHTML = r.is_no_show ? '&#8617; Undo no-show' : '&#8856; Mark no-show'; }
+    // No-show only applies once the showing has started (Calendly 400s "Event is not
+    // started yet" otherwise); always allow UNDO of an existing no-show.
+    var canNoShow = r.invitee_uri && r.status !== 'canceled' && s !== 'upcoming';
+    if (r.is_no_show || canNoShow) { nsB.style.display = ''; nsB.disabled = false; nsB.innerHTML = r.is_no_show ? '&#8617; Undo no-show' : '&#8856; Mark no-show'; }
+    else { nsB.style.display = 'none'; }
     // Showing notes (ledger-only).
     el('rm-notes').innerHTML =
       '<div class="rmclab">Showing notes</div>' +

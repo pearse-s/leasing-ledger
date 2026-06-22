@@ -1798,10 +1798,11 @@
     });
   }
   // RingCentral deep links — Call/Text ring through the RingCentral app, not the default phone app.
-  // Desktop app = rcapp://  ·  mobile app = rcmobile://  ·  no tel:/sms: fallback (numbers go to RingCentral).
-  var RC_MOBILE = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
-  function rcCall(num){ return RC_MOBILE ? 'rcmobile://call?number=' + num : 'rcapp://r/call?number=' + num; }
-  function rcText(num){ return RC_MOBILE ? 'rcmobile://sms?number=' + num : 'rcapp://r/sms?type=new&number=' + num; }
+  // Desktop "RingCentral app" = rcapp://  ·  mobile RingCentral app (ex-Glip) = glip://  (rcmobile:// is retired/dead).
+  // Both use the same /r/ paths; only the scheme prefix differs. No tel:/sms: fallback (numbers go to RingCentral).
+  var RC_SCHEME = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ? 'glip://' : 'rcapp://';
+  function rcCall(num){ return RC_SCHEME + 'r/call?number=' + num; }
+  function rcText(num){ return RC_SCHEME + 'r/sms?type=new&number=' + num; }
   function dstr(d){ return d.toISOString().slice(0,10); }
   function msIds(key){ return Object.keys(MS[key].sel); }
   function appendScope(p){

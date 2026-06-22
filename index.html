@@ -987,6 +987,11 @@
         <div class="num" id="k-totrate">&ndash;</div>
         <div class="sub" id="k-totrate-sub"></div>
       </div>
+      <div class="kpi" id="kpi-retention" title="Tenant retention, trailing 12 months: renewals ÷ (renewals + move-outs)">
+        <div class="lbl">Retention rate</div>
+        <div class="num" id="k-retention">&ndash;</div>
+        <div class="sub" id="k-retention-sub">trailing 12 mo</div>
+      </div>
       <div class="kpi click" id="kpi-pre" title="See pre-leased units on the Units tab">
         <div class="lbl">Pre-leased</div>
         <div class="num" id="k-pre">&ndash;</div>
@@ -1001,11 +1006,6 @@
         <div class="lbl">Vacant &amp; unlisted</div>
         <div class="num" id="k-unlisted">&ndash;</div>
         <div class="sub">vacant with no active listing &mdash; <b>not being marketed</b></div>
-      </div>
-      <div class="kpi click" id="kpi-turnover" title="Occupied units already being marketed — upcoming turnover">
-        <div class="lbl">Listed while occupied</div>
-        <div class="num" id="k-turnover">&ndash;</div>
-        <div class="sub">being marketed before turnover &middot; click to view</div>
       </div>
       <div class="kpi click" id="kpi-renewals" title="Lease renewals this cycle — open the Renewals tab">
         <div class="lbl">Renewals pending</div>
@@ -3157,7 +3157,10 @@
     countUp('k-pre', v.pre_leased, fmtNum);
     countUp('k-risk', d.money && d.money.rent_at_risk, fmtMoney);
     countUp('k-unlisted', d.vacant_not_listed, fmtNum);
-    countUp('k-turnover', d.listed_occupied_n, fmtNum);
+    var rt = d.retention || {};
+    if (rt.rate_pct == null) el('k-retention').textContent = '—';
+    else countUp('k-retention', rt.rate_pct, pct);
+    el('k-retention-sub').innerHTML = 'trailing 12 mo &middot; ' + fmtNum(rt.renewed || 0) + ' renewed / ' + fmtNum((rt.renewed || 0) + (rt.moved_out || 0)) + ' term-ends';
     if (d.kpis) renderKpiExtras(d.kpis);
 
     var ag = d.aging || {}; var op = ag.op_vacant || {}; var nl = ag.never_leased || {};
@@ -4931,13 +4934,6 @@
     setBucket(null);
     el('t-unlisted').checked = true; el('t-listed').checked = false;
     cgReplace('t-status', []);
-    drawTable();
-    scrollVacantTable();
-  });
-  el('kpi-turnover').addEventListener('click', function(){
-    setBucket(null);
-    cgReplace('t-status', ['occupied']);
-    el('t-listed').checked = false; el('t-unlisted').checked = false;
     drawTable();
     scrollVacantTable();
   });

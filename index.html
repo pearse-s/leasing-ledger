@@ -1078,9 +1078,9 @@
         <div class="pair"><span class="pl">Expiring &le;90d (total)</span><span class="pv" id="te-total">&ndash;</span></div>
         <div class="note" id="te-foot" style="margin-top:6px">&nbsp;</div>
         <div class="sect">Past term-ends (window)</div>
-        <div class="pair"><span class="pl">Lease terms ended</span><span class="pv" id="o-ends">&ndash;</span></div>
-        <div class="pair" title="Renewal vs month-to-month split needs Buildium renewal history (not yet mirrored)"><span class="pl">Retained <small>(type unknown)</small></span><span class="pv" id="o-stay">&ndash;</span></div>
-        <div class="pair"><span class="pl">Moved out</span><span class="pv" id="o-move">&ndash;</span></div>
+        <div class="pair" title="A new lease term started in this window (from Buildium renewal history)"><span class="pl">&#128260; Renewed <small>(new term)</small></span><span class="pv" id="o-renewed">&ndash;</span></div>
+        <div class="pair" title="Lease still active past its recorded end date, no new term — month-to-month holdover"><span class="pl">&#127968; Held over <small>(MTM)</small></span><span class="pv" id="o-stay">&ndash;</span></div>
+        <div class="pair"><span class="pl">&#128682; Moved out</span><span class="pv" id="o-move">&ndash;</span></div>
         <div class="warnchip" id="caly-warn"></div>
       </div>
     </div>
@@ -3334,7 +3334,7 @@
     el('sh-agents').innerHTML = ahtml;
 
     var oc = d.outcomes || {};
-    el('o-ends').textContent = fmtNum(oc.term_ends);
+    el('o-renewed').textContent = fmtNum(oc.renewed);
     el('o-stay').innerHTML = fmtNum(oc.stayed) + ' <small>' + pct(oc.stayed_pct) + '</small>';
     el('o-move').innerHTML = fmtNum(oc.moved_out) + ' <small>' + pct(oc.moved_out_pct) + '</small>';
 
@@ -3388,7 +3388,7 @@
       'The vacancy-aging chart counts <b>all</b> vacant units (listed and unlisted), excluding not-ready and take-back. Listed units age from their <b>available date</b> (units available in the future show <b>negative</b> days and sit in the 0&ndash;30 bucket); unlisted turnover ages from the lease end date, and unlisted never-leased from the listed/complex date or show as <b>age unknown</b>. ' +
       'Pre-leased units (signed future lease) count as <b>occupied</b> in both rates. ' +
       '“Leases signed” = lease records created in Buildium in the window; the future-start portion is pre-leasing. ' +
-      '“Retained” = lease still active past its end date (renewal or month-to-month; splitting the two needs Buildium renewal history). “Renewing vs ending” (next 90d) uses the live renewal e-signature status: signed / pending / not-renewing (notice given or renewal cancelled) / undecided. ' +
+      'Past term-ends: “Renewed” = a new lease term started in the window (from Buildium renewal history); “Held over” = lease still active past its end with no new term (month-to-month); “Moved out” = lease ended. “Renewing vs ending” (next 90d) uses the live renewal e-signature status: signed / pending / not-renewing (notice or cancelled) / undecided. ' +
       'Applications count individual applicants; the households figure collapses co-applicants. ' +
       'Showings and trend ignore the entity filters. ' +
       'Generated ' + (m.generated_at ? new Date(m.generated_at).toLocaleString('en-CA') : '') + '.';

@@ -4944,7 +4944,6 @@
   el('kpi-pre').addEventListener('click', function(){ gotoUnitsColFilter(function(){ colfState('utable','occupancy_status').sel = { pre_leased:1 }; }); });
   el('tile-apps').addEventListener('click', function(){ gotoApplications('all', true); });
   el('tile-mi').addEventListener('click', function(){ gotoUnitsFiltered('mi'); });
-  el('pair-exp').addEventListener('click', function(){ gotoUnitsColFilter(function(){ var s = colfState('utable','lease_to_date'); s.min = winToday(); s.max = dstr(new Date(Date.parse(winToday()) + 90*86400000)); }); });
   document.querySelectorAll('.pair[data-go="tours"]').forEach(function(n){
     n.addEventListener('click', gotoTours);
   });

@@ -492,11 +492,14 @@ window.addEventListener('error', function(e){
   /* key manager: multi-set badge + modal set-switcher */
   .setbadge{display:inline-block;font-size:.62rem;font-weight:700;color:var(--clay);background:var(--clay-soft);
     border:1px solid var(--clay);border-radius:9px;padding:1px 7px;margin-left:6px;vertical-align:middle}
-  .ksetbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:11px;grid-column:1/-1}
-  .ksetchip{font-family:var(--sans);font-size:.74rem;font-weight:600;cursor:pointer;color:var(--ink-soft);
-    background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:999px;padding:4px 11px;transition:all .15s ease}
+  .ksetbar{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:11px}
+  .ksetchip{display:inline-flex;align-items:center;gap:7px;font-family:var(--sans);font-size:.76rem;font-weight:600;cursor:pointer;color:var(--ink-soft);
+    background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:999px;padding:6px 13px;transition:all .15s ease}
   .ksetchip:hover{border-color:var(--clay);color:var(--ink)}
-  .ksetchip.on{background:var(--accent-grad);border-color:transparent;color:var(--on-accent)}
+  .ksetchip.on{background:var(--accent-grad);border-color:transparent;color:var(--on-accent);box-shadow:var(--accent-glow)}
+  .ksetdot{width:8px;height:8px;border-radius:50%;flex:none}
+  .ksetchip .ksetn{font-weight:800}
+  .ksetchip .ksets,.ksetchip .kseth{opacity:.85}
   .kfctx{font-size:.78rem;color:var(--ink-soft);margin-bottom:8px}
 
   /* directory row tints */
@@ -2490,6 +2493,12 @@ window.addEventListener('error', function(e){
     el('km-detailview').style.display = 'none'; el('km-compose').style.display = 'none'; el('km-binbig').style.display = 'none';
     openModal('kmodal'); showKeyForm('attach');
   }
+  function keyDotColor(s){
+    if (s === 'out_of_office') return 'var(--clay)';
+    if (s === 'missing' || s === 'not_received') return '#FF9DA6';
+    if (s === 'in_office' || s === 'available') return 'var(--moss)';
+    return 'var(--ink-soft)';
+  }
   function renderKey(){
     var r = kCur; if (!r) return;
     el('km-detailview').style.display = ''; el('km-compose').style.display = '';
@@ -2530,11 +2539,19 @@ window.addEventListener('error', function(e){
       if (r.property_manager_name) bits.push(esc(r.property_manager_name));
       el('km-context').innerHTML = '<div class="km-ctx">' + occ + '<span class="km-ctxt">' + bits.join(' &middot; ') + '</span></div>';
     } else el('km-context').innerHTML = '';
-    // set-switcher
+    // set-switcher — labeled section + status-aware chips, matching the pattern
     var sw = '';
     if (kGroup && kGroup.length > 1) {
-      sw = '<div class="ksetbar"><span class="cslabel">Sets in this bin</span>';
-      kGroup.forEach(function(s, i){ sw += '<button type="button" class="ksetchip' + (s.key_id === r.key_id ? ' on' : '') + '" data-setid="' + s.key_id + '">Set ' + (i + 1) + ' &middot; ' + esc(KEYLBL(s.status)) + '</button>'; });
+      sw = '<div class="rm-feedlab">Sets in this bin &middot; ' + kGroup.length + '</div><div class="ksetbar">';
+      kGroup.forEach(function(s, i){
+        var out = s.status === 'out_of_office';
+        sw += '<button type="button" class="ksetchip' + (s.key_id === r.key_id ? ' on' : '') + '" data-setid="' + s.key_id + '">' +
+          '<span class="ksetdot" style="background:' + keyDotColor(s.status) + '"></span>' +
+          '<span class="ksetn">Set ' + (i + 1) + '</span>' +
+          '<span class="ksets">' + esc(KEYLBL(s.status)) + '</span>' +
+          (out && s.holder ? '<span class="kseth">&middot; ' + esc(s.holder) + '</span>' : '') +
+          '</button>';
+      });
       sw += '</div>';
     }
     el('km-sets').innerHTML = sw;

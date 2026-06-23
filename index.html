@@ -9,7 +9,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="ll-build" content="2026-06-17-cool">
-<script>window.LL_BUILD='2026-06-23-modal-escape-stack';</script>
+<script>window.LL_BUILD='2026-06-23-renewal-col-filter';</script>
 <script>
 /* BOOT-CRASH GUARD — do not remove. The app runs as one big IIFE under 'use strict'
    with no try/catch, so ANY uncaught error during init aborts the boot: the page is
@@ -1798,7 +1798,7 @@ window.addEventListener('error', function(e){
   var curPhotosLm = [], curPhotosUm = [];
   var dlBusy = false;
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aSel = {};
-  var renewalsAll = null, rnSort = { k:'lease_from_date', d:1 }, rnSel = {}, renewalsLoading = false, rnByUnit = {};
+  var renewalsAll = null, rnSort = { k:'lease_from_date', d:1 }, renewalsLoading = false, rnByUnit = {};
   var aWin = { mode:'global', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 };
   var rView = 'cal', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [], curTour = null, tourPickMode = 'listing';
@@ -3187,6 +3187,13 @@ window.addEventListener('error', function(e){
       agent:{ t:'enum', label:'Agent' },
       status:{ t:'enum', label:'Status', disp:cf_cap }
     }},
+    rntable: { rows:function(){ return renewalsAll || []; }, redraw:function(){ drawRnChips(); drawRenewals(); }, cols:{
+      renewal_state:{ t:'enum', label:'State' },
+      lease_from_date:{ t:'date', label:'New term', get:function(r){ return (r.lease_from_date||'').slice(0,10); } },
+      lease_to_date:{ t:'date', label:'Ends', get:function(r){ return (r.lease_to_date||'').slice(0,10); } },
+      rent:{ t:'num', label:'New rent' },
+      last_updated_date_time:{ t:'date', label:'Updated', get:function(r){ return (r.last_updated_date_time||'').slice(0,10); } }
+    }},
     otable: { rows:function(){ return ownersAll || []; }, redraw:function(){ drawOwners(); }, cols:{
       is_company:{ t:'enum', label:'Type', disp:function(v){ return v ? 'Company' : 'Individual'; } },
       property_count:{ t:'num', label:'Props' },
@@ -3217,6 +3224,7 @@ window.addEventListener('error', function(e){
     utable: { get:function(){ return uSort; }, set:function(c,d){ uSort={k:c,d:d}; drawUnits(); } },
     atable: { get:function(){ return aSort; }, set:function(c,d){ aSort={k:c,d:d}; drawApps(); } },
     rtable: { get:function(){ return rSort; }, set:function(c,d){ rSort={k:c,d:d}; drawTours(); } },
+    rntable: { get:function(){ return rnSort; }, set:function(c,d){ rnSort={k:c,d:d}; drawRenewals(); } },
     otable: { get:function(){ return oSort; }, set:function(c,d){ oSort={k:c,d:d}; drawOwners(); } },
     ktable: { get:function(){ return kSort; }, set:function(c,d){ kSort={k:c,d:d}; drawKeys(); } },
     ttable: { get:function(){ return tSort; }, set:function(c,d){ tSort={k:c,d:d}; drawTasks(); } },
@@ -4743,23 +4751,22 @@ window.addEventListener('error', function(e){
   }
   function drawRnChips(){
     if (renewalsAll === null) return;
-    var states = [], seen = {};
-    renewalsAll.forEach(function(r){ var s = r.renewal_state || 'Unknown'; if (!seen[s]) { seen[s] = 1; states.push(s); } });
-    states.sort(function(a, b){ var ia = RN_ORDER.indexOf(a), ib = RN_ORDER.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
-    var empty = Object.keys(rnSel).length === 0;
+    var items = colEnumItems('rntable', 'renewal_state');
+    items.sort(function(a, b){ var ia = RN_ORDER.indexOf(a.raw), ib = RN_ORDER.indexOf(b.raw); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+    var sel = colfState('rntable', 'renewal_state').sel;
+    var empty = Object.keys(sel).length === 0;
     var html = '<button type="button" class="qchip' + (empty ? ' on' : '') + '" data-q="all">All <span class="qn">' + renewalsAll.length + '</span></button>';
-    states.forEach(function(s){
-      var n = renewalsAll.filter(function(r){ return (r.renewal_state || 'Unknown') === s; }).length;
-      html += '<button type="button" class="qchip' + (rnSel[s] ? ' on' : '') + '" data-q="' + esc(s) + '">' + esc(s) + ' <span class="qn">' + n + '</span></button>';
+    items.forEach(function(it){
+      var n = renewalsAll.filter(function(r){ return colKeyOf(r.renewal_state) === it.k; }).length;
+      html += '<button type="button" class="qchip' + (sel[it.k] ? ' on' : '') + '" data-q="' + esc(it.k) + '">' + esc(it.label) + ' <span class="qn">' + n + '</span></button>';
     });
     el('rn-chips').innerHTML = html;
   }
   function drawRenewals(){
     if (renewalsAll === null) return;
     var q = (el('rn-search').value || '').toLowerCase();
-    var sel = Object.keys(rnSel);
     var rows = renewalsAll.filter(function(r){
-      if (sel.length && sel.indexOf(r.renewal_state || 'Unknown') < 0) return false;
+      if (!colfPass('rntable', r)) return false;
       if (!q) return true;
       return ((r.tenant_names || '') + ' ' + (r.property_name || '') + ' ' + (r.unit_number || '') + ' ' +
               (r.property_manager_name || '') + ' ' + (r.primary_owner_name || '')).toLowerCase().indexOf(q) >= 0;
@@ -4785,16 +4792,15 @@ window.addEventListener('error', function(e){
   }
   el('rn-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return;
-    var s = b.getAttribute('data-q');
-    if (s === 'all') rnSel = {}; else if (rnSel[s]) delete rnSel[s]; else rnSel[s] = 1;
-    drawRnChips(); drawRenewals();
+    var k = b.getAttribute('data-q'); var st = colfState('rntable', 'renewal_state');
+    if (k === 'all') st.sel = {}; else if (st.sel[k]) delete st.sel[k]; else st.sel[k] = 1;
+    refreshFunnels(); drawRnChips(); drawRenewals();
   });
   el('rn-search').addEventListener('input', deb(drawRenewals));
   el('rntable').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return;
     var k = th.getAttribute('data-k'); if (!k) return;
-    if (rnSort.k === k) rnSort.d = -rnSort.d; else { rnSort.k = k; rnSort.d = 1; }
-    drawRenewals();
+    openCol('rntable', k, th);
   });
   el('rntable').addEventListener('click', function(e){
     var tr = e.target.closest('tr[data-uid]'); if (tr) openUnitEnsure(tr.getAttribute('data-uid'));
@@ -4809,7 +4815,9 @@ window.addEventListener('error', function(e){
     if (tasksAll !== null) { drawTaskChips(); drawTasks(); }
   });
   function gotoRenewals(state){
-    rnSel = {}; if (state) rnSel[state] = 1;
+    var st = colfState('rntable', 'renewal_state'); st.sel = {};
+    if (state) st.sel[colKeyOf(state)] = 1;
+    refreshFunnels();
     showTab('renewals');
     if (renewalsAll !== null) { drawRnChips(); drawRenewals(); }
   }

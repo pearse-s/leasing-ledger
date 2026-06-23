@@ -722,6 +722,9 @@ window.addEventListener('error', function(e){
   .km-compose{display:flex;gap:8px;align-items:center}
   #km-noteinput{flex:1;min-width:0;box-sizing:border-box;font-family:var(--sans);font-size:.86rem;color:var(--ink);background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:10px 12px}
   #km-noteinput:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
+  .km-binbig{display:flex;align-items:center;justify-content:center;gap:12px;margin:0 0 14px;padding:11px 16px;border-radius:var(--r-sm);background:var(--clay-soft);border:1px solid rgba(232,180,62,.32)}
+  .km-binbig .lab{font-size:.62rem;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
+  .km-binbig .val{font-family:var(--serif);font-weight:700;font-size:1.9rem;line-height:1;color:var(--clay);font-variant-numeric:tabular-nums}
 
   /* v5: clickable sections, app/tour tabs, vacant filters */
   /* ── clickable affordances — make it obvious what's interactive ── */
@@ -1665,6 +1668,7 @@ window.addEventListener('error', function(e){
       <div class="lmsub" id="km-sub"></div>
     </div>
     <div class="lmbody">
+      <div class="km-binbig" id="km-binbig" style="display:none"></div>
       <div class="rm-actrow" id="km-actions"></div>
       <div class="kform" id="km-form" style="display:none"></div>
       <div id="km-detailview">
@@ -2472,7 +2476,7 @@ window.addEventListener('error', function(e){
     el('km-sub').innerHTML = (ctx && ctx.property_name) ? (esc(ctx.property_name) + (ctx.unit_number ? ' · ' + esc(ctx.unit_number) : '')) : 'New key set';
     el('km-fields').innerHTML = ''; el('km-standing').style.display = 'none';
     el('km-actions').innerHTML = ''; el('km-links').innerHTML = ''; el('km-history').innerHTML = '&nbsp;';
-    el('km-detailview').style.display = 'none'; el('km-compose').style.display = 'none';
+    el('km-detailview').style.display = 'none'; el('km-compose').style.display = 'none'; el('km-binbig').style.display = 'none';
     openModal('kmodal'); showKeyForm('create');
   }
   // admin: attach an existing unlinked key to a unit that has none (opened from a unit panel)
@@ -2483,7 +2487,7 @@ window.addEventListener('error', function(e){
     el('km-sub').innerHTML = 'Attach a key to <b>' + esc(kAttachTarget.label) + '</b>';
     el('km-fields').innerHTML = ''; el('km-standing').style.display = 'none';
     el('km-actions').innerHTML = ''; el('km-links').innerHTML = ''; el('km-history').innerHTML = '&nbsp;';
-    el('km-detailview').style.display = 'none'; el('km-compose').style.display = 'none';
+    el('km-detailview').style.display = 'none'; el('km-compose').style.display = 'none'; el('km-binbig').style.display = 'none';
     openModal('kmodal'); showKeyForm('attach');
   }
   function renderKey(){
@@ -2492,9 +2496,11 @@ window.addEventListener('error', function(e){
     el('km-title').textContent = r.property_name ? (r.property_name + ' · ' + (r.unit_number || '')) : r.label;
     var sub = [keyChip(r.status)];
     if (r.property_name && r.label) sub.push('Monday: ' + esc(r.label));
-    if (r.bin != null && r.bin !== '') sub.push('Bin ' + esc(r.bin));
     if (r.holder) sub.push('held by <b>' + esc(r.holder) + '</b>' + (r.date_expected ? ', due ' + esc(r.date_expected) + (r.is_overdue ? ' <span class="ovr">overdue</span>' : '') : ''));
     el('km-sub').innerHTML = sub.join(' &middot; ');
+    // prominent bin — the physical location everyone needs at a glance
+    if (r.bin != null && r.bin !== '') { el('km-binbig').style.display = ''; el('km-binbig').innerHTML = '<span class="lab">Bin</span><span class="val">' + esc(r.bin) + '</span>'; }
+    else el('km-binbig').style.display = 'none';
     // primary action row (top)
     var a = '';
     if (r.status === 'out_of_office') a += '<button type="button" class="btn primary rmact" data-kact="checkin">Check in</button>';

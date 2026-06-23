@@ -815,11 +815,11 @@ window.addEventListener('error', function(e){
   .rmlinkback:hover,.rmlinkunlink:hover{border-color:var(--clay);color:var(--ink)}
   .rmlinkunlink{margin-top:10px;width:100%}
   /* tour modal — action rows, prospect strip, activity feed, pinned composer */
-  .rm-actrow,.rm-morerow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
-  .rm-morerow{margin-top:-2px}
+  .rm-actrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+  .rm-actrow:empty{display:none}
   .rmact{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-align:center;padding:10px 12px;font-size:.8rem}
+  .rm-navrow{display:flex;flex-wrap:wrap;gap:8px;padding:2px 12px 11px}
   .rmact2{flex:1 1 calc(50% - 4px);display:inline-flex;align-items:center;justify-content:center;gap:5px;text-align:center;padding:9px 10px;font-size:.76rem}
-  .rmact-ghost{flex:0 0 auto}
   #rm-cancel{border-color:#d9534f;color:#ff8a85}
   #rm-cancel:hover{background:#d9534f;color:#fff;border-color:#d9534f}
   #rm-detwrap{margin:2px 0 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
@@ -1498,16 +1498,17 @@ window.addEventListener('error', function(e){
         <a id="rm-resched" class="btn rmact" target="_blank" rel="noopener">&#8635; Reschedule</a>
         <button type="button" id="rm-noshow" class="btn rmact">&#8856; Mark no-show</button>
         <a id="rm-cancel" class="btn rmact" target="_blank" rel="noopener">&#10006; Cancel</a>
-        <button type="button" id="rm-more" class="btn rmact rmact-ghost">&#8943; More</button>
-      </div>
-      <div class="rm-morerow" id="rm-morerow" hidden>
-        <a id="rm-map" class="btn rmact2" target="_blank" rel="noopener">&#129517; Maps</a>
-        <button type="button" id="rm-listing" class="btn rmact2">View listing &rarr;</button>
-        <button type="button" id="rm-unit" class="btn rmact2">View unit &rarr;</button>
-        <button type="button" id="rm-linkbtn" class="btn rmact2">&#128279; Link to a unit</button>
       </div>
       <div id="rm-contact"></div>
-      <details id="rm-detwrap"><summary>Tour details</summary><div id="rm-body"></div></details>
+      <details id="rm-detwrap"><summary>Tour details</summary>
+        <div id="rm-body"></div>
+        <div class="rm-navrow">
+          <a id="rm-map" class="btn rmact2" target="_blank" rel="noopener">&#129517; Maps</a>
+          <button type="button" id="rm-listing" class="btn rmact2">View listing &rarr;</button>
+          <button type="button" id="rm-unit" class="btn rmact2">View unit &rarr;</button>
+          <button type="button" id="rm-linkbtn" class="btn rmact2">&#128279; Link to a unit</button>
+        </div>
+      </details>
       <div id="rm-pick"></div>
       <div id="rm-link"></div>
       <div class="rm-feedwrap"><div class="rm-feedlab" id="rm-feedlab"></div><div id="rm-feed"></div></div>
@@ -4961,7 +4962,10 @@ window.addEventListener('error', function(e){
     var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
     var endTxt = r.end_time ? new Date(Date.parse(r.end_time)).toLocaleTimeString('en-CA', { hour:'numeric', minute:'2-digit' }) : '';
     el('rm-title').textContent = tourAddr(r);
-    el('rm-sub').innerHTML = esc(when) + (endTxt ? ' – ' + esc(endTxt) : '') + '  ·  ' + tourPill(r);
+    // header sub-line: time · tour status · the matched unit's occupancy + (if listed) rent
+    var uChip = (r.matched_unit_id && r.unit_occupancy_status) ? (STATUS_CHIP[r.unit_occupancy_status] || '') : '';
+    var uRent = (r.matched_unit_id && r.unit_is_listed && r.unit_listing_rent != null) ? ' ' + fmtMoney(r.unit_listing_rent) : '';
+    el('rm-sub').innerHTML = esc(when) + (endTxt ? ' – ' + esc(endTxt) : '') + '  ·  ' + tourPill(r) + (uChip ? '  ·  ' + uChip + uRent : '');
     function rowH(lab, val){ return '<div class="rmrow"><span class="rmk">' + lab + '</span><span class="rmv">' + (val || '–') + '</span></div>'; }
     var body = '<div class="rmrow"><span class="rmk">Agent</span><span class="rmv"><span class="agdotrow" style="background:' + agentColor(r.agent) + '"></span>' + esc(r.agent || '–') + '</span></div>';
     if (r.matched_property_name) body += rowH('Property', esc(r.matched_property_name));
@@ -5000,7 +5004,6 @@ window.addEventListener('error', function(e){
     el('rm-pick').innerHTML = '';
     el('rm-link').innerHTML = ''; el('rm-link').removeAttribute('data-open');
     el('rm-linkbtn').innerHTML = r.matched_property_id ? '&#128279; Change link' : '&#128279; Link to a unit';
-    el('rm-morerow').hidden = true; el('rm-more').innerHTML = '&#8943; More';
     var addr = r.location_text || r.matched_property_name || '';
     var mapA = el('rm-map');
     if (addr) { mapA.style.display = ''; mapA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr); }
@@ -5343,10 +5346,6 @@ window.addEventListener('error', function(e){
   el('rm-noshow').addEventListener('click', toggleNoShow);
   el('rm-noteadd').addEventListener('click', addTourNote);
   el('rm-noteinput').addEventListener('keydown', function(e){ if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addTourNote(); } });
-  el('rm-more').addEventListener('click', function(){
-    var row = el('rm-morerow'); row.hidden = !row.hidden;
-    el('rm-more').innerHTML = row.hidden ? '&#8943; More' : '&#8743; Less';
-  });
   el('rm-pick').addEventListener('click', function(e){
     var b = e.target.closest('.listbtn'); if (!b) return;
     var uid = b.getAttribute('data-uid');

@@ -1159,10 +1159,10 @@ window.addEventListener('error', function(e){
         <div class="num" id="k-retention">&ndash;</div>
         <div class="sub" id="k-retention-sub">trailing 12 mo</div>
       </div>
-      <div class="kpi click" id="kpi-pre" title="See pre-leased units on the Units tab">
-        <div class="lbl">Pre-leased</div>
+      <div class="kpi click" id="kpi-pre" title="Units with a signed future lease — pre-leased vacancies + flips. Click for the move-in list.">
+        <div class="lbl">Pre-leased / upcoming</div>
         <div class="num" id="k-pre">&ndash;</div>
-        <div class="sub">signed, not yet moved in<br>counted as occupied &mdash; click to view</div>
+        <div class="sub" id="k-pre-sub">signed future lease &mdash; click for move-ins</div>
       </div>
       <div class="kpi">
         <div class="lbl">Rent at risk</div>
@@ -1675,6 +1675,7 @@ window.addEventListener('error', function(e){
     <div class="lmbody">
       <div class="rm-actrow" id="um-actrow"></div>
       <div id="um-contact"></div>
+      <div id="um-incoming"></div>
       <div class="lmphbar" id="um-phbar" style="display:none"><span class="lmphnote" id="um-phnote"></span></div>
       <div class="lmphotos" id="um-photos"></div>
       <div class="lm-photoacts" id="um-photoacts" style="display:none">
@@ -1712,6 +1713,21 @@ window.addEventListener('error', function(e){
         <div class="fgrid" id="om-fields"></div>
       </details>
       <div class="rm-feedwrap"><div class="rm-feedlab" id="om-portlab"></div><div class="propchips" id="om-props"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="lmodal" id="mimodal">
+  <div class="lmback" data-close="mimodal"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="mimodal">&times;</button>
+    <div class="lmhead">
+      <h3>Upcoming move-ins</h3>
+      <div class="lmsub" id="mi-sub">Units with a signed future lease &mdash; pre-leased vacancies and flips (tenant still in place).</div>
+    </div>
+    <div class="lmbody">
+      <div class="lm-feedchips" id="mi-chips"></div>
+      <div id="mi-list"><span class="count-note">Loading&hellip;</span></div>
     </div>
   </div>
 </div>
@@ -3741,7 +3757,11 @@ window.addEventListener('error', function(e){
     el('k-oprate-sub').innerHTML = '<div class="gband" style="color:' + gb.c + '">' + gb.w + ' &middot; target &lt;8%</div>' + fmtNum(v.op_vacant) + ' vacant &divide; ' + fmtNum((v.total_units||0)-(v.never_leased||0)) + ' ever-leased<br>(' + fmtNum(v.never_leased) + ' never-leased units excluded)';
     countUp('k-totrate', v.total_vacancy_rate, pct);
     el('k-totrate-sub').innerHTML = fmtNum(v.vacant_total) + ' vacant &divide; ' + fmtNum(v.total_units) + ' total units<br>(incl. never-leased new inventory)';
-    countUp('k-pre', v.pre_leased, fmtNum);
+    var upc = (v.upcoming_move_ins != null) ? v.upcoming_move_ins : v.pre_leased;
+    countUp('k-pre', upc, fmtNum);
+    var flips = Math.max(0, (upc || 0) - (v.pre_leased || 0));
+    el('k-pre-sub').innerHTML = fmtNum(v.pre_leased || 0) + ' pre-leased vacant' +
+      (flips ? ' &middot; ' + fmtNum(flips) + ' flip' + (flips === 1 ? '' : 's') : '') + '<br>click for move-ins';
     countUp('k-risk', d.money && d.money.rent_at_risk, fmtMoney);
     countUp('k-unlisted', d.vacant_not_listed, fmtNum);
     var rt = d.retention || {};
@@ -4277,6 +4297,87 @@ window.addEventListener('error', function(e){
   }, true);
   var modalDX = 0, modalDY = 0;   // remembered open origin, so close collapses back to it
   var modalStack = [];   // open-order of .lmodal modals so Escape closes the TOPMOST first
+  /* ── Upcoming move-ins (pre-leased vacancies + flips) ──────────────────────
+     Backed by dashboard.v_upcoming_move_ins via /upcoming-move-ins. The incoming
+     tenant is resolved server-side (applicants.tenant_id_buildium), so we always
+     have name + phone + email + their application id. */
+  function incomingActs(phone, email, appId){
+    var s = '';
+    if (phone){ var tel = String(phone).replace(/[^0-9+]/g, ''); s += '<a href="' + rcCall(esc(tel)) + '" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" title="Text">&#128172;</a>'; }
+    if (email) s += '<a href="mailto:' + esc(email) + '" title="Email">&#9993;&#65039;</a>';
+    if (appId) s += '<a class="listbtn" target="_blank" rel="noopener" href="' + BMGR + '/leasing/applicant/' + appId + '/summary" title="Open their application in Buildium">App &rarr;</a>';
+    if (email) s += '<button type="button" class="listbtn" data-tourq="' + esc(email) + '" title="Find their tours">Tours</button>';
+    return s;
+  }
+  // Unit-popup panel — shown only when the unit has a signed future lease.
+  function mountIncomingPanel(box, unitId){
+    if (!box) return;
+    box.innerHTML = '';
+    if (!unitId) return;
+    authFetch('/upcoming-move-ins?unit_id=' + encodeURIComponent(unitId)).then(function(j){
+      var rows = (j && j.move_ins) || [];
+      if (!rows.length) { box.innerHTML = ''; return; }
+      var r = rows[0];
+      var badge = r.is_flip ? '<span class="chip c-warm">flip &middot; tenant in place</span>' : '<span class="chip c-cold">pre-leased</span>';
+      var ts = (r.incoming_tenants && r.incoming_tenants.length) ? r.incoming_tenants
+        : [{ name:r.incoming_tenant_names, phone:r.incoming_phone, email:r.incoming_email, applicant_id:(r.incoming_applicant_ids || [])[0] }];
+      var body = ts.map(function(t){
+        var nm = (t.name || 'Incoming tenant').trim();
+        var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+        return '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div>' +
+          '<div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div>' +
+          '<div class="rmpro-stat">' + esc(t.email || t.phone || '') + '</div></div>' +
+          '<div class="rmpro-acts">' + incomingActs(t.phone, t.email, t.applicant_id) + '</div></div>';
+      }).join('');
+      box.innerHTML = '<div class="sect">Incoming tenant ' + badge +
+        (r.move_in_date ? ' <small style="font-weight:400;opacity:.8">moves in ' + esc(r.move_in_date) + '</small>' : '') + '</div>' + body;
+    }).catch(function(){ box.innerHTML = ''; });
+  }
+  // Dedicated "Upcoming move-ins" list (opened from the Pre-leased/upcoming KPI + Move-ins tile).
+  var miAll = null, miFilter = 'all';
+  function drawMiChips(){
+    var rows = miAll || [];
+    var flips = rows.filter(function(r){ return r.is_flip; }).length;
+    var defs = [['all','All',rows.length],['pre','Pre-leased vacant',rows.length - flips],['flip','Flips',flips]];
+    el('mi-chips').innerHTML = defs.map(function(d){
+      return '<button type="button" class="qchip' + (miFilter === d[0] ? ' on' : '') + '" data-mifilter="' + d[0] + '">' + d[1] + ' <span class="qn">' + d[2] + '</span></button>';
+    }).join('');
+  }
+  function drawMoveIns(){
+    var rows = (miAll || []).filter(function(r){
+      return miFilter === 'all' || (miFilter === 'flip' ? r.is_flip : !r.is_flip);
+    });
+    el('mi-sub').textContent = rows.length + ' upcoming ' + (rows.length === 1 ? 'move-in' : 'move-ins') + (miFilter === 'all' ? '' : ' · ' + miFilter);
+    if (!rows.length) { el('mi-list').innerHTML = '<span class="count-note">No upcoming move-ins in this filter.</span>'; return; }
+    el('mi-list').innerHTML = rows.map(function(r){
+      var badge = r.is_flip ? '<span class="chip c-warm">flip</span>' : '<span class="chip c-cold">pre-leased</span>';
+      var loc = esc(r.property_name || '') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '');
+      var nm = esc(r.incoming_tenant_names || 'Incoming tenant');
+      var appId = (r.incoming_applicant_ids && r.incoming_applicant_ids[0]) || null;
+      return '<div class="trow"><span class="tn">' + loc + ' ' + badge + '</span>' +
+        '<span>' + nm + (r.move_in_date ? ' &middot; in ' + esc(r.move_in_date) : '') + '</span>' +
+        '<span class="rmpro-acts">' + incomingActs(r.incoming_phone, r.incoming_email, appId) + '</span>' +
+        '<button type="button" class="listbtn" data-mi-unit="' + r.unit_id + '">View unit &rarr;</button></div>';
+    }).join('');
+  }
+  function openMoveIns(){
+    miFilter = 'all';
+    el('mi-chips').innerHTML = '';
+    el('mi-list').innerHTML = '<span class="count-note">Loading&hellip;</span>';
+    openModal('mimodal');
+    var p = new URLSearchParams(); appendScope(p);
+    authFetch('/upcoming-move-ins?' + p.toString()).then(function(j){
+      miAll = (j && j.move_ins) || [];
+      drawMiChips(); drawMoveIns();
+    }).catch(function(){ el('mi-list').innerHTML = '<span class="count-note">Could not load move-ins.</span>'; });
+  }
+  document.addEventListener('click', function(e){
+    var f = e.target.closest('[data-mifilter]');
+    if (f){ miFilter = f.getAttribute('data-mifilter'); drawMiChips(); drawMoveIns(); return; }
+    var u = e.target.closest('[data-mi-unit]');
+    if (u){ closeModal('mimodal'); openUnitEnsure(u.getAttribute('data-mi-unit')); return; }
+  });
+
   function openModal(id){
     var modal = el(id); modal.classList.add('open');
     var si = modalStack.indexOf(id); if (si >= 0) modalStack.splice(si, 1); modalStack.push(id);
@@ -4342,14 +4443,14 @@ window.addEventListener('error', function(e){
   function qfTest(r, k){
     if (k === 'all') return true;
     if (k === 'vacant') return r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased';
-    if (k === 'pre') return r.occupancy_status === 'pre_leased';
+    if (k === 'pre') return r.has_upcoming_move_in || r.occupancy_status === 'pre_leased';
     if (k === 'occ') return r.occupancy_status === 'occupied';
     if (k === 'exp60') return r.lease_source === 'Active' && r.days_remaining != null && r.days_remaining <= 60;
     if (k === 'exp90') return r.lease_source === 'Active' && r.days_remaining != null && r.days_remaining <= 90;
     if (k === 'balance') return (r.total_balance || 0) > 0;
     if (k === 'notice') return r.unit_event === 'Notice to Vacate';
     if (k === 'eviction') return r.unit_event === 'Eviction Pending';
-    if (k === 'mi') return r.occupancy_status === 'pre_leased' && upcomingMoveIn(r.lease_from_date);
+    if (k === 'mi') return r.has_upcoming_move_in && upcomingMoveIn(r.future_move_in_date);
     if (k === 'mo') return sameMonth(r.next_move_out);
     if (k === 'listed') return !!r.is_listed;
     if (k === 'nookbook') return !!r.is_nookbook;
@@ -4720,6 +4821,7 @@ window.addEventListener('error', function(e){
     el('um-phbar').style.display = 'none';
     openModal('umodal');
     mountKeyPanel(el('um-keys'), uid, (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : ''));
+    mountIncomingPanel(el('um-incoming'), uid);
     mountTaskPanel(el('um-tasks'), uid);
     // tenants → identity strip (primary) + full list in details
     if (r.lease_id) {
@@ -5212,7 +5314,7 @@ window.addEventListener('error', function(e){
   // Jump to the Tours tab filtered to a prospect (from the application modal's showings).
   document.addEventListener('click', function(e){
     var b = e.target.closest('[data-tourq]'); if (!b) return;
-    ['amodal','umodal','lmodal'].forEach(closeModal);
+    ['amodal','umodal','lmodal','mimodal'].forEach(closeModal);
     el('r-search').value = b.getAttribute('data-tourq') || '';
     showTab('tours');
     drawTours();
@@ -5969,9 +6071,9 @@ window.addEventListener('error', function(e){
     drawTable();
     scrollVacantTable();
   });
-  el('kpi-pre').addEventListener('click', function(){ gotoUnitsColFilter(function(){ colfState('utable','occupancy_status').sel = { pre_leased:1 }; }); });
+  el('kpi-pre').addEventListener('click', function(){ openMoveIns(); });
   el('tile-apps').addEventListener('click', function(){ gotoApplications('all', true); });
-  el('tile-mi').addEventListener('click', function(){ gotoUnitsFiltered('mi'); });
+  el('tile-mi').addEventListener('click', function(){ openMoveIns(); });
   document.querySelectorAll('.pair[data-go="tours"]').forEach(function(n){
     n.addEventListener('click', gotoTours);
   });

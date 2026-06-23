@@ -901,6 +901,7 @@
       <button type="button" class="navitem" data-tab="renewals"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg><span>Renewals</span></button>
       <button type="button" class="navitem" data-tab="owners"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Owners</span></button>
       <button type="button" class="navitem" data-tab="keys"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 19 4m-3 0 3 3-2.5 2.5L14 7"/></svg><span>Keys</span></button>
+      <button type="button" class="navitem" data-tab="tasks"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 3v3h8V3M8 13l2 2 4-4"/></svg><span>Tasks</span></button>
       <button type="button" class="navitem" data-tab="history"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>History</span></button>
     </nav>
     <div class="sidefilters">
@@ -1020,6 +1021,16 @@
         <div class="lbl">Renewals pending</div>
         <div class="num" id="k-renewals">&ndash;</div>
         <div class="sub" id="k-renewals-sub">awaiting signature &middot; click to view</div>
+      </div>
+      <div class="kpi click" id="kpi-tasks" title="Open Buildium tasks (maintenance + to-do) — open the Tasks tab">
+        <div class="lbl">Open tasks</div>
+        <div class="num" id="k-tasks">&ndash;</div>
+        <div class="sub">new + in progress &middot; click to view<br>portfolio-wide</div>
+      </div>
+      <div class="kpi alert click" id="kpi-overdue" title="Open tasks past their due date — open the Tasks tab">
+        <div class="lbl">Overdue tasks</div>
+        <div class="num" id="k-overdue">&ndash;</div>
+        <div class="sub">open &amp; past due date</div>
       </div>
     </div>
 
@@ -1369,6 +1380,32 @@
     </div>
   </div>
 
+  <div id="page-tasks" style="display:none">
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar">
+        <h2>Tasks</h2>
+        <input type="text" id="t-search" placeholder="Search title, unit, category, assignee&hellip;">
+        <span class="count-note" id="t-count"></span>
+      </div>
+      <div class="qchips" id="t-chips"></div>
+      <div class="scrolly tallscroll">
+        <table id="ttable">
+          <thead><tr>
+            <th data-k="property_name">Property &middot; Unit</th>
+            <th data-k="title">Task</th>
+            <th data-k="task_type">Type</th>
+            <th data-k="task_status">Status</th>
+            <th data-k="priority">Priority</th>
+            <th data-k="due_date">Due</th>
+            <th data-k="assignee_name">Assignee</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="note" style="margin-top:10px">Live from Buildium &mdash; maintenance requests, resident requests, and to-dos. Defaults to <b>open</b> (new / in progress); use the chips for overdue, maintenance, unassigned, etc. Sidebar scope filters apply. Click a row for full detail, the update history, and any linked work order.</div>
+    </div>
+  </div>
+
   <div id="page-history" style="display:none">
     <div class="card tablecard" style="margin-top:18px">
       <div class="tablebar">
@@ -1397,27 +1434,34 @@
 
 <div class="lmodal" id="rmodal">
   <div class="lmback" data-close="rmodal"></div>
-  <div class="lmcard" style="max-width:460px">
+  <div class="lmcard rmcard" style="max-width:480px">
     <button type="button" class="lmclose" data-close="rmodal">&times;</button>
     <div class="lmhead">
       <h3 id="rm-title"></h3>
       <div class="lmsub" id="rm-sub"></div>
     </div>
     <div class="lmbody">
-      <div id="rm-body"></div>
+      <div class="rm-actrow" id="rm-actrow">
+        <a id="rm-resched" class="btn rmact" target="_blank" rel="noopener">&#8635; Reschedule</a>
+        <button type="button" id="rm-noshow" class="btn rmact">&#8856; Mark no-show</button>
+        <a id="rm-cancel" class="btn rmact" target="_blank" rel="noopener">&#10006; Cancel</a>
+        <button type="button" id="rm-more" class="btn rmact rmact-ghost">&#8943; More</button>
+      </div>
+      <div class="rm-morerow" id="rm-morerow" hidden>
+        <a id="rm-map" class="btn rmact2" target="_blank" rel="noopener">&#129517; Maps</a>
+        <button type="button" id="rm-listing" class="btn rmact2">View listing &rarr;</button>
+        <button type="button" id="rm-unit" class="btn rmact2">View unit &rarr;</button>
+        <button type="button" id="rm-linkbtn" class="btn rmact2">&#128279; Link to a unit</button>
+      </div>
       <div id="rm-contact"></div>
-      <div id="rm-notes"></div>
+      <details id="rm-detwrap"><summary>Tour details</summary><div id="rm-body"></div></details>
       <div id="rm-pick"></div>
       <div id="rm-link"></div>
+      <div class="rm-feedwrap"><div class="rm-feedlab" id="rm-feedlab"></div><div id="rm-feed"></div></div>
     </div>
-    <div class="lmfoot rmfoot">
-      <a id="rm-map" class="btn primary rm-bigbtn" target="_blank" rel="noopener">&#129517; Open in Maps</a>
-      <button type="button" id="rm-listing" class="btn primary rm-bigbtn">View listing &rarr;</button>
-      <button type="button" id="rm-unit" class="btn rm-bigbtn">View unit &rarr;</button>
-      <a id="rm-resched" class="btn rm-bigbtn" target="_blank" rel="noopener">&#8635; Reschedule</a>
-      <button type="button" id="rm-noshow" class="btn rm-bigbtn">&#8856; Mark no-show</button>
-      <a id="rm-cancel" class="btn rm-bigbtn" target="_blank" rel="noopener">&#10006; Cancel showing</a>
-      <button type="button" id="rm-linkbtn" class="btn rm-bigbtn">&#128279; Link to a unit</button>
+    <div class="lmfoot rm-compose">
+      <input type="text" id="rm-noteinput" placeholder="Add a note about this prospect…" autocomplete="off">
+      <button type="button" id="rm-noteadd" class="rm-send" aria-label="Add note">&#10148;</button>
     </div>
   </div>
 </div>
@@ -1442,6 +1486,8 @@
       <div id="lm-renewals" class="minirows lmphnote" style="margin-bottom:12px">&nbsp;</div>
       <div class="sect">Key</div>
       <div id="lm-keys" class="lmphnote" data-keypanel style="margin-bottom:12px">&nbsp;</div>
+      <div class="sect">Tasks</div>
+      <div id="lm-tasks" class="lmphnote" data-taskpanel style="margin-bottom:12px">&nbsp;</div>
       <div class="lmdesc" id="lm-desc"></div>
       <div class="lmamen" id="lm-amen"></div>
     </div>
@@ -1465,6 +1511,8 @@
       <div class="fgrid" id="um-fields"></div>
       <div class="sect">Key</div>
       <div id="um-keys" class="lmphnote" data-keypanel>&nbsp;</div>
+      <div class="sect">Tasks</div>
+      <div id="um-tasks" class="lmphnote" data-taskpanel>&nbsp;</div>
       <div class="sect">Tenants</div>
       <div id="um-tenants" class="lmphnote">&nbsp;</div>
       <div class="sect">Renewal</div>
@@ -1533,6 +1581,25 @@
       <div id="km-history" class="khist lmphnote">&nbsp;</div>
     </div>
     <div class="lmfoot" id="km-links"></div>
+  </div>
+</div>
+
+<div class="lmodal" id="tmodal">
+  <div class="lmback" data-close="tmodal"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="tmodal">&times;</button>
+    <div class="lmhead">
+      <h3 id="tm-title"></h3>
+      <div class="lmsub" id="tm-sub"></div>
+    </div>
+    <div class="lmbody">
+      <div class="fgrid" id="tm-fields"></div>
+      <div class="note" id="tm-desc" style="display:none"></div>
+      <div id="tm-wo" style="display:none;margin-top:10px"></div>
+      <div class="sect">History</div>
+      <div id="tm-history" class="khist lmphnote">&nbsp;</div>
+    </div>
+    <div class="lmfoot" id="tm-links"></div>
   </div>
 </div>
 
@@ -1692,6 +1759,7 @@
   var kLinkUnit = null;          // unit chosen in the admin "Link to unit" form (key -> unit)
   var kAttachTarget = null;      // unit being linked TO in the admin "Link existing key" form (unit -> key)
   var kAttachKey = null;         // unlinked key chosen in the "Link existing key" form
+  var tasksAll = null, tSort = { k:'due_date', d:1 }, tSel = {};   // Tasks tab (read-only)
 
   var COL = {
     moss:'#9DBE86', amber:'#E6B65C', clay:'#E8B43E', plum:'#A6C0D2',
@@ -1935,10 +2003,13 @@
     if (k.op_vacancy)   setKpiExtra(el('kpi-oprate'), deltaChip(k.op_vacancy, true));
     if (k.leases_signed){ var sg = el('s-signed'); setKpiExtra(sg ? sg.parentNode : null, deltaChip(k.leases_signed, false) + sparkSVG(k.leases_signed.series, GOLD)); }
     if (k.move_ins){ var mi = el('tile-mi'); setKpiExtra(mi, deltaChip(k.move_ins, false) + sparkSVG(k.move_ins.series, GOLD)); }
+    // task tiles are KPI-sourced (get_stats has no task counts), so set the number here too
+    if (k.open_tasks){ countUp('k-tasks', k.open_tasks.cur == null ? 0 : k.open_tasks.cur, fmtNum); setKpiExtra(el('kpi-tasks'), deltaChip(k.open_tasks, false) + sparkSVG(k.open_tasks.series, GOLD)); }
+    if (k.overdue_tasks){ countUp('k-overdue', k.overdue_tasks.cur == null ? 0 : k.overdue_tasks.cur, fmtNum); setKpiExtra(el('kpi-overdue'), deltaChip(k.overdue_tasks, false) + sparkSVG(k.overdue_tasks.series, GOLD)); }
   }
 
   /* ── tabs ─────────────────────────────────── */
-  var PAGES = { ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', history:'page-history' };
+  var PAGES = { ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
   var ACTIVE_TAB = 'ledger';   // which tab is showing; render() only reveals the Ledger (#app) when this is 'ledger'
   var statsLoaded = false;     // a /stats load has succeeded at least once (Ledger DOM is populated)
   var statsLoading = false;    // a /stats load is currently in flight
@@ -1960,6 +2031,7 @@
     if (key === 'tours') { if (toursAll === null) loadTours(); else applyRView(); }
     if (key === 'renewals' && renewalsAll === null) loadRenewals();
     if (key === 'keys' && keysAll === null) loadKeys();
+    if (key === 'tasks' && tasksAll === null) loadTasks();
     if (key === 'history' && historyAll === null) loadHistory();
     // if a prior /stats load failed (e.g. first load errored while deep-linked elsewhere),
     // retry when the user actually opens the Ledger so it can never sit blank
@@ -2101,6 +2173,7 @@
     if (el('page-applications').style.display === 'block') { appsAll = null; loadApps(); }
     if (el('page-tours').style.display === 'block') { toursAll = null; loadTours(); }
     if (keysAll !== null) { drawKeyChips(); drawKeys(); }
+    if (tasksAll !== null) { drawTaskChips(); drawTasks(); }
     if (el('page-history').style.display === 'block') { historyAll = null; loadHistory(); }
     renewalsAll = null; loadRenewals();   // tile + tab are scope-aware
   }
@@ -2846,6 +2919,190 @@
   function cf_yesno(v){ return v ? 'Yes' : 'No'; }
   var CF_OCC = { occupied:'Occupied', pre_leased:'Pre-leased', op_vacant:'Vacant', never_leased:'Never leased' };
   var CF_EVT = { import:'Import', checkout:'Check-out', checkin:'Check-in', status_change:'Status change', note:'Note', create:'Created' };
+
+  /* ════════════ Tasks (Buildium, read-only) ════════════ */
+  var TASK_STATUS_CHIP = {
+    New:'<span class="chip c-new">New</span>',
+    InProgress:'<span class="chip c-warm">In progress</span>',
+    Completed:'<span class="chip c-ok">Completed</span>',
+    Deferred:'<span class="chip c-cold">Deferred</span>',
+    Closed:'<span class="chip c-cold">Closed</span>'
+  };
+  function taskStatusChip(s){ return TASK_STATUS_CHIP[s] || '<span class="chip c-cold">' + esc(s || '?') + '</span>'; }
+  var TASK_TYPE_NICE = { ResidentRequest:'Resident', Todo:'To-do', ContactRequest:'Contact', RentalOwnerRequest:'Owner' };
+  function taskTypeNice(t){ return TASK_TYPE_NICE[t] || t || '–'; }
+  function taskPriority(p){ return p === 'High' ? '<span class="ovr">&#9650; High</span>' : esc(p || 'Normal'); }
+  function taskAssignee(r){
+    if (r.assignee_name) return esc(r.assignee_name);
+    if (r.assigned_to_user_id) return '<span class="lmphnote">#' + esc(r.assigned_to_user_id) + '</span>';
+    return '<span class="lmphnote">Unassigned</span>';
+  }
+  function taskCatLabel(r){ return r.category_name ? (esc(r.category_name) + (r.subcategory_name ? ' &rsaquo; ' + esc(r.subcategory_name) : '')) : ''; }
+  var T_CHIPS = [['all','Open'],['overdue','Overdue'],['maintenance','Maintenance'],['resident','Resident'],['todo','To-do'],['unassigned','Unassigned']];
+  function taskMatchesFilter(r, f){
+    if (f === 'all') return true;
+    if (f === 'overdue') return !!r.is_overdue;
+    if (f === 'maintenance') return r.category_name === 'Maintenance Request';
+    if (f === 'resident') return r.task_type === 'ResidentRequest';
+    if (f === 'todo') return r.task_type === 'Todo';
+    if (f === 'unassigned') return r.assigned_to_user_id == null;
+    return false;
+  }
+  function tChipPass(r, tsel){ for (var i = 0; i < tsel.length; i++){ if (taskMatchesFilter(r, tsel[i])) return true; } return false; }
+  function scopedTasks(){
+    var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
+    return (tasksAll || []).filter(function(r){
+      if (mg.length && mg.indexOf(String(r.property_manager_id)) < 0) return false;
+      if (ow.length && ow.indexOf(String(r.primary_owner_id)) < 0) return false;
+      if (pr.length && pr.indexOf(String(r.property_id)) < 0) return false;
+      return true;
+    });
+  }
+  function loadTasks(){
+    el('veil').classList.remove('hide');
+    authFetch('/tasks').then(function(j){
+      tasksAll = j.tasks || []; drawTaskChips(); drawTasks(); el('veil').classList.add('hide');
+    }).catch(function(){ el('veil').classList.add('hide');
+      el('ttable').querySelector('tbody').innerHTML = emptyRow('ttable', 'Could not load tasks.'); });
+  }
+  function drawTaskChips(){
+    var base = scopedTasks(), html = '', empty = Object.keys(tSel).length === 0;
+    T_CHIPS.forEach(function(c){
+      var n = base.filter(function(r){ return taskMatchesFilter(r, c[0]); }).length;
+      var on = c[0] === 'all' ? empty : !!tSel[c[0]];
+      html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + c[0] + '">' +
+        esc(c[1]) + ' <span class="qn">' + n + '</span></button>';
+    });
+    el('t-chips').innerHTML = html;
+  }
+  function drawTasks(){
+    if (tasksAll === null) return;
+    var q = (el('t-search').value || '').toLowerCase();
+    var base = scopedTasks();
+    var tsel = Object.keys(tSel);
+    var rows = base.filter(function(r){
+      if (!colfPass('ttable', r)) return false;
+      if (tsel.length && !tChipPass(r, tsel)) return false;
+      if (!q) return true;
+      return ((r.title||'') + ' ' + (r.property_name||'') + ' ' + (r.unit_number||'') + ' ' +
+              (r.category_name||'') + ' ' + (r.subcategory_name||'') + ' ' + (r.assignee_name||'') + ' ' +
+              taskTypeNice(r.task_type)).toLowerCase().indexOf(q) >= 0;
+    });
+    rows.sort(cmpRows(tSort.k, tSort.d));
+    var html = '';
+    rows.forEach(function(r){
+      var nm = r.property_name ? (esc(r.property_name) + (r.unit_number ? ' · ' + esc(r.unit_number) : '')) : '<span class="lmphnote">no unit</span>';
+      var due = r.due_date ? (esc(r.due_date) + (r.is_overdue ? ' <span class="ovr">overdue</span>' : '')) : '–';
+      var cat = taskCatLabel(r);
+      html += '<tr class="rowlink' + (r.is_overdue ? ' r-over' : '') + '" data-tid="' + r.task_id + '">' +
+        '<td>' + nm + '</td>' +
+        '<td><b>' + esc(r.title || '–') + '</b>' + (cat ? '<br><span class="lmphnote">' + cat + '</span>' : '') + '</td>' +
+        '<td>' + esc(taskTypeNice(r.task_type)) + '</td>' +
+        '<td>' + taskStatusChip(r.task_status) + '</td>' +
+        '<td>' + taskPriority(r.priority) + '</td>' +
+        '<td>' + due + '</td>' +
+        '<td>' + taskAssignee(r) + '</td></tr>';
+    });
+    el('ttable').querySelector('tbody').innerHTML = html || emptyRow('ttable', 'Nothing matches');
+    el('t-count').textContent = rows.length + ' of ' + base.length + ' open tasks';
+  }
+  el('t-search').addEventListener('input', deb(drawTasks));
+  el('t-chips').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return;
+    var k = b.getAttribute('data-q');
+    if (k === 'all') tSel = {}; else if (tSel[k]) delete tSel[k]; else tSel[k] = 1;
+    drawTaskChips(); drawTasks(); });
+  el('ttable').querySelector('thead').addEventListener('click', function(e){
+    var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return; openCol('ttable', k, th);
+  });
+  el('ttable').addEventListener('click', function(e){ var tr2 = e.target.closest('tr[data-tid]'); if (tr2) openTask(tr2.getAttribute('data-tid')); });
+
+  /* task detail (read-only) */
+  function openTask(taskId){
+    el('tm-title').textContent = 'Loading…'; el('tm-sub').innerHTML = '';
+    el('tm-fields').innerHTML = ''; el('tm-desc').style.display = 'none';
+    el('tm-wo').style.display = 'none'; el('tm-links').innerHTML = ''; el('tm-history').innerHTML = '&nbsp;';
+    openModal('tmodal');
+    authFetch('/task?task_id=' + encodeURIComponent(taskId)).then(function(j){
+      renderTask(j.task, j.detail); loadTaskHistory(taskId);
+    }).catch(function(){ el('tm-title').textContent = 'Could not load task.'; });
+  }
+  function renderTask(r, detail){
+    if (!r) { el('tm-title').textContent = 'Task not found.'; return; }
+    el('tm-title').textContent = r.title || ('Task ' + r.task_id);
+    var sub = [taskStatusChip(r.task_status), taskTypeNice(r.task_type)];
+    if (r.priority === 'High') sub.push('<span class="ovr">High priority</span>');
+    var loc = r.property_name ? (esc(r.property_name) + (r.unit_number ? ' · ' + esc(r.unit_number) : '')) : 'no linked unit';
+    el('tm-sub').innerHTML = sub.join(' &middot; ') + ' &middot; ' + loc +
+      (r.created_date_time ? ' &middot; opened ' + esc((r.created_date_time||'').slice(0,10)) : '');
+    var f = '';
+    f += fitem('Category', taskCatLabel(r) || null);
+    f += fitem('Due', r.due_date ? (esc(r.due_date) + (r.is_overdue ? ' (overdue)' : '')) : null, r.is_overdue);
+    f += fitem('Assignee', taskAssignee(r));
+    f += fitem('Unit status', r.occupancy_status ? (STATUS_CHIP[r.occupancy_status] || esc(r.occupancy_status)) : null);
+    if (detail && detail.requested_by_name) f += fitem('Requested by', esc(detail.requested_by_name) + (detail.requested_by_type ? ' (' + esc(detail.requested_by_type) + ')' : ''));
+    if (detail && detail.resident_entry_notes) f += fitem('Entry notes', esc(detail.resident_entry_notes));
+    f += fitem('Age', r.age_days != null ? (r.age_days + ' days') : null);
+    el('tm-fields').innerHTML = f;
+    if (detail && detail.description) { el('tm-desc').style.display = 'block'; el('tm-desc').innerHTML = '<b>Description:</b> ' + esc(detail.description); }
+    else el('tm-desc').style.display = 'none';
+    if (r.work_order_id) {
+      el('tm-wo').style.display = 'block';
+      el('tm-wo').innerHTML = '<div class="note"><b>Linked work order</b> &middot; ' +
+        (r.wo_vendor_id ? 'Vendor #' + esc(r.wo_vendor_id) + ' &middot; ' : '') +
+        (r.wo_status ? esc(r.wo_status) + ' &middot; ' : '') +
+        (r.wo_amount != null ? fmtMoney(r.wo_amount) : '$0') +
+        (r.wo_count > 1 ? ' &middot; +' + (r.wo_count - 1) + ' more' : '') + '</div>';
+    } else el('tm-wo').style.display = 'none';
+    el('tm-links').innerHTML = r.unit_id ? '<button type="button" class="btn" data-tunit="' + r.unit_id + '">View unit &rarr;</button>' : '';
+  }
+  el('tm-links').addEventListener('click', function(e){
+    var b = e.target.closest('[data-tunit]'); if (!b) return;
+    closeModal('tmodal'); openUnitEnsure(b.getAttribute('data-tunit'));
+  });
+  function loadTaskHistory(taskId){
+    el('tm-history').textContent = 'Loading…';
+    authFetch('/task-history?task_id=' + encodeURIComponent(taskId)).then(function(j){
+      var ev = (j && j.history) || [];
+      el('tm-history').innerHTML = ev.length ? ev.map(thRow).join('') : 'No history yet.';
+    }).catch(function(){ el('tm-history').textContent = 'History unavailable right now.'; });
+  }
+  function thRow(h){
+    var when = (h.CreatedDateTime || h.CreatedDateTIme || '').slice(0,16).replace('T',' ');
+    var who = h.CreatedByUser ? [h.CreatedByUser.FirstName, h.CreatedByUser.LastName].filter(Boolean).join(' ') : '';
+    var statusbit = h.TaskStatus ? '<b>&rarr; ' + esc(h.TaskStatus) + '</b> ' : '';
+    var msg = h.Message ? esc(h.Message) : '';
+    return '<div style="padding:7px 0;border-top:1px solid var(--hairline);font-size:.82rem">' +
+      '<span class="lmphnote">' + esc(when) + '</span> ' + statusbit + msg +
+      (who ? ' <span class="lmphnote">· ' + esc(who) + '</span>' : '') + '</div>';
+  }
+
+  // ── task panel embedded in the unit + listing popups ──
+  function mountTaskPanel(box, unitId){
+    if (!box) return;
+    box.setAttribute('data-taskpanel', '1'); box._unitId = unitId;
+    if (!unitId) { box.innerHTML = '<span class="lmphnote">No linked unit.</span>'; return; }
+    box.textContent = 'Loading tasks…';
+    authFetch('/tasks?unit_id=' + encodeURIComponent(unitId)).then(function(j){
+      var all = (j && j.tasks) || [];
+      var open = all.filter(function(t){ return t.task_status === 'New' || t.task_status === 'InProgress'; });
+      if (!all.length) { box.innerHTML = '<span class="lmphnote">No tasks on file for this unit.</span>'; return; }
+      var show = open.length ? open : all.slice(0, 5);
+      box.innerHTML = '<div class="lmphnote" style="margin-bottom:6px">' + open.length + ' open' +
+          (all.length > open.length ? ' &middot; ' + all.length + ' total' : '') + '</div>' +
+        show.map(function(t){
+          var meta = [];
+          if (t.due_date) meta.push((t.is_overdue ? '<span class="ovr">overdue ' : 'due ') + esc(t.due_date) + (t.is_overdue ? '</span>' : ''));
+          else if (t.category_name) meta.push(esc(t.category_name));
+          return '<div class="trow"><span class="tn">' + taskStatusChip(t.task_status) + '</span>' +
+            '<span style="min-width:0"><b>' + esc(t.title || '–') + '</b>' + (meta.length ? ' <span class="lmphnote">· ' + meta.join(' · ') + '</span>' : '') + '</span>' +
+            '<button type="button" class="listbtn" data-taskfull="' + t.task_id + '">open &#9656;</button></div>';
+        }).join('');
+    }).catch(function(){ box.textContent = 'Tasks unavailable right now.'; });
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-taskfull]'); if (!b) return; openTask(b.getAttribute('data-taskfull'));
+  });
+
   var COLF_DEF = {
     vtable: { rows:function(){ return tableRows || []; }, redraw:function(){ drawTable(); }, cols:{
       bedrooms:{ t:'enum', label:'Bed' },
@@ -2884,6 +3141,13 @@
       date_out:{ t:'date', label:'Out' },
       date_expected:{ t:'date', label:'Due back' }
     }},
+    ttable: { rows:function(){ return scopedTasks(); }, redraw:function(){ drawTasks(); }, cols:{
+      task_type:{ t:'enum', label:'Type', disp:taskTypeNice },
+      task_status:{ t:'enum', label:'Status' },
+      priority:{ t:'enum', label:'Priority' },
+      category_name:{ t:'enum', label:'Category' },
+      due_date:{ t:'date', label:'Due' }
+    }},
     htable: { rows:function(){ return historyAll || []; }, redraw:function(){ drawHistory(); }, cols:{
       event_type:{ t:'enum', label:'Event', disp:function(v){ return CF_EVT[v] || v; } },
       created_at:{ t:'date', label:'When', get:function(r){ return (r.created_at||'').slice(0,10); } }
@@ -2898,6 +3162,7 @@
     rtable: { get:function(){ return rSort; }, set:function(c,d){ rSort={k:c,d:d}; drawTours(); } },
     otable: { get:function(){ return oSort; }, set:function(c,d){ oSort={k:c,d:d}; drawOwners(); } },
     ktable: { get:function(){ return kSort; }, set:function(c,d){ kSort={k:c,d:d}; drawKeys(); } },
+    ttable: { get:function(){ return tSort; }, set:function(c,d){ tSort={k:c,d:d}; drawTasks(); } },
     htable: { get:function(){ return hSort; }, set:function(c,d){ hSort={k:c,d:d}; drawHistory(); } }
   };
   var AUTO_MAX = 300;   // an unconfigured header with <= this many distinct values shows a value checklist; else text search
@@ -3603,6 +3868,7 @@
     el('lm-unit').setAttribute('data-uid', uid);
     openModal('lmodal');
     mountKeyPanel(el('lm-keys'), uid, (r.property || '') + (r.unit ? ' · ' + r.unit : ''));
+    mountTaskPanel(el('lm-tasks'), uid);
     authFetch('/photos?unit_id=' + encodeURIComponent(uid))
       .then(function(j){
         curPhotosLm = (j && j.photos) || [];
@@ -4060,6 +4326,7 @@
     el('um-phbar').style.display = 'none';
     openModal('umodal');
     mountKeyPanel(el('um-keys'), uid, (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : ''));
+    mountTaskPanel(el('um-tasks'), uid);
 
     if (r.lease_id) {
       authFetch('/unit?unit_id=' + encodeURIComponent(uid))
@@ -4422,6 +4689,14 @@
     var tr = e.target.closest('tr[data-uid]'); if (tr) openUnitEnsure(tr.getAttribute('data-uid'));
   });
   el('kpi-renewals').addEventListener('click', function(){ showTab('renewals'); });
+  el('kpi-tasks').addEventListener('click', function(){
+    tSel = {}; showTab('tasks');               // showTab loads tasks if not yet loaded
+    if (tasksAll !== null) { drawTaskChips(); drawTasks(); }
+  });
+  el('kpi-overdue').addEventListener('click', function(){
+    tSel = { overdue:1 }; showTab('tasks');     // filter is applied by the load's drawTasks
+    if (tasksAll !== null) { drawTaskChips(); drawTasks(); }
+  });
   function gotoRenewals(state){
     rnSel = {}; if (state) rnSel[state] = 1;
     showTab('renewals');

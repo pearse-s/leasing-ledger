@@ -756,6 +756,15 @@ window.addEventListener('error', function(e){
   #um-detwrap > #um-tenants,#um-detwrap > #um-tasks{padding:0 12px 11px}
   #um-feed .rmfi{border-bottom:1px solid var(--hairline-dark);padding:9px 0}
   #um-feed .rmfi:last-child{border-bottom:none}
+  /* task modal — pattern redesign: top action row + collapsed details + history feed */
+  #tm-actrow{margin-bottom:12px}
+  #tm-detwrap{margin:6px 0 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  #tm-detwrap summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+  #tm-detwrap summary::-webkit-details-marker{display:none}
+  #tm-detwrap summary::after{content:'▾';float:right;opacity:.6}
+  #tm-detwrap[open] summary::after{content:'▴'}
+  #tm-detwrap .fgrid{padding:2px 12px 0}
+  #tm-detwrap .note{margin:2px 12px 10px}
 
   /* v5: clickable sections, app/tour tabs, vacant filters */
   /* ── clickable affordances — make it obvious what's interactive ── */
@@ -1767,13 +1776,14 @@ window.addEventListener('error', function(e){
       <div class="lmsub" id="tm-sub"></div>
     </div>
     <div class="lmbody">
-      <div class="fgrid" id="tm-fields"></div>
-      <div class="note" id="tm-desc" style="display:none"></div>
-      <div id="tm-wo" style="display:none;margin-top:10px"></div>
-      <div class="sect">History</div>
-      <div id="tm-history" class="khist lmphnote">&nbsp;</div>
+      <div class="rm-actrow" id="tm-actrow"></div>
+      <details id="tm-detwrap"><summary>Task details</summary>
+        <div class="fgrid" id="tm-fields"></div>
+        <div class="note" id="tm-desc" style="display:none"></div>
+        <div id="tm-wo" style="display:none;margin-top:10px"></div>
+      </details>
+      <div class="rm-feedwrap"><div class="rm-feedlab">History</div><div id="tm-history" class="khist lmphnote">&nbsp;</div></div>
     </div>
-    <div class="lmfoot" id="tm-links"></div>
   </div>
 </div>
 
@@ -3280,7 +3290,7 @@ window.addEventListener('error', function(e){
   function openTask(taskId){
     el('tm-title').textContent = 'Loading…'; el('tm-sub').innerHTML = '';
     el('tm-fields').innerHTML = ''; el('tm-desc').style.display = 'none';
-    el('tm-wo').style.display = 'none'; el('tm-links').innerHTML = ''; el('tm-history').innerHTML = '&nbsp;';
+    el('tm-wo').style.display = 'none'; el('tm-actrow').innerHTML = ''; el('tm-history').innerHTML = '&nbsp;';
     openModal('tmodal');
     authFetch('/task?task_id=' + encodeURIComponent(taskId)).then(function(j){
       renderTask(j.task, j.detail); loadTaskHistory(taskId);
@@ -3313,11 +3323,12 @@ window.addEventListener('error', function(e){
         (r.wo_amount != null ? fmtMoney(r.wo_amount) : '$0') +
         (r.wo_count > 1 ? ' &middot; +' + (r.wo_count - 1) + ' more' : '') + '</div>';
     } else el('tm-wo').style.display = 'none';
-    var tlinks = '<a class="btn primary" target="_blank" rel="noopener" href="' + BMGR + '/tasks/' + r.task_id + '/task-summary?searchOption=new">Open in Buildium &rarr;</a>';
-    if (r.unit_id) tlinks += '<button type="button" class="btn" data-tunit="' + r.unit_id + '">View unit &rarr;</button>';
-    el('tm-links').innerHTML = tlinks;
+    var tlinks = '<a class="btn primary rmact" target="_blank" rel="noopener" href="' + BMGR + '/tasks/' + r.task_id + '/task-summary?searchOption=new">Open in Buildium &rarr;</a>';
+    if (r.unit_id) tlinks += '<button type="button" class="btn rmact" data-tunit="' + r.unit_id + '">View unit &rarr;</button>';
+    el('tm-actrow').innerHTML = tlinks;
+    el('tm-detwrap').open = false;
   }
-  el('tm-links').addEventListener('click', function(e){
+  el('tm-actrow').addEventListener('click', function(e){
     var b = e.target.closest('[data-tunit]'); if (!b) return;
     closeModal('tmodal'); openUnitEnsure(b.getAttribute('data-tunit'));
   });

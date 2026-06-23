@@ -10,6 +10,28 @@
 <meta http-equiv="Expires" content="0">
 <meta name="ll-build" content="2026-06-17-cool">
 <script>window.LL_BUILD='2026-06-22-tasks-tab';</script>
+<script>
+/* BOOT-CRASH GUARD — do not remove. The app runs as one big IIFE under 'use strict'
+   with no try/catch, so ANY uncaught error during init aborts the boot: the page is
+   left on the loading veil with a blank Activity Window and only comes alive after a
+   tab click (showTab is bound early; winRender + the auth boot run late). That failure
+   mode is SILENT and has shipped twice. This surfaces a boot-time error as a visible
+   red banner so it cannot pass testing unnoticed. window.__llBooted is set true at the
+   very end of init; an uncaught error before that == a boot crash. After ANY html.ts
+   change, verify a CLEAN refresh boots on its own (window populates, /stats fires)
+   WITHOUT clicking a tab. */
+window.addEventListener('error', function(e){
+  if (window.__llBooted) return;
+  try {
+    var v = document.getElementById('veil'); if (v) v.classList.add('hide');
+    var b = document.getElementById('booterr');
+    if (!b) { b = document.createElement('div'); b.id = 'booterr';
+      b.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#7a1f1f;color:#fff;font:13px/1.45 ui-sans-serif,system-ui,sans-serif;padding:10px 16px';
+      (document.body || document.documentElement).appendChild(b); }
+    b.textContent = 'Dashboard failed to start (boot crash) - ' + ((e && e.message) || 'script error') + ' @ ' + ((e && e.lineno) || '?') + ':' + ((e && e.colno) || '?');
+  } catch(_) {}
+}, true);
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -792,22 +814,53 @@
   .rmlinkback,.rmlinkunlink{font-family:var(--sans);font-size:.74rem;font-weight:700;cursor:pointer;color:var(--ink-soft);background:transparent;border:1px solid var(--hairline-dark);border-radius:999px;padding:5px 11px}
   .rmlinkback:hover,.rmlinkunlink:hover{border-color:var(--clay);color:var(--ink)}
   .rmlinkunlink{margin-top:10px;width:100%}
-  /* showing notes (ledger-only) */
-  #rm-notes:not(:empty){margin:12px 0 2px;padding:11px 13px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
-  .rmnotelist{display:flex;flex-direction:column;gap:8px;margin:7px 0;max-height:160px;overflow:auto}
-  .rmnote{border-left:2px solid var(--clay);padding:2px 0 2px 9px}
-  .rmnotetxt{font-size:.86rem;color:var(--ink);white-space:pre-wrap}
-  #rm-noteinput{width:100%;box-sizing:border-box;font-family:var(--sans);font-size:.86rem;color:var(--ink);background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:9px 11px;margin-bottom:7px;resize:vertical}
-  #rm-noteinput:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
+  /* tour modal — action rows, prospect strip, activity feed, pinned composer */
+  .rm-actrow,.rm-morerow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+  .rm-morerow{margin-top:-2px}
+  .rmact{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-align:center;padding:10px 12px;font-size:.8rem}
+  .rmact2{flex:1 1 calc(50% - 4px);display:inline-flex;align-items:center;justify-content:center;gap:5px;text-align:center;padding:9px 10px;font-size:.76rem}
+  .rmact-ghost{flex:0 0 auto}
   #rm-cancel{border-color:#d9534f;color:#ff8a85}
   #rm-cancel:hover{background:#d9534f;color:#fff;border-color:#d9534f}
+  #rm-detwrap{margin:2px 0 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  #rm-detwrap summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+  #rm-detwrap summary::-webkit-details-marker{display:none}
+  #rm-detwrap summary::after{content:'▾';float:right;opacity:.6}
+  #rm-detwrap[open] summary::after{content:'▴'}
+  #rm-detwrap .rmrow{padding-left:12px;padding-right:12px}
+  .rmpro{display:flex;align-items:center;gap:11px;padding:11px 0;border-top:1px solid var(--hairline-dark);border-bottom:1px solid var(--hairline-dark);margin-bottom:6px}
+  .rmav{width:40px;height:40px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.86rem;background:var(--clay-soft);color:var(--clay)}
+  .rmpro-main{flex:1;min-width:0}
+  .rmpro-name{font-size:.95rem;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rmpro-stat{font-size:.73rem;color:var(--ink-soft);margin-top:1px}
+  .rmpro-stat .warn{color:#ff8a85;font-weight:700}
+  .rmpro-acts{display:flex;gap:8px;flex-shrink:0}
+  .rmpro-acts a{font-size:1rem;text-decoration:none;color:var(--ink-soft);width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--hairline-dark);border-radius:50%}
+  .rmpro-acts a:hover{color:var(--clay);border-color:var(--clay)}
+  .rm-feedlab{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:8px 0 4px}
+  .rmfi{display:flex;gap:9px;padding:7px 0;font-size:.84rem}
+  .rmfi-ic{flex-shrink:0;width:18px;text-align:center;font-size:.92rem;margin-top:1px}
+  .rmfi-main{min-width:0}
+  .rmfi-t{color:var(--ink)}
+  .rmfi-s{font-size:.72rem;color:var(--ink-soft);margin-top:1px}
+  .rmfi.cur{background:var(--glass-2);border-radius:var(--r-sm);padding-left:8px;padding-right:8px;margin:0 -8px}
+  .rmfi.cur .rmfi-t{font-weight:700}
+  .rmfi-note .rmfi-t{white-space:pre-wrap}
+  .rmfi-note .rmfi-ic{color:var(--clay)}
+  .rm-compose{display:flex;gap:8px;align-items:center}
+  #rm-noteinput{flex:1;min-width:0;box-sizing:border-box;font-family:var(--sans);font-size:.86rem;color:var(--ink);background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:10px 12px}
+  #rm-noteinput:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
+  .rm-send{flex-shrink:0;width:40px;height:40px;border:none;border-radius:var(--r-sm);cursor:pointer;background:var(--accent-grad);color:var(--on-accent);font-size:1.05rem;box-shadow:var(--accent-glow)}
+  .rm-send:hover{filter:brightness(1.08)}
+  .rm-send:disabled{background:var(--hairline-dark);color:var(--ink-soft);box-shadow:none;cursor:default}
   @media(max-width:768px){
     .agchip,.chip-mini,.mybtn{padding:8px 13px;font-size:.82rem}
     .presets button{padding:9px 13px;font-size:.82rem}
     .rfreshbtn{padding:8px 14px;font-size:.82rem}
     #rtable td,#rtable th{padding-top:11px;padding-bottom:11px}
-    .rm-bigbtn{flex:1 1 calc(50% - 5px);min-width:0;padding:13px 10px}
-    .rmfoot{flex-flow:row wrap;gap:8px}
+    .rmcard{width:calc(100vw - 14px);max-height:93vh}
+    .rmact{flex:1 1 calc(50% - 4px);min-width:0;padding:12px 10px}
+    .rmact-ghost{flex:1 1 calc(50% - 4px)}
   }
   .rmrow{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--hairline-dark);font-size:.84rem}
   .rmrow:last-child{border-bottom:none}
@@ -4924,28 +4977,30 @@
     if (r.is_no_show) body += rowH('No-show', '<span class="chip c-hot">no-show</span>' + (r.no_show_by ? ' marked by ' + esc(r.no_show_by) : ''));
     if (r.is_manual_link) body += rowH('Link', '<span class="chip c-warm">manual</span>' + (r.manual_linked_by ? ' by ' + esc(r.manual_linked_by) : ''));
     el('rm-body').innerHTML = body;
-    // prospect (the person viewing) — name + tap-to-call/text/email
-    var cc = '';
+    el('rm-detwrap').open = false;
+    // Prospect strip — avatar + name + contact actions; the stat line fills in once
+    // the prospect history loads (showings / no-shows / notes).
+    var pc = '';
     if (r.invitee_name || r.invitee_email || r.invitee_phone) {
-      cc += '<div class="rmcontact"><div class="rmclab">Prospect</div>';
-      cc += '<div class="rmcname">' + esc(r.invitee_name || 'Prospect') + '</div>';
-      var det = [];
-      if (r.invitee_phone) det.push(esc(r.invitee_phone));
-      if (r.invitee_email) det.push(esc(r.invitee_email));
-      if (det.length) cc += '<div class="rmcdet">' + det.join(' · ') + '</div>';
-      cc += '<div class="rmcbtns">';
+      var nm = (r.invitee_name || r.invitee_email || '?').trim();
+      var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+      pc += '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div>';
+      pc += '<div class="rmpro-main"><div class="rmpro-name">' + esc(r.invitee_name || 'Prospect') + '</div>';
+      pc += '<div class="rmpro-stat" id="rm-prostat">' + esc(r.invitee_email || r.invitee_phone || '') + '</div></div>';
+      pc += '<div class="rmpro-acts">';
       if (r.invitee_phone) {
         var tel = r.invitee_phone.replace(/[^0-9+]/g, '');
-        cc += '<a class="ccbtn" href="' + rcCall(esc(tel)) + '">&#128222; Call</a>';
-        cc += '<a class="ccbtn" href="' + rcText(esc(tel)) + '">&#128172; Text</a>';
+        pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a>';
+        pc += '<a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>';
       }
-      if (r.invitee_email) cc += '<a class="ccbtn" href="mailto:' + esc(r.invitee_email) + '">&#9993;&#65039; Email</a>';
-      cc += '</div></div>';
+      if (r.invitee_email) pc += '<a href="mailto:' + esc(r.invitee_email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
+      pc += '</div></div>';
     }
-    el('rm-contact').innerHTML = cc;
+    el('rm-contact').innerHTML = pc;
     el('rm-pick').innerHTML = '';
     el('rm-link').innerHTML = ''; el('rm-link').removeAttribute('data-open');
     el('rm-linkbtn').innerHTML = r.matched_property_id ? '&#128279; Change link' : '&#128279; Link to a unit';
+    el('rm-morerow').hidden = true; el('rm-more').innerHTML = '&#8943; More';
     var addr = r.location_text || r.matched_property_name || '';
     var mapA = el('rm-map');
     if (addr) { mapA.style.display = ''; mapA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr); }
@@ -4968,38 +5023,66 @@
     var canNoShow = r.invitee_uri && r.status !== 'canceled' && s !== 'upcoming';
     if (r.is_no_show || canNoShow) { nsB.style.display = ''; nsB.disabled = false; nsB.innerHTML = r.is_no_show ? '&#8617; Undo no-show' : '&#8856; Mark no-show'; }
     else { nsB.style.display = 'none'; }
-    // Showing notes (ledger-only).
-    el('rm-notes').innerHTML =
-      '<div class="rmclab">Showing notes</div>' +
-      '<div id="rm-notelist" class="rmnotelist"></div>' +
-      '<textarea id="rm-noteinput" rows="2" placeholder="Add a note about this showing…"></textarea>' +
-      '<button type="button" id="rm-noteadd" class="btn">Add note</button> <span id="rm-notemsg" class="count-note"></span>';
-    loadTourNotes(r.uri);
+    var ni = el('rm-noteinput'); if (ni) { ni.value = ''; ni.disabled = false; }
+    var sb = el('rm-noteadd'); if (sb) sb.disabled = false;
+    el('rm-feedlab').textContent = ''; el('rm-feed').innerHTML = '';
+    loadProspectFeed(r);
     openModal('rmodal');
   }
-  function loadTourNotes(uri){
-    var box = el('rm-notelist'); if (!box) return;
-    box.innerHTML = '<span class="count-note">Loading…</span>';
-    authFetch('/tour-notes?event_uri=' + encodeURIComponent(uri)).then(function(j){
-      var notes = j.notes || [];
-      if (!notes.length) { box.innerHTML = '<span class="count-note">No notes yet.</span>'; return; }
-      box.innerHTML = notes.map(function(n){
-        var w = n.created_at ? new Date(Date.parse(n.created_at)).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
-        return '<div class="rmnote"><div class="count-note">' + esc(n.actor || '—') + ' · ' + esc(w) + '</div><div class="rmnotetxt">' + esc(n.note || '') + '</div></div>';
+  // Activity feed: this prospect's showings + notes (across ALL their tours, keyed by
+  // email), merged newest-first. Also fills the prospect stat line + no-show flag.
+  function loadProspectFeed(r){
+    var feed = el('rm-feed'), lab = el('rm-feedlab'); if (!feed) return;
+    var email = (r.invitee_email || '').trim();
+    if (!email) { lab.textContent = 'Notes'; feed.innerHTML = '<span class="count-note">No prospect email on this tour — notes can’t be grouped by person.</span>'; return; }
+    lab.textContent = 'Activity · across all their tours';
+    feed.innerHTML = '<span class="count-note">Loading…</span>';
+    authFetch('/prospect-history?email=' + encodeURIComponent(email)).then(function(j){
+      var showings = j.showings || [], notes = j.notes || [];
+      var noshows = showings.filter(function(x){ return x.is_no_show; });
+      var stat = el('rm-prostat');
+      if (stat) {
+        var bits = [showings.length + (showings.length === 1 ? ' showing' : ' showings')];
+        if (noshows.length) bits.push('<span class="warn">' + noshows.length + ' no-show' + (noshows.length === 1 ? '' : 's') + '</span>');
+        bits.push(notes.length + (notes.length === 1 ? ' note' : ' notes'));
+        stat.innerHTML = bits.join(' · ');
+      }
+      var items = [];
+      showings.forEach(function(x){ items.push({ kind: 'showing', at: Date.parse(x.start_time), s: x }); });
+      notes.forEach(function(n){ items.push({ kind: 'note', at: Date.parse(n.created_at), n: n }); });
+      items.sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+      if (!items.length) { feed.innerHTML = '<span class="count-note">No history yet — add the first note below.</span>'; return; }
+      feed.innerHTML = items.map(function(it){
+        if (it.kind === 'note') {
+          var n = it.n;
+          var wn = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+          var on = n.property_name ? ' · on ' + esc(n.property_name) : '';
+          return '<div class="rmfi rmfi-note"><div class="rmfi-ic">&#128172;</div><div class="rmfi-main"><div class="rmfi-t">' + esc(n.note || '') + '</div><div class="rmfi-s">' + esc(n.actor || '—') + ' · ' + esc(wn) + on + '</div></div></div>';
+        }
+        var x = it.s, icon, verb;
+        if (x.is_no_show) { icon = '&#8856;'; verb = 'No-show'; }
+        else if (x.status === 'canceled') { icon = x.rescheduled ? '&#8635;' : '&#10006;'; verb = x.rescheduled ? 'Rescheduled' : 'Canceled'; }
+        else if (Date.parse(x.start_time) >= Date.now()) { icon = '&#128197;'; verb = 'Booked'; }
+        else { icon = '&#10003;'; verb = 'Showed'; }
+        var place = (x.matched_property_name || 'Tour') + (x.matched_unit_number ? ' · ' + x.matched_unit_number : '');
+        var ws = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+        var sub = ws + (x.agent ? ' · ' + esc(x.agent) : '') + (x.is_no_show && x.no_show_by ? ' · by ' + esc(x.no_show_by) : '');
+        var cur = (x.uri === r.uri) ? ' cur' : '';
+        return '<div class="rmfi' + cur + '"><div class="rmfi-ic">' + icon + '</div><div class="rmfi-main"><div class="rmfi-t">' + verb + ' · ' + esc(place) + (cur ? ' <span class="count-note">(this tour)</span>' : '') + '</div><div class="rmfi-s">' + sub + '</div></div></div>';
       }).join('');
-    }).catch(function(){ box.innerHTML = '<span class="count-note">Could not load notes.</span>'; });
+    }).catch(function(){ feed.innerHTML = '<span class="count-note">Could not load history.</span>'; });
   }
   function addTourNote(){
     var r = curTour; if (!r) return;
     var actor = (getActor() || '').trim();
-    var ta = el('rm-noteinput'), msg = el('rm-notemsg');
-    if (!actor) { if (msg) msg.textContent = 'Pick your name in the sidebar “Acting as” first.'; return; }
+    var ta = el('rm-noteinput'), send = el('rm-noteadd');
+    if (!actor) { alert('Pick your name on the sign-in screen (or the “Acting as” picker) first.'); return; }
     var txt = (ta && ta.value || '').trim();
-    if (!txt) { if (msg) msg.textContent = 'Type a note first.'; return; }
-    if (msg) msg.textContent = 'Saving…';
+    if (!txt) { if (ta) ta.focus(); return; }
+    if (ta) ta.disabled = true; if (send) send.disabled = true;
     postJSON('/tour/note', { event_uri: r.uri, invitee_uri: r.invitee_uri || null, note: txt, actor: actor })
-      .then(function(){ if (ta) ta.value = ''; if (msg) msg.textContent = ''; loadTourNotes(r.uri); })
-      .catch(function(err){ if (msg) msg.textContent = 'Could not save: ' + esc(String((err && err.message) || err)); });
+      .then(function(){ if (ta) { ta.value = ''; ta.disabled = false; ta.focus(); } if (send) send.disabled = false; loadProspectFeed(r); })
+      .catch(function(err){ if (ta) ta.disabled = false; if (send) send.disabled = false; alert('Could not save note: ' + String((err && err.message) || err)); });
   }
   function toggleNoShow(){
     var r = curTour; if (!r || !r.invitee_uri) return;
@@ -5258,7 +5341,12 @@
   el('rm-listing').addEventListener('click', function(){ if (curTour) tourGoto('listing'); });
   el('rm-unit').addEventListener('click', function(){ if (curTour) tourGoto('unit'); });
   el('rm-noshow').addEventListener('click', toggleNoShow);
-  el('rm-notes').addEventListener('click', function(e){ if (e.target && e.target.id === 'rm-noteadd') addTourNote(); });
+  el('rm-noteadd').addEventListener('click', addTourNote);
+  el('rm-noteinput').addEventListener('keydown', function(e){ if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addTourNote(); } });
+  el('rm-more').addEventListener('click', function(){
+    var row = el('rm-morerow'); row.hidden = !row.hidden;
+    el('rm-more').innerHTML = row.hidden ? '&#8943; More' : '&#8743; Less';
+  });
   el('rm-pick').addEventListener('click', function(e){
     var b = e.target.closest('.listbtn'); if (!b) return;
     var uid = b.getAttribute('data-uid');
@@ -5491,6 +5579,7 @@
   } else {
     showLogin();
   }
+  window.__llBooted = true;   // synchronous init finished without throwing — disarms the boot-crash guard
 })();
 </script>
 </body>

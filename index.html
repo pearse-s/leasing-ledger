@@ -706,6 +706,22 @@ window.addEventListener('error', function(e){
   .khrow .khd{color:var(--ink-soft);font-size:.72rem;white-space:nowrap;min-width:120px;font-variant-numeric:tabular-nums}
   .khrow .khw{font-weight:700;min-width:92px}
   .khrow .kht{flex:1;color:var(--ink)}
+  /* key modal — pattern redesign: top action row, context strip, collapsed details, history chips, composer */
+  #km-actions{margin-bottom:12px}
+  .btn.kaddset{border-color:var(--clay);color:var(--clay);font-weight:800}
+  .btn.kaddset:hover{background:var(--accent-grad);color:var(--on-accent);border-color:transparent}
+  .km-ctx{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 0;border-top:1px solid var(--hairline-dark);border-bottom:1px solid var(--hairline-dark);margin-bottom:8px;font-size:.82rem}
+  .km-ctxt{color:var(--ink-soft)}
+  #km-detwrap{margin:6px 0 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  #km-detwrap summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+  #km-detwrap summary::-webkit-details-marker{display:none}
+  #km-detwrap summary::after{content:'▾';float:right;opacity:.6}
+  #km-detwrap[open] summary::after{content:'▴'}
+  #km-detwrap .fgrid{padding:2px 12px 0}
+  #km-adminrow{margin:8px 0 2px}
+  .km-compose{display:flex;gap:8px;align-items:center}
+  #km-noteinput{flex:1;min-width:0;box-sizing:border-box;font-family:var(--sans);font-size:.86rem;color:var(--ink);background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:10px 12px}
+  #km-noteinput:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
 
   /* v5: clickable sections, app/tour tabs, vacant filters */
   /* ── clickable affordances — make it obvious what's interactive ── */
@@ -1649,14 +1665,28 @@ window.addEventListener('error', function(e){
       <div class="lmsub" id="km-sub"></div>
     </div>
     <div class="lmbody">
-      <div class="fgrid" id="km-fields"></div>
-      <div class="note" id="km-standing" style="display:none"></div>
-      <div class="kactions" id="km-actions"></div>
+      <div class="rm-actrow" id="km-actions"></div>
       <div class="kform" id="km-form" style="display:none"></div>
-      <div class="sect">History</div>
-      <div id="km-history" class="khist lmphnote">&nbsp;</div>
+      <div id="km-detailview">
+        <div id="km-context"></div>
+        <div id="km-sets"></div>
+        <div class="note" id="km-standing" style="display:none"></div>
+        <details id="km-detwrap"><summary>Key details</summary>
+          <div class="fgrid" id="km-fields"></div>
+          <div class="kactions adminonly" id="km-adminrow"></div>
+          <div id="km-links" style="margin:2px 12px 11px"></div>
+        </details>
+        <div class="rm-feedwrap">
+          <div class="rm-feedlab">History</div>
+          <div class="lm-feedchips" id="km-histchips"></div>
+          <div id="km-history" class="khist lmphnote">&nbsp;</div>
+        </div>
+      </div>
     </div>
-    <div class="lmfoot" id="km-links"></div>
+    <div class="lmfoot km-compose" id="km-compose">
+      <input type="text" id="km-noteinput" placeholder="Add a note to this key…" autocomplete="off">
+      <button type="button" id="km-noteadd" class="rm-send" aria-label="Add note">&#10148;</button>
+    </div>
   </div>
 </div>
 
@@ -2442,6 +2472,7 @@ window.addEventListener('error', function(e){
     el('km-sub').innerHTML = (ctx && ctx.property_name) ? (esc(ctx.property_name) + (ctx.unit_number ? ' · ' + esc(ctx.unit_number) : '')) : 'New key set';
     el('km-fields').innerHTML = ''; el('km-standing').style.display = 'none';
     el('km-actions').innerHTML = ''; el('km-links').innerHTML = ''; el('km-history').innerHTML = '&nbsp;';
+    el('km-detailview').style.display = 'none'; el('km-compose').style.display = 'none';
     openModal('kmodal'); showKeyForm('create');
   }
   // admin: attach an existing unlinked key to a unit that has none (opened from a unit panel)
@@ -2452,18 +2483,58 @@ window.addEventListener('error', function(e){
     el('km-sub').innerHTML = 'Attach a key to <b>' + esc(kAttachTarget.label) + '</b>';
     el('km-fields').innerHTML = ''; el('km-standing').style.display = 'none';
     el('km-actions').innerHTML = ''; el('km-links').innerHTML = ''; el('km-history').innerHTML = '&nbsp;';
+    el('km-detailview').style.display = 'none'; el('km-compose').style.display = 'none';
     openModal('kmodal'); showKeyForm('attach');
   }
   function renderKey(){
     var r = kCur; if (!r) return;
+    el('km-detailview').style.display = ''; el('km-compose').style.display = '';
     el('km-title').textContent = r.property_name ? (r.property_name + ' · ' + (r.unit_number || '')) : r.label;
     var sub = [keyChip(r.status)];
     if (r.property_name && r.label) sub.push('Monday: ' + esc(r.label));
-    if (r.holder) sub.push('held by <b>' + esc(r.holder) + '</b>');
+    if (r.bin != null && r.bin !== '') sub.push('Bin ' + esc(r.bin));
+    if (r.holder) sub.push('held by <b>' + esc(r.holder) + '</b>' + (r.date_expected ? ', due ' + esc(r.date_expected) + (r.is_overdue ? ' <span class="ovr">overdue</span>' : '') : ''));
     el('km-sub').innerHTML = sub.join(' &middot; ');
+    // primary action row (top)
+    var a = '';
+    if (r.status === 'out_of_office') a += '<button type="button" class="btn primary rmact" data-kact="checkin">Check in</button>';
+    else a += '<button type="button" class="btn primary rmact" data-kact="checkout">Check out</button>';
+    a += '<button type="button" class="btn rmact" data-kact="status">Change status</button>';
+    if (r.unit_id) a += '<button type="button" class="btn rmact" data-kunit="' + r.unit_id + '">View unit &rarr;</button>';
+    // "+ Add key set" = add another set to this bin. General users may only add when a
+    // bin exists (the same-bin rule); admins can always (the server enforces this too).
+    if (IS_ADMIN || (r.bin != null && r.bin !== '')) {
+      a += '<button type="button" class="btn rmact kaddset" data-kact="create" title="Add another key set in this bin">+ Add key set</button>';
+    }
+    el('km-actions').innerHTML = a;
+    // admin actions live inside the collapsed details
+    var adm = '';
+    if (IS_ADMIN) {
+      adm += '<button type="button" class="btn" data-kact="edit">Edit details</button>';
+      adm += '<button type="button" class="btn" data-kact="link">' + (r.unit_id ? 'Change unit' : 'Link to unit') + '</button>';
+      adm += '<button type="button" class="btn danger" data-kact="delete">Delete</button>';
+    }
+    el('km-adminrow').innerHTML = adm;
+    // unit-context strip
+    if (r.property_name && (r.occupancy_status || r.tenant_names || r.lease_to_date || r.property_manager_name)) {
+      var occ = r.occupancy_status ? (STATUS_CHIP[r.occupancy_status] || esc(r.occupancy_status)) : '';
+      var bits = [];
+      if (r.tenant_names) bits.push(esc(r.tenant_names));
+      if (r.lease_to_date) bits.push('ends ' + esc(r.lease_to_date));
+      if (r.property_manager_name) bits.push(esc(r.property_manager_name));
+      el('km-context').innerHTML = '<div class="km-ctx">' + occ + '<span class="km-ctxt">' + bits.join(' &middot; ') + '</span></div>';
+    } else el('km-context').innerHTML = '';
+    // set-switcher
+    var sw = '';
+    if (kGroup && kGroup.length > 1) {
+      sw = '<div class="ksetbar"><span class="cslabel">Sets in this bin</span>';
+      kGroup.forEach(function(s, i){ sw += '<button type="button" class="ksetchip' + (s.key_id === r.key_id ? ' on' : '') + '" data-setid="' + s.key_id + '">Set ' + (i + 1) + ' &middot; ' + esc(KEYLBL(s.status)) + '</button>'; });
+      sw += '</div>';
+    }
+    el('km-sets').innerHTML = sw;
+    // detail fields (collapsed)
     var f = '';
     f += fitem('Bin', esc(r.bin));
-    f += fitem('Status', keyChip(r.status));
     if (r.status === 'out_of_office') {
       f += fitem('Holder', esc(r.holder));
       f += fitem('Date out', esc(r.date_out));
@@ -2475,44 +2546,23 @@ window.addEventListener('error', function(e){
     f += fitem('Parking pass', esc(r.parking_pass));
     f += fitem('Garage opener', esc(r.garage_opener));
     f += fitem('Mailbox', esc(r.mailbox));
-    if (r.property_name) {
-      f += fitem('Occupancy', r.occupancy_status ? (STATUS_CHIP[r.occupancy_status] || esc(r.occupancy_status)) : null);
-      f += fitem('Tenant', esc(r.tenant_names));
-      f += fitem('Lease end', esc(r.lease_to_date));
-      f += fitem('Manager', esc(r.property_manager_name));
-    }
-    var sw = '';
-    if (kGroup && kGroup.length > 1) {
-      sw = '<div class="ksetbar"><span class="cslabel">Sets in this bin</span>';
-      kGroup.forEach(function(s, i){ sw += '<button type="button" class="ksetchip' + (s.key_id === r.key_id ? ' on' : '') + '" data-setid="' + s.key_id + '">Set ' + (i + 1) + ' &middot; ' + esc(KEYLBL(s.status)) + '</button>'; });
-      sw += '</div>';
-    }
-    el('km-fields').innerHTML = sw + f;
+    el('km-fields').innerHTML = f;
     if (r.standing_note) { el('km-standing').style.display = 'block'; el('km-standing').innerHTML = '<b>Standing note:</b> ' + esc(r.standing_note); }
     else el('km-standing').style.display = 'none';
-    var a = '';
-    if (r.status === 'out_of_office') a += '<button type="button" class="btn primary" data-kact="checkin">Check in</button>';
-    else a += '<button type="button" class="btn primary" data-kact="checkout">Check out</button>';
-    a += '<button type="button" class="btn" data-kact="status">Change status</button>';
-    a += '<button type="button" class="btn" data-kact="note">Add note</button>';
-    // "Add key set" = add another set to this bin. General users may only add when a
-    // bin exists (the same-bin rule); admins can always (the server enforces this too).
-    if (IS_ADMIN || (r.bin != null && r.bin !== '')) {
-      a += '<button type="button" class="btn" data-kact="create" title="Add another key set in this bin">Add key set</button>';
-    }
-    if (IS_ADMIN) {
-      a += '<button type="button" class="btn" data-kact="edit">Edit details</button>';
-      a += '<button type="button" class="btn" data-kact="link">' + (r.unit_id ? 'Change unit' : 'Link to unit') + '</button>';
-      a += '<button type="button" class="btn danger" data-kact="delete">Delete</button>';
-    }
-    el('km-actions').innerHTML = a;
     var links = '';
     if (r.unit_id && r.property_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit in Buildium &rarr;</a>';
     el('km-links').innerHTML = links;
+    el('km-detwrap').open = false;
   }
   function kPlus2(){ var d = new Date(); d.setDate(d.getDate() + 2); return d.toISOString().slice(0,10); }
-  el('km-actions').addEventListener('click', function(e){ var b = e.target.closest('[data-kact]'); if (b) showKeyForm(b.getAttribute('data-kact')); });
-  el('km-fields').addEventListener('click', function(e){
+  function kActionClick(e){
+    var u = e.target.closest('[data-kunit]');
+    if (u) { var uid = u.getAttribute('data-kunit'); closeModal('kmodal'); openUnitEnsure(uid); return; }
+    var b = e.target.closest('[data-kact]'); if (b) showKeyForm(b.getAttribute('data-kact'));
+  }
+  el('km-actions').addEventListener('click', kActionClick);
+  el('km-adminrow').addEventListener('click', kActionClick);
+  el('km-sets').addEventListener('click', function(e){
     var c = e.target.closest('.ksetchip'); if (!c) return;
     var id = c.getAttribute('data-setid'), s = null;
     (kGroup || []).forEach(function(x){ if (String(x.key_id) === id) s = x; });
@@ -2773,13 +2823,46 @@ window.addEventListener('error', function(e){
       '<span class="khw">' + evChipK(e.event_type) + '</span>' +
       '<span class="kht">' + (e.actor ? '<b>' + esc(e.actor) + '</b> · ' : '') + khDetail(e) + '</span></div>';
   }
+  var kHist = null, kHistFilter = 'all';
+  function keyHistGroup(t){ return t === 'checkout' ? 'out' : t === 'checkin' ? 'in' : t === 'status_change' ? 'status' : t === 'note' ? 'note' : t === 'create' ? 'added' : 'other'; }
   function loadKeyHistory(kid){
+    kHist = null; kHistFilter = 'all';
+    el('km-histchips').innerHTML = '';
     el('km-history').textContent = 'Loading…';
     authFetch('/key-events?key_id=' + encodeURIComponent(kid)).then(function(j){
-      var ev = (j && j.events) || [];
-      el('km-history').innerHTML = ev.length ? ev.map(khRow).join('') : 'No history yet.';
+      kHist = (j && j.events) || [];
+      renderKeyHistory();
     }).catch(function(){ el('km-history').textContent = 'History unavailable right now.'; });
   }
+  function renderKeyHistory(){
+    var box = el('km-history'), chips = el('km-histchips'); if (!box) return;
+    var ev = kHist || [];
+    if (!ev.length) { box.innerHTML = 'No history yet.'; if (chips) chips.innerHTML = ''; return; }
+    var counts = { all: ev.length, out: 0, 'in': 0, status: 0, note: 0, added: 0 };
+    ev.forEach(function(e){ var g = keyHistGroup(e.event_type); if (counts[g] != null) counts[g]++; });
+    var defs = [['all', 'All'], ['out', 'Check-outs'], ['in', 'Check-ins'], ['status', 'Status'], ['note', 'Notes'], ['added', 'Added']];
+    if (chips) chips.innerHTML = defs.filter(function(d){ return d[0] === 'all' || counts[d[0]] > 0; }).map(function(d){
+      return '<button type="button" class="qchip' + (kHistFilter === d[0] ? ' on' : '') + '" data-kf="' + d[0] + '">' + d[1] + ' <span class="qn">' + counts[d[0]] + '</span></button>';
+    }).join('');
+    var rows = (kHistFilter === 'all') ? ev : ev.filter(function(e){ return keyHistGroup(e.event_type) === kHistFilter; });
+    box.innerHTML = rows.length ? rows.map(khRow).join('') : 'Nothing in this filter.';
+  }
+  el('km-histchips').addEventListener('click', function(e){ var b = e.target.closest('[data-kf]'); if (!b) return; kHistFilter = b.getAttribute('data-kf'); renderKeyHistory(); });
+  // Pinned composer — quick note on the current key (reuses the /key/note path).
+  function kQuickNote(){
+    var r = kCur; if (!r) return;
+    var actor = getActor();
+    if (!actor) { actor = (window.prompt('Your name (for the key log):') || '').trim(); if (!actor) return; try { localStorage.setItem(ACT_KEY, actor); } catch (e) {} }
+    var ta = el('km-noteinput'), send = el('km-noteadd');
+    var txt = (ta && ta.value || '').trim(); if (!txt) { if (ta) ta.focus(); return; }
+    if (ta) ta.disabled = true; if (send) send.disabled = true;
+    postJSON('/key/note', { key_id: r.key_id, actor: actor, note: txt }).then(function(j){
+      if (ta) { ta.value = ''; ta.disabled = false; ta.focus(); } if (send) send.disabled = false;
+      applyKeyUpdate(j);
+    }).catch(function(err){ if (ta) ta.disabled = false; if (send) send.disabled = false; alert('Could not save note: ' + String((err && err.message) || err)); });
+  }
+  el('km-noteadd').addEventListener('click', kQuickNote);
+  el('km-noteinput').addEventListener('keydown', function(e){ if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); kQuickNote(); } });
 
   // ── key panel embedded in the unit + marketed-listing popups ──
   // Shows the key(s) for a unit with status, and Sign-out / Check-in / manage

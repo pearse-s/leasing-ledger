@@ -9,7 +9,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="ll-build" content="2026-06-17-cool">
-<script>window.LL_BUILD='2026-06-23-renewal-col-filter';</script>
+<script>window.LL_BUILD='2026-06-23-units-event-filter';</script>
 <script>
 /* BOOT-CRASH GUARD — do not remove. The app runs as one big IIFE under 'use strict'
    with no try/catch, so ANY uncaught error during init aborts the boot: the page is
@@ -3398,7 +3398,10 @@ window.addEventListener('error', function(e){
     utable: { rows:function(){ return unitsAll || []; }, redraw:function(){ drawUnits(); }, cols:{
       unit_bedrooms:{ t:'enum', label:'Beds' },
       occupancy_status:{ t:'enum', label:'Status', disp:function(v){ return CF_OCC[v] || v; } },
-      unit_event:{ t:'enum', label:'Event' },
+      unit_event:{ t:'enum', label:'Event', multi:true,
+        vals:function(r){ var out = []; if (r.unit_event) out.push(r.unit_event);
+          var rn = rnByUnit[r.unit_id]; if (rn && rn.renewal_state) out.push('renewal:' + rn.renewal_state); return out; },
+        disp:function(v){ return v.indexOf('renewal:') === 0 ? 'Renewal: ' + v.slice(8).toLowerCase() : v; } },
       lease_to_date:{ t:'date', label:'Lease end' },
       monthly_rent:{ t:'num', label:'Rent', get:rentBasis },
       total_balance:{ t:'num', label:'Balance' },
@@ -3475,7 +3478,12 @@ window.addEventListener('error', function(e){
       if (!colActive(tid, col)) continue;
       var d = colDef(tid, col);
       var raw = colVal(tid, col, row), s = st[col];
-      if (d.t === 'enum'){ if (!s.sel[colKeyOf(raw)]) return false; }
+      if (d.t === 'enum'){
+        if (d.multi){ var mv = d.vals(row) || [];
+          if (!mv.length){ if (!s.sel['__blank__']) return false; }
+          else if (!mv.some(function(v){ return s.sel[colKeyOf(v)]; })) return false; }
+        else if (!s.sel[colKeyOf(raw)]) return false;
+      }
       else if (d.t === 'text' || d.t === 'auto'){
         if (Object.keys(s.sel).length){ if (!s.sel[colKeyOf(raw)]) return false; }
         else if (s.q && String(raw == null ? '' : raw).toLowerCase().indexOf(s.q) < 0) return false;
@@ -3492,6 +3500,12 @@ window.addEventListener('error', function(e){
   function colEnumItems(tid, col){
     var d = colDef(tid, col), seen = {}, out = [];
     (COLF_DEF[tid].rows() || []).forEach(function(r){
+      if (d.multi){
+        var mv = d.vals(r) || [];
+        if (!mv.length){ if (!('__blank__' in seen)) seen['__blank__'] = { k:'__blank__', label:colDisp(d, null), raw:null }; }
+        else mv.forEach(function(v){ var k = colKeyOf(v); if (!(k in seen)) seen[k] = { k:k, label:colDisp(d, v), raw:v }; });
+        return;
+      }
       var raw = colVal(tid, col, r), k = colKeyOf(raw);
       if (!(k in seen)) seen[k] = { k:k, label:colDisp(d, raw), raw:raw };
     });

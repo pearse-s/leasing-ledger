@@ -728,6 +728,19 @@ window.addEventListener('error', function(e){
   .km-binbig{display:flex;align-items:center;justify-content:center;gap:12px;margin:0 0 14px;padding:11px 16px;border-radius:var(--r-sm);background:var(--clay-soft);border:1px solid rgba(232,180,62,.32)}
   .km-binbig .lab{font-size:.62rem;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
   .km-binbig .val{font-family:var(--serif);font-weight:700;font-size:1.9rem;line-height:1;color:var(--clay);font-variant-numeric:tabular-nums}
+  /* application modal — pattern redesign: action row, identity strip, collapsed details, feed chips, composer */
+  #am-actrow{margin-bottom:12px}
+  #am-detwrap{margin:6px 0 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  #am-detwrap summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+  #am-detwrap summary::-webkit-details-marker{display:none}
+  #am-detwrap summary::after{content:'▾';float:right;opacity:.6}
+  #am-detwrap[open] summary::after{content:'▴'}
+  #am-detwrap .fgrid{padding:2px 12px 4px}
+  #am-feed .rmfi{border-bottom:1px solid var(--hairline-dark);padding:9px 0}
+  #am-feed .rmfi:last-child{border-bottom:none}
+  .am-compose{display:flex;gap:8px;align-items:center}
+  #am-noteinput{flex:1;min-width:0;box-sizing:border-box;font-family:var(--sans);font-size:.86rem;color:var(--ink);background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:10px 12px}
+  #am-noteinput:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
 
   /* v5: clickable sections, app/tour tabs, vacant filters */
   /* ── clickable affordances — make it obvious what's interactive ── */
@@ -1655,10 +1668,21 @@ window.addEventListener('error', function(e){
       <div class="lmsub" id="am-sub"></div>
     </div>
     <div class="lmbody">
-      <div class="fgrid" id="am-fields"></div>
-      <div id="am-showings"></div>
+      <div class="rm-actrow" id="am-actrow"></div>
+      <div id="am-contact"></div>
+      <details id="am-detwrap"><summary>Application details</summary>
+        <div class="fgrid" id="am-fields"></div>
+      </details>
+      <div class="rm-feedwrap">
+        <div class="rm-feedlab" id="am-feedlab"></div>
+        <div class="lm-feedchips" id="am-feedchips"></div>
+        <div id="am-feed"></div>
+      </div>
     </div>
-    <div class="lmfoot" id="am-links"></div>
+    <div class="lmfoot am-compose" id="am-compose">
+      <input type="text" id="am-noteinput" placeholder="Add a note about this prospect…" autocomplete="off">
+      <button type="button" id="am-noteadd" class="rm-send" aria-label="Add note">&#10148;</button>
+    </div>
   </div>
 </div>
 
@@ -4854,6 +4878,24 @@ window.addEventListener('error', function(e){
     if (!r) return;
     el('am-title').textContent = r.applicant_name || 'Application';
     el('am-sub').innerHTML = appChip(r.application_status) + ' &middot; submitted ' + esc((r.submitted_at||'').slice(0,10));
+    // action row — In Buildium (primary) · View unit · View in Tours
+    var a = '';
+    if (r.applicant_id) a += '<a class="btn primary rmact" target="_blank" rel="noopener" href="' + BMGR + '/leasing/applicant/' + r.applicant_id + '/summary">In Buildium &rarr;</a>';
+    if (r.unit_id) a += '<button type="button" class="btn rmact" data-amunit="' + r.unit_id + '">View unit &rarr;</button>';
+    if (r.applicant_email) a += '<button type="button" class="btn rmact" data-tourq="' + esc(r.applicant_email) + '">View in Tours &rarr;</button>';
+    el('am-actrow').innerHTML = a;
+    // identity strip — the applicant, tap-to-call/text/email
+    var nm = (r.applicant_name || r.applicant_email || '?').trim();
+    var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0,2).toUpperCase();
+    var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div>' +
+      '<div class="rmpro-main"><div class="rmpro-name">' + esc(r.applicant_name || 'Applicant') + '</div>' +
+      '<div class="rmpro-stat" id="am-prostat">' + esc(r.applicant_email || r.applicant_phone || '') + '</div></div>' +
+      '<div class="rmpro-acts">';
+    if (r.applicant_phone) { var tel = String(r.applicant_phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>'; }
+    if (r.applicant_email) pc += '<a href="mailto:' + esc(r.applicant_email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
+    pc += '</div></div>';
+    el('am-contact').innerHTML = pc;
+    // collapsed details
     var f = '';
     f += fitem('Property', esc(r.property_name));
     f += fitem('Unit', esc(r.unit_number));
@@ -4864,14 +4906,15 @@ window.addEventListener('error', function(e){
     f += fitem('Owner', esc(r.primary_owner_name));
     f += fitem('Buildium app ID', esc(r.application_id));
     el('am-fields').innerHTML = f;
-    el('am-showings').innerHTML = '';
-    if (r.application_id) loadAppShowings(r.application_id, r.applicant_email);
-    var links = '';
-    if (r.applicant_id) links += '<a class="btn primary" target="_blank" rel="noopener" href="' + BMGR + '/leasing/applicant/' + r.applicant_id + '/summary">Application in Buildium &rarr;</a>';
-    if (r.property_id && r.unit_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit &rarr;</a>';
-    if (r.property_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/summary">Property &rarr;</a>';
-    el('am-links').innerHTML = links || '<span class="noapply">No property link on this application</span>';
+    el('am-detwrap').open = false;
+    el('am-noteinput').value = '';
+    // activity feed — this prospect's tours + notes + applications
+    el('am-feedlab').textContent = 'Activity · this prospect';
+    el('am-feedchips').innerHTML = '';
+    el('am-feed').innerHTML = '<span class="count-note">Loading…</span>';
+    amFeed = null; amFeedFilter = 'all'; amCurAid = r.application_id;
     openModal('amodal');
+    if (r.application_id) loadAppFeed(r.application_id);
   }
   // Small label for a phone/name-based link (email matches show nothing — they're the
   // confident default). Lets the team see when a link rests on a fuzzier signal.
@@ -4879,37 +4922,77 @@ window.addEventListener('error', function(e){
   // Application modal — the applicant's tour history (showings + notes), linked by
   // email/phone/name. Read-only context for reviewing the application; "View in Tours"
   // jumps to the Tours tab filtered to this prospect.
-  function loadAppShowings(aid, email){
-    var box = el('am-showings'); if (!box) return;
-    if (!aid) { box.innerHTML = ''; return; }
-    box.innerHTML = '<div class="rm-feedlab">Showings &amp; notes</div><span class="count-note">Loading…</span>';
+  // Application modal activity feed — the prospect's tours + notes + applications (this
+  // one + their others), keyed server-side by application_id (no PII in the URL), with
+  // filter chips + counts and a pinned note composer (writes a prospect note by email).
+  var amFeed = null, amFeedFilter = 'all', amCurAid = null;
+  function loadAppFeed(aid){
+    var box = el('am-feed'); if (!box) return;
     authFetch('/applicant-showings?application_id=' + encodeURIComponent(aid)).then(function(j){
-      var showings = j.showings || [], notes = j.notes || [];
-      var items = [];
-      showings.forEach(function(x){ items.push({ at: Date.parse(x.start_time), s: x }); });
-      notes.forEach(function(n){ items.push({ at: Date.parse(n.created_at), n: n }); });
-      items.sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
-      var h = '<div class="rm-feedlab">Showings &amp; notes · ' + showings.length + (showings.length === 1 ? ' showing' : ' showings') + '</div>';
-      if (!items.length) { box.innerHTML = h + '<span class="count-note">No showings linked to this applicant.</span>'; return; }
-      h += items.map(function(it){
-        if (it.n) {
-          var n = it.n, wn = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month:'short', day:'numeric' });
-          var on = n.property_name ? ' · on ' + esc(n.property_name) : '';
-          return '<div class="rmfi rmfi-note"><div class="rmfi-ic">&#128172;</div><div class="rmfi-main"><div class="rmfi-t">' + esc(n.note || '') + '</div><div class="rmfi-s">' + esc(n.actor || '—') + ' · ' + esc(wn) + on + '</div></div></div>';
-        }
-        var x = it.s, icon, verb;
-        if (x.is_no_show) { icon = '&#8856;'; verb = 'No-show'; }
-        else if (x.status === 'canceled') { icon = x.rescheduled ? '&#8635;' : '&#10006;'; verb = x.rescheduled ? 'Rescheduled' : 'Canceled'; }
-        else if (Date.parse(x.start_time) >= Date.now()) { icon = '&#128197;'; verb = 'Booked'; }
-        else { icon = '&#10003;'; verb = 'Showed'; }
-        var place = (x.matched_property_name || 'Tour') + (x.matched_unit_number ? ' · ' + x.matched_unit_number : '');
-        var ws = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month:'short', day:'numeric' });
-        return '<div class="rmfi"><div class="rmfi-ic">' + icon + '</div><div class="rmfi-main"><div class="rmfi-t">' + verb + ' · ' + esc(place) + matchTag(x.match_type) + '</div><div class="rmfi-s">' + ws + (x.agent ? ' · ' + esc(x.agent) : '') + '</div></div></div>';
-      }).join('');
-      if (email) h += '<div style="margin-top:8px"><button type="button" class="listbtn" data-tourq="' + esc(email) + '">View in Tours tab &#9656;</button></div>';
-      box.innerHTML = h;
-    }).catch(function(){ box.innerHTML = '<div class="rm-feedlab">Showings &amp; notes</div><span class="count-note">Could not load showings.</span>'; });
+      amFeed = { showings: j.showings || [], notes: j.notes || [], apps: j.applications || [] };
+      renderAppFeed();
+    }).catch(function(){ el('am-feed').innerHTML = '<span class="count-note">Could not load activity.</span>'; el('am-feedchips').innerHTML = ''; });
   }
+  function amFeedItems(){
+    var d = amFeed; if (!d) return [];
+    var items = [];
+    (d.apps || []).forEach(function(a){ items.push({ at: Date.parse(a.submitted_at), kind: 'app', a: a }); });
+    (d.showings || []).forEach(function(s){ items.push({ at: Date.parse(s.start_time), kind: 'tour', s: s }); });
+    (d.notes || []).forEach(function(n){ items.push({ at: Date.parse(n.created_at), kind: 'note', n: n }); });
+    return items;
+  }
+  function amFeedRow(it){
+    var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month:'short', day:'numeric' });
+    if (it.kind === 'note') {
+      var n = it.n, on = n.property_name ? ' · on ' + esc(n.property_name) : '';
+      return '<div class="rmfi rmfi-note"><div class="rmfi-ic">&#128172;</div><div class="rmfi-main"><div class="rmfi-t">' + esc(n.note || '') + '</div><div class="rmfi-s">' + esc(n.actor || '—') + ' · ' + wd + on + '</div></div></div>';
+    }
+    if (it.kind === 'app') {
+      var a = it.a, cur = (String(a.application_id) === String(amCurAid));
+      var place = (a.property_name || 'a unit') + (a.unit_number ? ' · ' + a.unit_number : '');
+      return '<div class="rmfi' + (cur ? ' cur' : '') + '"><div class="rmfi-ic">&#128203;</div><div class="rmfi-main"><div class="rmfi-t">Applied · ' + esc(place) + ' ' + appChip(a.application_status) + (cur ? ' <span class="count-note">(this one)</span>' : '') + '</div><div class="rmfi-s">' + wd + '</div></div></div>';
+    }
+    var s = it.s, icon, verb;
+    if (s.is_no_show) { icon = '&#8856;'; verb = 'No-show'; }
+    else if (s.status === 'canceled') { icon = s.rescheduled ? '&#8635;' : '&#10006;'; verb = s.rescheduled ? 'Rescheduled' : 'Canceled'; }
+    else if (Date.parse(s.start_time) >= Date.now()) { icon = '&#128197;'; verb = 'Booked'; }
+    else { icon = '&#10003;'; verb = 'Showed'; }
+    var place2 = (s.matched_property_name || 'Tour') + (s.matched_unit_number ? ' · ' + s.matched_unit_number : '');
+    return '<div class="rmfi"><div class="rmfi-ic">' + icon + '</div><div class="rmfi-main"><div class="rmfi-t">' + verb + ' · ' + esc(place2) + matchTag(s.match_type) + '</div><div class="rmfi-s">' + wd + (s.agent ? ' · ' + esc(s.agent) : '') + '</div></div></div>';
+  }
+  function renderAppFeed(){
+    var box = el('am-feed'), chips = el('am-feedchips'); if (!box) return;
+    if (!amFeed) { box.innerHTML = ''; if (chips) chips.innerHTML = ''; return; }
+    var all = amFeedItems();
+    var counts = { all: all.length, tour: 0, note: 0, app: 0 };
+    all.forEach(function(it){ counts[it.kind]++; });
+    var defs = [['all', 'All'], ['tour', 'Tours'], ['note', 'Notes'], ['app', 'Applications']];
+    if (chips) chips.innerHTML = defs.filter(function(d){ return d[0] === 'all' || counts[d[0]] > 0; }).map(function(d){
+      return '<button type="button" class="qchip' + (amFeedFilter === d[0] ? ' on' : '') + '" data-af="' + d[0] + '">' + d[1] + ' <span class="qn">' + counts[d[0]] + '</span></button>';
+    }).join('');
+    var items = (amFeedFilter === 'all') ? all : all.filter(function(it){ return it.kind === amFeedFilter; });
+    items.sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+    box.innerHTML = items.length ? items.map(amFeedRow).join('') : '<span class="count-note">No activity yet — add the first note below.</span>';
+  }
+  el('am-feedchips').addEventListener('click', function(e){ var b = e.target.closest('[data-af]'); if (!b) return; amFeedFilter = b.getAttribute('data-af'); renderAppFeed(); });
+  el('am-actrow').addEventListener('click', function(e){
+    var u = e.target.closest('[data-amunit]'); if (!u) return;
+    closeModal('amodal'); openUnitEnsure(u.getAttribute('data-amunit'));
+  });
+  function amAddNote(){
+    if (!amCurAid) return;
+    var actor = (getActor() || '').trim();
+    if (!actor) { alert('Pick your name on the sign-in screen (or the “Acting as” picker) first.'); return; }
+    var ta = el('am-noteinput'), send = el('am-noteadd');
+    var txt = (ta && ta.value || '').trim(); if (!txt) { if (ta) ta.focus(); return; }
+    if (ta) ta.disabled = true; if (send) send.disabled = true;
+    postJSON('/applicant-note', { application_id: amCurAid, note: txt, actor: actor }).then(function(){
+      if (ta) { ta.value = ''; ta.disabled = false; ta.focus(); } if (send) send.disabled = false;
+      loadAppFeed(amCurAid);
+    }).catch(function(err){ if (ta) ta.disabled = false; if (send) send.disabled = false; alert('Could not save note: ' + String((err && err.message) || err)); });
+  }
+  el('am-noteadd').addEventListener('click', amAddNote);
+  el('am-noteinput').addEventListener('keydown', function(e){ if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); amAddNote(); } });
   function renderMiniApps(box, apps, searchText){
     if (!apps.length) { box.textContent = 'No applications on record for this unit.'; return; }
     var h = '';

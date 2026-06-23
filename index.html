@@ -648,6 +648,22 @@ window.addEventListener('error', function(e){
   .propchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .propchips span{font-size:.72rem;background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:10px;padding:3px 10px}
 
+  /* listing modal — action row + demoted photo actions + collapsed details + activity feed */
+  #lm-actrow{margin-bottom:14px}
+  .lm-photoacts{display:flex;gap:18px;align-items:center;margin:2px 0 14px;flex-wrap:wrap}
+  .lm-ghostlink{font-family:var(--sans);font-size:.74rem;font-weight:700;color:var(--ink-soft);cursor:pointer;background:none;border:none;padding:0;display:inline-flex;align-items:center;gap:5px}
+  .lm-ghostlink:hover{color:var(--clay)}
+  #lm-dlall.dlall{background:none;color:var(--ink-soft);box-shadow:none;border:none;padding:0;font-weight:700;font-size:.74rem}
+  #lm-dlall.dlall:hover{color:var(--clay)}
+  #lm-detwrap{margin:2px 0 12px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  #lm-detwrap summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+  #lm-detwrap summary::-webkit-details-marker{display:none}
+  #lm-detwrap summary::after{content:'▾';float:right;opacity:.6}
+  #lm-detwrap[open] summary::after{content:'▴'}
+  #lm-detwrap .lmdesc,#lm-detwrap .lmamen{padding:0 12px 12px;margin:0}
+  #lm-feed .rmfi{border-bottom:1px solid var(--hairline-dark);padding:9px 0}
+  #lm-feed .rmfi:last-child{border-bottom:none}
+
   /* ── Key Manager ── */
   .c-bad{background:rgba(223,47,74,.16);color:#FF9DA6}
   .ovr{font-size:.6rem;font-weight:800;letter-spacing:.03em;color:#FF9DA6;background:rgba(223,47,74,.18);border-radius:8px;padding:1px 6px;margin-left:6px;text-transform:uppercase}
@@ -1531,24 +1547,24 @@ window.addEventListener('error', function(e){
       <div class="lmsub" id="lm-sub"></div>
     </div>
     <div class="lmbody">
-      <div class="lmphbar">
-        <span class="lmphnote" id="lm-phnote"></span>
-        <button type="button" class="dlall" id="lm-dlall">&#8595; Download all</button>
+      <div class="rm-actrow" id="lm-actrow">
+        <a id="lm-apply" class="btn primary rmact" target="_blank" rel="noopener">Apply &rarr;</a>
+        <a id="lm-map" class="btn rmact" target="_blank" rel="noopener">&#129517; Maps</a>
+        <button type="button" id="lm-unit" class="btn rmact">View unit &rarr;</button>
       </div>
+      <div class="lmphbar"><span class="lmphnote" id="lm-phnote"></span></div>
       <div class="lmphotos" id="lm-photos"></div>
-      <div class="sect">Applications</div>
-      <div id="lm-apps" class="minirows lmphnote" style="margin-bottom:12px">&nbsp;</div>
-      <div class="sect">Renewal</div>
-      <div id="lm-renewals" class="minirows lmphnote" style="margin-bottom:12px">&nbsp;</div>
+      <div class="lm-photoacts">
+        <button type="button" class="lm-ghostlink" id="lm-copy">Copy details</button>
+        <button type="button" id="lm-dlall" class="dlall">&#8595; Download all photos</button>
+      </div>
       <div class="sect">Key</div>
       <div id="lm-keys" class="lmphnote" data-keypanel style="margin-bottom:12px">&nbsp;</div>
-      <div class="lmdesc" id="lm-desc"></div>
-      <div class="lmamen" id="lm-amen"></div>
-    </div>
-    <div class="lmfoot">
-      <span class="noapply" id="lm-noapply" style="display:none">No application link on this listing</span>
-      <button type="button" id="lm-unit" class="btn">View unit &rarr;</button>
-      <a id="lm-apply" class="btn primary" target="_blank" rel="noopener">Open application page &rarr;</a>
+      <details id="lm-detwrap"><summary>Listing details</summary>
+        <div class="lmdesc" id="lm-desc"></div>
+        <div class="lmamen" id="lm-amen"></div>
+      </details>
+      <div class="rm-feedwrap"><div class="rm-feedlab" id="lm-feedlab"></div><div id="lm-feed"></div></div>
     </div>
   </div>
 </div>
@@ -3899,6 +3915,8 @@ window.addEventListener('error', function(e){
       bedrooms: u.unit_bedrooms,
       available_date: u.listing_available_date,
       manager: u.property_manager_name,
+      address_line1: u.address_line1,
+      city: u.city,
       listing_description: null,
       listing_amenities: u.amenities || [],
       listing_url: u.listing_url
@@ -3914,23 +3932,26 @@ window.addEventListener('error', function(e){
     if (r.available_date) sub.push('available ' + esc(r.available_date));
     if (r.manager) sub.push('managed by ' + esc(r.manager));
     el('lm-sub').innerHTML = sub.join(' &middot; ');
+    // action row — Apply (primary) · Maps · View unit
+    var apply = el('lm-apply');
+    if (r.listing_url) { apply.href = r.listing_url; apply.style.display = ''; }
+    else { apply.removeAttribute('href'); apply.style.display = 'none'; }
+    var maddr = [r.address_line1, r.city].filter(Boolean).join(', ') || r.property || '';
+    var mapA = el('lm-map');
+    if (maddr) { mapA.style.display = ''; mapA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(maddr); }
+    else mapA.style.display = 'none';
+    el('lm-unit').setAttribute('data-uid', uid);
+    el('lm-copy')._row = r;
+    // collapsed details
     el('lm-desc').textContent = r.listing_description || 'No description on this listing.';
     var amen = r.listing_amenities || [];
     el('lm-amen').innerHTML = amen.map(function(a){ return '<span>' + esc(a) + '</span>'; }).join('');
-    var apply = el('lm-apply');
-    if (r.listing_url) {
-      apply.href = r.listing_url; apply.style.display = 'inline-block';
-      el('lm-noapply').style.display = 'none';
-    } else {
-      apply.removeAttribute('href'); apply.style.display = 'none';
-      el('lm-noapply').style.display = 'inline';
-    }
+    el('lm-detwrap').open = false;
+    // photos
     el('lm-photos').innerHTML = '';
     el('lm-phnote').textContent = 'Loading photos…';
     el('lm-dlall').classList.remove('show');
     curPhotosLm = [];
-    el('lm-apps').textContent = 'Loading…';
-    el('lm-unit').setAttribute('data-uid', uid);
     openModal('lmodal');
     mountKeyPanel(el('lm-keys'), uid, (r.property || '') + (r.unit ? ' · ' + r.unit : ''));
     authFetch('/photos?unit_id=' + encodeURIComponent(uid))
@@ -3939,13 +3960,47 @@ window.addEventListener('error', function(e){
         renderPhotos(el('lm-photos'), el('lm-phnote'), el('lm-dlall'), curPhotosLm);
       })
       .catch(function(){ el('lm-phnote').textContent = 'Photos unavailable right now.'; });
-    authFetch('/applications?unit_id=' + encodeURIComponent(uid))
-      .then(function(j){
-        renderMiniApps(el('lm-apps'), (j && j.applications) || [], (r.property || '') + ' ' + (r.unit || ''));
-      })
-      .catch(function(){ el('lm-apps').textContent = 'Applications unavailable right now.'; });
-    renderMiniRenewals(el('lm-renewals'), rnForUnit(uid));
-    if (renewalsAll === null) loadRenewals();
+    // activity feed — applications + showings (+ a terminal "listed" marker). No notes (Buildium notes TBD).
+    el('lm-feedlab').textContent = 'Activity · interest in this unit';
+    el('lm-feed').innerHTML = '<span class="count-note">Loading…</span>';
+    Promise.all([
+      authFetch('/unit-activity?unit_id=' + encodeURIComponent(uid)).catch(function(){ return { showings: [] }; }),
+      authFetch('/applications?unit_id=' + encodeURIComponent(uid)).catch(function(){ return { applications: [] }; })
+    ]).then(function(res){
+      renderListingFeed(el('lm-feed'), (res[0] && res[0].showings) || [], (res[1] && res[1].applications) || [], r);
+    });
+  }
+  function listFeedItem(icon, title, sub){
+    return '<div class="rmfi"><div class="rmfi-ic">' + icon + '</div><div class="rmfi-main"><div class="rmfi-t">' + title + '</div><div class="rmfi-s">' + (sub || '') + '</div></div></div>';
+  }
+  // Listing activity feed: this unit's applications + showings, newest first, plus a
+  // terminal "Listed for rent" marker. App items jump to the Applications tab (shared
+  // [data-appsq] delegate). No notes/composer on listings (Buildium notes come later).
+  function renderListingFeed(box, showings, apps, r){
+    if (!box) return;
+    var items = [];
+    (apps || []).forEach(function(a){ items.push({ at: Date.parse(a.submitted_at), kind: 'app', a: a }); });
+    (showings || []).forEach(function(s){ items.push({ at: Date.parse(s.start_time), kind: 'showing', s: s }); });
+    items.sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+    var rows = items.map(function(it){
+      if (it.kind === 'app') {
+        var a = it.a, nm = esc(a.applicant_name || 'Applicant');
+        var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+        return '<div class="rmfi" data-appsq="' + esc((r.property || '') + ' ' + (r.unit || '')) + '" title="Open in Applications tab" style="cursor:pointer"><div class="rmfi-ic">&#128203;</div><div class="rmfi-main"><div class="rmfi-t">Applied &middot; ' + nm + ' ' + appChip(a.application_status) + ' &#9656;</div><div class="rmfi-s">' + wd + '</div></div></div>';
+      }
+      var s = it.s, icon, verb;
+      if (s.is_no_show) { icon = '&#8856;'; verb = 'No-show'; }
+      else if (s.status === 'canceled') { icon = s.rescheduled ? '&#8635;' : '&#10006;'; verb = s.rescheduled ? 'Rescheduled' : 'Canceled'; }
+      else if (Date.parse(s.start_time) >= Date.now()) { icon = '&#128197;'; verb = 'Booked'; }
+      else { icon = '&#10003;'; verb = 'Showed'; }
+      var who = s.invitee_name ? ' &middot; ' + esc(s.invitee_name) : '';
+      var ws = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+      return listFeedItem(icon, verb + who, ws + (s.agent ? ' &middot; ' + esc(s.agent) : ''));
+    });
+    if (r.listing_url || r.available_date) {
+      rows.push(listFeedItem('&#127991;&#65039;', 'Listed for rent', r.available_date ? 'available ' + esc(r.available_date) : ''));
+    }
+    box.innerHTML = rows.length ? rows.join('') : '<span class="count-note">No applications or showings on this unit yet.</span>';
   }
   el('vtable').addEventListener('click', function(ev){
     var b = ev.target.closest('.listbtn');
@@ -4442,6 +4497,21 @@ window.addEventListener('error', function(e){
     var uid = this.getAttribute('data-uid'); if (!uid) return;
     closeModal('lmodal');
     openUnitEnsure(uid);
+  });
+  // Listing modal → copy a plain-text unit summary for pasting to a tenant.
+  el('lm-copy').addEventListener('click', function(){
+    var r = this._row; if (!r) return;
+    var lines = [(r.property || '') + (r.unit ? ' — ' + r.unit : '')];
+    if (r.listing_rent != null) lines.push(fmtMoney(r.listing_rent) + '/mo');
+    if (r.bedrooms) lines.push(r.bedrooms + ' bed');
+    if (r.available_date) lines.push('Available ' + r.available_date);
+    if ((r.listing_amenities || []).length) lines.push('Amenities: ' + r.listing_amenities.join(', '));
+    if (r.listing_description) { lines.push(''); lines.push(r.listing_description); }
+    if (r.listing_url) { lines.push(''); lines.push('Apply: ' + r.listing_url); }
+    var txt = lines.join(String.fromCharCode(10)), self = this, orig = self.textContent;
+    var done = function(){ self.textContent = 'Copied ✓'; setTimeout(function(){ self.textContent = orig; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(function(){ window.prompt('Copy details:', txt); });
+    else window.prompt('Copy details:', txt);
   });
 
   /* ── Owners directory ─────────────────────── */

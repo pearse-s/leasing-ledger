@@ -744,6 +744,18 @@ window.addEventListener('error', function(e){
   .am-compose{display:flex;gap:8px;align-items:center}
   #am-noteinput{flex:1;min-width:0;box-sizing:border-box;font-family:var(--sans);font-size:.86rem;color:var(--ink);background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:10px 12px}
   #am-noteinput:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
+  /* unit modal — pattern redesign: action row, identity strip, compact photos, collapsed details, feed chips */
+  #um-actrow{margin-bottom:12px}
+  #um-detwrap{margin:6px 0 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  #um-detwrap summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+  #um-detwrap summary::-webkit-details-marker{display:none}
+  #um-detwrap summary::after{content:'▾';float:right;opacity:.6}
+  #um-detwrap[open] summary::after{content:'▴'}
+  #um-detwrap .fgrid{padding:2px 12px 2px}
+  #um-detwrap .umd-sect{font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);padding:9px 12px 3px}
+  #um-detwrap > #um-tenants,#um-detwrap > #um-tasks{padding:0 12px 11px}
+  #um-feed .rmfi{border-bottom:1px solid var(--hairline-dark);padding:9px 0}
+  #um-feed .rmfi:last-child{border-bottom:none}
 
   /* v5: clickable sections, app/tour tabs, vacant filters */
   /* ── clickable affordances — make it obvious what's interactive ── */
@@ -1644,25 +1656,25 @@ window.addEventListener('error', function(e){
       <div class="lmsub" id="um-sub"></div>
     </div>
     <div class="lmbody">
-      <div class="fgrid" id="um-fields"></div>
+      <div class="rm-actrow" id="um-actrow"></div>
+      <div id="um-contact"></div>
+      <div class="lmphbar" id="um-phbar" style="display:none"><span class="lmphnote" id="um-phnote"></span></div>
+      <div class="lmphotos" id="um-photos"></div>
+      <div class="lm-photoacts" id="um-photoacts" style="display:none">
+        <button type="button" class="lm-ghostlink" id="um-viewall" style="display:none">View all</button>
+        <button type="button" id="um-dlall" class="dlall">&#8595; Download all photos</button>
+      </div>
       <div class="sect">Key</div>
       <div id="um-keys" class="lmphnote" data-keypanel>&nbsp;</div>
-      <div class="sect">Tasks</div>
-      <div id="um-tasks" class="lmphnote" data-taskpanel>&nbsp;</div>
-      <div class="sect">Tenants</div>
-      <div id="um-tenants" class="lmphnote">&nbsp;</div>
-      <div class="sect">Renewal</div>
-      <div id="um-renewals" class="minirows lmphnote">&nbsp;</div>
-      <div class="sect">Applications</div>
-      <div id="um-apps" class="minirows lmphnote">&nbsp;</div>
-      <div class="sect" id="um-photo-sect" style="display:none">Listing photos</div>
-      <div class="lmphbar" id="um-phbar" style="display:none">
-        <span class="lmphnote" id="um-phnote"></span>
-        <button type="button" class="dlall" id="um-dlall">&#8595; Download all</button>
-      </div>
-      <div class="lmphotos" id="um-photos"></div>
+      <details id="um-detwrap"><summary>Unit details</summary>
+        <div class="fgrid" id="um-fields"></div>
+        <div class="umd-sect">Tenants</div>
+        <div id="um-tenants" class="lmphnote">&nbsp;</div>
+        <div class="umd-sect">Tasks</div>
+        <div id="um-tasks" class="lmphnote" data-taskpanel>&nbsp;</div>
+      </details>
+      <div class="rm-feedwrap"><div class="rm-feedlab" id="um-feedlab"></div><div class="lm-feedchips" id="um-feedchips"></div><div id="um-feed"></div></div>
     </div>
-    <div class="lmfoot" id="um-links"></div>
   </div>
 </div>
 
@@ -4624,16 +4636,28 @@ window.addEventListener('error', function(e){
     if (!r) return;
     el('um-title').textContent = (r.property_name || '') + ' — ' + (r.unit_number || '');
     var sub = [];
+    var stat = STATUS_CHIP[r.occupancy_status] || '';
+    if (r.is_not_ready) stat = '<span class="chip c-otb">not ready</span> ' + stat;
+    if (r.is_owner_takeback) stat += ' <span class="chip c-otb">take-back</span>';
+    if (stat) sub.push(stat);
     if (r.address_line1) sub.push(esc(r.address_line1) + (r.city ? ', ' + esc(r.city) : ''));
-    sub.push((r.unit_bedrooms || '–') + ' bd / ' + (r.unit_bathrooms || '–') + ' ba' + (r.unit_size ? ' · ' + fmtNum(r.unit_size) + ' sqft' : ''));
+    sub.push((r.unit_bedrooms || '–') + ' bd / ' + (r.unit_bathrooms || '–') + ' ba');
+    var rentTxt = r.is_listed && r.listing_rent != null ? fmtMoney(r.listing_rent) + '/mo listed' : (r.monthly_rent != null ? fmtMoney(r.monthly_rent) + '/mo' : '');
+    if (rentTxt) sub.push(rentTxt);
     if (r.property_manager_name) sub.push('managed by ' + esc(r.property_manager_name));
-    if (r.primary_owner_name) sub.push('owner ' + esc(r.primary_owner_name));
     el('um-sub').innerHTML = sub.join(' &middot; ');
-
+    // action row — Maps (primary) · View listing · Buildium · Apply
+    var a = '';
+    var umaddr = r.address_line1 ? (r.address_line1 + (r.city ? ', ' + r.city : '')) : (r.property_name || '');
+    if (umaddr) a += '<a class="btn primary rmact" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(umaddr) + '">&#129517; Maps</a>';
+    if (r.is_listed) a += '<button type="button" class="btn rmact" data-listing-uid="' + r.unit_id + '">View listing &rarr;</button>';
+    a += '<a class="btn rmact" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Buildium &rarr;</a>';
+    if (r.listing_url) a += '<a class="btn rmact" target="_blank" rel="noopener" href="' + esc(r.listing_url) + '">Apply &rarr;</a>';
+    el('um-actrow').innerHTML = a;
+    el('um-contact').innerHTML = '';
+    // collapsed details — fields
     var f = '';
-    f += fitem('Status', (r.is_not_ready ? '<span class="chip c-otb">not ready</span> ' : '') + (STATUS_CHIP[r.occupancy_status] || '') + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : ''));
-    var umEv = evChip(r.unit_event) + rnUnitChip(r.unit_id);
-    f += fitem('Unit event', umEv || '–');
+    f += fitem('Unit event', (evChip(r.unit_event) + rnUnitChip(r.unit_id)) || '–');
     if (r.is_nookbook) {
       f += fitem('Building type', esc(r.nb_building_type));
       f += fitem('Parking', esc(r.nb_parking));
@@ -4650,38 +4674,32 @@ window.addEventListener('error', function(e){
     f += fitem('Days vacant', r.days_vacant != null ? r.days_vacant + 'd' : null);
     f += fitem('Available', esc(r.listing_available_date));
     el('um-fields').innerHTML = f;
-
+    el('um-detwrap').open = false;
     el('um-tenants').textContent = r.lease_id ? 'Loading tenant contacts…' : 'No current lease.';
-    el('um-apps').textContent = 'Loading…';
-    authFetch('/applications?unit_id=' + encodeURIComponent(uid))
-      .then(function(j){
-        renderMiniApps(el('um-apps'), (j && j.applications) || [], (r.property_name || '') + ' ' + (r.unit_number || ''));
-      })
-      .catch(function(){ el('um-apps').textContent = 'Applications unavailable right now.'; });
-    renderMiniRenewals(el('um-renewals'), rnForUnit(uid));
-    if (renewalsAll === null) loadRenewals();
-
-    var links = '';
-    var umaddr = r.address_line1 ? (r.address_line1 + (r.city ? ', ' + r.city : '')) : (r.property_name || '');
-    if (umaddr) links += '<a class="btn primary" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(umaddr) + '">&#129517; Open in Maps</a>';
-    links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit in Buildium &rarr;</a>';
-    links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/summary">Property &rarr;</a>';
-    if (r.is_listed) links += '<button type="button" class="btn" data-listing-uid="' + r.unit_id + '">Listing &rarr;</button>';
-    if (r.listing_url) links += '<a class="btn primary" target="_blank" rel="noopener" href="' + esc(r.listing_url) + '">Apply link &rarr;</a>';
-    el('um-links').innerHTML = links;
-
+    // photos reset
     curPhotosUm = [];
     el('um-photos').innerHTML = '';
-    el('um-photo-sect').style.display = 'none';
+    el('um-photos').classList.remove('compact');
+    el('um-photoacts').style.display = 'none';
+    el('um-viewall').style.display = 'none';
     el('um-phbar').style.display = 'none';
     openModal('umodal');
     mountKeyPanel(el('um-keys'), uid, (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : ''));
     mountTaskPanel(el('um-tasks'), uid);
-
+    // tenants → identity strip (primary) + full list in details
     if (r.lease_id) {
       authFetch('/unit?unit_id=' + encodeURIComponent(uid))
         .then(function(j){
           var ts = j.tenants || [];
+          if (ts.length) {
+            var t0 = ts[0], nm = (t0.name || 'Tenant').trim();
+            var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+            var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div><div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div><div class="rmpro-stat">' + (ts.length > 1 ? esc(ts.length + ' tenants') : esc(t0.email || t0.phone || 'Tenant')) + '</div></div><div class="rmpro-acts">';
+            if (t0.phone) { var tel = String(t0.phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>'; }
+            if (t0.email) pc += '<a href="mailto:' + esc(t0.email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
+            pc += '</div></div>';
+            el('um-contact').innerHTML = pc;
+          }
           if (!ts.length) { el('um-tenants').textContent = 'No tenant contact details on the lease.'; return; }
           var th = '';
           ts.forEach(function(t){
@@ -4693,27 +4711,109 @@ window.addEventListener('error', function(e){
         })
         .catch(function(){ el('um-tenants').textContent = 'Contacts unavailable right now.'; });
     }
+    // photos (if listed) — compact strip + view-all
     if (r.is_listed) {
-      el('um-photo-sect').style.display = 'block';
       el('um-phbar').style.display = 'flex';
+      el('um-photoacts').style.display = 'flex';
       el('um-phnote').textContent = 'Loading photos…';
       authFetch('/photos?unit_id=' + encodeURIComponent(uid))
         .then(function(j){
           curPhotosUm = (j && j.photos) || [];
           renderPhotos(el('um-photos'), el('um-phnote'), el('um-dlall'), curPhotosUm);
+          el('um-photos').classList.add('compact');
+          var n = curPhotosUm.length, va = el('um-viewall');
+          if (n > 2) { va.style.display = ''; va.setAttribute('data-exp', '0'); va.textContent = 'View all (' + n + ')'; }
+          else va.style.display = 'none';
         })
         .catch(function(){ el('um-phnote').textContent = 'Photos unavailable right now.'; });
     }
+    // activity feed — applications + tours + key history + renewals + lease
+    el('um-feedlab').textContent = 'Activity · everything on this unit';
+    el('um-feedchips').innerHTML = '';
+    el('um-feed').innerHTML = '<span class="count-note">Loading…</span>';
+    umFeed = null; umFeedFilter = 'all';
+    Promise.all([
+      authFetch('/unit-activity?unit_id=' + encodeURIComponent(uid)).catch(function(){ return { showings: [], key_events: [] }; }),
+      authFetch('/applications?unit_id=' + encodeURIComponent(uid)).catch(function(){ return { applications: [] }; })
+    ]).then(function(res){
+      umFeed = { showings: (res[0] && res[0].showings) || [], keyEvents: (res[0] && res[0].key_events) || [], apps: (res[1] && res[1].applications) || [], renewals: (renewalsAll && rnForUnit(uid)) || [], r: r };
+      umFeedFilter = 'all';
+      renderUnitFeed();
+    });
+    if (renewalsAll === null) loadRenewals();
   }
   // Unit modal "Listing" button → open the in-page listing modal (not Buildium).
   // umodal and lmodal share a z-index and lmodal is earlier in the DOM, so we close the
   // unit modal before opening the listing modal rather than stacking (both animate from
   // the clicked button → a clean morph).
-  el('um-links').addEventListener('click', function(ev){
+  el('um-actrow').addEventListener('click', function(ev){
     var b = ev.target.closest('[data-listing-uid]');
     if (!b) return;
     closeModal('umodal');
     openListing(b.getAttribute('data-listing-uid'));
+  });
+  // Unit modal activity feed — applications + tours/showings + key history + renewals
+  // + a terminal lease marker, with filter chips + counts. No notes (Buildium notes TBD).
+  var umFeed = null, umFeedFilter = 'all';
+  function umFeedItems(){
+    var d = umFeed; if (!d) return [];
+    var items = [];
+    (d.apps || []).forEach(function(a){ items.push({ at: Date.parse(a.submitted_at), kind: 'app', a: a }); });
+    (d.showings || []).forEach(function(s){ items.push({ at: Date.parse(s.start_time), kind: 'tour', s: s }); });
+    (d.keyEvents || []).forEach(function(k){ items.push({ at: Date.parse(k.created_at), kind: 'key', k: k }); });
+    (d.renewals || []).forEach(function(rn){ items.push({ at: Date.parse(rn.last_updated_date_time || rn.lease_from_date), kind: 'renewal', rn: rn }); });
+    return items;
+  }
+  function umFeedRow(it){
+    var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    if (it.kind === 'app') {
+      var a = it.a;
+      return '<div class="rmfi" data-appsq="' + esc((umFeed.r.property_name || '') + ' ' + (umFeed.r.unit_number || '')) + '" title="Open in Applications tab" style="cursor:pointer"><div class="rmfi-ic">&#128203;</div><div class="rmfi-main"><div class="rmfi-t">Applied &middot; ' + esc(a.applicant_name || 'Applicant') + ' ' + appChip(a.application_status) + ' &#9656;</div><div class="rmfi-s">' + wd + '</div></div></div>';
+    }
+    if (it.kind === 'renewal') {
+      return listFeedItem('&#128260;', 'Renewal &middot; ' + esc(it.rn.renewal_state || ''), wd);
+    }
+    if (it.kind === 'key') {
+      var k = it.k, verb;
+      if (k.event_type === 'checkout') verb = 'Key signed out' + (k.holder ? ' &middot; ' + esc(k.holder) : '');
+      else if (k.event_type === 'checkin') verb = 'Key checked in';
+      else if (k.event_type === 'status_change') verb = 'Key status &rarr; ' + esc(String(k.to_status || '').replace(/_/g, ' '));
+      else if (k.event_type === 'create') verb = 'Key set added';
+      else if (k.event_type === 'note') verb = 'Key note' + (k.note ? ' &middot; ' + esc(k.note) : '');
+      else verb = 'Key ' + esc(k.event_type);
+      return listFeedItem('&#128273;', verb, (k.actor ? esc(k.actor) + ' &middot; ' : '') + wd);
+    }
+    var s = it.s, icon, verb2;
+    if (s.is_no_show) { icon = '&#8856;'; verb2 = 'No-show'; }
+    else if (s.status === 'canceled') { icon = s.rescheduled ? '&#8635;' : '&#10006;'; verb2 = s.rescheduled ? 'Rescheduled' : 'Canceled'; }
+    else if (Date.parse(s.start_time) >= Date.now()) { icon = '&#128197;'; verb2 = 'Booked'; }
+    else { icon = '&#10003;'; verb2 = 'Showed'; }
+    var who = s.invitee_name ? ' &middot; ' + esc(s.invitee_name) : '';
+    return listFeedItem(icon, verb2 + who, wd + (s.agent ? ' &middot; ' + esc(s.agent) : ''));
+  }
+  function renderUnitFeed(){
+    var box = el('um-feed'), chips = el('um-feedchips'); if (!box) return;
+    if (!umFeed) { box.innerHTML = ''; if (chips) chips.innerHTML = ''; return; }
+    var all = umFeedItems();
+    var counts = { all: all.length, app: 0, tour: 0, key: 0, renewal: 0 };
+    all.forEach(function(it){ counts[it.kind]++; });
+    var defs = [['all', 'All'], ['app', 'Applications'], ['tour', 'Tours'], ['key', 'Keys'], ['renewal', 'Renewals']];
+    if (chips) chips.innerHTML = defs.filter(function(d){ return d[0] === 'all' || counts[d[0]] > 0; }).map(function(d){
+      return '<button type="button" class="qchip' + (umFeedFilter === d[0] ? ' on' : '') + '" data-uf="' + d[0] + '">' + d[1] + ' <span class="qn">' + counts[d[0]] + '</span></button>';
+    }).join('');
+    var items = (umFeedFilter === 'all') ? all : all.filter(function(it){ return it.kind === umFeedFilter; });
+    items.sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+    var rows = items.map(umFeedRow);
+    if (umFeedFilter === 'all' && umFeed.r.lease_from_date) {
+      rows.push(listFeedItem('&#128196;', 'Lease' + (umFeed.r.lease_type ? ' &middot; ' + esc(umFeed.r.lease_type) : ''), esc(umFeed.r.lease_from_date) + (umFeed.r.lease_to_date ? ' &rarr; ' + esc(umFeed.r.lease_to_date) : '')));
+    }
+    box.innerHTML = rows.length ? rows.join('') : '<span class="count-note">No activity on this unit yet.</span>';
+  }
+  el('um-feedchips').addEventListener('click', function(e){ var b = e.target.closest('[data-uf]'); if (!b) return; umFeedFilter = b.getAttribute('data-uf'); renderUnitFeed(); });
+  el('um-viewall').addEventListener('click', function(){
+    var pe = el('um-photos'), exp = this.getAttribute('data-exp') === '1';
+    if (exp) { pe.classList.add('compact'); this.setAttribute('data-exp', '0'); this.textContent = 'View all (' + curPhotosUm.length + ')'; }
+    else { pe.classList.remove('compact'); this.setAttribute('data-exp', '1'); this.textContent = 'Show less'; }
   });
   // Listing modal → unit popup (symmetric to the unit modal's "Listing" button).
   el('lm-unit').addEventListener('click', function(){

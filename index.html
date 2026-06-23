@@ -1160,7 +1160,7 @@ window.addEventListener('error', function(e){
             <div class="tv" id="s-signed">&ndash;</div>
             <div class="ts" id="s-signed-sub"></div>
           </div>
-          <div class="tile click" id="tile-mi" title="See this month's move-ins on the Units tab">
+          <div class="tile click" id="tile-mi" title="See upcoming move-ins on the Units tab">
             <div class="tl">Move-ins</div>
             <div class="tv" id="s-movein">&ndash;</div>
             <div class="ts">by lease start date</div>
@@ -4204,7 +4204,7 @@ window.addEventListener('error', function(e){
     { k:'all',      label:'All' },
     { k:'listed',   label:'Listed' },
     { k:'vacant',   label:'Vacant' },
-    { k:'mi',       label:'Move-ins this month' },
+    { k:'mi',       label:'Upcoming move-ins', title:'Pre-leased units moving in this month or on the 1st of next month' },
     { k:'mo',       label:'Move-outs this month' },
     { k:'eviction', label:'Evictions' },
     { k:'balance',  label:'Has balance' },
@@ -4216,6 +4216,15 @@ window.addEventListener('error', function(e){
     var n = new Date();
     return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
   }
+  // true if a move-in date falls within the current calendar month OR on the 1st of next month
+  function upcomingMoveIn(dstr2){
+    if (!dstr2) return false;
+    var d = new Date(dstr2 + 'T00:00:00');
+    var n = new Date();
+    if (d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth()) return true;
+    var first = new Date(n.getFullYear(), n.getMonth() + 1, 1);  // 1st of next month
+    return d.getFullYear() === first.getFullYear() && d.getMonth() === first.getMonth() && d.getDate() === 1;
+  }
   function qfTest(r, k){
     if (k === 'all') return true;
     if (k === 'vacant') return r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased';
@@ -4226,7 +4235,7 @@ window.addEventListener('error', function(e){
     if (k === 'balance') return (r.total_balance || 0) > 0;
     if (k === 'notice') return r.unit_event === 'Notice to Vacate';
     if (k === 'eviction') return r.unit_event === 'Eviction Pending';
-    if (k === 'mi') return r.lease_source !== 'Historic' && sameMonth(r.lease_from_date);
+    if (k === 'mi') return r.occupancy_status === 'pre_leased' && upcomingMoveIn(r.lease_from_date);
     if (k === 'mo') return sameMonth(r.next_move_out);
     if (k === 'listed') return !!r.is_listed;
     if (k === 'nookbook') return !!r.is_nookbook;
@@ -4264,7 +4273,8 @@ window.addEventListener('error', function(e){
         return qfTest(r, f.k);
       }).length;
       var on = f.k === 'all' ? empty : !!uSel[f.k];
-      html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + f.k + '">' +
+      html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + f.k + '"' +
+        (f.title ? ' title="' + esc(f.title) + '"' : '') + '>' +
         esc(f.label) + ' <span class="qn">' + n + '</span></button>';
     });
     el('u-chips').innerHTML = html;

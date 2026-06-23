@@ -9,7 +9,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="ll-build" content="2026-06-17-cool">
-<script>window.LL_BUILD='2026-06-22-tasks-bootguard';</script>
+<script>window.LL_BUILD='2026-06-23-modal-escape-stack';</script>
 <script>
 /* BOOT-CRASH GUARD — do not remove. The app runs as one big IIFE under 'use strict'
    with no try/catch, so ANY uncaught error during init aborts the boot: the page is
@@ -1542,8 +1542,6 @@ window.addEventListener('error', function(e){
       <div id="lm-renewals" class="minirows lmphnote" style="margin-bottom:12px">&nbsp;</div>
       <div class="sect">Key</div>
       <div id="lm-keys" class="lmphnote" data-keypanel style="margin-bottom:12px">&nbsp;</div>
-      <div class="sect">Tasks</div>
-      <div id="lm-tasks" class="lmphnote" data-taskpanel style="margin-bottom:12px">&nbsp;</div>
       <div class="lmdesc" id="lm-desc"></div>
       <div class="lmamen" id="lm-amen"></div>
     </div>
@@ -3110,7 +3108,9 @@ window.addEventListener('error', function(e){
         (r.wo_amount != null ? fmtMoney(r.wo_amount) : '$0') +
         (r.wo_count > 1 ? ' &middot; +' + (r.wo_count - 1) + ' more' : '') + '</div>';
     } else el('tm-wo').style.display = 'none';
-    el('tm-links').innerHTML = r.unit_id ? '<button type="button" class="btn" data-tunit="' + r.unit_id + '">View unit &rarr;</button>' : '';
+    var tlinks = '<a class="btn primary" target="_blank" rel="noopener" href="' + BMGR + '/tasks/' + r.task_id + '/task-summary?searchOption=new">Open in Buildium &rarr;</a>';
+    if (r.unit_id) tlinks += '<button type="button" class="btn" data-tunit="' + r.unit_id + '">View unit &rarr;</button>';
+    el('tm-links').innerHTML = tlinks;
   }
   el('tm-links').addEventListener('click', function(e){
     var b = e.target.closest('[data-tunit]'); if (!b) return;
@@ -3925,7 +3925,6 @@ window.addEventListener('error', function(e){
     el('lm-unit').setAttribute('data-uid', uid);
     openModal('lmodal');
     mountKeyPanel(el('lm-keys'), uid, (r.property || '') + (r.unit ? ' · ' + r.unit : ''));
-    mountTaskPanel(el('lm-tasks'), uid);
     authFetch('/photos?unit_id=' + encodeURIComponent(uid))
       .then(function(j){
         curPhotosLm = (j && j.photos) || [];
@@ -3954,8 +3953,10 @@ window.addEventListener('error', function(e){
     if (e.clientX || e.clientY) { lastPt.x = e.clientX; lastPt.y = e.clientY; }
   }, true);
   var modalDX = 0, modalDY = 0;   // remembered open origin, so close collapses back to it
+  var modalStack = [];   // open-order of .lmodal modals so Escape closes the TOPMOST first
   function openModal(id){
     var modal = el(id); modal.classList.add('open');
+    var si = modalStack.indexOf(id); if (si >= 0) modalStack.splice(si, 1); modalStack.push(id);
     var card = modal.querySelector('.lmcard');
     if (!card || !FXON || !GS) { modal.classList.remove('gsanim'); return; }
     modal.classList.add('gsanim');
@@ -3967,6 +3968,7 @@ window.addEventListener('error', function(e){
       { xPercent:-50, yPercent:-50, x:0, y:0, scale:1, opacity:1, rotation:0, duration:0.52, ease:'back.out(1.7)', clearProps:'transform,opacity' });
   }
   function closeModal(id){
+    var si = modalStack.indexOf(id); if (si >= 0) modalStack.splice(si, 1);
     var modal = el(id); var card = modal.querySelector('.lmcard');
     if (!card || !FXON || !GS) { modal.classList.remove('open'); return; }
     GS.killTweensOf(card);
@@ -3978,7 +3980,12 @@ window.addEventListener('error', function(e){
     n.addEventListener('click', function(){ closeModal(n.getAttribute('data-close')); });
   });
   document.addEventListener('keydown', function(ev){
-    if (ev.key === 'Escape') ['lmodal','umodal','omodal','amodal','rmodal'].forEach(closeModal);
+    if (ev.key !== 'Escape') return;
+    // close only the TOPMOST open modal, so a task modal opened over a unit modal
+    // closes itself first instead of the unit modal behind it
+    if (modalStack.length) { closeModal(modalStack[modalStack.length - 1]); return; }
+    var open = Array.prototype.filter.call(document.querySelectorAll('.lmodal.open'), function(m){ return m.id; });
+    if (open.length) closeModal(open[open.length - 1].id);
   });
 
   /* ── Units directory ──────────────────────── */

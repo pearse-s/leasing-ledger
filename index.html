@@ -834,6 +834,7 @@ window.addEventListener('error', function(e){
   .rmpro-name{font-size:.95rem;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .rmpro-stat{font-size:.73rem;color:var(--ink-soft);margin-top:1px}
   .rmpro-stat .warn{color:#ff8a85;font-weight:700}
+  .rmpro-stat .ok{color:#62c79a;font-weight:700}
   .rmpro-acts{display:flex;gap:8px;flex-shrink:0}
   .rmpro-acts a{font-size:1rem;text-decoration:none;color:var(--ink-soft);width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--hairline-dark);border-radius:50%}
   .rmpro-acts a:hover{color:var(--clay);border-color:var(--clay)}
@@ -1613,6 +1614,7 @@ window.addEventListener('error', function(e){
     </div>
     <div class="lmbody">
       <div class="fgrid" id="am-fields"></div>
+      <div id="am-showings"></div>
     </div>
     <div class="lmfoot" id="am-links"></div>
   </div>
@@ -4571,7 +4573,7 @@ window.addEventListener('error', function(e){
     rows.forEach(function(r){
       html += '<tr class="rowlink" data-aid="' + r.application_id + '">' +
         '<td>' + esc((r.submitted_at||'').slice(0,10)) + '</td>' +
-        '<td><b>' + esc(r.applicant_name || '–') + '</b></td>' +
+        '<td><b>' + esc(r.applicant_name || '–') + '</b>' + (r.toured ? ' <span class="chip c-ok" title="This applicant toured with us">toured</span>' : '') + '</td>' +
         '<td>' + esc(r.property_name || '–') + '</td>' +
         '<td>' + esc(r.unit_number || '–') + '</td>' +
         '<td>' + appChip(r.application_status) + '</td>' +
@@ -4608,12 +4610,49 @@ window.addEventListener('error', function(e){
     f += fitem('Owner', esc(r.primary_owner_name));
     f += fitem('Buildium app ID', esc(r.application_id));
     el('am-fields').innerHTML = f;
+    el('am-showings').innerHTML = '';
+    if (r.applicant_email) loadAppShowings(r.applicant_email, r.applicant_name);
     var links = '';
     if (r.applicant_id) links += '<a class="btn primary" target="_blank" rel="noopener" href="' + BMGR + '/leasing/applicant/' + r.applicant_id + '/summary">Application in Buildium &rarr;</a>';
     if (r.property_id && r.unit_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Unit &rarr;</a>';
     if (r.property_id) links += '<a class="btn" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/summary">Property &rarr;</a>';
     el('am-links').innerHTML = links || '<span class="noapply">No property link on this application</span>';
     openModal('amodal');
+  }
+  // Application modal — the applicant's tour history (showings + notes), matched by
+  // email. Read-only context for reviewing the application; "View in Tours" jumps to
+  // the Tours tab filtered to this prospect.
+  function loadAppShowings(email, name){
+    var box = el('am-showings'); if (!box) return;
+    email = (email || '').trim();
+    if (!email) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="rm-feedlab">Showings &amp; notes</div><span class="count-note">Loading…</span>';
+    authFetch('/prospect-history?email=' + encodeURIComponent(email)).then(function(j){
+      var showings = j.showings || [], notes = j.notes || [];
+      var items = [];
+      showings.forEach(function(x){ items.push({ at: Date.parse(x.start_time), s: x }); });
+      notes.forEach(function(n){ items.push({ at: Date.parse(n.created_at), n: n }); });
+      items.sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+      var h = '<div class="rm-feedlab">Showings &amp; notes · ' + showings.length + (showings.length === 1 ? ' showing' : ' showings') + '</div>';
+      if (!items.length) { box.innerHTML = h + '<span class="count-note">No showings on record for this prospect.</span>'; return; }
+      h += items.map(function(it){
+        if (it.n) {
+          var n = it.n, wn = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month:'short', day:'numeric' });
+          var on = n.property_name ? ' · on ' + esc(n.property_name) : '';
+          return '<div class="rmfi rmfi-note"><div class="rmfi-ic">&#128172;</div><div class="rmfi-main"><div class="rmfi-t">' + esc(n.note || '') + '</div><div class="rmfi-s">' + esc(n.actor || '—') + ' · ' + esc(wn) + on + '</div></div></div>';
+        }
+        var x = it.s, icon, verb;
+        if (x.is_no_show) { icon = '&#8856;'; verb = 'No-show'; }
+        else if (x.status === 'canceled') { icon = x.rescheduled ? '&#8635;' : '&#10006;'; verb = x.rescheduled ? 'Rescheduled' : 'Canceled'; }
+        else if (Date.parse(x.start_time) >= Date.now()) { icon = '&#128197;'; verb = 'Booked'; }
+        else { icon = '&#10003;'; verb = 'Showed'; }
+        var place = (x.matched_property_name || 'Tour') + (x.matched_unit_number ? ' · ' + x.matched_unit_number : '');
+        var ws = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month:'short', day:'numeric' });
+        return '<div class="rmfi"><div class="rmfi-ic">' + icon + '</div><div class="rmfi-main"><div class="rmfi-t">' + verb + ' · ' + esc(place) + '</div><div class="rmfi-s">' + ws + (x.agent ? ' · ' + esc(x.agent) : '') + '</div></div></div>';
+      }).join('');
+      h += '<div style="margin-top:8px"><button type="button" class="listbtn" data-tourq="' + esc(email) + '">View in Tours tab &#9656;</button></div>';
+      box.innerHTML = h;
+    }).catch(function(){ box.innerHTML = '<div class="rm-feedlab">Showings &amp; notes</div><span class="count-note">Could not load showings.</span>'; });
   }
   function renderMiniApps(box, apps, searchText){
     if (!apps.length) { box.textContent = 'No applications on record for this unit.'; return; }
@@ -4633,12 +4672,20 @@ window.addEventListener('error', function(e){
   }
   document.addEventListener('click', function(e){
     var b = e.target.closest('[data-appsq]'); if (!b) return;
-    ['lmodal','umodal'].forEach(closeModal);
+    ['lmodal','umodal','rmodal'].forEach(closeModal);
     aSel = {};
     aWin = { mode:'all', from:null, to:null };
     appsAll = null;
     aPendingSearch = b.getAttribute('data-appsq') || '';
     showTab('applications');
+  });
+  // Jump to the Tours tab filtered to a prospect (from the application modal's showings).
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-tourq]'); if (!b) return;
+    ['amodal','umodal','lmodal'].forEach(closeModal);
+    el('r-search').value = b.getAttribute('data-tourq') || '';
+    showTab('tours');
+    drawTours();
   });
 
   /* ════════════ Lease renewals ════════════ */
@@ -4882,7 +4929,7 @@ window.addEventListener('error', function(e){
       if (anyAg && !rAgents[r.agent || 'Unknown']) return false;
       if (anySt && !rStatus[tourStatusOf(r)]) return false;
       if (!q) return true;
-      return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.matched_unit_number||'') + ' ' + (r.event_name||'')).toLowerCase().indexOf(q) >= 0;
+      return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.matched_unit_number||'') + ' ' + (r.event_name||'') + ' ' + (r.invitee_name||'') + ' ' + (r.invitee_email||'')).toLowerCase().indexOf(q) >= 0;
     });
     rows.sort(cmpRows(rSort.k, rSort.d, rSort.k === 'start_time'));
     return rows;
@@ -4901,7 +4948,7 @@ window.addEventListener('error', function(e){
       html += '<tr class="' + cls + '" data-uri="' + esc(r.uri) + '">' +
         '<td>' + esc(when) + '</td>' +
         '<td><span class="agdotrow" style="background:' + agentColor(r.agent) + '"></span>' + esc(r.agent || '–') + '</td>' +
-        '<td>' + st + '</td>' +
+        '<td>' + st + (r.applied ? ' <span class="chip c-ok" title="This prospect applied">applied</span>' : '') + '</td>' +
         '<td>' + esc(r.matched_unit_number || '–') + '</td>' +
         '<td>' + esc(r.location_text || '–') + '</td>' +
         '<td>' + esc(r.matched_property_name || '–') + '</td></tr>';
@@ -5041,18 +5088,20 @@ window.addEventListener('error', function(e){
     lab.textContent = 'Activity · across all their tours';
     feed.innerHTML = '<span class="count-note">Loading…</span>';
     authFetch('/prospect-history?email=' + encodeURIComponent(email)).then(function(j){
-      var showings = j.showings || [], notes = j.notes || [];
+      var showings = j.showings || [], notes = j.notes || [], applications = j.applications || [];
       var noshows = showings.filter(function(x){ return x.is_no_show; });
       var stat = el('rm-prostat');
       if (stat) {
         var bits = [showings.length + (showings.length === 1 ? ' showing' : ' showings')];
         if (noshows.length) bits.push('<span class="warn">' + noshows.length + ' no-show' + (noshows.length === 1 ? '' : 's') + '</span>');
         bits.push(notes.length + (notes.length === 1 ? ' note' : ' notes'));
+        if (applications.length) bits.push('<span class="ok">' + applications.length + (applications.length === 1 ? ' application' : ' applications') + '</span>');
         stat.innerHTML = bits.join(' · ');
       }
       var items = [];
       showings.forEach(function(x){ items.push({ kind: 'showing', at: Date.parse(x.start_time), s: x }); });
       notes.forEach(function(n){ items.push({ kind: 'note', at: Date.parse(n.created_at), n: n }); });
+      applications.forEach(function(a){ items.push({ kind: 'app', at: Date.parse(a.submitted_at), a: a }); });
       items.sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
       if (!items.length) { feed.innerHTML = '<span class="count-note">No history yet — add the first note below.</span>'; return; }
       feed.innerHTML = items.map(function(it){
@@ -5061,6 +5110,12 @@ window.addEventListener('error', function(e){
           var wn = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
           var on = n.property_name ? ' · on ' + esc(n.property_name) : '';
           return '<div class="rmfi rmfi-note"><div class="rmfi-ic">&#128172;</div><div class="rmfi-main"><div class="rmfi-t">' + esc(n.note || '') + '</div><div class="rmfi-s">' + esc(n.actor || '—') + ' · ' + esc(wn) + on + '</div></div></div>';
+        }
+        if (it.kind === 'app') {
+          var a = it.a;
+          var aplace = (a.property_name || 'a unit') + (a.unit_number ? ' · ' + a.unit_number : '');
+          var wa = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+          return '<div class="rmfi rmfi-app" data-appsq="' + esc(email) + '" title="Open in Applications tab" style="cursor:pointer"><div class="rmfi-ic">&#128203;</div><div class="rmfi-main"><div class="rmfi-t">Applied · ' + esc(aplace) + ' ' + appChip(a.application_status) + ' &#9656;</div><div class="rmfi-s">' + wa + '</div></div></div>';
         }
         var x = it.s, icon, verb;
         if (x.is_no_show) { icon = '&#8856;'; verb = 'No-show'; }

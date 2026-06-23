@@ -765,6 +765,15 @@ window.addEventListener('error', function(e){
   #tm-detwrap[open] summary::after{content:'▴'}
   #tm-detwrap .fgrid{padding:2px 12px 0}
   #tm-detwrap .note{margin:2px 12px 10px}
+  /* owner modal — pattern redesign: action row + identity strip + collapsed details + portfolio */
+  #om-actrow{margin-bottom:12px}
+  #om-detwrap{margin:6px 0 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  #om-detwrap summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+  #om-detwrap summary::-webkit-details-marker{display:none}
+  #om-detwrap summary::after{content:'▾';float:right;opacity:.6}
+  #om-detwrap[open] summary::after{content:'▴'}
+  #om-detwrap .fgrid{padding:2px 12px 4px}
+  #om-props{margin-top:2px}
 
   /* v5: clickable sections, app/tour tabs, vacant filters */
   /* ── clickable affordances — make it obvious what's interactive ── */
@@ -1695,12 +1704,14 @@ window.addEventListener('error', function(e){
       <div class="lmsub" id="om-sub"></div>
     </div>
     <div class="lmbody">
-      <div class="fgrid" id="om-fields"></div>
-      <div class="sect">Properties</div>
-      <div class="propchips" id="om-props"></div>
-    </div>
-    <div class="lmfoot">
-      <button type="button" class="btn" id="om-viewunits">View this owner&rsquo;s units &rarr;</button>
+      <div class="rm-actrow" id="om-actrow">
+        <button type="button" class="btn primary rmact" id="om-viewunits">View this owner&rsquo;s units &rarr;</button>
+      </div>
+      <div id="om-contact"></div>
+      <details id="om-detwrap"><summary>Owner details</summary>
+        <div class="fgrid" id="om-fields"></div>
+      </details>
+      <div class="rm-feedwrap"><div class="rm-feedlab" id="om-portlab"></div><div class="propchips" id="om-props"></div></div>
     </div>
   </div>
 </div>
@@ -4915,15 +4926,28 @@ window.addEventListener('error', function(e){
     curOwner = r;
     el('om-title').textContent = r.display_name || '';
     el('om-sub').innerHTML = (r.is_company ? 'Company' : 'Individual') + (r.is_active === false ? ' &middot; INACTIVE' : '');
+    // identity strip — the owner, tap-to-call/text/email
+    var nm = (r.display_name || 'Owner').trim();
+    var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+    var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div><div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div><div class="rmpro-stat">' + (r.is_company ? 'Company' : 'Individual') + ' &middot; ' + fmtNum(r.property_count) + (r.property_count === 1 ? ' property' : ' properties') + '</div></div><div class="rmpro-acts">';
+    if (r.phone) { var tel = String(r.phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>'; }
+    if (r.email) pc += '<a href="mailto:' + esc(r.email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
+    pc += '</div></div>';
+    el('om-contact').innerHTML = pc;
+    // collapsed details
     var f = '';
+    f += fitem('Phone', esc(r.phone));
     f += fitem('Email', r.email ? '<a href="mailto:' + esc(r.email) + '" style="color:var(--clay)">' + esc(r.email) + '</a>' : null);
     f += fitem('Alt email', r.alternate_email ? esc(r.alternate_email) : null);
-    f += fitem('Phone', esc(r.phone));
     f += fitem('Properties', fmtNum(r.property_count));
     f += fitem('Mgmt start', esc(r.management_agreement_start_date));
     f += fitem('Mgmt end', esc(r.management_agreement_end_date));
     el('om-fields').innerHTML = f;
-    el('om-props').innerHTML = (r.property_names || []).map(function(p){ return '<span>' + esc(p) + '</span>'; }).join('') || '<span>–</span>';
+    el('om-detwrap').open = false;
+    // portfolio — what they own
+    var props = r.property_names || [];
+    el('om-portlab').textContent = 'Portfolio · ' + props.length + (props.length === 1 ? ' property' : ' properties');
+    el('om-props').innerHTML = props.map(function(p){ return '<span>' + esc(p) + '</span>'; }).join('') || '<span>–</span>';
     openModal('omodal');
   });
   el('om-viewunits').addEventListener('click', function(){

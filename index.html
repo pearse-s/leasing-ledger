@@ -1021,6 +1021,36 @@ window.addEventListener('error', function(e){
     .mobscrim{display:block;position:fixed;inset:0;background:rgba(6,7,12,.5);z-index:50;opacity:0;pointer-events:none;transition:opacity .3s}
     body.moreopen .mobscrim{opacity:1;pointer-events:auto}
   }
+  /* Keep the whole desktop sidebar inside the viewport so its bottom (scope +
+     activity window) is always visible WITHOUT scrolling the content cards.
+     The sidebar's min-height:calc(100vh-40px) already pins the footer to the
+     bottom; these tiers shrink the stacked content as the window gets shorter
+     so it never grows past the viewport. Desktop only (min-width:901px) — the
+     ≤900px "More" sheet has its own scroll. Pure spacing changes; the scope &
+     activity popovers are untouched (no overflow added, so nothing is clipped). */
+  @media (min-width:901px) and (max-height:1040px){
+    .sidebar{gap:12px;padding:16px 16px 13px}
+    .brand h1{font-size:1.26rem}
+    .navitem{padding:6px 12px}
+    .sidefilters{gap:8px}
+    .sidefilters label{margin-bottom:3px}
+    .sidewindow{gap:6px}
+    .sidefoot{padding-top:11px;gap:8px}
+  }
+  @media (min-width:901px) and (max-height:860px){
+    .sidebar{gap:8px;padding:11px 14px 10px}
+    .brand h1{font-size:1.14rem}
+    .brand .eyebrow{margin-bottom:2px}
+    .navlist{gap:1px}
+    .navitem{padding:4px 11px;font-size:.82rem}
+    .navitem svg{width:16px;height:16px}
+    .sidefilters{gap:6px}
+    .sidefilters label{margin-bottom:1px}
+    .sidefilters .msbtn{padding:5px 22px 5px 8px}
+    .sidewindow{gap:5px}
+    .winsummary{padding:7px 10px}
+    .sidefoot{padding-top:8px;gap:6px}
+  }
   @media(prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
   }

@@ -4289,7 +4289,7 @@ window.addEventListener('error', function(e){
     return items;
   }
   function lmFeedRow(it){
-    var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
     if (it.kind === 'app') {
       var a = it.a, nm = esc(a.applicant_name || 'Applicant');
       return '<div class="rmfi" data-appsq="' + esc((lmFeed.r.property || '') + ' ' + (lmFeed.r.unit || '')) + '" title="Open in Applications tab" style="cursor:pointer"><div class="rmfi-ic">&#128203;</div><div class="rmfi-main"><div class="rmfi-t">Applied &middot; ' + nm + ' ' + appChip(a.application_status) + ' &#9656;</div><div class="rmfi-s">' + wd + '</div></div></div>';
@@ -4950,7 +4950,7 @@ window.addEventListener('error', function(e){
     return items;
   }
   function umFeedRow(it){
-    var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
     if (it.kind === 'app') {
       var a = it.a;
       return '<div class="rmfi" data-appsq="' + esc((umFeed.r.property_name || '') + ' ' + (umFeed.r.unit_number || '')) + '" title="Open in Applications tab" style="cursor:pointer"><div class="rmfi-ic">&#128203;</div><div class="rmfi-main"><div class="rmfi-t">Applied &middot; ' + esc(a.applicant_name || 'Applicant') + ' ' + appChip(a.application_status) + ' &#9656;</div><div class="rmfi-s">' + wd + '</div></div></div>';
@@ -5283,7 +5283,7 @@ window.addEventListener('error', function(e){
     return items;
   }
   function amFeedRow(it){
-    var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month:'short', day:'numeric' });
+    var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month:'short', day:'numeric', year:'numeric' });
     if (it.kind === 'note') {
       var n = it.n, on = n.property_name ? ' · on ' + esc(n.property_name) : '';
       return '<div class="rmfi rmfi-note"><div class="rmfi-ic">&#128172;</div><div class="rmfi-main"><div class="rmfi-t">' + esc(n.note || '') + '</div><div class="rmfi-s">' + esc(n.actor || '—') + ' · ' + wd + on + '</div></div></div>';
@@ -5787,14 +5787,14 @@ window.addEventListener('error', function(e){
       feed.innerHTML = items.map(function(it){
         if (it.kind === 'note') {
           var n = it.n;
-          var wn = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+          var wn = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
           var on = n.property_name ? ' · on ' + esc(n.property_name) : '';
           return '<div class="rmfi rmfi-note"><div class="rmfi-ic">&#128172;</div><div class="rmfi-main"><div class="rmfi-t">' + esc(n.note || '') + '</div><div class="rmfi-s">' + esc(n.actor || '—') + ' · ' + esc(wn) + on + '</div></div></div>';
         }
         if (it.kind === 'app') {
           var a = it.a;
           var aplace = (a.property_name || 'a unit') + (a.unit_number ? ' · ' + a.unit_number : '');
-          var wa = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+          var wa = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
           return '<div class="rmfi rmfi-app" data-appsq="' + esc(email) + '" title="Open in Applications tab" style="cursor:pointer"><div class="rmfi-ic">&#128203;</div><div class="rmfi-main"><div class="rmfi-t">Applied · ' + esc(aplace) + ' ' + appChip(a.application_status) + matchTag(a.match_type) + ' &#9656;</div><div class="rmfi-s">' + wa + '</div></div></div>';
         }
         var x = it.s, icon, verb;
@@ -5803,7 +5803,7 @@ window.addEventListener('error', function(e){
         else if (Date.parse(x.start_time) >= Date.now()) { icon = '&#128197;'; verb = 'Booked'; }
         else { icon = '&#10003;'; verb = 'Showed'; }
         var place = (x.matched_property_name || 'Tour') + (x.matched_unit_number ? ' · ' + x.matched_unit_number : '');
-        var ws = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+        var ws = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
         var sub = ws + (x.agent ? ' · ' + esc(x.agent) : '') + (x.is_no_show && x.no_show_by ? ' · by ' + esc(x.no_show_by) : '');
         var cur = (x.uri === r.uri) ? ' cur' : '';
         return '<div class="rmfi' + cur + '"><div class="rmfi-ic">' + icon + '</div><div class="rmfi-main"><div class="rmfi-t">' + verb + ' · ' + esc(place) + (cur ? ' <span class="count-note">(this tour)</span>' : '') + '</div><div class="rmfi-s">' + sub + '</div></div></div>';

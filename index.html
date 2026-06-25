@@ -4664,9 +4664,9 @@ window.addEventListener('error', function(e){
     { k:'otb',      label:'Take-backs' }
   ];
   var OCC = [{ k:'all', label:'All' }, { k:'occupied', label:'Occupied' }, { k:'vacant', label:'Vacant' }, { k:'upcoming', label:'Upcoming move-in' }];
-  var MKT = [{ k:'all', label:'All' }, { k:'marketed', label:'Marketed' }, { k:'unlisted', label:'Unlisted' }];
+  var MKT = [{ k:'all', label:'All' }, { k:'marketed', label:'Marketed' }, { k:'unlisted', label:'Unlisted vacant' }];
   function occMatch(k, r){ if (k === 'occupied') return r.occupancy_status === 'occupied'; if (k === 'vacant') return r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'; if (k === 'upcoming') return !!r.has_upcoming_move_in || r.occupancy_status === 'pre_leased'; return true; }
-  function mktMatch(k, r){ if (k === 'marketed') return !!r.is_listed; if (k === 'unlisted') return !r.is_listed; return true; }
+  function mktMatch(k, r){ if (k === 'marketed') return !!r.is_listed; if (k === 'unlisted') return !r.is_listed && (r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'); return true; }
   function occTest(r){ return occMatch(uOcc, r); }
   function mktTest(r){ return mktMatch(uMkt, r); }
   function dvTest(r){ if (!uDV) return true; var isVac = (r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'); if (!isVac) return false; var rg = BUCKET_RANGE[uDV]; if (rg === null) return r.days_vacant == null; return r.days_vacant != null && r.days_vacant >= rg[0] && r.days_vacant <= rg[1]; }

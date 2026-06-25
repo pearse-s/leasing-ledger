@@ -1876,6 +1876,33 @@ window.addEventListener('error', function(e){
   </div>
 </div>
 
+<div class="lmodal" id="cthread">
+  <style>
+  #cthread .ct-scroll{max-height:58vh;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px}
+  #cthread .ct-day{text-align:center;font-size:.72rem;color:var(--ink-soft);margin:6px 0}
+  #cthread .ct-row{display:flex;flex-direction:column;max-width:80%}
+  #cthread .ct-in{align-self:flex-start;align-items:flex-start}
+  #cthread .ct-out{align-self:flex-end;align-items:flex-end}
+  #cthread .ct-bub{padding:7px 11px;border-radius:14px;font-size:.9rem;line-height:1.35;white-space:pre-wrap;word-break:break-word}
+  #cthread .ct-in .ct-bub{background:var(--glass);border-bottom-left-radius:4px}
+  #cthread .ct-out .ct-bub{background:var(--clay);color:#1a130b;border-bottom-right-radius:4px}
+  #cthread .ct-meta{font-size:.66rem;color:var(--ink-soft);margin:2px 6px 0}
+  #cthread .ct-call{align-self:center;font-size:.74rem;color:var(--ink-soft);background:var(--glass);padding:3px 11px;border-radius:12px}
+  .thrbtn{cursor:pointer;text-decoration:none}
+  </style>
+  <div class="lmback" data-close="cthread"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="cthread">&times;</button>
+    <div class="lmhead"><h3 id="ct-title"></h3><div class="lmsub" id="ct-sub"></div></div>
+    <div class="lmbody"><div id="ct-body" class="ct-scroll"></div></div>
+    <div class="lmfoot" style="display:flex;gap:8px;align-items:center">
+      <a id="ct-call" class="btn rmact" href="#">&#128222; Call</a>
+      <a id="ct-text" class="btn rmact" href="#">&#128172; Text</a>
+      <span class="note" style="margin-left:auto">opens RingCentral</span>
+    </div>
+  </div>
+</div>
+
 <div class="lmodal" id="kmodal">
   <div class="lmback" data-close="kmodal"></div>
   <div class="lmcard">
@@ -5304,7 +5331,7 @@ window.addEventListener('error', function(e){
       '<div class="rmpro-main"><div class="rmpro-name">' + esc(r.applicant_name || 'Applicant') + '</div>' +
       '<div class="rmpro-stat" id="am-prostat">' + esc(r.applicant_email || r.applicant_phone || '') + '</div></div>' +
       '<div class="rmpro-acts">';
-    if (r.applicant_phone) { var tel = String(r.applicant_phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>'; }
+    if (r.applicant_phone) { var tel = String(r.applicant_phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>' + threadIcon(tel, r.applicant_name); }
     if (r.applicant_email) pc += '<a href="mailto:' + esc(r.applicant_email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
     pc += '</div></div>';
     el('am-contact').innerHTML = pc;
@@ -5795,6 +5822,7 @@ window.addEventListener('error', function(e){
         var tel = r.invitee_phone.replace(/[^0-9+]/g, '');
         pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a>';
         pc += '<a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>';
+        pc += threadIcon(tel, r.invitee_name);
       }
       if (r.invitee_email) pc += '<a href="mailto:' + esc(r.invitee_email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
       pc += '</div></div>';
@@ -6461,10 +6489,21 @@ window.addEventListener('error', function(e){
   }
   function hubFuComms(r){
     var c = r.calls||0, t = r.texts||0;
-    if (!c && !t) return '<div style="font-size:.74rem;color:var(--clay);margin-bottom:6px">&#9888; no calls or texts logged</div>';
     var d = r.days_since_contact, stale = (d != null && d >= 7);
-    var last = d == null ? '' : (' &middot; last ' + (d === 0 ? 'today' : d + 'd ago'));
-    return '<div style="font-size:.74rem;margin-bottom:6px;color:' + (stale ? 'var(--clay)' : 'var(--ink-soft)') + '">&#128222; ' + c + ' &middot; &#128172; ' + t + last + (stale ? ' &#9888;' : '') + '</div>';
+    var ph = (r.phone || '').replace(/\D/g, ''), canThread = (c || t) && ph.length >= 10;
+    var teaser = '';
+    if (r.last_text_body){
+      teaser = '<div style="font-size:.73rem;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">' +
+        esc((r.last_text_dir === 'Outbound' ? 'You: ' : '') + r.last_text_body) + '</div>';
+    }
+    var line;
+    if (!c && !t){ line = '<span style="color:var(--clay)">&#9888; no calls or texts logged</span>'; }
+    else {
+      var last = d == null ? '' : (' &middot; last ' + (d === 0 ? 'today' : d + 'd ago'));
+      line = '<span style="color:' + (stale ? 'var(--clay)' : 'var(--ink-soft)') + '">&#128222; ' + c + ' &middot; &#128172; ' + t + last + (stale ? ' &#9888;' : '') + (canThread ? ' &rsaquo;' : '') + '</span>';
+    }
+    var inner = '<div style="font-size:.74rem;margin-bottom:6px">' + line + teaser + '</div>';
+    return canThread ? '<div class="thrbtn" data-ph="' + esc(ph) + '" data-nm="' + esc(r.tenant_name || '') + '">' + inner + '</div>' : inner;
   }
   function hubRenderLeaderboard(){
     var t = el('hublead'); if (!t) return; var tb = t.querySelector('tbody');
@@ -6602,6 +6641,51 @@ window.addEventListener('error', function(e){
     hubRenderFunnel(); hubRenderLeaderboard(); loadHubAgent();
   });
   if (el('hub-export')) el('hub-export').addEventListener('click', hubExport);
+
+  /* ── Prospect SMS/call thread viewer (chat modal, all agents) ── */
+  function threadIcon(phone, name){
+    var d = String(phone || '').replace(/\D/g, ''); if (d.length < 10) return '';
+    return '<a href="#" class="thrbtn" data-ph="' + d + '" data-nm="' + esc(name || '') + '" aria-label="View text thread" title="View text thread">&#129525;</a>';
+  }
+  function ctDay(d){ try { return d.toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch (e) { return ''; } }
+  function ctTime(d){ try { return d.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' }); } catch (e) { return ''; } }
+  function openThread(phone, name){
+    var d = String(phone || '').replace(/\D/g, ''); if (d.length < 10) return;
+    if (el('ct-title')) el('ct-title').textContent = name || 'Conversation';
+    if (el('ct-sub')) el('ct-sub').textContent = 'Loading…';
+    if (el('ct-body')) el('ct-body').innerHTML = '<div class="note" style="padding:18px;text-align:center">Loading…</div>';
+    if (el('ct-call')) el('ct-call').setAttribute('href', rcCall(d));
+    if (el('ct-text')) el('ct-text').setAttribute('href', rcText(d));
+    openModal('cthread');
+    authFetch('/prospect-comms?phone=' + encodeURIComponent(d)).then(function(j){ renderThread(j, name); })
+      .catch(function(){ if (el('ct-body')) el('ct-body').innerHTML = '<div class="note" style="padding:18px;text-align:center">Could not load the conversation.</div>'; });
+  }
+  function renderThread(j, name){
+    var texts = (j.texts || []).map(function(t){ return { at:t.creation_time, kind:'text', dir:t.direction, agent:t.agent_name, body:t.body }; });
+    var calls = (j.calls || []).map(function(c){ return { at:c.start_time, kind:'call', dir:c.direction, agent:c.agent_name, result:c.result, dur:c.duration }; });
+    var items = texts.concat(calls).filter(function(x){ return x.at; }).sort(function(a, b){ return (Date.parse(a.at)||0) - (Date.parse(b.at)||0); });
+    var s = j.summary || {};
+    if (el('ct-sub')) el('ct-sub').textContent = (s.texts != null ? s.texts : texts.length) + ' texts · ' + (s.calls != null ? s.calls : calls.length) + ' calls' + (s.agents && s.agents.length ? ' · ' + s.agents.join(', ') : '');
+    if (!items.length){ if (el('ct-body')) el('ct-body').innerHTML = '<div class="note" style="padding:18px;text-align:center">No texts or calls on record.</div>'; return; }
+    var h = '', lastDay = '';
+    items.forEach(function(it){
+      var dt = new Date(it.at), day = dt.toDateString();
+      if (day !== lastDay){ lastDay = day; h += '<div class="ct-day">' + esc(ctDay(dt)) + '</div>'; }
+      var tm = ctTime(dt), out = (it.dir === 'Outbound');
+      if (it.kind === 'call'){
+        var mins = it.dur ? Math.round(it.dur / 60) : 0;
+        h += '<div class="ct-call">&#128222; ' + (out ? 'Outbound' : 'Inbound') + ' call' + (it.agent ? ' · ' + esc(it.agent) : '') + (mins ? ' · ' + mins + 'm' : '') + (it.result ? ' · ' + esc(it.result) : '') + ' · ' + tm + '</div>';
+      } else {
+        h += '<div class="ct-row ' + (out ? 'ct-out' : 'ct-in') + '"><div class="ct-bub">' + esc(it.body || '') + '</div>' +
+          '<div class="ct-meta">' + (out ? esc(it.agent || 'Us') : esc(name || 'Prospect')) + ' · ' + tm + '</div></div>';
+      }
+    });
+    var b = el('ct-body'); if (b){ b.innerHTML = h; b.scrollTop = b.scrollHeight; }
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('.thrbtn'); if (!b) return;
+    e.preventDefault(); openThread(b.getAttribute('data-ph'), b.getAttribute('data-nm'));
+  });
 
   var ledOutreachLoaded = null;
   function loadLedgerOutreach(){

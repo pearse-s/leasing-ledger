@@ -1237,6 +1237,31 @@ window.addEventListener('error', function(e){
         <div class="num" id="k-overdue">&ndash;</div>
         <div class="sub">open &amp; past due date</div>
       </div>
+      <div class="kpi click" id="kpi-signed-mtd" title="New leases signed this month — open My hub">
+        <div class="lbl">Signed this month</div>
+        <div class="num" id="k-signed-mtd">&ndash;</div>
+        <div class="sub" id="k-signed-mtd-sub">new rent this month</div>
+      </div>
+      <div class="kpi click" id="kpi-conv" title="Showings that became signed leases, last 30 days — open Applications">
+        <div class="lbl">Showing &rarr; lease</div>
+        <div class="num" id="k-conv">&ndash;</div>
+        <div class="sub">conversion &middot; last 30 days</div>
+      </div>
+      <div class="kpi alert click" id="kpi-needs" title="Prospects you toured but haven't called or texted in 7+ days — open My hub">
+        <div class="lbl">Needs follow-up</div>
+        <div class="num" id="k-needs">&ndash;</div>
+        <div class="sub">toured &middot; no contact in 7 days</div>
+      </div>
+      <div class="kpi alert" id="kpi-missed" title="Inbound calls not answered, last 7 days">
+        <div class="lbl">Missed calls</div>
+        <div class="num" id="k-missed">&ndash;</div>
+        <div class="sub">inbound, last 7 days</div>
+      </div>
+      <div class="kpi click" id="kpi-outreach" title="Team calls + texts, last 7 days — open My hub">
+        <div class="lbl">Outreach this week</div>
+        <div class="num" id="k-outreach">&ndash;</div>
+        <div class="sub" id="k-outreach-sub">calls &middot; texts</div>
+      </div>
     </div>
 
     <div class="grid g2">
@@ -2361,7 +2386,24 @@ window.addEventListener('error', function(e){
     // task tiles are KPI-sourced (get_stats has no task counts), so set the number here too
     if (k.open_tasks){ countUp('k-tasks', k.open_tasks.cur == null ? 0 : k.open_tasks.cur, fmtNum); setKpiExtra(el('kpi-tasks'), deltaChip(k.open_tasks, false) + sparkSVG(k.open_tasks.series, GOLD)); }
     if (k.overdue_tasks){ countUp('k-overdue', k.overdue_tasks.cur == null ? 0 : k.overdue_tasks.cur, fmtNum); setKpiExtra(el('kpi-overdue'), deltaChip(k.overdue_tasks, false) + sparkSVG(k.overdue_tasks.series, GOLD)); }
+    if (k.signed_month){ countUp('k-signed-mtd', k.signed_month.cur == null ? 0 : k.signed_month.cur, fmtNum);
+      var sms = el('k-signed-mtd-sub'); if (sms) sms.innerHTML = '$' + fmtNum(k.signed_month.rent) + ' new rent this month';
+      setKpiExtra(el('kpi-signed-mtd'), deltaChip(k.signed_month, false) + sparkSVG(k.signed_month.series, GOLD)); }
+    if (k.conversion){ var cv = el('k-conv'); if (cv) cv.textContent = (k.conversion.cur == null ? '—' : k.conversion.cur + '%');
+      setKpiExtra(el('kpi-conv'), deltaChip(k.conversion, true) + sparkSVG(k.conversion.series, GOLD)); }
+    if (k.needs_followup){ countUp('k-needs', k.needs_followup.cur == null ? 0 : k.needs_followup.cur, fmtNum); setKpiExtra(el('kpi-needs'), deltaChip(k.needs_followup, false) + sparkSVG(k.needs_followup.series, GOLD)); }
+    if (k.missed_calls){ countUp('k-missed', k.missed_calls.cur == null ? 0 : k.missed_calls.cur, fmtNum); setKpiExtra(el('kpi-missed'), deltaChip(k.missed_calls, false) + sparkSVG(k.missed_calls.series, GOLD)); }
+    if (k.outreach){ countUp('k-outreach', k.outreach.cur == null ? 0 : k.outreach.cur, fmtNum);
+      var ous = el('k-outreach-sub'); if (ous) ous.innerHTML = fmtNum(k.outreach.calls) + ' calls &middot; ' + fmtNum(k.outreach.texts) + ' texts';
+      setKpiExtra(el('kpi-outreach'), deltaChip(k.outreach, false) + sparkSVG(k.outreach.series, GOLD)); }
   }
+  (function(){
+    var goHub = function(){ showTab('hub'); };
+    if (el('kpi-signed-mtd')) el('kpi-signed-mtd').addEventListener('click', goHub);
+    if (el('kpi-outreach'))   el('kpi-outreach').addEventListener('click', goHub);
+    if (el('kpi-needs'))      el('kpi-needs').addEventListener('click', goHub);
+    if (el('kpi-conv'))       el('kpi-conv').addEventListener('click', function(){ showTab('applications'); });
+  })();
 
   /* ── tabs ─────────────────────────────────── */
   var PAGES = { ledger:'app', hub:'page-hub', units:'page-units', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };

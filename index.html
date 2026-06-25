@@ -1354,6 +1354,13 @@ window.addEventListener('error', function(e){
       </div>
     </div>
 
+    <div class="card tablecard" id="ledger-outreach-card" style="margin-top:18px">
+      <div class="tablebar"><h2>Team outreach</h2><span class="count-note">calls &amp; texts &middot; RingCentral &middot; ~last 7 days</span></div>
+      <div class="scrolly"><table id="ledoutreach"><thead><tr>
+        <th>Agent</th><th class="rt">Calls out</th><th class="rt">Calls in</th><th class="rt">Texts out</th><th class="rt">Texts in</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+
     <footer id="foot"></footer>
   </div>
 
@@ -1411,15 +1418,12 @@ window.addEventListener('error', function(e){
       <div class="tablebar"><h2>Team leaderboard</h2><span class="count-note">all agents &middot; window applies</span></div>
       <div class="scrolly">
         <table id="hublead"><thead><tr>
-          <th>Agent</th><th class="rt">Showings</th><th class="rt">Applications</th><th class="rt">Signed</th><th class="rt">Suggested</th>
+          <th>Agent</th><th class="rt">Showings</th><th class="rt">Applications</th><th class="rt">Signed</th><th class="rt">Suggested</th><th class="rt">Calls</th><th class="rt">Texts</th>
         </tr></thead><tbody></tbody></table>
       </div>
     </div>
 
-    <div class="card" style="margin-top:18px;display:flex;align-items:center;gap:12px">
-      <div style="flex:1"><b>Calls &amp; texts &mdash; RingCentral</b><div class="note" style="margin:4px 0 0">Phase 2: your call/text volume per period, once RingCentral reporting is connected. (The Call/Text buttons above already ring through RingCentral.)</div></div>
-      <span class="pill" style="color:var(--ink-soft)">later</span>
-    </div>
+    <div class="card" id="hub-rc" style="margin-top:18px"></div>
   </div>
 
   <div id="page-units" style="display:none">
@@ -2362,6 +2366,7 @@ window.addEventListener('error', function(e){
     // if a prior /stats load failed (e.g. first load errored while deep-linked elsewhere),
     // retry when the user actually opens the Ledger so it can never sit blank
     if (key === 'ledger' && !statsLoaded && !statsLoading) load();
+    if (key === 'ledger' && ledOutreachLoaded === null) loadLedgerOutreach();
     // keep the URL hash in sync so the current tab is shareable/bookmarkable
     // (replaceState, not location.hash, so back/forward still leaves the app cleanly)
     try { if (('#' + key) !== location.hash) history.replaceState(null, '', location.pathname + location.search + '#' + key); } catch (e) {}
@@ -6439,6 +6444,27 @@ window.addEventListener('error', function(e){
     function arr(p){ return '<div style="text-align:center;color:var(--ink-soft)"><div style="font-size:1.1rem">&rarr;</div><div style="font-size:.7rem">' + p + '%</div></div>'; }
     var signedVal = fmtNum(s.signed) + (s.signed_suggested ? ' <span style="font-size:.95rem;color:var(--ink-soft);font-weight:600">+' + s.signed_suggested + ' sug.</span>' : '');
     f.innerHTML = hubTileHtml('Showings', fmtNum(s.showings)) + arr(c1) + hubTileHtml('Applications', fmtNum(s.applications)) + arr(c2) + hubTileHtml('Signed', signedVal, 'confirmed · suggested');
+    var rc = el('hub-rc');
+    if (rc){
+      var co = s.calls_out||0, ci = s.calls_in||0, to = s.texts_out||0, ti = s.texts_in||0;
+      rc.innerHTML = '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">' +
+        '<b style="font-size:.95rem">Outreach</b>' +
+        '<span style="color:var(--ink-soft)">&#128222; Calls <b style="color:var(--ink)">' + fmtNum(co) + '</b> out &middot; <b style="color:var(--ink)">' + fmtNum(ci) + '</b> in</span>' +
+        '<span style="color:var(--ink-soft)">&#128172; Texts <b style="color:var(--ink)">' + fmtNum(to) + '</b> out &middot; <b style="color:var(--ink)">' + fmtNum(ti) + '</b> in</span>' +
+        '<span class="pill" style="color:var(--ink-soft);margin-left:auto">RingCentral &middot; ~last 7 days</span></div>';
+    }
+  }
+  // total calls/texts for a leaderboard cell — "—" when an agent has no RC line / no activity
+  function hubComms(o, i){
+    var n = (o||0) + (i||0);
+    return n ? fmtNum(n) : '<span style="color:var(--ink-soft)">&mdash;</span>';
+  }
+  function hubFuComms(r){
+    var c = r.calls||0, t = r.texts||0;
+    if (!c && !t) return '<div style="font-size:.74rem;color:var(--clay);margin-bottom:6px">&#9888; no calls or texts logged</div>';
+    var d = r.days_since_contact, stale = (d != null && d >= 7);
+    var last = d == null ? '' : (' &middot; last ' + (d === 0 ? 'today' : d + 'd ago'));
+    return '<div style="font-size:.74rem;margin-bottom:6px;color:' + (stale ? 'var(--clay)' : 'var(--ink-soft)') + '">&#128222; ' + c + ' &middot; &#128172; ' + t + last + (stale ? ' &#9888;' : '') + '</div>';
   }
   function hubRenderLeaderboard(){
     var t = el('hublead'); if (!t) return; var tb = t.querySelector('tbody');
@@ -6451,7 +6477,9 @@ window.addEventListener('error', function(e){
         '<td class="rt">' + fmtNum(r.showings) + '</td>' +
         '<td class="rt">' + fmtNum(r.applications) + '</td>' +
         '<td class="rt">' + fmtNum(r.signed) + '</td>' +
-        '<td class="rt" style="color:var(--ink-soft)">' + fmtNum(r.signed_suggested) + '</td></tr>';
+        '<td class="rt" style="color:var(--ink-soft)">' + fmtNum(r.signed_suggested) + '</td>' +
+        '<td class="rt" title="' + ((r.calls_out||0) + ' out / ' + (r.calls_in||0) + ' in') + '">' + hubComms(r.calls_out, r.calls_in) + '</td>' +
+        '<td class="rt" title="' + ((r.texts_out||0) + ' out / ' + (r.texts_in||0) + ' in') + '">' + hubComms(r.texts_out, r.texts_in) + '</td></tr>';
     });
     tb.innerHTML = h || emptyRow('hublead', 'No activity in this window');
   }
@@ -6515,6 +6543,7 @@ window.addEventListener('error', function(e){
           '<b>' + esc(r.tenant_name || r.email || 'Prospect') + '</b>' +
           '<span style="font-size:.72rem;color:var(--ink-soft)">' + (r.age_days != null ? r.age_days + 'd ago' : '') + '</span></div>' +
         '<div style="font-size:.82rem;color:var(--ink-soft);margin:2px 0 6px">' + esc((r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : '')) + ' &mdash; ' + tag + '</div>' +
+        hubFuComms(r) +
         (contact ? '<div class="fubtns">' + contact + '</div>' : '') + '</div>';
     });
     box.innerHTML = h || '<div class="note" style="padding:14px">Nothing to follow up — all clear.</div>';
@@ -6573,6 +6602,21 @@ window.addEventListener('error', function(e){
     hubRenderFunnel(); hubRenderLeaderboard(); loadHubAgent();
   });
   if (el('hub-export')) el('hub-export').addEventListener('click', hubExport);
+
+  var ledOutreachLoaded = null;
+  function loadLedgerOutreach(){
+    ledOutreachLoaded = 1;
+    var to = dstr(new Date()), from = dstr(new Date(Date.now() - 7 * 86400000));
+    authFetch('/agent-scorecard?from=' + from + '&to=' + to).then(function(j){
+      var rows = (j.scorecard || []).filter(function(r){ return (r.calls_out||0)+(r.calls_in||0)+(r.texts_out||0)+(r.texts_in||0) > 0; })
+        .sort(function(a, b){ return ((b.calls_out||0)+(b.texts_out||0)) - ((a.calls_out||0)+(a.texts_out||0)); });
+      var h = '';
+      rows.forEach(function(r){
+        h += '<tr><td>' + esc(r.agent) + '</td><td class="rt">' + fmtNum(r.calls_out) + '</td><td class="rt">' + fmtNum(r.calls_in) + '</td><td class="rt">' + fmtNum(r.texts_out) + '</td><td class="rt">' + fmtNum(r.texts_in) + '</td></tr>';
+      });
+      var t = el('ledoutreach'); if (t) t.querySelector('tbody').innerHTML = h || emptyRow('ledoutreach', 'No outreach in the last 7 days');
+    }).catch(function(){ var t = el('ledoutreach'); if (t) t.querySelector('tbody').innerHTML = emptyRow('ledoutreach', 'Could not load outreach.'); });
+  }
 
   window.__llBooted = true;   // synchronous init finished without throwing — disarms the boot-crash guard
 })();

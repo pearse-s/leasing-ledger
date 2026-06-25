@@ -1374,46 +1374,7 @@ window.addEventListener('error', function(e){
       </div>
     </section>
 
-    <div class="card tablecard">
-      <div class="tablebar">
-        <h2>Marketed units</h2>
-        <button type="button" class="bucketchip" id="bucketchip"><span id="bucketlabel"></span>&nbsp;&#10005;</button>
-        <input type="text" id="t-search" placeholder="Search property, unit, owner&hellip;">
-        <input type="number" id="t-rmin" placeholder="Min rent" min="0" step="50" title="Minimum rent (listed rent, market rent if unlisted)">
-        <input type="number" id="t-rmax" placeholder="Max rent" min="0" step="50" title="Maximum rent (listed rent, market rent if unlisted)">
-        <span class="msinline" id="fg-t_amen">
-          <button type="button" class="msbtn" id="msb-t_amen" title="Amenity (from active listings — unlisted units have no amenity data). Pick one or more.">Any amenity</button>
-          <div class="mspanel" id="msp-t_amen">
-            <input type="text" class="mssearch" id="mss-t_amen" placeholder="Search amenities&hellip;">
-            <div class="mslist" id="msl-t_amen"></div>
-            <div class="msfoot"><button type="button" class="msclear" data-key="t_amen">Clear</button><button type="button" class="msdone" data-key="t_amen">Done</button></div>
-          </div>
-        </span>
-        <span class="chipset" data-cg="t-status" title="Vacant vs. occupied-but-listed (upcoming turnover). Pick either or both.">
-          <span class="cslabel">Status</span>
-          <button type="button" class="chip-mini" data-v="vacant">Vacant</button>
-          <button type="button" class="chip-mini" data-v="occupied">Occupied &middot; listed</button>
-        </span>
-        <label class="toggle"><input type="checkbox" id="t-listed"> listed only</label>
-        <label class="toggle"><input type="checkbox" id="t-unlisted"> unlisted only</label>
-        <span class="count-note" id="t-count"></span>
-      </div>
-      <div class="scrolly">
-        <table id="vtable">
-          <thead><tr>
-            <th data-k="property">Property</th>
-            <th data-k="unit">Unit</th>
-            <th data-k="bedrooms">Bed</th>
-            <th data-k="listing_rent" class="rt">Rent</th>
-            <th data-k="days_vacant" class="rt">Days vacant</th>
-            <th data-k="is_listed">Listed</th>
-            <th data-k="occupancy_status">Status</th>
-            <th data-k="manager">Manager</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
+    <!-- Marketed-units table retired in Phase 2b; all units (with Occupancy / Marketing / Days-vacant filters) live on the Units board -->
 
     <div class="card tablecard" id="ledger-outreach-card" style="margin-top:18px">
       <div class="tablebar"><h2>Team outreach</h2><span class="count-note">calls &amp; texts &middot; RingCentral &middot; ~last 7 days</span></div>
@@ -2155,7 +2116,6 @@ window.addEventListener('error', function(e){
     managers:   { sel:{}, items:[], all:'All managers',   scope:true,  cb:function(){ onScopeChange(); } },
     owners:     { sel:{}, items:[], all:'All owners',      scope:true,  cb:function(){ onScopeChange(); } },
     properties: { sel:{}, items:[], all:'All properties',  scope:true,  cb:function(){ onScopeChange(); } },
-    t_amen:     { sel:{}, items:[], all:'Any amenity',     scope:false, cb:function(){ drawTable(); } },
     u_amen:     { sel:{}, items:[], all:'Any amenity',     scope:false, cb:function(){ drawUnits(); } },
     nb_park:    { sel:{}, items:[], all:'Any parking',     scope:false, cb:function(){ drawUnits(); } }
   };
@@ -2271,7 +2231,6 @@ window.addEventListener('error', function(e){
      State is a plain object used as a Set; empty = no constraint. One delegated handler. */
   var CG = {};
   var CG_ONCHANGE = {
-    't-status':function(){ drawTable(); },
     'nb-bt':   function(){ drawUnits(); },
     'nb-appl': function(){ drawUnits(); }
   };
@@ -3643,13 +3602,6 @@ window.addEventListener('error', function(e){
   });
 
   var COLF_DEF = {
-    vtable: { rows:function(){ return tableRows || []; }, redraw:function(){ drawTable(); }, cols:{
-      bedrooms:{ t:'enum', label:'Bed' },
-      listing_rent:{ t:'num', label:'Rent', get:marketedRent },
-      days_vacant:{ t:'num', label:'Days vacant' },
-      is_listed:{ t:'enum', label:'Listed', disp:cf_yesno },
-      occupancy_status:{ t:'enum', label:'Status', get:statusOf, disp:cf_cap }
-    }},
     utable: { rows:function(){ return unitsAll || []; }, redraw:function(){ drawUnits(); }, cols:{
       unit_bedrooms:{ t:'enum', label:'Beds' },
       occupancy_status:{ t:'enum', label:'Status', disp:function(v){ return CF_OCC[v] || v; } },
@@ -3705,7 +3657,6 @@ window.addEventListener('error', function(e){
   var COLF = {};
   // per-table sort wiring — the popover's A→Z / Z→A buttons drive these
   var COLF_SORT = {
-    vtable: { get:function(){ return { k:sortKey, d:sortDir }; }, set:function(c,d){ sortKey=c; sortDir=d; drawTable(); } },
     utable: { get:function(){ return uSort; }, set:function(c,d){ uSort={k:c,d:d}; drawUnits(); } },
     atable: { get:function(){ return aSort; }, set:function(c,d){ aSort={k:c,d:d}; drawApps(); } },
     rtable: { get:function(){ return rSort; }, set:function(c,d){ rSort={k:c,d:d}; drawTours(); } },
@@ -3962,18 +3913,6 @@ window.addEventListener('error', function(e){
     if (b2) b2.style.opacity = (stale ? 0.62 : 0.34).toFixed(2);
   }
 
-  function setBucket(b){
-    state.bucket = b;
-    var chipEl = el('bucketchip');
-    if (b) {
-      el('bucketlabel').textContent = 'Aging: ' + b.label;
-      chipEl.classList.add('show');
-    } else {
-      chipEl.classList.remove('show');
-    }
-    drawTable();
-  }
-  el('bucketchip').addEventListener('click', function(){ setBucket(null); });
 
   function render(d){
     statsLoaded = true; statsLoading = false;
@@ -4041,14 +3980,8 @@ window.addEventListener('error', function(e){
       options:{ responsive:true, maintainAspectRatio:false, layout:{ padding:{ top:16 } },
         onClick:function(evt, els){
           if (!els || !els.length) return;
-          var idx = els[0].index;
-          // clicking any segment drills the WHOLE age band (operational + never-leased);
-          // clear conflicting table filters so the band's vacant units always show
-          // (inBucket already restricts to vacant rows, so status resets to "all")
-          el('t-listed').checked = false; el('t-unlisted').checked = false;
-          cgReplace('t-status', []);
-          setBucket({ key:BUCKET_KEYS[idx], label:BUCKET_LABELS[idx] });
-          scrollVacantTable();
+          // drill into the Units board: vacant units in the clicked age band
+          gotoUnitsFilter('vacant', 'all', BUCKET_KEYS[els[0].index]);
         },
         onHover:function(evt, els){
           evt.native.target.style.cursor = els && els.length ? 'pointer' : 'default';
@@ -4215,9 +4148,7 @@ window.addEventListener('error', function(e){
 
     // vacant units + occupied-but-listed (upcoming turnover) share one table.
     // Headline vacancy KPIs/rates/aging stay vacant-only (server-side).
-    tableRows = (d.vacant_units || []).concat(d.marketed_occupied || []);
-    fillAmenMS('t_amen', tableRows, function(r){ return r.listing_amenities; });
-    drawTable();
+    tableRows = (d.vacant_units || []).concat(d.marketed_occupied || []);  // kept for the listing modal (listingRowFor)
 
     var ops = d.ops || {};
     lastBuildiumSync = ops.last_buildium_sync || null;
@@ -4253,64 +4184,8 @@ window.addEventListener('error', function(e){
     if (days > 90) return '<span class="chip c-hot" style="font-weight:800">' + days + 'd</span>';
     return '<span class="chip ' + cls + '">' + days + 'd</span>';
   }
-  function statusOf(r){
-    var s = r.occupancy_status;
-    return (!s || s === 'op_vacant' || s === 'never_leased') ? 'vacant' : 'occupied';
-  }
-  function statusChip(r){
-    var s = r.occupancy_status;
-    if (s === 'occupied')   return '<span class="chip c-turn">occupied &middot; listed</span>';
-    if (s === 'pre_leased') return '<span class="chip c-warm">pre-leased</span>';
-    if (r.never_leased)     return '<span class="chip c-new">new</span>';
-    return '<span class="chip c-cold">turnover</span>';
-  }
-  function inBucket(r){
-    var b = state.bucket;
-    if (!b) return true;
-    if (statusOf(r) !== 'vacant') return false;        // aging is vacant-only (operational + never-leased together)
-    var range = BUCKET_RANGE[b.key];
-    if (range === null) return r.days_vacant == null;  // the "age unknown" bucket
-    return r.days_vacant != null && r.days_vacant >= range[0] && r.days_vacant <= range[1];
-  }
-  function drawTable(){
-    var q = (el('t-search').value || '').toLowerCase();
-    var onlyUnlisted = el('t-unlisted').checked;
-    var onlyListed = el('t-listed').checked;
-    var rmin = parseFloat(el('t-rmin').value);
-    var rmax = parseFloat(el('t-rmax').value);
-    var statusSel = cgArr('t-status');
-    var amenSel = msIds('t_amen');
-    var rows = tableRows.filter(function(r){
-      if (!colfPass('vtable', r)) return false;
-      if (!inBucket(r)) return false;
-      if (statusSel.length && statusSel.indexOf(statusOf(r)) < 0) return false;
-      if (onlyUnlisted && r.is_listed) return false;
-      if (onlyListed && !r.is_listed) return false;
-      var rent = marketedRent(r);
-      if (!isNaN(rmin) && (rent == null || rent < rmin)) return false;
-      if (!isNaN(rmax) && (rent == null || rent > rmax)) return false;
-      if (!amenMatchMulti(r.listing_amenities, amenSel)) return false;
-      if (!q) return true;
-      return ((r.property||'') + ' ' + (r.unit||'') + ' ' + (r.owner||'') + ' ' + (r.manager||'')).toLowerCase().indexOf(q) >= 0;
-    });
-    rows.sort(cmpRows(sortKey, sortDir));
-    var html = '';
-    rows.forEach(function(r){
-      // whole row opens the unit popup (like the Units tab); the listed button still opens the listing modal
-      var uattr = r.unit_id != null ? ' class="rowlink" data-uid="' + r.unit_id + '"' : '';
-      html += '<tr' + uattr + '>' +
-        '<td>' + esc(r.property) + '</td>' +
-        '<td>' + esc(r.unit) + '</td>' +
-        '<td>' + esc(r.bedrooms || '–') + '</td>' +
-        '<td class="rt">' + (marketedRent(r) != null ? fmtMoney(marketedRent(r)) : '–') + '</td>' +
-        '<td class="rt">' + (statusOf(r) === 'vacant' ? chipFor(r.days_vacant, r.days_vacant == null) : '<span style="color:var(--ink-soft)">—</span>') + '</td>' +
-        '<td>' + (r.is_listed ? '<button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '<span class="nolist">NO</span>') + '</td>' +
-        '<td>' + statusChip(r) + '</td>' +
-        '<td>' + esc(r.manager || '–') + '</td></tr>';
-    });
-    el('vtable').querySelector('tbody').innerHTML = html || emptyRow('vtable', 'Nothing matches');
-    el('t-count').textContent = rows.length + ' of ' + tableRows.length + ' marketed units';
-  }
+  // statusOf / statusChip / inBucket / drawTable were removed with the Marketed-units table (Phase 2b).
+  // chipFor (above) is kept — the Units board reuses it for the days-vacant age chip in the Status column.
 
   /* ── photo helpers (shared) ───────────────── */
   function blobDownload(p){
@@ -4521,12 +4396,7 @@ window.addEventListener('error', function(e){
     }
     box.innerHTML = rows.length ? rows.join('') : '<span class="count-note">Nothing here yet.</span>';
   }
-  el('vtable').addEventListener('click', function(ev){
-    var b = ev.target.closest('.listbtn');
-    if (b) { openListing(b.getAttribute('data-uid')); return; }
-    var tr = ev.target.closest('tr[data-uid]');
-    if (tr) openUnitEnsure(tr.getAttribute('data-uid'));
-  });
+  // (Marketed-units #vtable row-click handler removed in Phase 2b — the Units board has its own.)
 
   /* ── modals (generic open/close) ──────────── */
   // remember where the user last pressed so modals can expand from that point
@@ -6321,18 +6191,21 @@ window.addEventListener('error', function(e){
   });
 
   /* ── drill-down clicks (Ledger → other tabs) ── */
-  function scrollVacantTable(){
-    var tc = document.querySelector('#app .tablecard');
-    if (tc && tc.scrollIntoView) tc.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' });
+  // drill from a Ledger KPI / aging bar into the Units board, pre-filtered
+  function gotoUnitsFilter(occ, mkt, band){
+    showTab('units');
+    var go = function(){
+      el('u-search').value = ''; el('u-rmin').value = ''; el('u-rmax').value = '';
+      uSel = {}; uOcc = occ || 'all'; uMkt = mkt || 'all'; uDV = band || '';
+      if (el('u-dv')) el('u-dv').value = uDV;
+      COLF['utable'] = {};
+      drawChips(); drawUnits();
+    };
+    if (unitsAll === null) loadUnits(go); else go();
   }
-  el('kpi-vacant').addEventListener('click', function(){
-    setBucket(null);
-    el('t-listed').checked = false; el('t-unlisted').checked = false;
-    cgReplace('t-status', ['vacant']);
-    drawTable();
-    scrollVacantTable();
-  });
-  // "Vacant & unlisted" is now a sub-line of the Vacant KPI; standalone card + drill removed (Phase 2 will drill to Units · Vacant + Unlisted).
+  el('kpi-vacant').addEventListener('click', function(){ gotoUnitsFilter('vacant', 'all', ''); });
+  // the "unlisted" sub-line on the Vacant KPI drills to vacant units with no active listing
+  (function(){ var kun = el('k-unlisted'); if (kun && kun.parentNode){ kun.parentNode.style.cursor = 'pointer'; kun.parentNode.title = 'See vacant units with no active listing'; kun.parentNode.addEventListener('click', function(ev){ ev.stopPropagation(); gotoUnitsFilter('vacant', 'unlisted', ''); }); } })();
   el('kpi-pre').addEventListener('click', function(){ openMoveIns(); });
   el('tile-apps').addEventListener('click', function(){ gotoApplications('all', true); });
   el('tile-mi').addEventListener('click', function(){ openMoveIns(); });
@@ -6443,23 +6316,7 @@ window.addEventListener('error', function(e){
   });
   document.addEventListener('click', winClose);
   winRender();
-  el('t-search').addEventListener('input', deb(drawTable));
-  // t-beds / t-status are chip groups (CG_ONCHANGE), t-amen is a popover (MS.cb) — they wire themselves
-  el('t-rmin').addEventListener('input', drawTable);
-  el('t-rmax').addEventListener('input', drawTable);
-  el('t-unlisted').addEventListener('change', function(){
-    if (this.checked) el('t-listed').checked = false;
-    drawTable();
-  });
-  el('t-listed').addEventListener('change', function(){
-    if (this.checked) el('t-unlisted').checked = false;
-    drawTable();
-  });
-  el('vtable').querySelector('thead').addEventListener('click', function(e){
-    var th = e.target.closest('th'); if (!th) return;
-    var k = th.getAttribute('data-k'); if (!k) return;
-    openCol('vtable', k, th);
-  });
+  // Marketed-units table listeners removed (Phase 2b — table retired; units live on the Units board).
 
   /* ── auth / login ─────────────────────────── */
   function showLogin(){

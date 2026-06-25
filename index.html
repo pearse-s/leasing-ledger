@@ -353,6 +353,11 @@ window.addEventListener('error', function(e){
   .panel-kpis>.kpi{flex:1 1 210px;max-width:360px}
   .panel-kpis>.kpi.gauge{flex:1 1 340px;max-width:440px}
   @media(max-width:620px){ .panel-kpis>.kpi,.panel-kpis>.kpi.gauge{max-width:none} }
+  /* Units board — labeled filter axes (occupancy / marketing / flags) */
+  .ufilters{display:flex;flex-direction:column;gap:7px;margin:8px 0 10px}
+  .ufrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ufrow>.cslabel{min-width:72px;flex:none}
+  .ufrow .qchips{margin:0}
   .grid{display:grid;gap:18px;margin-top:18px}
   .g2{grid-template-columns:3fr 2fr}
   .g3{grid-template-columns:1.2fr .9fr .9fr}
@@ -1491,6 +1496,7 @@ window.addEventListener('error', function(e){
           <button data-v="map">Map</button>
         </div>
         <input type="text" id="u-search" placeholder="Search property, unit, tenant, owner&hellip;">
+        <input type="number" id="u-rmin" placeholder="Min rent" min="0" step="50" title="Minimum rent (listed rent if listed, else lease rent, else market rent)">
         <input type="number" id="u-rmax" placeholder="Max rent" min="0" step="50" title="Maximum rent (listed rent if listed, else lease rent, else market rent)">
         <span class="msinline" id="fg-u_amen">
           <button type="button" class="msbtn" id="msb-u_amen" title="Amenity (from active listings — unlisted units have no amenity data). Pick one or more.">Any amenity</button>
@@ -1500,9 +1506,21 @@ window.addEventListener('error', function(e){
             <div class="msfoot"><button type="button" class="msclear" data-key="u_amen">Clear</button><button type="button" class="msdone" data-key="u_amen">Done</button></div>
           </div>
         </span>
+        <select id="u-dv" title="Days vacant — vacant units only">
+          <option value="">Any days vacant</option>
+          <option value="d0_30">0&ndash;30 days</option>
+          <option value="d31_60">31&ndash;60</option>
+          <option value="d61_90">61&ndash;90</option>
+          <option value="d90_plus">90+</option>
+          <option value="unknown">age unknown</option>
+        </select>
         <span class="count-note" id="u-count"></span>
       </div>
-      <div class="qchips" id="u-chips"></div>
+      <div class="ufilters">
+        <div class="ufrow"><span class="cslabel">Occupancy</span><div class="qchips" id="u-occ"></div></div>
+        <div class="ufrow"><span class="cslabel">Marketing</span><div class="qchips" id="u-mkt"></div></div>
+        <div class="ufrow"><span class="cslabel">Flags</span><div class="qchips" id="u-chips"></div></div>
+      </div>
       <div class="tablebar" id="u-nbfilters" style="margin:0 0 10px;padding:8px 10px;background:var(--paper-deep);border-radius:3px">
         <span style="font-size:.66rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)">Nookbook</span>
         <span class="chipset" data-cg="nb-bt" title="Building type — pick one or more">
@@ -1541,7 +1559,7 @@ window.addEventListener('error', function(e){
             <th data-k="monthly_rent" class="rt">Rent</th>
             <th data-k="total_balance" class="rt">Balance</th>
             <th data-k="tenant_names">Tenant</th>
-            <th data-k="is_listed">Listed</th>
+            <th data-k="property_manager_name">Manager</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -2150,7 +2168,8 @@ window.addEventListener('error', function(e){
   var unitsAll = null, ownersAll = null;
   var uSort = { k:'property_name', d:1 }, oSort = { k:'display_name', d:1 };
   var uPage = 0, uSig = '', U_PER = 200;
-  var uSel = {};   // Units quick-chip multi-select (empty = All)
+  var uSel = {};   // Units flag chips multi-select (move-out / eviction / balance / take-backs)
+  var uOcc = 'all', uMkt = 'all', uDV = '';   // Occupancy axis · Marketing axis · Days-vacant band
   var curPhotosLm = [], curPhotosUm = [];
   var dlBusy = false;
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aSel = {};
@@ -4635,16 +4654,22 @@ window.addEventListener('error', function(e){
   /* ── Units directory ──────────────────────── */
   // Slim chip bar — granular facets (beds, status values, dates, …) live in the column
   // filters now. Take-backs are hidden by default; the chip reveals them.
+  // Flag chips (multi-select OR). Occupancy + Marketing are the two primary axes,
+  // rendered separately below as single-select groups; Days-vacant is a vacant-only refinement.
   var QFILTERS = [
     { k:'all',      label:'All' },
-    { k:'listed',   label:'Listed' },
-    { k:'vacant',   label:'Vacant' },
-    { k:'mi',       label:'Upcoming move-ins', title:'Pre-leased units moving in this month or on the 1st of next month' },
     { k:'mo',       label:'Move-outs this month' },
     { k:'eviction', label:'Evictions' },
     { k:'balance',  label:'Has balance' },
     { k:'otb',      label:'Take-backs' }
   ];
+  var OCC = [{ k:'all', label:'All' }, { k:'occupied', label:'Occupied' }, { k:'vacant', label:'Vacant' }, { k:'upcoming', label:'Upcoming move-in' }];
+  var MKT = [{ k:'all', label:'All' }, { k:'marketed', label:'Marketed' }, { k:'unlisted', label:'Unlisted' }];
+  function occMatch(k, r){ if (k === 'occupied') return r.occupancy_status === 'occupied'; if (k === 'vacant') return r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'; if (k === 'upcoming') return !!r.has_upcoming_move_in || r.occupancy_status === 'pre_leased'; return true; }
+  function mktMatch(k, r){ if (k === 'marketed') return !!r.is_listed; if (k === 'unlisted') return !r.is_listed; return true; }
+  function occTest(r){ return occMatch(uOcc, r); }
+  function mktTest(r){ return mktMatch(uMkt, r); }
+  function dvTest(r){ if (!uDV) return true; var isVac = (r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'); if (!isVac) return false; var rg = BUCKET_RANGE[uDV]; if (rg === null) return r.days_vacant == null; return r.days_vacant != null && r.days_vacant >= rg[0] && r.days_vacant <= rg[1]; }
   function sameMonth(dstr2){
     if (!dstr2) return false;
     var d = new Date(dstr2 + 'T00:00:00');
@@ -4713,7 +4738,25 @@ window.addEventListener('error', function(e){
         esc(f.label) + ' <span class="qn">' + n + '</span></button>';
     });
     el('u-chips').innerHTML = html;
+    drawAxes();
   }
+  function drawAxes(){
+    var oc = unitsAll || [];
+    function grp(arr, sel, container, matchFn){
+      var h = '';
+      arr.forEach(function(f){
+        var n = oc.filter(function(r){ if (r.is_owner_takeback) return false; return matchFn(f.k, r); }).length;
+        h += '<button type="button" class="qchip' + (sel === f.k ? ' on' : '') + '" data-q="' + f.k + '">' + esc(f.label) + ' <span class="qn">' + n + '</span></button>';
+      });
+      el(container).innerHTML = h;
+    }
+    grp(OCC, uOcc, 'u-occ', occMatch);
+    grp(MKT, uMkt, 'u-mkt', mktMatch);
+  }
+  el('u-occ').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return; uOcc = b.getAttribute('data-q'); ['vacant','pre','occ','mi','exp60','exp90','notice'].forEach(function(k){ delete uSel[k]; }); drawChips(); drawUnits(); });
+  el('u-mkt').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return; uMkt = b.getAttribute('data-q'); delete uSel['listed']; drawChips(); drawUnits(); });
+  el('u-dv').addEventListener('change', function(){ uDV = this.value; drawUnits(); });
+  el('u-rmin').addEventListener('input', deb(drawUnits));
   el('u-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return;
     var k = b.getAttribute('data-q');
@@ -4794,15 +4837,20 @@ window.addEventListener('error', function(e){
     var amenSel = msIds('u_amen');
     var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
     var nbf = { bt: cgArr('nb-bt'), park: msIds('nb_park'), appl: cgArr('nb-appl'), notready: el('nb-notready').checked };
+    var rmin = parseFloat(el('u-rmin').value);
     var rows = unitsAll.filter(function(r){
       if (r.is_owner_takeback && !uSel['otb']) return false;   // take-backs hidden unless the chip is on
       if (!colfPass('utable', r)) return false;
       if (!scopeTestUnit(r, mg, ow, pr)) return false;
       if (!uChipPass(r)) return false;
+      if (!occTest(r)) return false;
+      if (!mktTest(r)) return false;
+      if (!dvTest(r)) return false;
       if (!nbTest(r, nbf)) return false;
-      if (!isNaN(rmax)) {
+      if (!isNaN(rmax) || !isNaN(rmin)) {
         var rent = rentBasis(r);
-        if (rent == null || rent > rmax) return false;
+        if (!isNaN(rmax) && (rent == null || rent > rmax)) return false;
+        if (!isNaN(rmin) && (rent == null || rent < rmin)) return false;
       }
       if (!amenMatchMulti(r.amenities, amenSel)) return false;
       if (!q) return true;
@@ -4812,7 +4860,7 @@ window.addEventListener('error', function(e){
     });
     rows.sort(cmpRows(uSort.k, uSort.d));
     // reset to page 1 whenever the filter/sort/scope changes (but not on paging)
-    var sig = [q, el('u-rmax').value, amenSel.join(','), Object.keys(uSel).sort().join(','), JSON.stringify(nbf), JSON.stringify(COLF['utable']||{}), mg.join(','), ow.join(','), pr.join(','), uSort.k, uSort.d, uView].join('|');
+    var sig = [q, el('u-rmin').value, el('u-rmax').value, amenSel.join(','), uOcc, uMkt, uDV, Object.keys(uSel).sort().join(','), JSON.stringify(nbf), JSON.stringify(COLF['utable']||{}), mg.join(','), ow.join(','), pr.join(','), uSort.k, uSort.d, uView].join('|');
     if (sig !== uSig) { uSig = sig; uPage = 0; }
     var pageCount = Math.max(1, Math.ceil(rows.length / U_PER));
     if (uPage >= pageCount) uPage = pageCount - 1;
@@ -4837,13 +4885,13 @@ window.addEventListener('error', function(e){
         '<td>' + esc(r.property_name) + '</td>' +
         '<td>' + esc(r.unit_number) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
-        '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + '</td>' +
-        '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + '</td>' +
+        '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + '</td>' +
+        '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
         '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>' : '–') + '</td>' +
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
-        '<td>' + (r.is_listed ? '<span class="chip c-ok">listed</span>' : '–') + '</td></tr>';
+        '<td>' + esc(r.property_manager_name || '–') + '</td></tr>';
     });
     el('utable').querySelector('tbody').innerHTML = html || emptyRow('utable', 'Nothing matches');
     var note = rows.length + ' of ' + unitsAll.length + ' units';
@@ -4972,6 +5020,8 @@ window.addEventListener('error', function(e){
     openCol('utable', k, th);
   });
   el('utable').addEventListener('click', function(e){
+    var lb = e.target.closest && e.target.closest('.listbtn');
+    if (lb){ openListing(lb.getAttribute('data-uid')); return; }
     var tr2 = e.target.closest('tr[data-uid]');
     if (tr2) openUnit(tr2.getAttribute('data-uid'));
   });

@@ -1122,6 +1122,40 @@ window.addEventListener('error', function(e){
   @media(prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
   }
+  /* Schedule-tour wizard */
+  .schwiz{display:flex;flex-direction:column;gap:14px;margin-top:12px}
+  .schstep{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
+  .schstep.schlocked{opacity:.45;pointer-events:none}
+  .schnum{flex:0 0 28px;width:28px;height:28px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#15110D;background:var(--accent-grad)}
+  .schmain{flex:1 1 auto;min-width:0}
+  .schlbl{display:block;font-weight:800;font-size:.95rem;margin-bottom:8px}
+  .schsub{display:block;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin:8px 0 4px}
+  .schwiz input[type=text],.schwiz input[type=email],.schwiz select{width:100%;max-width:440px}
+  .schresults{margin-top:8px;display:flex;flex-direction:column;gap:4px;max-height:280px;overflow:auto}
+  .schres{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border:1px solid var(--hairline-dark);border-radius:10px;background:rgba(255,255,255,.02);cursor:pointer;text-align:left;font-family:var(--sans);color:var(--ink)}
+  .schres:hover{border-color:var(--clay)}
+  .schres b{font-size:.92rem}
+  .schres span{font-size:.76rem;color:var(--ink-soft)}
+  .schchips{display:flex;flex-wrap:wrap;gap:7px}
+  .schrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+  .schslots{display:flex;flex-direction:column;gap:10px;max-height:360px;overflow:auto;margin-top:4px}
+  .schday{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .schdaylab{flex:0 0 116px;font-weight:700;font-size:.8rem;color:var(--ink-soft)}
+  .schslot{font-family:var(--sans);font-size:.82rem;font-weight:700;border:1px solid var(--hairline-dark);background:rgba(255,255,255,.03);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
+  .schslot.on{background:var(--accent-grad);color:#15110D;border-color:transparent}
+  .schsummary{font-size:.9rem;color:var(--ink-soft);margin-bottom:10px}
+  .schgen{margin-bottom:10px}
+  .schlink{display:flex;gap:8px;align-items:center;margin-bottom:10px;max-width:560px}
+  .schlink input{flex:1 1 auto;font-size:.82rem}
+  .schsend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .schmanual{display:flex;flex-direction:column;gap:6px;max-width:440px;margin-top:6px}
+  .schmanual .mybtn{align-self:flex-start}
+  .linklike{background:none;border:none;color:var(--clay);font-weight:700;font-size:.82rem;cursor:pointer;padding:6px 0;margin-top:6px;font-family:var(--sans)}
+  .linklike:hover{text-decoration:underline}
+  .schpicked{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--clay);border-radius:10px;margin-top:8px;background:var(--clay-soft)}
+  .schpicked b{font-size:.92rem;color:var(--ink)}
+  .schpicked span{font-size:.78rem;color:var(--ink-soft)}
+  .schpicked .schpx{margin-left:auto;cursor:pointer;color:var(--ink-soft);background:none;border:none;font-size:1.2rem;line-height:1}
 </style>
 </head>
 <body>
@@ -1155,6 +1189,7 @@ window.addEventListener('error', function(e){
       <button type="button" class="navitem" data-tab="units"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg><span>Units</span></button>
       <button type="button" class="navitem" data-tab="applications"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg><span>Applications</span></button>
       <button type="button" class="navitem" data-tab="tours"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Tours</span></button>
+      <button type="button" class="navitem" data-tab="schedule"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><circle cx="16" cy="15.5" r="3.2"/><path d="M16 14v1.7l1.1.7"/></svg><span>Schedule tour</span></button>
       <button type="button" class="navitem" data-tab="renewals"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg><span>Renewals</span></button>
       <button type="button" class="navitem" data-tab="owners"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Owners</span></button>
       <button type="button" class="navitem" data-tab="keys"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 19 4m-3 0 3 3-2.5 2.5L14 7"/></svg><span>Keys</span></button>
@@ -1670,6 +1705,78 @@ window.addEventListener('error', function(e){
         </table>
       </div>
       <div class="note" style="margin-top:10px">Live from Calendly &mdash; new bookings &amp; cancellations land within seconds; tap <b>Refresh</b> to pull the latest. Calendar items are colour-coded by agent (tap a name to filter, or <b>My tours</b> for just yours); a <span style="color:#ff6b6b;font-weight:900">&times;</span> marks a cancelled tour. Tap any tour for details, the unit&rsquo;s live status &amp; rent, directions, and a jump to the listing. &ldquo;Property/Unit&rdquo; is a best-effort address match &mdash; tours outside the managed portfolio stay unmatched. Sidebar scope filters apply here too.</div>
+    </div>
+  </div>
+
+  <div id="page-schedule" style="display:none">
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar"><h2>Schedule a tour</h2><span class="count-note" id="sch-status">Find a prospect, pick an agent &amp; times, send a booking link that pre-fills their name &amp; email.</span></div>
+      <div class="schwiz">
+        <div class="schstep">
+          <div class="schnum">1</div>
+          <div class="schmain">
+            <label class="schlbl">Who applied?</label>
+            <input type="text" id="sch-app-search" placeholder="Search applicant name, email or phone&hellip;" autocomplete="off">
+            <div id="sch-app-results" class="schresults"></div>
+            <div id="sch-app-picked"></div>
+            <div id="sch-app-manual" style="display:none">
+              <div class="schmanual">
+                <input type="text" id="sch-m-name" placeholder="Full name">
+                <input type="email" id="sch-m-email" placeholder="Email">
+                <input type="text" id="sch-m-phone" placeholder="Phone (optional)">
+                <button type="button" class="mybtn" id="sch-m-use">Use this prospect</button>
+              </div>
+            </div>
+            <button type="button" class="linklike" id="sch-app-manual-toggle">+ enter a prospect manually</button>
+          </div>
+        </div>
+        <div class="schstep schlocked" id="sch-step-agent">
+          <div class="schnum">2</div>
+          <div class="schmain">
+            <label class="schlbl">Tour with which agent?</label>
+            <div id="sch-agent-chips" class="chipset schchips"></div>
+            <div id="sch-et-wrap" style="display:none">
+              <label class="schsub">Event type</label>
+              <select id="sch-eventtype"></select>
+            </div>
+          </div>
+        </div>
+        <div class="schstep schlocked" id="sch-step-slots">
+          <div class="schnum">3</div>
+          <div class="schmain">
+            <label class="schlbl">Pick the times to offer</label>
+            <div class="schrow">
+              <label class="schsub" style="margin:0">Through</label>
+              <select id="sch-window" style="width:auto">
+                <option value="7">next 7 days</option>
+                <option value="14" selected>next 14 days</option>
+                <option value="21">next 21 days</option>
+                <option value="28">next 28 days</option>
+              </select>
+              <button type="button" class="rfreshbtn" id="sch-load-avail">&#8635; Load availability</button>
+              <span class="count-note" id="sch-avail-note"></span>
+            </div>
+            <div id="sch-slots" class="schslots"></div>
+          </div>
+        </div>
+        <div class="schstep schlocked" id="sch-step-send">
+          <div class="schnum">4</div>
+          <div class="schmain">
+            <label class="schlbl">Generate &amp; send</label>
+            <div class="schsummary" id="sch-summary"></div>
+            <button type="button" class="mybtn schgen" id="sch-generate">Generate booking link</button>
+            <div id="sch-result" style="display:none">
+              <div class="schlink"><input type="text" id="sch-link" readonly><button type="button" class="rfreshbtn" id="sch-copy">&#10697; Copy</button></div>
+              <div class="schsend">
+                <a id="sch-sms" class="ccbtn" target="_blank" rel="noopener">&#128172; Text</a>
+                <a id="sch-mail" class="ccbtn" target="_blank" rel="noopener">&#9993;&#65039; Email</a>
+              </div>
+              <div class="note" id="sch-result-note"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note" style="margin-top:12px">The link is a single-use Calendly &ldquo;Share&rdquo; restricted to the times you pick and routed to the chosen agent &mdash; it opens with the prospect&rsquo;s name &amp; email already filled in. Times are in Edmonton time. Every link you generate is logged.</div>
     </div>
   </div>
 
@@ -2451,7 +2558,7 @@ window.addEventListener('error', function(e){
   })();
 
   /* ── tabs ─────────────────────────────────── */
-  var PAGES = { ledger:'app', hub:'page-hub', units:'page-units', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
+  var PAGES = { ledger:'app', hub:'page-hub', units:'page-units', applications:'page-applications', tours:'page-tours', schedule:'page-schedule', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
   var ACTIVE_TAB = 'ledger';   // which tab is showing; render() only reveals the Ledger (#app) when this is 'ledger'
   var statsLoaded = false;     // a /stats load has succeeded at least once (Ledger DOM is populated)
   var statsLoading = false;    // a /stats load is currently in flight
@@ -2472,6 +2579,7 @@ window.addEventListener('error', function(e){
     if (key === 'owners' && ownersAll === null) loadOwners();
     if (key === 'applications' && appsAll === null) loadApps();
     if (key === 'tours') { if (toursAll === null) loadTours(); else applyRView(); }
+    if (key === 'schedule' && schedAgents === null) loadSchedule();
     if (key === 'renewals' && renewalsAll === null) loadRenewals();
     if (key === 'keys' && keysAll === null) loadKeys();
     if (key === 'hub' && hubLoaded === null) loadHub();
@@ -6738,6 +6846,180 @@ window.addEventListener('error', function(e){
       var t = el('ledoutreach'); if (t) t.querySelector('tbody').innerHTML = h || emptyRow('ledoutreach', 'No outreach in the last 7 days');
     }).catch(function(){ var t = el('ledoutreach'); if (t) t.querySelector('tbody').innerHTML = emptyRow('ledoutreach', 'Could not load outreach.'); });
   }
+
+  // ── Schedule-tour wizard ─────────────────────────────────────────────────
+  // applicant search -> agent -> live availability slot picker -> Calendly Share link.
+  var schedAgents = null;
+  var schedState = { applicant:null, agentId:null, agentName:'', eventType:null, duration:0, slots:{} };
+  var schSearchT = null;
+  var schSearchRows = [];
+  function loadSchedule(){
+    authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; renderSchedAgents(); })
+      .catch(function(e){ if (String(e.message) !== 'AUTH'){ var s = el('sch-status'); if (s) s.textContent = 'Could not load agents.'; } });
+  }
+  function renderSchedAgents(){
+    var box = el('sch-agent-chips'); if (!box) return;
+    box.innerHTML = (schedAgents || []).map(function(a){
+      return '<button type="button" class="chip-mini" data-aid="' + esc(a.id) + '">' + esc(a.display_name) + '</button>';
+    }).join('') || '<span class="count-note">No tour agents configured.</span>';
+  }
+  function schUnlock(id, on){ var n = el(id); if (n) n.classList.toggle('schlocked', !on); }
+  function schEdFmt(iso, opts){ try { return new Intl.DateTimeFormat('en-CA', Object.assign({ timeZone:'America/Edmonton' }, opts)).format(new Date(iso)); } catch(e){ return iso; } }
+  function schPickApplicant(o){
+    schedState.applicant = o;
+    var box = el('sch-app-picked');
+    if (box){
+      box.innerHTML = '<div class="schpicked"><div><b>' + esc(o.name || 'Prospect') + '</b><br><span>' + esc([o.email, o.phone].filter(Boolean).join(' · ')) + (o.property ? ' · ' + esc(o.property) : '') + '</span></div><button type="button" class="schpx" id="sch-app-clear" title="Clear">&times;</button></div>';
+      var c = el('sch-app-clear'); if (c) c.addEventListener('click', schClearApplicant);
+    }
+    if (el('sch-app-results')) el('sch-app-results').innerHTML = '';
+    if (el('sch-app-search')) el('sch-app-search').value = '';
+    if (el('sch-app-manual')) el('sch-app-manual').style.display = 'none';
+    schUnlock('sch-step-agent', true);
+  }
+  function schClearApplicant(){
+    schedState.applicant = null;
+    if (el('sch-app-picked')) el('sch-app-picked').innerHTML = '';
+    schUnlock('sch-step-agent', false);
+  }
+  function schDoSearch(){
+    var q = (el('sch-app-search').value || '').trim();
+    var res = el('sch-app-results');
+    if (q.length < 2){ res.innerHTML = ''; return; }
+    authFetch('/tour-applicant-search?q=' + encodeURIComponent(q)).then(function(j){
+      var rows = j.results || []; schSearchRows = rows;
+      if (!rows.length){ res.innerHTML = '<span class="count-note">No matches.</span>'; return; }
+      res.innerHTML = rows.map(function(r){
+        var sub = [r.applicant_email, r.applicant_phone].filter(Boolean).join(' · ');
+        var ctx = [r.property_name, r.unit_number ? 'Unit ' + r.unit_number : '', r.application_status].filter(Boolean).join(' · ');
+        return '<button type="button" class="schres" data-app="' + esc(r.application_id) + '"><b>' + esc(r.applicant_name || '(no name)') + '</b><span>' + esc(sub) + '</span>' + (ctx ? '<span>' + esc(ctx) + '</span>' : '') + '</button>';
+      }).join('');
+    }).catch(function(e){ if (String(e.message) !== 'AUTH') res.innerHTML = '<span class="count-note">Search failed.</span>'; });
+  }
+  function schPickAgent(aid){
+    var a = (schedAgents || []).filter(function(x){ return String(x.id) === String(aid); })[0];
+    if (!a) return;
+    schedState.agentId = a.id; schedState.agentName = a.display_name;
+    schedState.eventType = a.default_event_type_uri; schedState.duration = a.duration_minutes || 0;
+    el('sch-agent-chips').querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-aid') === String(aid)); });
+    schedState.slots = {};
+    if (el('sch-slots')) el('sch-slots').innerHTML = '';
+    if (el('sch-avail-note')) el('sch-avail-note').textContent = '';
+    schUnlock('sch-step-slots', true); schUnlock('sch-step-send', false);
+    if (el('sch-result')) el('sch-result').style.display = 'none';
+    schRenderSummary();
+    authFetch('/agent-event-types?agent_id=' + encodeURIComponent(aid)).then(function(j){
+      var ets = j.event_types || [], wrap = el('sch-et-wrap'), sel = el('sch-eventtype');
+      if (!sel || !wrap) return;
+      if (ets.length <= 1){ wrap.style.display = 'none'; return; }
+      sel.innerHTML = ets.map(function(e){
+        var label = (e.name || 'Event') + (e.duration ? ' (' + e.duration + ' min)' : '');
+        return '<option value="' + esc(e.uri) + '"' + (e.uri === a.default_event_type_uri ? ' selected' : '') + '>' + esc(label) + '</option>';
+      }).join('');
+      wrap.style.display = 'block';
+    }).catch(function(){ /* optional */ });
+  }
+  function schLoadAvail(){
+    if (!schedState.agentId) return;
+    var days = parseInt((el('sch-window').value || '14'), 10) || 14;
+    var to = new Date(Date.now() + days * 86400000).toISOString().slice(0,10);
+    var et = schedState.eventType, sel = el('sch-eventtype'), wrap = el('sch-et-wrap');
+    if (sel && wrap && wrap.style.display !== 'none' && sel.value) et = sel.value;
+    schedState.eventType = et;
+    var note = el('sch-avail-note'); note.textContent = 'Loading…';
+    el('sch-slots').innerHTML = '';
+    authFetch('/agent-availability?agent_id=' + encodeURIComponent(schedState.agentId) + '&event_type=' + encodeURIComponent(et) + '&to=' + to).then(function(j){
+      schedState.duration = j.duration_minutes || schedState.duration || 30;
+      var slots = j.slots || []; schedState.slots = {};
+      if (!slots.length){ note.textContent = 'No open times in that window.'; el('sch-slots').innerHTML = ''; schUnlock('sch-step-send', false); schRenderSummary(); return; }
+      note.textContent = slots.length + ' open slot' + (slots.length === 1 ? '' : 's') + ' · tap to offer';
+      var byDay = {}, order = [];
+      slots.forEach(function(s){
+        var key = schEdFmt(s.start_time, { year:'numeric', month:'2-digit', day:'2-digit' });
+        if (!byDay[key]){ byDay[key] = []; order.push(key); }
+        byDay[key].push(s);
+      });
+      el('sch-slots').innerHTML = order.map(function(key){
+        var lab = schEdFmt(byDay[key][0].start_time, { weekday:'short', month:'short', day:'numeric' });
+        var btns = byDay[key].map(function(s){
+          var t = schEdFmt(s.start_time, { hour:'numeric', minute:'2-digit', hour12:true });
+          return '<button type="button" class="schslot" data-st="' + esc(s.start_time) + '">' + esc(t) + '</button>';
+        }).join('');
+        return '<div class="schday"><span class="schdaylab">' + esc(lab) + '</span>' + btns + '</div>';
+      }).join('');
+      schRenderSummary();
+    }).catch(function(e){ if (String(e.message) !== 'AUTH') note.textContent = 'Could not load availability.'; });
+  }
+  function schToggleSlot(st){
+    if (schedState.slots[st]) delete schedState.slots[st]; else schedState.slots[st] = true;
+    el('sch-slots').querySelectorAll('.schslot').forEach(function(b){ b.classList.toggle('on', !!schedState.slots[b.getAttribute('data-st')]); });
+    var n = Object.keys(schedState.slots).length;
+    schUnlock('sch-step-send', n > 0);
+    if (!n && el('sch-result')) el('sch-result').style.display = 'none';
+    schRenderSummary();
+  }
+  function schRenderSummary(){
+    var box = el('sch-summary'); if (!box) return;
+    var p = schedState.applicant, n = Object.keys(schedState.slots).length;
+    if (!p || !schedState.agentId){ box.textContent = ''; return; }
+    box.innerHTML = 'Offer <b>' + n + '</b> time' + (n === 1 ? '' : 's') + ' to <b>' + esc(p.name || 'prospect') + '</b> for a tour with <b>' + esc(schedState.agentName) + '</b>.';
+  }
+  function schGenerate(){
+    var p = schedState.applicant; if (!p || !schedState.agentId) return;
+    var slots = Object.keys(schedState.slots); if (!slots.length) return;
+    var actor = getActor(), noteEl = el('sch-result-note');
+    if (!actor){ el('sch-result').style.display = 'block'; if (noteEl) noteEl.textContent = 'Pick your name on the sign-in screen first (so the link is logged to you).'; return; }
+    var btn = el('sch-generate'), orig = btn.textContent; btn.textContent = 'Generating…'; btn.disabled = true;
+    postJSON('/tour-offer', {
+      actor: actor, agent_id: schedState.agentId, event_type: schedState.eventType,
+      prospect_name: p.name, prospect_email: p.email, prospect_phone: p.phone || null,
+      application_id: p.application_id || null,
+      slots: slots.map(function(s){ return { start_time: s }; })
+    }).then(function(j){
+      btn.textContent = orig; btn.disabled = false;
+      el('sch-result').style.display = 'block';
+      el('sch-link').value = j.booking_url || '';
+      var sms = el('sch-sms'); if (sms){ if (j.sms_url){ sms.style.display = ''; sms.href = j.sms_url; } else sms.style.display = 'none'; }
+      var mail = el('sch-mail'); if (mail) mail.href = j.mailto_url || '#';
+      if (noteEl) noteEl.textContent = (j.offered_dates && j.offered_dates.length) ? ('Offered on: ' + j.offered_dates.join(', ') + '. The link is single-use and expires once booked or after those dates.') : '';
+    }).catch(function(e){
+      btn.textContent = orig; btn.disabled = false;
+      el('sch-result').style.display = 'block';
+      if (noteEl) noteEl.textContent = 'Could not generate the link: ' + (e && e.message ? e.message : 'error');
+    });
+  }
+  (function(){
+    if (!el('page-schedule')) return;   // Working Rule #9: one guard over every binding
+    var s = el('sch-app-search');
+    if (s) s.addEventListener('input', function(){ clearTimeout(schSearchT); schSearchT = setTimeout(schDoSearch, 260); });
+    var res = el('sch-app-results');
+    if (res) res.addEventListener('click', function(e){
+      var b = e.target.closest('.schres'); if (!b) return;
+      var id = b.getAttribute('data-app');
+      var r = schSearchRows.filter(function(x){ return String(x.application_id) === String(id); })[0];
+      if (r) schPickApplicant({ application_id: r.application_id, name: r.applicant_name, email: r.applicant_email, phone: r.applicant_phone, property: r.property_name });
+    });
+    var mt = el('sch-app-manual-toggle');
+    if (mt) mt.addEventListener('click', function(){ var m = el('sch-app-manual'); if (m) m.style.display = (m.style.display === 'none' ? 'block' : 'none'); });
+    var mu = el('sch-m-use');
+    if (mu) mu.addEventListener('click', function(){
+      var nm = (el('sch-m-name').value || '').trim(), em = (el('sch-m-email').value || '').trim(), ph = (el('sch-m-phone').value || '').trim();
+      if (!nm || !em || em.indexOf('@') < 0){ alert('Enter a name and a valid email.'); return; }
+      schPickApplicant({ application_id: null, name: nm, email: em, phone: ph, property: '' });
+    });
+    var ac = el('sch-agent-chips');
+    if (ac) ac.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schPickAgent(b.getAttribute('data-aid')); });
+    var la = el('sch-load-avail'); if (la) la.addEventListener('click', schLoadAvail);
+    var sl = el('sch-slots'); if (sl) sl.addEventListener('click', function(e){ var b = e.target.closest('.schslot'); if (b) schToggleSlot(b.getAttribute('data-st')); });
+    var g = el('sch-generate'); if (g) g.addEventListener('click', schGenerate);
+    var cp = el('sch-copy');
+    if (cp) cp.addEventListener('click', function(){
+      var v = el('sch-link').value, self = this, orig = self.textContent;
+      var done = function(){ self.textContent = 'Copied ✓'; setTimeout(function(){ self.textContent = orig; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done).catch(function(){ window.prompt('Copy link:', v); });
+      else window.prompt('Copy link:', v);
+    });
+  })();
 
   window.__llBooted = true;   // synchronous init finished without throwing — disarms the boot-crash guard
 })();

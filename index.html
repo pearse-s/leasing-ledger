@@ -412,7 +412,9 @@ window.addEventListener('error', function(e){
   .empty{display:flex;align-items:center;justify-content:center;height:100%;font-size:.8rem;color:var(--ink-soft);font-style:italic;text-align:center;padding:0 12px}
 
   .tiles{display:flex;gap:0;margin-top:14px;border-top:1px solid var(--hairline)}
-  .tile{flex:1;padding:10px 6px 0;border-right:1px solid var(--hairline);text-align:center}
+  /* min-width:0 lets these flex tiles shrink with their card instead of refusing
+     below content width and spilling the row into the next card (the old overflow). */
+  .tile{flex:1;min-width:0;padding:10px 6px 0;border-right:1px solid var(--hairline);text-align:center}
   .tile:last-child{border-right:none}
   .tile .tl{font-size:.6rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-soft);font-weight:700}
   .tile .tv{font-family:var(--serif);font-size:1.45rem;font-weight:600;font-variant-numeric:tabular-nums}

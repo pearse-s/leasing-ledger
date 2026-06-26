@@ -2172,10 +2172,16 @@ window.addEventListener('error', function(e){
   var qs = new URLSearchParams(window.location.search);
   var STORE_KEY = 'ledger_token_v1';
   var urlToken = qs.get('token');           // legacy ?token= links still work
-  // ?lead=<aptlyCardId> deep link (from an Aptly Leads-board card) → open Schedule tab
-  // pre-filled. Captured BEFORE the ?token= strip; consumed after auth in startApp().
-  var pendingLeadCard = '';
+  // Aptly Leads-board deep link → open Schedule tab pre-filled. Two forms:
+  //   ?lead=<cardId>       (single-card lookup) and
+  //   ?lead_email=<email>  (Contact-Email lookup — the form a self-populating Aptly
+  //                         calculation column CAN produce; cardId can't be rendered there).
+  // Captured BEFORE the ?token= strip; consumed after auth in startApp().
+  var pendingLeadCard = '', pendingLeadEmail = '';
   try { var _lc = qs.get('lead'); if (_lc && /^[A-Za-z0-9]{6,40}$/.test(_lc)) pendingLeadCard = _lc; } catch (e) {}
+  // Parse email from the RAW query so a literal '+' in the address survives (URLSearchParams
+  // would turn '+' into a space).
+  try { var _em = /[?&]lead_email=([^&#]*)/.exec(window.location.search); if (_em) { var _e = decodeURIComponent(_em[1]); if (_e.indexOf('@') > 0 && _e.length <= 160) pendingLeadEmail = _e.trim(); } } catch (e) {}
   var TOKEN = '';
   try { TOKEN = localStorage.getItem(STORE_KEY) || ''; } catch (e) {}
   if (!TOKEN && urlToken) TOKEN = urlToken;
@@ -6549,15 +6555,17 @@ window.addEventListener('error', function(e){
     load();
     // deep link: if the URL points at a specific tab (e.g. #keys), open it
     var t = tabFromHash(); if (t) showTab(t);
-    if (pendingLeadCard) openLeadDeepLink(pendingLeadCard);   // ?lead=<cardId> → Schedule tab pre-filled
+    // ?lead=<cardId> or ?lead_email=<email> → Schedule tab pre-filled
+    if (pendingLeadCard) openLeadDeepLink('card_id=' + encodeURIComponent(pendingLeadCard));
+    else if (pendingLeadEmail) openLeadDeepLink('email=' + encodeURIComponent(pendingLeadEmail));
   }
-  // Open the Schedule tab and pre-fill the prospect from an Aptly lead card id.
+  // Open the Schedule tab and pre-fill the prospect from an Aptly lead (by card id or email).
   // Runs inside an async .then() (after boot) so a failure can never abort init.
-  function openLeadDeepLink(cardId){
-    pendingLeadCard = '';   // consume once
+  function openLeadDeepLink(query){
+    pendingLeadCard = ''; pendingLeadEmail = '';   // consume once
     try { showTab('schedule'); } catch (e) {}   // also lazy-loads agents (showTab)
     var s = el('sch-status'); if (s) s.textContent = 'Loading lead…';
-    authFetch('/tour-lead?card_id=' + encodeURIComponent(cardId)).then(function(j){
+    authFetch('/tour-lead?' + query).then(function(j){
       var L = j && j.lead;
       if (!L){ if (s) s.textContent = 'Lead not found.'; return; }
       if (typeof schPickApplicant === 'function')
@@ -6596,9 +6604,9 @@ window.addEventListener('error', function(e){
 
   setupFX();
 
-  // boot: strip any ?token= / ?lead= from the URL bar (keep the hash; showTab re-sets
-  // #schedule for a lead deep link), then verify what we have
-  if (urlToken || pendingLeadCard) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {} }
+  // boot: strip any ?token= / ?lead= / ?lead_email= from the URL bar (keep the hash; showTab
+  // re-sets #schedule for a lead deep link), then verify what we have
+  if (urlToken || pendingLeadCard || pendingLeadEmail) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {} }
   if (TOKEN) {
     checkToken(TOKEN).then(function(res){
       if (res.ok) { applyRole(res.role); try { localStorage.setItem(STORE_KEY, TOKEN); } catch (e) {} startApp(); }

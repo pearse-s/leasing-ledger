@@ -1136,6 +1136,9 @@ window.addEventListener('error', function(e){
   .schres:hover{border-color:var(--clay)}
   .schres b{font-size:.92rem}
   .schres span{font-size:.76rem;color:var(--ink-soft)}
+  .schbadge{display:inline-block;font-size:.62rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:1px 7px;vertical-align:middle}
+  .schbadge-app{color:var(--ink-soft);background:rgba(255,255,255,.06);border:1px solid var(--hairline-dark)}
+  .schbadge-lead{color:var(--clay);background:var(--clay-soft);border:1px solid var(--clay)}
   .schchips{display:flex;flex-wrap:wrap;gap:7px}
   .schrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
   .schslots{display:flex;flex-direction:column;gap:10px;max-height:360px;overflow:auto;margin-top:4px}
@@ -2169,6 +2172,10 @@ window.addEventListener('error', function(e){
   var qs = new URLSearchParams(window.location.search);
   var STORE_KEY = 'ledger_token_v1';
   var urlToken = qs.get('token');           // legacy ?token= links still work
+  // ?lead=<aptlyCardId> deep link (from an Aptly Leads-board card) → open Schedule tab
+  // pre-filled. Captured BEFORE the ?token= strip; consumed after auth in startApp().
+  var pendingLeadCard = '';
+  try { var _lc = qs.get('lead'); if (_lc && /^[A-Za-z0-9]{6,40}$/.test(_lc)) pendingLeadCard = _lc; } catch (e) {}
   var TOKEN = '';
   try { TOKEN = localStorage.getItem(STORE_KEY) || ''; } catch (e) {}
   if (!TOKEN && urlToken) TOKEN = urlToken;
@@ -6542,6 +6549,21 @@ window.addEventListener('error', function(e){
     load();
     // deep link: if the URL points at a specific tab (e.g. #keys), open it
     var t = tabFromHash(); if (t) showTab(t);
+    if (pendingLeadCard) openLeadDeepLink(pendingLeadCard);   // ?lead=<cardId> → Schedule tab pre-filled
+  }
+  // Open the Schedule tab and pre-fill the prospect from an Aptly lead card id.
+  // Runs inside an async .then() (after boot) so a failure can never abort init.
+  function openLeadDeepLink(cardId){
+    pendingLeadCard = '';   // consume once
+    try { showTab('schedule'); } catch (e) {}   // also lazy-loads agents (showTab)
+    var s = el('sch-status'); if (s) s.textContent = 'Loading lead…';
+    authFetch('/tour-lead?card_id=' + encodeURIComponent(cardId)).then(function(j){
+      var L = j && j.lead;
+      if (!L){ if (s) s.textContent = 'Lead not found.'; return; }
+      if (typeof schPickApplicant === 'function')
+        schPickApplicant({ application_id: null, name: L.name, email: L.email, phone: L.phone, property: '', unit_number: '', unit_address: L.location, aptly_card_id: L.card_id });
+      if (s) s.textContent = 'Prospect pre-filled from the lead — pick an agent and times.';
+    }).catch(function(e){ if (String(e.message) !== 'AUTH' && s) s.textContent = 'Could not load that lead.'; });
   }
   function checkToken(tok){
     return fetch(API + '/check', { headers: { 'Authorization': 'Bearer ' + tok } })
@@ -6574,8 +6596,9 @@ window.addEventListener('error', function(e){
 
   setupFX();
 
-  // boot: strip any ?token= from the URL bar, then verify what we have
-  if (urlToken) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {} }
+  // boot: strip any ?token= / ?lead= from the URL bar (keep the hash; showTab re-sets
+  // #schedule for a lead deep link), then verify what we have
+  if (urlToken || pendingLeadCard) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {} }
   if (TOKEN) {
     checkToken(TOKEN).then(function(res){
       if (res.ok) { applyRole(res.role); try { localStorage.setItem(STORE_KEY, TOKEN); } catch (e) {} startApp(); }
@@ -6878,7 +6901,7 @@ window.addEventListener('error', function(e){
   var schedAgents = null;
   var schedState = { applicant:null, agentId:null, agentName:'', eventType:null, duration:0, slots:{}, days:[], curDay:null, locDefault:'' };
   var schSearchT = null, schLocT = null;
-  var schSearchRows = [];
+  var schSearchRows = [], schLeadRows = [];
   function loadSchedule(){
     authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; renderSchedAgents(); })
       .catch(function(e){ if (String(e.message) !== 'AUTH'){ var s = el('sch-status'); if (s) s.textContent = 'Could not load agents.'; } });
@@ -6934,14 +6957,30 @@ window.addEventListener('error', function(e){
     var q = (el('sch-app-search').value || '').trim();
     var res = el('sch-app-results');
     if (q.length < 2){ res.innerHTML = ''; return; }
-    authFetch('/tour-applicant-search?q=' + encodeURIComponent(q)).then(function(j){
-      var rows = j.results || []; schSearchRows = rows;
-      if (!rows.length){ res.innerHTML = '<span class="count-note">No matches.</span>'; return; }
-      res.innerHTML = rows.map(function(r){
+    // Search Buildium applications AND Aptly leads in parallel; merge into one list.
+    Promise.all([
+      authFetch('/tour-applicant-search?q=' + encodeURIComponent(q)).catch(function(e){ if (String(e.message) === 'AUTH') throw e; return { results: [] }; }),
+      authFetch('/tour-lead-search?q=' + encodeURIComponent(q)).catch(function(){ return { results: [] }; })
+    ]).then(function(parts){
+      var apps = (parts[0] && parts[0].results) || []; schSearchRows = apps;
+      var leads = (parts[1] && parts[1].results) || []; schLeadRows = leads;
+      // Dedupe a lead whose email matches an application row (the application wins).
+      var appEmails = {};
+      apps.forEach(function(a){ var e = (a.applicant_email || '').toLowerCase(); if (e) appEmails[e] = 1; });
+      var dedupLeads = leads.filter(function(l){ var e = (l.email || '').toLowerCase(); return !(e && appEmails[e]); });
+      if (!apps.length && !dedupLeads.length){ res.innerHTML = '<span class="count-note">No matches.</span>'; return; }
+      var html = '';
+      apps.forEach(function(r){
         var sub = [r.applicant_email, r.applicant_phone].filter(Boolean).join(' · ');
         var ctx = [r.property_name, r.unit_number ? 'Unit ' + r.unit_number : '', r.application_status].filter(Boolean).join(' · ');
-        return '<button type="button" class="schres" data-app="' + esc(r.application_id) + '"><b>' + esc(r.applicant_name || '(no name)') + '</b><span>' + esc(sub) + '</span>' + (ctx ? '<span>' + esc(ctx) + '</span>' : '') + '</button>';
-      }).join('');
+        html += '<button type="button" class="schres" data-kind="app" data-app="' + esc(r.application_id) + '"><b>' + esc(r.applicant_name || '(no name)') + '</b> <span class="schbadge schbadge-app">Application</span><span>' + esc(sub) + '</span>' + (ctx ? '<span>' + esc(ctx) + '</span>' : '') + '</button>';
+      });
+      dedupLeads.forEach(function(r){
+        var sub = [r.email, r.phone].filter(Boolean).join(' · ');
+        var ctx = [r.location, r.stage].filter(Boolean).join(' · ');
+        html += '<button type="button" class="schres" data-kind="lead" data-card="' + esc(r.card_id) + '"><b>' + esc(r.name || '(no name)') + '</b> <span class="schbadge schbadge-lead">Lead</span><span>' + esc(sub) + '</span>' + (ctx ? '<span>' + esc(ctx) + '</span>' : '') + '</button>';
+      });
+      res.innerHTML = html;
     }).catch(function(e){ if (String(e.message) !== 'AUTH') res.innerHTML = '<span class="count-note">Search failed.</span>'; });
   }
   function schPickAgent(aid){
@@ -7048,7 +7087,7 @@ window.addEventListener('error', function(e){
     postJSON('/tour-offer', {
       actor: actor, agent_id: schedState.agentId, event_type: schedState.eventType,
       prospect_name: p.name, prospect_email: p.email, prospect_phone: p.phone || null,
-      application_id: p.application_id || null, location: location,
+      application_id: p.application_id || null, aptly_card_id: (p && p.aptly_card_id) || null, location: location,
       slots: slots.map(function(s){ return { start_time: s }; })
     }).then(function(j){
       btn.textContent = orig; btn.disabled = false;
@@ -7075,6 +7114,12 @@ window.addEventListener('error', function(e){
     var res = el('sch-app-results');
     if (res) res.addEventListener('click', function(e){
       var b = e.target.closest('.schres'); if (!b) return;
+      if (b.getAttribute('data-kind') === 'lead'){
+        var cid = b.getAttribute('data-card');
+        var l = schLeadRows.filter(function(x){ return String(x.card_id) === String(cid); })[0];
+        if (l) schPickApplicant({ application_id: null, name: l.name, email: l.email, phone: l.phone, property: '', unit_number: '', unit_address: l.location, aptly_card_id: l.card_id });
+        return;
+      }
       var id = b.getAttribute('data-app');
       var r = schSearchRows.filter(function(x){ return String(x.application_id) === String(id); })[0];
       if (r) schPickApplicant({ application_id: r.application_id, name: r.applicant_name, email: r.applicant_email, phone: r.applicant_phone, property: r.property_name, unit_number: r.unit_number, unit_address: r.unit_address });

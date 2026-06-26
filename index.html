@@ -349,18 +349,51 @@ window.addEventListener('error', function(e){
   .panel-head .ph-ic svg{width:18px;height:18px;fill:none;stroke:var(--clay);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
   .panel-head h2{font-family:var(--serif);font-weight:600;font-size:1.12rem;margin:0}
   .panel-head .ph-sub{margin-left:auto;font-size:.7rem;color:var(--ink-soft);font-style:italic;text-align:right}
-  .panel-kpis{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px}
-  .panel-kpis>.kpi{flex:1 1 210px;max-width:360px}
-  .panel-kpis>.kpi.gauge{flex:1 1 340px;max-width:440px}
-  @media(max-width:620px){ .panel-kpis>.kpi,.panel-kpis>.kpi.gauge{max-width:none} }
+  /* KPI rows are an explicit grid, not greedy flex-wrap: each panel gets a column
+     count matched to its card count so rows stay EVENLY filled — never a lone card
+     stranded under a full row (the old 4-then-1 wrap). align-items:stretch keeps
+     cards in a row the same height even when one carries a sparkline. */
+  .panel-kpis{display:grid;gap:14px;margin-bottom:16px;align-items:stretch}
+  .panel-kpis>.kpi{max-width:none;width:auto}
+  /* 5 stats incl. the gauge → 3 cols with the gauge spanning 2, so BOTH rows fill
+     completely: [ gauge · gauge · stat ] / [ stat · stat · stat ]. */
+  .panel-kpis.pk-occ{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .panel-kpis.pk-occ>.kpi.gauge{grid-column:span 2;max-width:none}
+  /* 3 stats → one even row */
+  .panel-kpis.pk-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  /* 2 stats → an even pair held to a sensible card width (don't balloon to half the page) */
+  .panel-kpis.pk-2{grid-template-columns:repeat(2,minmax(0,360px))}
+  /* a lone stat → normal card width, not stretched across the whole row */
+  .panel-kpis.pk-1{grid-template-columns:minmax(0,360px)}
+  @media(max-width:900px){
+    .panel-kpis.pk-occ{grid-template-columns:repeat(2,minmax(0,1fr))}  /* gauge full row, then 2x2 */
+    .panel-kpis.pk-occ>.kpi.gauge{grid-column:span 2}
+    .panel-kpis.pk-3{grid-template-columns:1fr}
+    .panel-kpis.pk-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+  @media(max-width:560px){
+    .panel-kpis.pk-occ,.panel-kpis.pk-2{grid-template-columns:1fr}
+    .panel-kpis.pk-occ>.kpi.gauge{grid-column:auto}
+  }
   /* Units board — labeled filter axes (occupancy / marketing / flags) */
   .ufilters{display:flex;flex-direction:column;gap:7px;margin:8px 0 10px}
   .ufrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .ufrow>.cslabel{min-width:72px;flex:none}
   .ufrow .qchips{margin:0}
   .grid{display:grid;gap:18px;margin-top:18px}
-  .g2{grid-template-columns:3fr 2fr}
-  .g3{grid-template-columns:1.2fr .9fr .9fr}
+  /* minmax(0,…) on every track: without it a chart canvas / dense card forces its
+     column past its fr share, which both squeezed the Showings card and pushed the
+     whole row wider than the content column (the horizontal-scroll bug). */
+  .g2{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+  .g3{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr)}
+  /* Narrow desktop window (still sidebar layout): 3 cards across squeezes the
+     Showings agent list until names clip. Give the chart its own full-width row
+     and pair the two list cards below, so Showings keeps a comfortable width.
+     Normal monitors (>=1340px → content capped at ~1044) keep the 3-across row. */
+  @media(min-width:901px) and (max-width:1300px){
+    .g3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .g3>.card:first-child{grid-column:1 / -1}
+  }
   .card{
     background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
     border:1px solid var(--glass-brd);border-radius:var(--r);position:relative;
@@ -402,7 +435,7 @@ window.addEventListener('error', function(e){
   .warnchip.show{display:block}
 
   .agents{margin-top:10px}
-  .agrow{display:grid;grid-template-columns:1fr 44px 44px 44px;gap:6px;align-items:center;padding:5px 2px;border-bottom:1px dotted var(--hairline);font-size:.78rem}
+  .agrow{display:grid;grid-template-columns:minmax(0,1fr) 38px 38px 38px;gap:6px;align-items:center;padding:5px 2px;border-bottom:1px dotted var(--hairline);font-size:.78rem}
   .agrow:last-child{border-bottom:none}
   .agrow .an{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .agrow .av{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
@@ -1202,7 +1235,7 @@ window.addEventListener('error', function(e){
   <div id="app" style="display:none">
     <section class="panel">
       <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg></span><h2>Occupancy &amp; vacancy</h2><span class="ph-sub">where the portfolio stands right now</span></div>
-      <div class="panel-kpis">
+      <div class="panel-kpis pk-occ">
         <div class="kpi gauge" id="kpi-oprate">
           <div class="gaugewrap"><div class="gring"></div>
             <div class="gctr"><div class="num" id="k-oprate">&ndash;</div></div></div>
@@ -1249,7 +1282,7 @@ window.addEventListener('error', function(e){
 
     <section class="panel">
       <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg></span><h2>Leasing funnel</h2><span class="ph-sub">turning demand into signed leases</span></div>
-      <div class="panel-kpis">
+      <div class="panel-kpis pk-2">
         <div class="kpi click" id="kpi-signed-mtd" title="New leases signed this month — open My hub">
           <div class="lbl">Signed this month</div>
           <div class="num" id="k-signed-mtd">&ndash;</div>
@@ -1311,7 +1344,7 @@ window.addEventListener('error', function(e){
 
     <section class="panel">
       <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg></span><h2>Renewals &amp; retention</h2><span class="ph-sub">keeping the units we have</span></div>
-      <div class="panel-kpis">
+      <div class="panel-kpis pk-2">
         <div class="kpi click" id="kpi-renewals" title="Lease renewals this cycle — open the Renewals tab">
           <div class="lbl">Renewals pending</div>
           <div class="num" id="k-renewals">&ndash;</div>
@@ -1343,7 +1376,7 @@ window.addEventListener('error', function(e){
 
     <section class="panel">
       <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 3v3h8V3M8 13l2 2 4-4"/></svg></span><h2>Operations</h2><span class="ph-sub">maintenance &amp; to-do tasks</span></div>
-      <div class="panel-kpis">
+      <div class="panel-kpis pk-1">
         <div class="kpi click" id="kpi-tasks" title="Open Buildium tasks (maintenance + to-do) — open the Tasks tab">
           <div class="lbl">Open tasks</div>
           <div class="num" id="k-tasks">&ndash;</div>
@@ -1355,7 +1388,7 @@ window.addEventListener('error', function(e){
 
     <section class="panel">
       <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h2>Team activity</h2><span class="ph-sub">agent follow-up &amp; outreach</span></div>
-      <div class="panel-kpis">
+      <div class="panel-kpis pk-3">
         <div class="kpi alert click" id="kpi-needs" title="Prospects you toured but haven't called or texted in 7+ days — open My hub">
           <div class="lbl">Needs follow-up</div>
           <div class="num" id="k-needs">&ndash;</div>

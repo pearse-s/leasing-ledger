@@ -1859,6 +1859,7 @@ window.addEventListener('error', function(e){
     <div class="lmbody">
       <div class="rm-actrow" id="om-actrow">
         <button type="button" class="btn primary rmact" id="om-viewunits">View this owner&rsquo;s units &rarr;</button>
+        <button type="button" class="btn rmact" id="om-report">Download owner report &darr;</button>
       </div>
       <div id="om-contact"></div>
       <details id="om-detwrap"><summary>Owner details</summary>
@@ -5208,11 +5209,37 @@ window.addEventListener('error', function(e){
     var props = r.property_names || [];
     el('om-portlab').textContent = 'Portfolio · ' + props.length + (props.length === 1 ? ' property' : ' properties');
     el('om-props').innerHTML = props.map(function(p){ return '<span>' + esc(p) + '</span>'; }).join('') || '<span>–</span>';
+    if (el('om-report')) el('om-report').textContent = 'Download report · ' + winFmt(state.from) + '–' + winFmt(state.to);
     openModal('omodal');
   });
   el('om-viewunits').addEventListener('click', function(){
     closeModal('omodal');
     if (curOwner) gotoUnitsWithSearch(curOwner.display_name || '');
+  });
+  // Owner PDF report — raw fetch + blob (NOT authFetch/postJSON, which JSON-parse
+  // the body). Period = the global ledger window (windowDates), same from/to that
+  // drive /stats. Mirrors the hubExport blob-download pattern.
+  if (el('om-report')) el('om-report').addEventListener('click', function(){
+    if (!curOwner) return;
+    var w = windowDates();
+    var btn = el('om-report'); var prev = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Building report…';
+    var qp = '?owner_id=' + encodeURIComponent(curOwner.buildium_id) + '&from=' + w.from + '&to=' + w.to;
+    fetch(API + '/owner-report' + qp, { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+      .then(function(r){
+        if (r.status === 401) { onAuthFail(); throw new Error('AUTH'); }
+        if (!r.ok) return r.text().then(function(t){ throw new Error('HTTP ' + r.status + ': ' + t.slice(0, 200)); });
+        return r.blob();
+      })
+      .then(function(blob){
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = (curOwner.display_name || 'owner').replace(/[^\w]+/g, '_') + '_portfolio_' + w.from + '_' + w.to + '.pdf';
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
+      })
+      .catch(function(e){ if (e && e.message !== 'AUTH') alert('Could not build report: ' + (e && e.message ? e.message : 'error')); })
+      .finally(function(){ btn.disabled = false; btn.textContent = prev; });
   });
 
   /* ── Applications directory ───────────────── */

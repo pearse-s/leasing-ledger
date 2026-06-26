@@ -2284,7 +2284,7 @@ window.addEventListener('error', function(e){
   var unitsAll = null, ownersAll = null;
   var uSort = { k:'property_name', d:1 }, oSort = { k:'display_name', d:1 };
   var uPage = 0, uSig = '', U_PER = 200;
-  var uSel = {};   // Units flag chips multi-select (move-out / eviction / balance / take-backs)
+  var uSel = {};   // Units flag chips multi-select (on-notice / move-out / eviction / balance / take-backs)
   var uOcc = 'all', uMkt = 'all', uDV = '';   // Occupancy axis · Marketing axis · Days-vacant band
   var curPhotosLm = [], curPhotosUm = [];
   var dlBusy = false;
@@ -4689,6 +4689,7 @@ window.addEventListener('error', function(e){
   // rendered separately below as single-select groups; Days-vacant is a vacant-only refinement.
   var QFILTERS = [
     { k:'all',      label:'All' },
+    { k:'notice',   label:'On notice', title:'Tenant has given notice to vacate (any move-out date, not just this month)' },
     { k:'mo',       label:'Move-outs this month' },
     { k:'eviction', label:'Evictions' },
     { k:'balance',  label:'Has balance' },
@@ -4784,7 +4785,7 @@ window.addEventListener('error', function(e){
     grp(OCC, uOcc, 'u-occ', occMatch);
     grp(MKT, uMkt, 'u-mkt', mktMatch);
   }
-  el('u-occ').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return; uOcc = b.getAttribute('data-q'); ['vacant','pre','occ','mi','exp60','exp90','notice'].forEach(function(k){ delete uSel[k]; }); drawChips(); drawUnits(); });
+  el('u-occ').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return; uOcc = b.getAttribute('data-q'); ['vacant','pre','occ','mi','exp60','exp90'].forEach(function(k){ delete uSel[k]; }); drawChips(); drawUnits(); });
   el('u-mkt').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return; uMkt = b.getAttribute('data-q'); delete uSel['listed']; drawChips(); drawUnits(); });
   el('u-dv').addEventListener('change', function(){ uDV = this.value; drawUnits(); });
   el('u-rmin').addEventListener('input', deb(drawUnits));

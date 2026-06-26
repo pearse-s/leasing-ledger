@@ -1264,7 +1264,7 @@ window.addEventListener('error', function(e){
       <div class="grid g3">
         <div class="card">
           <h2>Leasing activity</h2>
-          <div class="note">chart: 8 weeks weekly, or monthly when the window &gt; 8 weeks &middot; counters: selected window only</div>
+          <div class="note">chart &amp; counters reflect the selected window &middot; daily up to a month, weekly up to ~4 months, then monthly</div>
           <div class="chartbox"><canvas id="ch-activity"></canvas></div>
           <div class="tiles">
             <div class="tile click" id="tile-apps" title="Open the Applications tab">
@@ -4011,13 +4011,17 @@ window.addEventListener('error', function(e){
     }
 
     var act = d.activity || {};
-    // chart floor is 8 weeks (weekly); for a window over 8 weeks switch to one bar per month
-    var actMonthly = winDays() > 56;
-    var actSeries = actMonthly ? (act.monthly || []) : (act.weekly || []);
     var MOABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    // chart spans the SELECTED window; the server picks the granularity by window length
+    // (daily up to ~1 month, weekly up to ~4 months, then monthly) so the bars match the tiles below.
+    var actWin = act.windowed || {};
+    var actGran = actWin.granularity || 'week';
+    var actSeries = actWin.series || [];
     var actLabels = actSeries.map(function(w){
-      if (actMonthly) { var p = (w.month||'').split('-'); return (MOABBR[(parseInt(p[1],10)||1)-1]||'') + " '" + (p[0]||'').slice(2); }
-      return (w.week||'').slice(5);
+      var p = (w.period || '').split('-');
+      var mo = MOABBR[(parseInt(p[1],10)||1)-1] || '';
+      if (actGran === 'month') return mo + " '" + (p[0]||'').slice(2);
+      return mo + ' ' + (parseInt(p[2],10) || '');
     });
     var actVal = function(w, kind){ return (w.counts && w.counts[kind]) || 0; };
     mkChart('ch-activity', {

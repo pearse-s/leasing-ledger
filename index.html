@@ -1166,6 +1166,14 @@ window.addEventListener('error', function(e){
   .schselpill b{color:var(--ink-soft);margin-left:3px}
   .schloc{margin-bottom:12px;max-width:440px}
   .schsublite{font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-soft)}
+  .schoffers{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:340px;overflow:auto}
+  .schoffer{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--hairline-dark);border-radius:10px;background:var(--glass-2)}
+  .schoffer-main{flex:1 1 auto;min-width:0;font-size:.88rem}
+  .schoffer-sub{font-size:.74rem;color:var(--ink-soft);margin-top:2px}
+  .schoffer-copy{flex:0 0 auto;background:none;border:1px solid var(--hairline-dark);border-radius:8px;color:var(--ink-soft);cursor:pointer;font-size:.85rem;padding:4px 8px}
+  .schchip-sent{flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--ink-soft);background:rgba(255,255,255,.05);border:1px solid var(--hairline-dark);border-radius:999px;padding:4px 10px;white-space:nowrap}
+  .schchip-booked{flex:0 0 auto;font-size:.72rem;font-weight:800;color:#0f2417;background:#9fe3b8;border-radius:999px;padding:4px 10px;white-space:nowrap}
+  .schchip-cxl{flex:0 0 auto;font-size:.72rem;font-weight:700;color:#fff;background:#b5564e;border-radius:999px;padding:4px 10px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -1790,6 +1798,10 @@ window.addEventListener('error', function(e){
         </div>
       </div>
       <div class="note" style="margin-top:12px">The link is a single-use Calendly &ldquo;Share&rdquo; restricted to the times you pick and routed to the chosen agent &mdash; it opens with the prospect&rsquo;s name &amp; email already filled in. Times are in Edmonton time. Every link you generate is logged.</div>
+    </div>
+    <div class="card tablecard" style="margin-top:14px">
+      <div class="tablebar"><h2 style="font-size:1rem">Recent offers</h2><span class="count-note" id="sch-offers-note"></span></div>
+      <div id="sch-offers" class="schoffers"></div>
     </div>
   </div>
 
@@ -6870,6 +6882,26 @@ window.addEventListener('error', function(e){
   function loadSchedule(){
     authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; renderSchedAgents(); })
       .catch(function(e){ if (String(e.message) !== 'AUTH'){ var s = el('sch-status'); if (s) s.textContent = 'Could not load agents.'; } });
+    loadTourOffers();
+  }
+  function loadTourOffers(){
+    var box = el('sch-offers'); if (!box) return;
+    authFetch('/tour-offers?limit=50').then(function(j){
+      var rows = j.offers || [];
+      var noteEl = el('sch-offers-note');
+      if (!rows.length){ box.innerHTML = '<div class="note">No tour links generated yet.</div>'; if (noteEl) noteEl.textContent = ''; return; }
+      var booked = rows.filter(function(r){ return r.is_booked; }).length;
+      if (noteEl) noteEl.textContent = rows.length + ' recent · ' + booked + ' booked';
+      box.innerHTML = rows.map(function(r){
+        var chip;
+        if (r.is_booked) chip = '<span class="schchip-booked">Booked ✓' + (r.booked_start_time ? ' ' + esc(schEdFmt(r.booked_start_time, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true })) : '') + '</span>';
+        else if (r.booked_canceled) chip = '<span class="schchip-cxl">Booked · canceled</span>';
+        else chip = '<span class="schchip-sent">Sent</span>';
+        var when = schEdFmt(r.created_at, { month:'short', day:'numeric' });
+        var sub = [r.actor, when, r.delivered_via].filter(Boolean).map(esc).join(' · ');
+        return '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.prospect_name || 'Prospect') + '</b> · ' + esc(r.agent_name || '') + ' · ' + (r.slot_count || 0) + ' time' + (r.slot_count === 1 ? '' : 's') + '<div class="schoffer-sub">' + sub + '</div></div>' + chip + (r.booking_url ? '<button type="button" class="schoffer-copy" data-url="' + esc(r.booking_url) + '" title="Copy link">⧉</button>' : '') + '</div>';
+      }).join('');
+    }).catch(function(e){ if (String(e.message) !== 'AUTH') box.innerHTML = '<div class="note">Could not load recent offers.</div>'; });
   }
   function renderSchedAgents(){
     var box = el('sch-agent-chips'); if (!box) return;
@@ -7025,6 +7057,7 @@ window.addEventListener('error', function(e){
       var sms = el('sch-sms'); if (sms){ if (j.sms_url){ sms.style.display = ''; sms.href = j.sms_url; } else sms.style.display = 'none'; }
       var mail = el('sch-mail'); if (mail) mail.href = j.mailto_url || '#';
       if (noteEl) noteEl.textContent = (j.offered_dates && j.offered_dates.length) ? ('Offered on: ' + j.offered_dates.join(', ') + '. The link is single-use and expires once booked or after those dates.') : '';
+      loadTourOffers();   // refresh the Recent offers list with the new one
     }).catch(function(e){
       btn.textContent = orig; btn.disabled = false;
       el('sch-result').style.display = 'block';
@@ -7064,6 +7097,14 @@ window.addEventListener('error', function(e){
     if (cp) cp.addEventListener('click', function(){
       var v = el('sch-link').value, self = this, orig = self.textContent;
       var done = function(){ self.textContent = 'Copied ✓'; setTimeout(function(){ self.textContent = orig; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done).catch(function(){ window.prompt('Copy link:', v); });
+      else window.prompt('Copy link:', v);
+    });
+    var off = el('sch-offers');
+    if (off) off.addEventListener('click', function(e){
+      var b = e.target.closest('.schoffer-copy'); if (!b) return;
+      var v = b.getAttribute('data-url') || '', o = b.textContent;
+      var done = function(){ b.textContent = '✓'; setTimeout(function(){ b.textContent = o; }, 1200); };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done).catch(function(){ window.prompt('Copy link:', v); });
       else window.prompt('Copy link:', v);
     });

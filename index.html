@@ -2448,7 +2448,7 @@ window.addEventListener('error', function(e){
   // Both use the same /r/ paths; only the scheme prefix differs. No tel:/sms: fallback (numbers go to RingCentral).
   var RC_SCHEME = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ? 'glip://' : 'rcapp://';
   function rcCall(num){ return RC_SCHEME + 'r/call?number=' + num; }
-  function rcText(num){ return RC_SCHEME + 'r/sms?type=new&number=' + num; }
+  function rcText(num, body){ return RC_SCHEME + 'r/sms?type=new&number=' + num + (body ? '&content=' + encodeURIComponent(body) : ''); }
   function dstr(d){ return d.toISOString().slice(0,10); }
   function msIds(key){ return Object.keys(MS[key].sel); }
   function appendScope(p){
@@ -7054,7 +7054,11 @@ window.addEventListener('error', function(e){
       btn.textContent = orig; btn.disabled = false;
       el('sch-result').style.display = 'block';
       el('sch-link').value = j.booking_url || '';
-      var sms = el('sch-sms'); if (sms){ if (j.sms_url){ sms.style.display = ''; sms.href = j.sms_url; } else sms.style.display = 'none'; }
+      var sms = el('sch-sms');
+      if (sms){
+        if (p.phone){ var tel = String(p.phone).replace(/[^0-9+]/g, ''); sms.style.display = ''; sms.href = rcText(tel, j.message_text || ''); }   // route through RingCentral (content= prefills the message)
+        else sms.style.display = 'none';
+      }
       var mail = el('sch-mail'); if (mail) mail.href = j.mailto_url || '#';
       if (noteEl) noteEl.textContent = (j.offered_dates && j.offered_dates.length) ? ('Offered on: ' + j.offered_dates.join(', ') + '. The link is single-use and expires once booked or after those dates.') : '';
       loadTourOffers();   // refresh the Recent offers list with the new one

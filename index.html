@@ -1740,6 +1740,7 @@ window.addEventListener('error', function(e){
             <th data-k="matched_unit_number">Unit</th>
             <th data-k="location_text">Location</th>
             <th data-k="matched_property_name">Property</th>
+            <th data-k="attendee_count" class="rt">People</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -2041,6 +2042,7 @@ window.addEventListener('error', function(e){
         <a id="rm-cancel" class="btn rmact" target="_blank" rel="noopener">&#10006; Cancel</a>
       </div>
       <div id="rm-contact"></div>
+      <div id="rm-roster"></div>
       <details id="rm-detwrap"><summary>Tour details</summary>
         <div id="rm-body"></div>
         <div class="rm-navrow">
@@ -6007,6 +6009,47 @@ window.addEventListener('error', function(e){
     if (r.matched_property_name) return r.matched_property_name + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
     return r.location_text || 'Tour';
   }
+  // list-view "People" cell: headcount badge for multi-attendee (open-house) slots
+  function tourPeopleCell(r){
+    var n = r.attendee_count || 1, tot = r.attendee_total || n;
+    if (n <= 1 && tot <= 1) return '1';
+    var ttl = tot + ' booked' + (tot > n ? ' · ' + (tot - n) + ' canceled' : '');
+    return '<span class="chip c-ok" title="' + esc(ttl) + '">&#128101; ' + n + '</span>';
+  }
+  // tour modal: load + render the per-attendee roster (each person + their suite)
+  function loadRoster(r){
+    var box = el('rm-roster'); if (!box) return;
+    box.innerHTML = '<div class="rm-feedlab">Attendees</div><div class="count-note" style="padding:2px 0">Loading…</div>';
+    authFetch('/open-house-attendees?event_uri=' + encodeURIComponent(r.uri))
+      .then(function(d){ renderRoster(box, (d && d.attendees) || []); })
+      .catch(function(){ box.innerHTML = ''; });
+  }
+  function renderRoster(box, atts){
+    if (!atts.length) { box.innerHTML = ''; return; }
+    var going = atts.filter(function(a){ return a.invitee_status === 'active'; }).length;
+    var h = '<div class="rm-feedlab">Attendees · ' + going + ' going'
+          + (atts.length > going ? ' · ' + (atts.length - going) + ' canceled' : '') + '</div>';
+    atts.forEach(function(a){
+      var cxl = a.invitee_status === 'canceled';
+      var suite = a.resolved_unit_number || (a.suite_answer || '');
+      var suiteChip = suite ? '<span class="chip ' + (a.resolved_unit_id ? 'c-ok' : 'c-warm') + '">' + esc(suite) + '</span>' : '';
+      var nm = a.invitee_name || a.invitee_email || 'Prospect';
+      var acts = '';
+      if (a.invitee_phone) { var tel = a.invitee_phone.replace(/[^0-9+]/g, '');
+        acts += '<a href="' + rcCall(esc(tel)) + '" title="Call">&#128222;</a> <a href="' + rcText(esc(tel)) + '" title="Text">&#128172;</a> '; }
+      if (a.invitee_email) acts += '<a href="mailto:' + esc(a.invitee_email) + '" title="Email">&#9993;&#65039;</a>';
+      var unitBtn = a.resolved_unit_id ? ' <a href="#" class="rmatt-unit" data-uid="' + a.resolved_unit_id + '" title="Open unit">unit &rarr;</a>' : '';
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--rim)' + (cxl ? ';opacity:.5' : '') + '">'
+        + '<span style="flex:1;min-width:0;font-weight:600;font-size:.83rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(nm) + (cxl ? ' <span class="chip c-hot">canceled</span>' : '') + '</span>'
+        + '<span style="flex-shrink:0">' + suiteChip + '</span>'
+        + '<span style="flex-shrink:0;white-space:nowrap;font-size:.95rem">' + acts + unitBtn + '</span>'
+        + '</div>';
+    });
+    box.innerHTML = h;
+    Array.prototype.forEach.call(box.querySelectorAll('.rmatt-unit'), function(a){
+      a.addEventListener('click', function(e){ e.preventDefault(); var uid = +a.getAttribute('data-uid'); if (uid) { closeModal('rmodal'); openUnitEnsure(uid); } });
+    });
+  }
   function tourRows(){
     var q = (el('r-search').value || '').toLowerCase();
     var showOnly = el('r-showings').checked;
@@ -6040,7 +6083,8 @@ window.addEventListener('error', function(e){
         '<td>' + st + (r.applied ? ' <span class="chip c-ok" title="This prospect applied">applied</span>' : '') + '</td>' +
         '<td>' + esc(r.matched_unit_number || '–') + '</td>' +
         '<td>' + esc(r.location_text || '–') + '</td>' +
-        '<td>' + esc(r.matched_property_name || '–') + '</td></tr>';
+        '<td>' + esc(r.matched_property_name || '–') + '</td>' +
+        '<td class="rt">' + tourPeopleCell(r) + '</td></tr>';
     });
     el('rtable').querySelector('tbody').innerHTML = html || emptyRow('rtable', 'Nothing matches');
     el('r-count').textContent = rows.length + ' of ' + (toursAll || []).length + ' events';
@@ -6063,7 +6107,7 @@ window.addEventListener('error', function(e){
         end: r.end_time || undefined,
         backgroundColor: col, borderColor: col, textColor: '#15110D',
         classNames: canceled ? ['fc-ev-cxl'] : [],
-        extendedProps: { canceled: canceled, noshow: !!r.is_no_show }
+        extendedProps: { canceled: canceled, noshow: !!r.is_no_show, n: r.attendee_count || 0 }
       };
     });
     if (!rcal) {
@@ -6080,7 +6124,9 @@ window.addEventListener('error', function(e){
           wrap.className = 'fc-ev-wrap';
           var x = arg.event.extendedProps.canceled ? '<span class="fcx">&#10006;</span>'
                 : (arg.event.extendedProps.noshow ? '<span class="fcx">&#8856;</span>' : '');
-          wrap.innerHTML = x + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>';
+          var n = arg.event.extendedProps.n || 0;
+          var nb = n > 1 ? '<span class="fc-ev-n" title="' + n + ' people booked" style="margin-left:4px;font-weight:700;background:rgba(0,0,0,.22);border-radius:6px;padding:0 4px;font-size:.72em;white-space:nowrap">&#128101; ' + n + '</span>' : '';
+          wrap.innerHTML = x + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' + nb;
           return { domNodes: [wrap] };
         }
       });
@@ -6138,6 +6184,10 @@ window.addEventListener('error', function(e){
       pc += '</div></div>';
     }
     el('rm-contact').innerHTML = pc;
+    // Open-house roster — when a slot holds multiple attendees, list everyone with the
+    // suite they asked about (per-attendee resolution); single-invitee tours skip it.
+    var rosterBox = el('rm-roster');
+    if (rosterBox) { rosterBox.innerHTML = ''; if ((r.attendee_total || r.attendee_count || 1) > 1) loadRoster(r); }
     el('rm-pick').innerHTML = '';
     el('rm-link').innerHTML = ''; el('rm-link').removeAttribute('data-open');
     el('rm-linkbtn').innerHTML = r.matched_property_id ? '&#128279; Change link' : '&#128279; Link to a unit';

@@ -1238,6 +1238,7 @@ window.addEventListener('error', function(e){
       <span class="navpill" aria-hidden="true"></span>
       <button type="button" class="navitem on" data-tab="ledger"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M9 9v11"/></svg><span>Ledger</span></button>
       <button type="button" class="navitem" data-tab="hub"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8V3h-8zM3 21h8v-6H3z"/></svg><span>My hub</span></button>
+      <button type="button" class="navitem" data-tab="phones"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Phones</span></button>
       <button type="button" class="navitem" data-tab="units"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg><span>Units</span></button>
       <button type="button" class="navitem" data-tab="applications"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg><span>Applications</span></button>
       <button type="button" class="navitem" data-tab="tours"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Tours</span></button>
@@ -2038,6 +2039,84 @@ window.addEventListener('error', function(e){
       <div class="note" style="margin-top:10px">Append-only audit trail of every key action (and the one-time import). Sidebar scope filters apply to matched keys.</div>
     </div>
   </div>
+  <div id="page-phones" style="display:none">
+    <style>
+    #page-phones .ph-attr{margin:12px 0 0;font-size:.84rem;color:var(--ink-soft);line-height:1.6}
+    #page-phones .ph-attr b{color:var(--ink)}
+    #page-phones .vmfunnel{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end;margin-top:8px}
+    #page-phones .vmf{display:flex;flex-direction:column;gap:2px}
+    #page-phones .vmf .v{font-size:1.7rem;font-weight:700;line-height:1}
+    #page-phones .vmf .l{font-size:.68rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
+    #page-phones .vmf .good{color:var(--moss)} #page-phones .vmf .bad{color:var(--clay)}
+    #page-phones .ph-sub2{font-size:.7rem;color:var(--ink-soft)}
+    #page-phones .badge{display:inline-block;font-size:.6rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--clay-soft);color:var(--clay);vertical-align:middle}
+    #page-phones .badge.moss{background:var(--moss-soft);color:var(--moss)}
+    #page-phones .heat-toggle{display:flex;gap:6px;margin-left:auto}
+    #ph-heat-wrap{overflow-x:auto;padding-bottom:4px}
+    #ph-heat{display:grid;grid-template-columns:38px repeat(24,minmax(20px,1fr));gap:2px;min-width:640px}
+    #ph-heat .hh{font-size:.58rem;color:var(--ink-soft);display:flex;align-items:center;justify-content:flex-start;height:14px}
+    #ph-heat .hr{font-size:.66rem;color:var(--ink-soft);display:flex;align-items:center;height:20px}
+    #ph-heat .hc{height:20px;border-radius:3px;background:var(--glass)}
+    #page-phones td .acts a{text-decoration:none;font-size:1rem;margin-right:4px}
+    </style>
+
+    <section class="panel">
+      <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span><h2>Phone performance</h2><span class="ph-sub">calls &amp; texts &middot; RingCentral &middot; window follows the sidebar dates</span></div>
+      <div class="panel-kpis pk-3">
+        <div class="kpi"><div class="lbl">Inbound calls</div><div class="num" id="ph-k-inbound">&ndash;</div><div class="sub" id="ph-k-inbound-sub">received</div></div>
+        <div class="kpi"><div class="lbl">Answer rate</div><div class="num" id="ph-k-answer">&ndash;</div><div class="sub" id="ph-k-answer-sub">answered vs missed</div></div>
+        <div class="kpi"><div class="lbl">Missed calls</div><div class="num" id="ph-k-missed">&ndash;</div><div class="sub" id="ph-k-missed-sub">incl. voicemail</div></div>
+        <div class="kpi"><div class="lbl">Voicemail call-back rate</div><div class="num" id="ph-k-return">&ndash;</div><div class="sub" id="ph-k-return-sub">missed we got back to &middot; 7d</div></div>
+        <div class="kpi"><div class="lbl">Outbound calls</div><div class="num" id="ph-k-outbound">&ndash;</div><div class="sub" id="ph-k-outbound-sub">made</div></div>
+        <div class="kpi"><div class="lbl">Texts</div><div class="num" id="ph-k-texts">&ndash;</div><div class="sub" id="ph-k-texts-sub">in &middot; out</div></div>
+      </div>
+      <div class="ph-attr" id="ph-attr"></div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <h2>Call volume</h2>
+          <div class="note">inbound &middot; missed &middot; outbound per day &middot; Mountain time</div>
+          <div class="chartbox tall"><canvas id="ch-ph-trend"></canvas></div>
+        </div>
+        <div class="card">
+          <h2>Voicemail &amp; missed-call follow-up</h2>
+          <div class="note">of every missed/voicemail call, did we get back to them within 7 days?</div>
+          <div class="vmfunnel" id="ph-vmfunnel"></div>
+          <div class="note" style="margin-top:12px" id="ph-vmnote"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar"><h2>When the calls come in</h2><span class="count-note">inbound by hour &amp; weekday &middot; Mountain time</span>
+        <div class="heat-toggle"><button type="button" class="chip-mini on" id="ph-heat-calls">All calls</button><button type="button" class="chip-mini" id="ph-heat-missed">Missed only</button></div>
+      </div>
+      <div id="ph-heat-wrap"><div id="ph-heat"></div></div>
+      <div class="note" style="margin-top:8px">Darker = more calls. Shows the hours we're getting hit hardest (and where the misses cluster).</div>
+    </div>
+
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar"><h2>Agent scorecard</h2><span class="count-note">calls &amp; texts by agent &middot; selected window</span></div>
+      <div class="scrolly"><table id="ph-agents"><thead><tr>
+        <th>Agent</th><th class="rt">Calls out</th><th class="rt">Calls in</th><th class="rt">Answered</th><th class="rt">Missed</th><th class="rt">Answer&nbsp;%</th><th class="rt">Avg call</th><th class="rt">Texts out</th><th class="rt">Texts in</th><th class="rt">Call-back&nbsp;%</th>
+      </tr></thead><tbody></tbody></table></div>
+      <div class="note" style="margin-top:8px">Answered/missed reflect calls that reached each agent's line. Call-back&nbsp;% = their missed/voicemail calls that got a call or text back within 7 days.</div>
+    </div>
+
+    <div class="grid g2" style="margin-top:18px">
+      <div class="card tablecard">
+        <div class="tablebar"><h2>Who's calling the most</h2><span class="count-note">top inbound numbers</span></div>
+        <div class="scrolly tallscroll"><table id="ph-callers"><thead><tr>
+          <th>Caller</th><th class="rt">Calls</th><th class="rt">Ans</th><th class="rt">Missed</th><th>Last call</th><th>Reached back?</th><th></th>
+        </tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card tablecard">
+        <div class="tablebar"><h2>Needs a call back</h2><span class="count-note">last contact was a missed/VM, no reply since</span></div>
+        <div class="scrolly tallscroll"><table id="ph-followups"><thead><tr>
+          <th>Caller</th><th>Last missed</th><th class="rt">Calls</th><th></th>
+        </tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </div>
   </main>
   <nav class="mobnav" id="mobnav" aria-label="Primary navigation">
     <button type="button" class="mobnav-btn" data-tab="units"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg><span>Units</span></button>
@@ -2727,7 +2806,7 @@ window.addEventListener('error', function(e){
   })();
 
   /* ── tabs ─────────────────────────────────── */
-  var PAGES = { ledger:'app', hub:'page-hub', units:'page-units', applications:'page-applications', tours:'page-tours', schedule:'page-schedule', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
+  var PAGES = { ledger:'app', hub:'page-hub', phones:'page-phones', units:'page-units', applications:'page-applications', tours:'page-tours', schedule:'page-schedule', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
   var ACTIVE_TAB = 'ledger';   // which tab is showing; render() only reveals the Ledger (#app) when this is 'ledger'
   var statsLoaded = false;     // a /stats load has succeeded at least once (Ledger DOM is populated)
   var statsLoading = false;    // a /stats load is currently in flight
@@ -2752,6 +2831,7 @@ window.addEventListener('error', function(e){
     if (key === 'renewals' && renewalsAll === null) loadRenewals();
     if (key === 'keys' && keysAll === null) loadKeys();
     if (key === 'hub' && hubLoaded === null) loadHub();
+    if (key === 'phones' && phonesData === null) loadPhones();
     if (key === 'tasks' && tasksAll === null) loadTasks();
     if (key === 'history' && historyAll === null) loadHistory();
     // if a prior /stats load failed (e.g. first load errored while deep-linked elsewhere),
@@ -6681,6 +6761,7 @@ window.addEventListener('error', function(e){
     load();   // reloads the ledger and invalidates appsAll/toursAll
     if (el('page-applications').style.display === 'block') loadApps();
     if (el('page-tours').style.display === 'block') loadTours();
+    if (el('page-phones') && el('page-phones').style.display === 'block') { phonesData = null; loadPhones(); }
   }
   // ── activity window: explicit From/To range with a "Last N days" stepper ──
   // The sidebar summary shows the range; clicking opens the popover. ±/typing N
@@ -7752,6 +7833,147 @@ window.addEventListener('error', function(e){
       var inp = bstops && bstops.querySelector('.schstop-loc[data-st="' + (window.CSS && CSS.escape ? CSS.escape(st) : st) + '"]'); if (inp) inp.value = addr;
       bstopres.innerHTML = '';
     });
+  })();
+
+  /* ── Phones tab (RingCentral analysis) ─────────────────────────────────── */
+  var phonesData = null, phHeatMode = 'calls';
+  function phFmtPhone(l10){ var d = String(l10 || '').replace(/\D/g, '');
+    if (d.length === 11 && d[0] === '1') d = d.slice(1);
+    if (d.length === 10) return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6);
+    return l10 || ''; }
+  function phWhen(s){ if (!s) return '–'; var d = new Date(s); if (isNaN(d)) return '–';
+    try { return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); } catch(e){ return '–'; } }
+  function phDur(s){ s = Math.round(s || 0); var m = Math.floor(s/60), ss = s%60; return m ? (m + 'm' + (ss<10?'0':'') + ss + 's') : (ss + 's'); }
+  function phActs(phone, name){ var tel = String(phone || '').replace(/[^0-9]/g, ''); if (!tel) return '';
+    return '<span class="acts"><a href="' + rcCall(esc(tel)) + '" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" title="Text">&#128172;</a>' + threadIcon(tel, name) + '</span>'; }
+  function loadPhones(){
+    if (!el('page-phones')) return;
+    phonesData = 1;
+    var w = windowDates();
+    authFetch('/phone-stats?from=' + w.from + '&to=' + w.to).then(function(j){
+      phonesData = j; phRender(j);
+    }).catch(function(){
+      phonesData = null;
+      var a = el('ph-agents'); if (a) a.querySelector('tbody').innerHTML = emptyRow('ph-agents', 'Could not load phone data.');
+    });
+  }
+  function phRender(j){
+    if (!j || !j.totals) return;
+    phRenderKpis(j); phRenderAttr(j); phRenderTrend(j); phRenderFunnel(j);
+    phRenderHeat(j); phRenderAgents(j); phRenderCallers(j); phRenderFollowups(j);
+  }
+  function phRenderKpis(j){
+    var t = j.totals || {}, vf = j.voicemail_funnel || {};
+    countUp('ph-k-inbound', t.inbound || 0, fmtNum);
+    countUp('ph-k-missed', t.missed || 0, fmtNum);
+    countUp('ph-k-outbound', t.outbound || 0, fmtNum);
+    if (el('ph-k-answer')) el('ph-k-answer').textContent = (t.answer_rate == null ? '–' : t.answer_rate + '%');
+    if (el('ph-k-answer-sub')) el('ph-k-answer-sub').innerHTML = fmtNum(t.answered || 0) + ' answered &middot; ' + fmtNum(t.missed || 0) + ' missed';
+    if (el('ph-k-missed-sub')) el('ph-k-missed-sub').innerHTML = fmtNum(t.voicemail || 0) + ' to voicemail';
+    if (el('ph-k-outbound-sub')) el('ph-k-outbound-sub').innerHTML = fmtNum(t.outbound_connected || 0) + ' connected';
+    if (el('ph-k-texts')) el('ph-k-texts').textContent = fmtNum((t.texts_in || 0) + (t.texts_out || 0));
+    if (el('ph-k-texts-sub')) el('ph-k-texts-sub').innerHTML = fmtNum(t.texts_in || 0) + ' in &middot; ' + fmtNum(t.texts_out || 0) + ' out';
+    if (el('ph-k-return')) el('ph-k-return').textContent = (vf.return_rate == null ? '–' : vf.return_rate + '%');
+    if (el('ph-k-return-sub')) el('ph-k-return-sub').innerHTML = fmtNum(vf.called_back || 0) + ' of ' + fmtNum(vf.missed_events || 0) + ' called back';
+  }
+  function phRenderAttr(j){
+    var a = j.attribution || {}, nv = j.new_vs_returning || {};
+    var h = '<b>' + fmtNum(a.inbound_total || 0) + '</b> inbound &middot; <b>' + fmtNum(a.inbound_to_agent || 0) + '</b> reached a tracked agent &middot; <b>' + fmtNum(a.inbound_queue_only || 0) + '</b> went to the main line / queue / other staff';
+    h += '<br><b>' + fmtNum(nv.total_callers || 0) + '</b> people called &middot; <b>' + fmtNum(nv.new_callers || 0) + '</b> first-time &middot; <b>' + fmtNum(nv.returning_callers || 0) + '</b> have called before';
+    if (el('ph-attr')) el('ph-attr').innerHTML = h;
+  }
+  function phRenderTrend(j){
+    if (!el('ch-ph-trend') || !window.Chart) return;
+    var s = j.series || [];
+    mkChart('ch-ph-trend', {
+      type:'bar',
+      data:{ labels: s.map(function(r){ return r.date; }), datasets:[
+        { label:'Inbound',  data: s.map(function(r){ return r.inbound; }),  backgroundColor: vgrad('#F4CB63','#C9912A'), borderRadius:2 },
+        { label:'Missed',   data: s.map(function(r){ return r.missed; }),   backgroundColor: vgrad('#E8956A','#C5603A'), borderRadius:2 },
+        { label:'Outbound', data: s.map(function(r){ return r.outbound; }), backgroundColor: vgrad('rgba(166,192,210,.75)','rgba(166,192,210,.2)'), borderRadius:2 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:true, position:'bottom', labels:{ boxWidth:12, padding:12 } } },
+        scales:{ x:{ grid:{ display:false }, ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit:12 } },
+                 y:{ beginAtZero:true, grid:{ color:COL.hairline } } } }
+    });
+  }
+  function phRenderFunnel(j){
+    var vf = j.voicemail_funnel || {};
+    var h = ''
+      + '<div class="vmf"><span class="v">' + fmtNum(vf.missed_events || 0) + '</span><span class="l">missed / voicemail</span></div>'
+      + '<div class="vmf"><span class="v good">' + fmtNum(vf.called_back || 0) + '</span><span class="l">called back</span></div>'
+      + '<div class="vmf"><span class="v">' + fmtNum(vf.texted_back || 0) + '</span><span class="l">texted back</span></div>'
+      + '<div class="vmf"><span class="v bad">' + fmtNum(vf.no_followup || 0) + '</span><span class="l">no follow-up</span></div>'
+      + '<div class="vmf"><span class="v">' + (vf.return_rate == null ? '–' : vf.return_rate + '%') + '</span><span class="l">call-back rate</span></div>';
+    if (el('ph-vmfunnel')) el('ph-vmfunnel').innerHTML = h;
+    if (el('ph-vmnote')) el('ph-vmnote').innerHTML = vf.median_hours_to_callback != null
+      ? ('When we do call back, the median wait is <b>' + vf.median_hours_to_callback + ' hours</b>.') : '';
+  }
+  function phRenderHeat(j){
+    var box = el('ph-heat'); if (!box) return;
+    var data = j.heatmap || [], grid = {}, maxv = 0;
+    data.forEach(function(c){ grid[c.dow + '_' + c.hour] = c; var v = phHeatMode === 'missed' ? c.missed : c.calls; if (v > maxv) maxv = v; });
+    var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    function hl(hr){ if (hr % 3 !== 0) return ''; return hr === 0 ? '12a' : (hr < 12 ? hr + 'a' : (hr === 12 ? '12p' : (hr - 12) + 'p')); }
+    var h = '<div class="hh"></div>';
+    for (var hr = 0; hr < 24; hr++) h += '<div class="hh">' + hl(hr) + '</div>';
+    for (var d = 0; d < 7; d++){
+      h += '<div class="hr">' + days[d] + '</div>';
+      for (var k = 0; k < 24; k++){
+        var c = grid[d + '_' + k], v = c ? (phHeatMode === 'missed' ? c.missed : c.calls) : 0;
+        var al = (maxv > 0 && v > 0) ? (0.14 + 0.86 * (v / maxv)) : 0;
+        var bg = v > 0 ? (phHeatMode === 'missed' ? 'rgba(232,149,106,' + al + ')' : 'rgba(244,203,99,' + al + ')') : 'var(--glass)';
+        var tip = v > 0 ? (days[d] + ' ' + k + ':00 — ' + v + (phHeatMode === 'missed' ? ' missed' : ' calls')) : '';
+        h += '<div class="hc" style="background:' + bg + '" title="' + tip + '"></div>';
+      }
+    }
+    box.innerHTML = h;
+  }
+  function phRenderAgents(j){
+    var t = el('ph-agents'); if (!t) return;
+    var h = '';
+    (j.agents || []).forEach(function(r){
+      h += '<tr><td>' + esc(r.agent) + '</td>'
+        + '<td class="rt">' + fmtNum(r.calls_out) + '</td><td class="rt">' + fmtNum(r.calls_in) + '</td>'
+        + '<td class="rt">' + fmtNum(r.answered) + '</td><td class="rt">' + fmtNum(r.missed) + '</td>'
+        + '<td class="rt">' + (r.answer_rate == null ? '–' : r.answer_rate + '%') + '</td>'
+        + '<td class="rt">' + (r.avg_duration ? phDur(r.avg_duration) : '–') + '</td>'
+        + '<td class="rt">' + fmtNum(r.texts_out) + '</td><td class="rt">' + fmtNum(r.texts_in) + '</td>'
+        + '<td class="rt">' + (r.callback_rate == null ? '–' : r.callback_rate + '%') + '</td></tr>';
+    });
+    t.querySelector('tbody').innerHTML = h || emptyRow('ph-agents', 'No agent activity in this window.');
+  }
+  function phRenderCallers(j){
+    var t = el('ph-callers'); if (!t) return;
+    var h = '';
+    (j.top_callers || []).forEach(function(r){
+      var nm = r.name || phFmtPhone(r.phone);
+      var badge = r.is_prospect ? ' <span class="badge moss">prospect</span>' : '';
+      var fu = r.followed_up ? '<span class="badge moss">yes</span>' : '<span class="badge">no</span>';
+      h += '<tr><td>' + esc(nm) + badge + '<div class="ph-sub2">' + esc(phFmtPhone(r.phone)) + '</div></td>'
+        + '<td class="rt">' + fmtNum(r.inbound) + '</td><td class="rt">' + fmtNum(r.answered) + '</td><td class="rt">' + fmtNum(r.missed) + '</td>'
+        + '<td>' + phWhen(r.last_call_at) + '</td><td>' + fu + '</td><td>' + phActs(r.phone, nm) + '</td></tr>';
+    });
+    t.querySelector('tbody').innerHTML = h || emptyRow('ph-callers', 'No inbound callers in this window.');
+  }
+  function phRenderFollowups(j){
+    var t = el('ph-followups'); if (!t) return;
+    var h = '';
+    (j.followups || []).forEach(function(r){
+      var nm = r.name || phFmtPhone(r.phone);
+      var badge = r.is_prospect ? ' <span class="badge moss">prospect</span>' : '';
+      var vm = r.last_result === 'Voicemail' ? ' <span class="badge">VM</span>' : '';
+      h += '<tr><td>' + esc(nm) + badge + '<div class="ph-sub2">' + esc(phFmtPhone(r.phone)) + '</div></td>'
+        + '<td>' + phWhen(r.last_inbound_at) + vm + '</td><td class="rt">' + fmtNum(r.inbound_total) + '</td>'
+        + '<td>' + phActs(r.phone, nm) + '</td></tr>';
+    });
+    t.querySelector('tbody').innerHTML = h || emptyRow('ph-followups', 'Nobody is waiting on a call back. 🎉');
+  }
+  (function(){
+    var bc = el('ph-heat-calls'), bm = el('ph-heat-missed');
+    if (bc) bc.addEventListener('click', function(){ phHeatMode = 'calls'; bc.classList.add('on'); if (bm) bm.classList.remove('on'); if (phonesData && phonesData.heatmap) phRenderHeat(phonesData); });
+    if (bm) bm.addEventListener('click', function(){ phHeatMode = 'missed'; bm.classList.add('on'); if (bc) bc.classList.remove('on'); if (phonesData && phonesData.heatmap) phRenderHeat(phonesData); });
   })();
 
   window.__llBooted = true;   // synchronous init finished without throwing — disarms the boot-crash guard

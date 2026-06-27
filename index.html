@@ -7315,6 +7315,15 @@ window.addEventListener('error', function(e){
       var sched = parts[0] || {}, avail = parts[1] || {};
       bkData.showings = sched.showings || []; bkData.busy = sched.busy || []; bkData.slots = avail.slots || [];
       schedBook.duration = avail.duration_minutes || schedBook.duration || 15;
+      // Defensive: drop open slots that overlap a known showing/busy block, in case Calendly
+      // availability didn't cross-block (e.g. a booking on the agent's OTHER event type).
+      var durMs = (schedBook.duration || 15) * 60000;
+      var blocks = bkData.showings.concat(bkData.busy).map(function(b){ return [Date.parse(b.start), Date.parse(b.end || b.start)]; }).filter(function(x){ return x[0] && x[1] && x[1] > x[0]; });
+      bkData.slots = bkData.slots.filter(function(sl){
+        var s = Date.parse(sl.start_time); if (!s) return true; var e = s + durMs;
+        for (var i = 0; i < blocks.length; i++){ if (s < blocks[i][1] && e > blocks[i][0]) return false; }
+        return true;
+      });
       if (note) note.textContent = bkData.slots.length + ' open slot' + (bkData.slots.length === 1 ? '' : 's') + ' · ' + bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' — click a green slot to book';
       schBkRenderCal();
     }).catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });

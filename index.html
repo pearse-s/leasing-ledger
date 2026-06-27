@@ -1155,6 +1155,18 @@ window.addEventListener('error', function(e){
   .fc-ev-open{cursor:pointer;font-weight:700}
   #sch-bk-cal{margin-top:8px}
   .schbooked{padding:10px 12px;border:1px solid var(--clay);border-radius:10px;background:var(--clay-soft);color:var(--ink);font-weight:600;margin-top:8px}
+  .schleg-stop:before{background:#E8B43E}
+  .schstop{display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid var(--hairline-dark);border-radius:10px;margin-bottom:6px;background:rgba(255,255,255,.02)}
+  .schstop-n{flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--clay);color:var(--on-accent,#15110D);font-size:.72rem;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .schstop-body{flex:1 1 auto;min-width:0}
+  .schstop-time{font-size:.82rem;color:var(--ink);font-weight:600}
+  .schstop-txt{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--clay);border:1px solid var(--clay);border-radius:999px;padding:0 6px;margin-left:6px}
+  .schstop-loc{width:100%;margin-top:3px;font-size:.82rem}
+  .schstop-x{flex:0 0 auto;background:none;border:none;color:var(--ink-soft);font-size:1.2rem;line-height:1;cursor:pointer}
+  .schstop-x:hover{color:var(--clay)}
+  .schstop-res{font-size:.8rem;color:var(--ink-soft);padding:2px 0}
+  .schstop-ok{color:#5E8E4B;font-weight:600}
+  .schstop-err{color:#c0563a;font-weight:600}
   .schbadge{display:inline-block;font-size:.62rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:1px 7px;vertical-align:middle}
   .schbadge-app{color:var(--ink-soft);background:rgba(255,255,255,.06);border:1px solid var(--hairline-dark)}
   .schbadge-lead{color:var(--clay);background:var(--clay-soft);border:1px solid var(--clay)}
@@ -1891,7 +1903,7 @@ window.addEventListener('error', function(e){
                 <button type="button" class="rfreshbtn" id="sch-bk-reload">&#8635; Refresh</button>
                 <span class="count-note" id="sch-bk-cal-note"></span>
               </div>
-              <div class="schcal-legend"><span class="schleg schleg-show">Showing</span><span class="schleg schleg-busy">Busy</span><span class="schhint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><label class="schtgl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label></div>
+              <div class="schcal-legend"><span class="schleg schleg-show">Showing</span><span class="schleg schleg-busy">Busy</span><span class="schhint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><label class="schtgl"><input type="checkbox" id="sch-bk-multi"> Book several back-to-back</label><label class="schtgl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label></div>
               <div id="sch-bk-cal"></div>
             </div>
           </div>
@@ -1899,15 +1911,25 @@ window.addEventListener('error', function(e){
             <div class="schnum">5</div>
             <div class="schmain">
               <label class="schlbl">Confirm &amp; book</label>
-              <div class="schrow"><label class="schsub" style="margin:0">Time</label> <select id="sch-bk-time" style="width:auto"></select> <span class="schsublite" id="sch-bk-daylab"></span></div>
-              <div class="schloc">
-                <label class="schsub">Tour location <span class="schsublite">&mdash; sent to the prospect; type to search our units</span></label>
-                <input type="text" id="sch-bk-loc" placeholder="Unit address" autocomplete="off">
-                <div id="sch-bk-loc-results" class="schresults"></div>
+              <div id="sch-bk-single-wrap">
+                <div class="schrow"><label class="schsub" style="margin:0">Time</label> <select id="sch-bk-time" style="width:auto"></select> <span class="schsublite" id="sch-bk-daylab"></span></div>
+                <div class="schloc">
+                  <label class="schsub">Tour location <span class="schsublite">&mdash; sent to the prospect; type to search our units</span></label>
+                  <input type="text" id="sch-bk-loc" placeholder="Unit address" autocomplete="off">
+                  <div id="sch-bk-loc-results" class="schresults"></div>
+                </div>
+                <div class="schsummary" id="sch-bk-summary"></div>
+                <button type="button" class="mybtn schgen" id="sch-bk-go">Book this tour</button>
+                <div id="sch-bk-result" style="display:none"></div>
               </div>
-              <div class="schsummary" id="sch-bk-summary"></div>
-              <button type="button" class="mybtn schgen" id="sch-bk-go">Book this tour</button>
-              <div id="sch-bk-result" style="display:none"></div>
+              <div id="sch-bk-multi-wrap" style="display:none">
+                <div class="schsublite" style="margin-bottom:6px">Click each open time on the calendar above to add a stop, then set each stop&rsquo;s unit. The prospect gets <b>one text</b> (for the first tour).</div>
+                <div id="sch-bk-stops"></div>
+                <div id="sch-bk-stop-results" class="schresults"></div>
+                <div class="schsummary" id="sch-bk-multi-summary"></div>
+                <button type="button" class="mybtn schgen" id="sch-bk-book-all" disabled>Book all tours</button>
+                <div id="sch-bk-multi-result" style="display:none"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -7277,6 +7299,7 @@ window.addEventListener('error', function(e){
   var schedProspect = null;   // prospect from a lead deep link, carried to either flow
   var schedBook = { applicant:null, agentId:null, agentName:'', eventType:null, eventTypeName:'', duration:0, locDefault:'', chosen:null };
   var bkcal = null, schBkSearchT = null, schBkLocT = null, schBkSearchRows = [], schBkLeadRows = [], bkData = { showings:[], busy:[], slots:[] };
+  var schBkMulti = false, schBkStops = [], schBkStopT = null;   // back-to-back run: [{start_time, location}]
   function schShowView(v){
     var L = el('sch-landing'), O = el('sch-view-offer'), B = el('sch-view-book');
     if (L) L.style.display = v === 'landing' ? 'block' : 'none';
@@ -7341,6 +7364,7 @@ window.addEventListener('error', function(e){
   function schBkPickAgent(aid){
     var a = (schedAgents || []).filter(function(x){ return String(x.id) === String(aid); })[0]; if (!a) return;
     schedBook.agentId = a.id; schedBook.agentName = a.display_name; schedBook.eventType = null; schedBook.eventTypeName = '';
+    schBkStops = []; schBkRenderStops();   // a different agent → start the run fresh
     var box = el('sch-bk-agent-chips'); if (box) box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-aid') === String(aid)); });
     schUnlock('sch-bk-step-event', true); schUnlock('sch-bk-step-cal', false); schUnlock('sch-bk-step-confirm', false);
     var et = el('sch-bk-ettype'); if (et) et.innerHTML = '<span class="count-note">Loading event types…</span>';
@@ -7353,6 +7377,7 @@ window.addEventListener('error', function(e){
   function schBkPickEventType(uri, name, dur){
     schedBook.eventType = uri; schedBook.eventTypeName = name || ''; schedBook.duration = parseInt(dur, 10) || 15;
     var et = el('sch-bk-ettype'); if (et) et.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-uri') === uri); });
+    schBkStops = []; schBkRenderStops();   // event type changed → times differ, start fresh
     schUnlock('sch-bk-step-cal', true);
     schBkLoadCalendar();
   }
@@ -7400,8 +7425,15 @@ window.addEventListener('error', function(e){
     });
     if (showOpen){
       bkData.slots.forEach(function(sl){
+        if (schBkMulti && schBkStops.some(function(s){ return s.start_time === sl.start_time; })) return;   // already a stop
         var end = new Date(Date.parse(sl.start_time) + dur * 60000).toISOString();
         evs.push({ id: 'open_' + sl.start_time, title: 'Open', start: sl.start_time, end: end, backgroundColor: '#5E8E4B', borderColor: '#3f6b30', textColor: '#fff', classNames: ['fc-ev-open'], extendedProps: { kind: 'open', start_time: sl.start_time } });
+      });
+    }
+    if (schBkMulti){
+      schBkStops.forEach(function(s, i){
+        var end = new Date(Date.parse(s.start_time) + dur * 60000).toISOString();
+        evs.push({ id: 'stop_' + s.start_time, title: 'Stop ' + (i + 1), start: s.start_time, end: end, backgroundColor: '#E8B43E', borderColor: '#caa233', textColor: '#15110D', classNames: ['fc-ev-stop'], extendedProps: { kind: 'stop', start_time: s.start_time } });
       });
     }
     if (!bkcal){
@@ -7410,7 +7442,7 @@ window.addEventListener('error', function(e){
         initialView: mob ? 'timeGridDay' : 'timeGridWeek',
         headerToolbar: { left: 'prev,next today', center: 'title', right: mob ? 'timeGridDay,timeGridWeek' : 'timeGridWeek,timeGridDay,dayGridMonth' },
         height: 620, nowIndicator: true, firstDay: 0, expandRows: true, snapDuration: '00:15:00', slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
-        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); if (info.event.extendedProps.kind === 'open') schBkPickTime(info.event.extendedProps.start_time); },
+        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); var k = info.event.extendedProps.kind; if (k === 'stop') schBkRemoveStop(info.event.extendedProps.start_time); else if (k === 'open') schBkPickTime(info.event.extendedProps.start_time); },
         dateClick: function(info){ schBkPickTime(info.date.getTime()); }
       });
       bkcal.render();
@@ -7428,7 +7460,112 @@ window.addEventListener('error', function(e){
     var pool = day.length ? day : (bkData.slots || []);
     if (!pool.length){ var note = el('sch-bk-cal-note'); if (note) note.textContent = 'No open times to book in this window — try another window or agent.'; return; }
     var pick = pool.reduce(function(a, b){ return Math.abs(Date.parse(b.start_time) - ms) < Math.abs(Date.parse(a.start_time) - ms) ? b : a; });
-    schBkConfirm(pick.start_time);
+    if (schBkMulti) schBkAddStop(pick.start_time); else schBkConfirm(pick.start_time);
+  }
+  // ── Back-to-back run (one prospect, several units; text on the first only) ─────────
+  function schBkSetMulti(on){
+    schBkMulti = !!on;
+    var sw = el('sch-bk-single-wrap'), mw = el('sch-bk-multi-wrap');
+    if (sw) sw.style.display = on ? 'none' : '';
+    if (mw) mw.style.display = on ? '' : 'none';
+    if (on) schUnlock('sch-bk-step-confirm', true);
+    schBkRenderStops();
+    schBkRenderCal();
+  }
+  function schBkAddStop(startIso){
+    if (schBkStops.some(function(s){ return s.start_time === startIso; })) return;   // dedupe
+    schBkStops.push({ start_time: startIso, location: schedBook.locDefault || '' });
+    schBkStops.sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+    schUnlock('sch-bk-step-confirm', true);
+    schBkRenderStops();
+    schBkRenderCal();
+  }
+  function schBkRemoveStop(startIso){
+    schBkStops = schBkStops.filter(function(s){ return s.start_time !== startIso; });
+    schBkRenderStops();
+    schBkRenderCal();
+  }
+  function schBkRenderStops(){
+    var box = el('sch-bk-stops'); if (!box) return;
+    if (!schBkStops.length){
+      box.innerHTML = '<div class="note">No stops yet &mdash; click open times on the calendar above to add them.</div>';
+    } else {
+      box.innerHTML = schBkStops.map(function(s, i){
+        var when = schEdFmt(s.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        return '<div class="schstop" data-st="' + esc(s.start_time) + '">' +
+          '<span class="schstop-n">' + (i + 1) + '</span>' +
+          '<div class="schstop-body"><div class="schstop-time">' + esc(when) + (i === 0 ? ' <span class="schstop-txt">texts prospect</span>' : '') + '</div>' +
+          '<input type="text" class="schstop-loc" data-st="' + esc(s.start_time) + '" value="' + esc(s.location || '') + '" placeholder="Unit address" autocomplete="off"></div>' +
+          '<button type="button" class="schstop-x" data-st="' + esc(s.start_time) + '" title="Remove">&times;</button>' +
+          '</div>';
+      }).join('');
+    }
+    var sum = el('sch-bk-multi-summary');
+    if (sum){
+      var n = schBkStops.length;
+      sum.innerHTML = n ? ('Book <b>' + n + '</b> tour' + (n === 1 ? '' : 's') + ' for <b>' + esc(schedBook.applicant ? schedBook.applicant.name : 'prospect') + '</b> with <b>' + esc(schedBook.agentName) + '</b>. The prospect gets <b>one text</b> (for the first).') : '';
+    }
+    var btn = el('sch-bk-book-all'); if (btn) btn.disabled = !schBkStops.length;
+  }
+  function schBkStopLocSearch(inputEl){
+    var st = inputEl.getAttribute('data-st');
+    var stop = schBkStops.filter(function(s){ return s.start_time === st; })[0];
+    if (stop) stop.location = inputEl.value;   // keep model in sync as they type
+    var res = el('sch-bk-stop-results'); if (!res) return;
+    var q = (inputEl.value || '').trim();
+    res.setAttribute('data-st', st);
+    try { inputEl.parentNode.insertAdjacentElement('afterend', res); } catch (e) {}   // float results under the active row
+    if (q.length < 3){ res.innerHTML = ''; return; }
+    authFetch('/tour-unit-search?q=' + encodeURIComponent(q)).then(function(j){
+      var rows = j.results || []; if (!rows.length){ res.innerHTML = ''; return; }
+      res.innerHTML = rows.map(function(u){ return '<button type="button" class="schres" data-addr="' + esc(u.address) + '"><b>' + esc(u.address || (u.property_name + ' ' + (u.unit_number || ''))) + '</b><span>' + esc([u.property_name, u.unit_number ? 'Unit ' + u.unit_number : ''].filter(Boolean).join(' · ')) + '</span></button>'; }).join('');
+    }).catch(function(){ /* ignore */ });
+  }
+  function schBkBookAll(){
+    var p = schedBook.applicant; if (!p || !schedBook.agentId || !schBkStops.length) return;
+    // pull the latest location text straight from the inputs (in case a keystroke hasn't debounced)
+    var inputs = (el('sch-bk-stops') || document).querySelectorAll('.schstop-loc');
+    [].slice.call(inputs).forEach(function(inp){ var st = inp.getAttribute('data-st'); var s = schBkStops.filter(function(x){ return x.start_time === st; })[0]; if (s) s.location = inp.value; });
+    var actor = getActor(), rb = el('sch-bk-multi-result');
+    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Pick your name on the sign-in screen first (so the bookings are logged to you).</div>'; } return; }
+    var stops = schBkStops.slice().sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+    var btn = el('sch-bk-book-all'), orig = btn.textContent; btn.textContent = 'Booking…'; btn.disabled = true;
+    if (rb){ rb.style.display = 'block'; rb.innerHTML = ''; }
+    var done = [];
+    function paint(){
+      if (!rb) return;
+      rb.innerHTML = stops.map(function(st, i){
+        var when = schEdFmt(st.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        var r = done[i];
+        var tag = !r ? '<span class="schstep-wait">…</span>' : (r.ok ? '<span class="schstop-ok">✓ booked</span>' : '<span class="schstop-err">✕ ' + esc(r.err || 'failed') + '</span>');
+        return '<div class="schstop-res">' + esc(when) + (st.location ? ' · ' + esc(st.location) : '') + ' — ' + tag + '</div>';
+      }).join('');
+    }
+    paint();
+    var i = 0;
+    function next(){
+      if (i >= stops.length){
+        btn.textContent = orig; btn.disabled = false;
+        var ok = done.filter(function(r){ return r && r.ok; }).length;
+        // keep only the failed stops so they can retry; drop the booked ones
+        var failedTimes = {}; stops.forEach(function(st, k){ if (done[k] && !done[k].ok) failedTimes[st.start_time] = 1; });
+        schBkStops = schBkStops.filter(function(s){ return failedTimes[s.start_time]; });
+        if (rb) rb.insertAdjacentHTML('afterbegin', '<div class="schbooked">✓ Booked ' + ok + ' of ' + stops.length + ' tour' + (stops.length === 1 ? '' : 's') + ' for ' + esc(p.name || 'the prospect') + '. The prospect was texted once (first tour).</div>');
+        schBkRenderStops();
+        schBkLoadCalendar();
+        return;
+      }
+      var st = stops[i], first = (i === 0);
+      postJSON('/tour-book', {
+        actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,
+        prospect_name: p.name, prospect_email: p.email,
+        prospect_phone: first ? (p.phone || null) : null,   // text only on the first tour
+        application_id: p.application_id || null, aptly_card_id: (p && p.aptly_card_id) || null,
+        location: (st.location || '').trim(), start_time: st.start_time
+      }).then(function(){ done[i] = { ok: true }; i++; paint(); next(); })
+        .catch(function(e){ if (String(e.message) === 'AUTH') { btn.textContent = orig; btn.disabled = false; return; } done[i] = { ok: false, err: (e && e.message) ? e.message : 'error' }; i++; paint(); next(); });
+    }
+    next();
   }
   function schBkRenderSummary(){
     var sum = el('sch-bk-summary'); if (!sum) return;
@@ -7573,6 +7710,22 @@ window.addEventListener('error', function(e){
     var blc = el('sch-bk-loc'); if (blc) blc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(schBkUnitSearch, 280); });
     var blr = el('sch-bk-loc-results'); if (blr) blr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-bk-loc')) el('sch-bk-loc').value = b.getAttribute('data-addr') || ''; blr.innerHTML = ''; });
     var bgo = el('sch-bk-go'); if (bgo) bgo.addEventListener('click', schBkGo);
+    // Back-to-back run
+    var bmul = el('sch-bk-multi'); if (bmul) bmul.addEventListener('change', function(){ schBkSetMulti(this.checked); });
+    var bba = el('sch-bk-book-all'); if (bba) bba.addEventListener('click', schBkBookAll);
+    var bstops = el('sch-bk-stops');
+    if (bstops){
+      bstops.addEventListener('click', function(e){ var x = e.target.closest('.schstop-x'); if (x) schBkRemoveStop(x.getAttribute('data-st')); });
+      bstops.addEventListener('input', function(e){ var inp = e.target.closest('.schstop-loc'); if (!inp) return; clearTimeout(schBkStopT); schBkStopT = setTimeout(function(){ schBkStopLocSearch(inp); }, 280); });
+    }
+    var bstopres = el('sch-bk-stop-results');
+    if (bstopres) bstopres.addEventListener('click', function(e){
+      var b = e.target.closest('.schres'); if (!b) return;
+      var st = bstopres.getAttribute('data-st'), addr = b.getAttribute('data-addr') || '';
+      var stop = schBkStops.filter(function(s){ return s.start_time === st; })[0]; if (stop) stop.location = addr;
+      var inp = bstops && bstops.querySelector('.schstop-loc[data-st="' + (window.CSS && CSS.escape ? CSS.escape(st) : st) + '"]'); if (inp) inp.value = addr;
+      bstopres.innerHTML = '';
+    });
   })();
 
   window.__llBooted = true;   // synchronous init finished without throwing — disarms the boot-crash guard

@@ -2061,7 +2061,7 @@ window.addEventListener('error', function(e){
       <div class="rm-actrow" id="rm-actrow">
         <a id="rm-resched" class="btn rmact" target="_blank" rel="noopener">&#8635; Reschedule</a>
         <button type="button" id="rm-noshow" class="btn rmact">&#8856; Mark no-show</button>
-        <a id="rm-cancel" class="btn rmact" target="_blank" rel="noopener">&#10006; Cancel</a>
+        <button type="button" id="rm-cancel" class="btn rmact">&#10006; Cancel</button>
       </div>
       <div id="rm-contact"></div>
       <div id="rm-roster"></div>
@@ -6228,7 +6228,10 @@ window.addEventListener('error', function(e){
     // booking. No-show = a real API writeback (post-showing), reversible.
     var canMod = r.status === 'active' && s === 'upcoming';
     var cxA = el('rm-cancel'), rsA = el('rm-resched'), nsB = el('rm-noshow');
-    if (canMod && r.cancel_url) { cxA.style.display = ''; cxA.href = r.cancel_url; } else cxA.style.display = 'none';
+    // Cancel = a real Calendly API cancellation (POST /tour/cancel), shown for any live
+    // upcoming tour (no longer needs the hosted cancel_url). Reschedule stays a hosted
+    // link (Calendly has no reschedule API).
+    if (canMod) { cxA.style.display = ''; cxA.disabled = false; cxA.innerHTML = '&#10006; Cancel'; } else cxA.style.display = 'none';
     if (canMod && r.reschedule_url) { rsA.style.display = ''; rsA.href = r.reschedule_url; } else rsA.style.display = 'none';
     // No-show only applies once the showing has started (Calendly 400s "Event is not
     // started yet" otherwise); always allow UNDO of an existing no-show.
@@ -6316,6 +6319,28 @@ window.addEventListener('error', function(e){
       .then(function(){ return fetchTours(); })
       .then(function(){ if ((toursAll || []).some(function(x){ return x.uri === uri; })) openTourDetail(uri); else closeModal('rmodal'); })
       .catch(function(err){ btn.disabled = false; btn.innerHTML = lbl; alert('Could not update no-show: ' + String((err && err.message) || err)); });
+  }
+  // Cancel a showing via the Calendly API (replaces the old hosted cancel_url link).
+  // Cancellation is event-level, so for a multi-person open house it cancels the whole
+  // slot for everyone — the prompt makes that explicit. The optional reason is emailed.
+  function cancelTour(){
+    var r = curTour; if (!r) return;
+    var actor = (getActor() || '').trim();
+    if (!actor) { alert('Pick your name in the sidebar “Acting as” first.'); return; }
+    var heads = (r.attendee_count || r.attendee_total || 1);
+    var multi = heads > 1;
+    var who = multi ? ('the whole open house for all ' + heads + ' attendees')
+                    : ('this showing for ' + (r.invitee_name || 'this prospect'));
+    var reason = window.prompt('Cancel ' + who + '?\n\nThis cancels it in Calendly and emails '
+      + (multi ? 'every attendee' : 'the prospect') + '. Press OK to cancel the showing.\n\n'
+      + 'Optional reason (shown to them):', '');
+    if (reason === null) return; // prompt dismissed = abort
+    var btn = el('rm-cancel'), lbl = btn.innerHTML, uri = r.uri;
+    btn.disabled = true; btn.innerHTML = 'Cancelling…';
+    postJSON('/tour/cancel', { event_uri: uri, actor: actor, reason: (reason || '').trim() })
+      .then(function(){ return fetchTours(); })
+      .then(function(){ if ((toursAll || []).some(function(x){ return x.uri === uri; })) openTourDetail(uri); else closeModal('rmodal'); })
+      .catch(function(err){ btn.disabled = false; btn.innerHTML = lbl; alert('Could not cancel: ' + String((err && err.message) || err)); });
   }
   // "View listing" from a tour: jump to the precise resolved unit, or fall back to the
   // matched property's listed/known units (one → open it; several → pick).
@@ -6561,6 +6586,7 @@ window.addEventListener('error', function(e){
   el('rm-listing').addEventListener('click', function(){ if (curTour) tourGoto('listing'); });
   el('rm-unit').addEventListener('click', function(){ if (curTour) tourGoto('unit'); });
   el('rm-noshow').addEventListener('click', toggleNoShow);
+  el('rm-cancel').addEventListener('click', cancelTour);
   el('rm-noteadd').addEventListener('click', addTourNote);
   el('rm-noteinput').addEventListener('keydown', function(e){ if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addTourNote(); } });
   el('rm-pick').addEventListener('click', function(e){

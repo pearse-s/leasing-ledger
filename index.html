@@ -2095,6 +2095,13 @@ window.addEventListener('error', function(e){
     </div>
 
     <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar"><h2>Weekend reach-outs</h2><span class="count-note">scheduling &amp; inquiry vs tour follow-up &middot; Mountain time</span></div>
+      <div class="vmfunnel" id="ph-inq-top"></div>
+      <div class="scrolly" style="margin-top:12px"><table id="ph-inq"><thead><tr><th>Line</th><th class="rt">Weekend</th><th class="rt">All days</th></tr></thead><tbody></tbody></table></div>
+      <div class="note" style="margin-top:8px" id="ph-inq-note"></div>
+    </div>
+
+    <div class="card tablecard" style="margin-top:18px">
       <div class="tablebar"><h2>Agent scorecard</h2><span class="count-note">calls &amp; texts by agent &middot; selected window</span></div>
       <div class="scrolly"><table id="ph-agents"><thead><tr>
         <th>Agent</th><th class="rt">Calls out</th><th class="rt">Calls in</th><th class="rt">Answered</th><th class="rt">Missed</th><th class="rt">Answer&nbsp;%</th><th class="rt">Avg call</th><th class="rt">Texts out</th><th class="rt">Texts in</th><th class="rt">Call-back&nbsp;%</th>
@@ -7860,7 +7867,22 @@ window.addEventListener('error', function(e){
   function phRender(j){
     if (!j || !j.totals) return;
     phRenderKpis(j); phRenderAttr(j); phRenderTrend(j); phRenderFunnel(j);
-    phRenderHeat(j); phRenderAgents(j); phRenderCallers(j); phRenderFollowups(j);
+    phRenderHeat(j); phRenderInquiry(j); phRenderAgents(j); phRenderCallers(j); phRenderFollowups(j);
+  }
+  function phRenderInquiry(j){
+    var w = j.weekend_inquiry; if (!w) return;
+    if (el('ph-inq-top')) el('ph-inq-top').innerHTML =
+        '<div class="vmf"><span class="v good">' + fmtNum(w.inquiry_weekend) + '</span><span class="l">weekend inquiries &middot; coordinator + leasing queue</span></div>'
+      + '<div class="vmf"><span class="v">' + fmtNum(w.followup_weekend) + '</span><span class="l">weekend agent follow-ups</span></div>'
+      + '<div class="vmf"><span class="v">' + fmtNum(w.inquiry_total) + '</span><span class="l">inquiries &middot; all days</span></div>';
+    var t = el('ph-inq');
+    if (t){ var h = '';
+      (w.lines || []).forEach(function(r){
+        h += '<tr><td>' + esc(r.label) + ' <span class="ph-sub2">' + esc(r.kind) + '</span></td><td class="rt">' + fmtNum(r.weekend) + '</td><td class="rt">' + fmtNum(r.total) + '</td></tr>';
+      });
+      t.querySelector('tbody').innerHTML = h || emptyRow('ph-inq', 'No inbound activity in this window.');
+    }
+    if (el('ph-inq-note')) el('ph-inq-note').innerHTML = 'Scheduling &amp; inquiry = the coordinator (' + esc(w.coordinator) + ')&rsquo;s inbound texts &amp; calls + leasing-queue calls (people reaching out to book / ask). Follow-up = agents&rsquo; inbound texts (mid-tour conversations). Texts land on individual lines; the leasing queue routes calls.';
   }
   function phRenderKpis(j){
     var t = j.totals || {}, vf = j.voicemail_funnel || {};

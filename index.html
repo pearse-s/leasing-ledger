@@ -2087,11 +2087,11 @@ window.addEventListener('error', function(e){
     </section>
 
     <div class="card tablecard" style="margin-top:18px">
-      <div class="tablebar"><h2>When the calls come in</h2><span class="count-note">inbound by hour &amp; weekday &middot; Mountain time</span>
-        <div class="heat-toggle"><button type="button" class="chip-mini on" id="ph-heat-calls">All calls</button><button type="button" class="chip-mini" id="ph-heat-missed">Missed only</button></div>
+      <div class="tablebar"><h2>When it comes in</h2><span class="count-note">inbound calls or texts by hour &amp; weekday &middot; Mountain time</span>
+        <div class="heat-toggle"><button type="button" class="chip-mini on" id="ph-heat-calls">Calls in</button><button type="button" class="chip-mini" id="ph-heat-missed">Missed</button><button type="button" class="chip-mini" id="ph-heat-texts">Texts in</button></div>
       </div>
       <div id="ph-heat-wrap"><div id="ph-heat"></div></div>
-      <div class="note" style="margin-top:8px">Darker = more calls. Shows the hours we're getting hit hardest (and where the misses cluster).</div>
+      <div class="note" style="margin-top:8px">Darker = more activity. Switch between inbound calls, missed calls, and inbound texts to see when each peaks.</div>
     </div>
 
     <div class="card tablecard" style="margin-top:18px">
@@ -7913,7 +7913,10 @@ window.addEventListener('error', function(e){
   function phRenderHeat(j){
     var box = el('ph-heat'); if (!box) return;
     var data = j.heatmap || [], grid = {}, maxv = 0;
-    data.forEach(function(c){ grid[c.dow + '_' + c.hour] = c; var v = phHeatMode === 'missed' ? c.missed : c.calls; if (v > maxv) maxv = v; });
+    var fld = phHeatMode === 'missed' ? 'missed' : (phHeatMode === 'texts' ? 'texts' : 'calls');
+    var rgb = phHeatMode === 'missed' ? '232,149,106' : (phHeatMode === 'texts' ? '157,190,134' : '244,203,99');
+    var suffix = phHeatMode === 'missed' ? ' missed' : (phHeatMode === 'texts' ? ' texts' : ' calls');
+    data.forEach(function(c){ grid[c.dow + '_' + c.hour] = c; var v = c[fld] || 0; if (v > maxv) maxv = v; });
     var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     function hl(hr){ if (hr % 3 !== 0) return ''; return hr === 0 ? '12a' : (hr < 12 ? hr + 'a' : (hr === 12 ? '12p' : (hr - 12) + 'p')); }
     var h = '<div class="hh"></div>';
@@ -7921,10 +7924,10 @@ window.addEventListener('error', function(e){
     for (var d = 0; d < 7; d++){
       h += '<div class="hr">' + days[d] + '</div>';
       for (var k = 0; k < 24; k++){
-        var c = grid[d + '_' + k], v = c ? (phHeatMode === 'missed' ? c.missed : c.calls) : 0;
+        var c = grid[d + '_' + k], v = c ? (c[fld] || 0) : 0;
         var al = (maxv > 0 && v > 0) ? (0.14 + 0.86 * (v / maxv)) : 0;
-        var bg = v > 0 ? (phHeatMode === 'missed' ? 'rgba(232,149,106,' + al + ')' : 'rgba(244,203,99,' + al + ')') : 'var(--glass)';
-        var tip = v > 0 ? (days[d] + ' ' + k + ':00 — ' + v + (phHeatMode === 'missed' ? ' missed' : ' calls')) : '';
+        var bg = v > 0 ? ('rgba(' + rgb + ',' + al + ')') : 'var(--glass)';
+        var tip = v > 0 ? (days[d] + ' ' + k + ':00 — ' + v + suffix) : '';
         h += '<div class="hc" style="background:' + bg + '" title="' + tip + '"></div>';
       }
     }
@@ -7970,10 +7973,13 @@ window.addEventListener('error', function(e){
     });
     t.querySelector('tbody').innerHTML = h || emptyRow('ph-followups', 'Nobody is waiting on a call back. 🎉');
   }
+  function phSetHeat(mode){
+    phHeatMode = mode;
+    ['calls','missed','texts'].forEach(function(m){ var b = el('ph-heat-' + m); if (b) b.classList.toggle('on', m === mode); });
+    if (phonesData && phonesData.heatmap) phRenderHeat(phonesData);
+  }
   (function(){
-    var bc = el('ph-heat-calls'), bm = el('ph-heat-missed');
-    if (bc) bc.addEventListener('click', function(){ phHeatMode = 'calls'; bc.classList.add('on'); if (bm) bm.classList.remove('on'); if (phonesData && phonesData.heatmap) phRenderHeat(phonesData); });
-    if (bm) bm.addEventListener('click', function(){ phHeatMode = 'missed'; bm.classList.add('on'); if (bc) bc.classList.remove('on'); if (phonesData && phonesData.heatmap) phRenderHeat(phonesData); });
+    ['calls','missed','texts'].forEach(function(m){ var b = el('ph-heat-' + m); if (b) b.addEventListener('click', function(){ phSetHeat(m); }); });
   })();
 
   window.__llBooted = true;   // synchronous init finished without throwing — disarms the boot-crash guard

@@ -6125,7 +6125,7 @@ window.addEventListener('error', function(e){
           var x = arg.event.extendedProps.canceled ? '<span class="fcx">&#10006;</span>'
                 : (arg.event.extendedProps.noshow ? '<span class="fcx">&#8856;</span>' : '');
           var n = arg.event.extendedProps.n || 0;
-          var nb = n > 1 ? '<span class="fc-ev-n" title="' + n + ' people booked" style="margin-left:4px;font-weight:700;background:rgba(0,0,0,.22);border-radius:6px;padding:0 4px;font-size:.72em;white-space:nowrap">&#128101; ' + n + '</span>' : '';
+          var nb = n > 1 ? '<span class="fc-ev-n" title="' + n + ' people booked" style="flex:0 0 auto;align-self:center;margin-left:4px;font-weight:800;background:rgba(0,0,0,.28);border-radius:7px;padding:0 5px;font-size:.74em;white-space:nowrap">&#128101; ' + n + '</span>' : '';
           wrap.innerHTML = x + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' + nb;
           return { domNodes: [wrap] };
         }

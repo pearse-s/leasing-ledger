@@ -1149,6 +1149,9 @@ window.addEventListener('error', function(e){
   .schleg-open:before{background:#5E8E4B}
   .schleg-show:before{background:#8a8f98}
   .schleg-busy:before{background:#c9ccd1}
+  .schtgl{font-size:.74rem;color:var(--ink-soft);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-left:auto}
+  .schhint{font-size:.74rem;color:var(--ink-soft);font-style:italic}
+  #sch-bk-cal .fc-timegrid-slot{cursor:pointer}
   .fc-ev-open{cursor:pointer;font-weight:700}
   #sch-bk-cal{margin-top:8px}
   .schbooked{padding:10px 12px;border:1px solid var(--clay);border-radius:10px;background:var(--clay-soft);color:var(--ink);font-weight:600;margin-top:8px}
@@ -1887,7 +1890,7 @@ window.addEventListener('error', function(e){
                 <button type="button" class="rfreshbtn" id="sch-bk-reload">&#8635; Refresh</button>
                 <span class="count-note" id="sch-bk-cal-note"></span>
               </div>
-              <div class="schcal-legend"><span class="schleg schleg-open">Open (click to book)</span><span class="schleg schleg-show">Showing</span><span class="schleg schleg-busy">Busy</span></div>
+              <div class="schcal-legend"><span class="schleg schleg-show">Showing</span><span class="schleg schleg-busy">Busy</span><span class="schhint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><label class="schtgl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label></div>
               <div id="sch-bk-cal"></div>
             </div>
           </div>
@@ -1895,6 +1898,7 @@ window.addEventListener('error', function(e){
             <div class="schnum">5</div>
             <div class="schmain">
               <label class="schlbl">Confirm &amp; book</label>
+              <div class="schrow"><label class="schsub" style="margin:0">Time</label> <select id="sch-bk-time" style="width:auto"></select> <span class="schsublite" id="sch-bk-daylab"></span></div>
               <div class="schloc">
                 <label class="schsub">Tour location <span class="schsublite">&mdash; sent to the prospect; type to search our units</span></label>
                 <input type="text" id="sch-bk-loc" placeholder="Unit address" autocomplete="off">
@@ -7324,30 +7328,40 @@ window.addEventListener('error', function(e){
         for (var i = 0; i < blocks.length; i++){ if (s < blocks[i][1] && e > blocks[i][0]) return false; }
         return true;
       });
-      if (note) note.textContent = bkData.slots.length + ' open slot' + (bkData.slots.length === 1 ? '' : 's') + ' · ' + bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' — click a green slot to book';
+      if (note) note.textContent = bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' · ' + bkData.slots.length + ' open time' + (bkData.slots.length === 1 ? '' : 's') + ' — click any empty time to book';
       schBkRenderCal();
     }).catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });
+  }
+  function schBkDayKey(ms){ var d = new Date(ms); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
+  function schBkSlotsForDay(ms){ var k = schBkDayKey(ms); return (bkData.slots || []).filter(function(sl){ return schBkDayKey(Date.parse(sl.start_time)) === k; }); }
+  function schBkShowingTitle(s){
+    var t = (s.location && String(s.location).trim()) ? String(s.location) : String(s.title || 'Tour');
+    return t.replace(/^.*?Rental Tour\s*[—–-]\s*/i, '');   // drop the "Live Furnished Rental Tour — " prefix
   }
   function schBkRenderCal(){
     if (!window.FullCalendar){ var n = el('sch-bk-cal'); if (n) n.innerHTML = '<div class="note">Calendar library not loaded.</div>'; return; }
     var dur = schedBook.duration || 15, evs = [];
+    var showOpen = !!(el('sch-bk-showopen') && el('sch-bk-showopen').checked);
     bkData.showings.forEach(function(s){
-      evs.push({ id: 'show_' + s.start, title: (s.title || 'Tour') + (s.location ? ' — ' + s.location : ''), start: s.start, end: s.end || undefined, backgroundColor: '#8a8f98', borderColor: '#8a8f98', textColor: '#15110D', classNames: ['fc-ev-show'], extendedProps: { kind: 'show' } });
+      evs.push({ id: 'show_' + s.start, title: schBkShowingTitle(s), start: s.start, end: s.end || undefined, backgroundColor: '#8a8f98', borderColor: '#6f757e', textColor: '#15110D', classNames: ['fc-ev-show'], extendedProps: { kind: 'show' } });
     });
     bkData.busy.forEach(function(b){
       evs.push({ id: 'busy_' + b.start, title: 'Busy', start: b.start, end: b.end || undefined, display: 'background', backgroundColor: '#c9ccd1', classNames: ['fc-ev-busy'], extendedProps: { kind: 'busy' } });
     });
-    bkData.slots.forEach(function(sl){
-      var end = new Date(Date.parse(sl.start_time) + dur * 60000).toISOString();
-      evs.push({ id: 'open_' + sl.start_time, title: 'Open', start: sl.start_time, end: end, backgroundColor: '#5E8E4B', borderColor: '#3f6b30', textColor: '#fff', classNames: ['fc-ev-open'], extendedProps: { kind: 'open', start_time: sl.start_time } });
-    });
+    if (showOpen){
+      bkData.slots.forEach(function(sl){
+        var end = new Date(Date.parse(sl.start_time) + dur * 60000).toISOString();
+        evs.push({ id: 'open_' + sl.start_time, title: 'Open', start: sl.start_time, end: end, backgroundColor: '#5E8E4B', borderColor: '#3f6b30', textColor: '#fff', classNames: ['fc-ev-open'], extendedProps: { kind: 'open', start_time: sl.start_time } });
+      });
+    }
     if (!bkcal){
       var mob = isMobile();
       bkcal = new FullCalendar.Calendar(el('sch-bk-cal'), {
         initialView: mob ? 'timeGridDay' : 'timeGridWeek',
         headerToolbar: { left: 'prev,next today', center: 'title', right: mob ? 'timeGridDay,timeGridWeek' : 'timeGridWeek,timeGridDay,dayGridMonth' },
-        height: 620, nowIndicator: true, firstDay: 0, expandRows: true, slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
-        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); if (info.event.extendedProps.kind === 'open') schBkConfirm(info.event.extendedProps.start_time); }
+        height: 620, nowIndicator: true, firstDay: 0, expandRows: true, snapDuration: '00:15:00', slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
+        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); if (info.event.extendedProps.kind === 'open') schBkPickTime(info.event.extendedProps.start_time); },
+        dateClick: function(info){ schBkPickTime(info.date.getTime()); }
       });
       bkcal.render();
     }
@@ -7356,15 +7370,36 @@ window.addEventListener('error', function(e){
     if (bkData.slots.length){ try { bkcal.gotoDate(bkData.slots[0].start_time); } catch(e){} }
     setTimeout(function(){ try { bkcal.updateSize(); } catch(e){} }, 30);
   }
+  // Snap a clicked time (ms or ISO) to the nearest OPEN slot — same day if possible — then confirm.
+  function schBkPickTime(when){
+    var ms = (typeof when === 'number') ? when : Date.parse(when);
+    if (!ms){ return; }
+    var day = schBkSlotsForDay(ms);
+    var pool = day.length ? day : (bkData.slots || []);
+    if (!pool.length){ var note = el('sch-bk-cal-note'); if (note) note.textContent = 'No open times to book in this window — try another window or agent.'; return; }
+    var pick = pool.reduce(function(a, b){ return Math.abs(Date.parse(b.start_time) - ms) < Math.abs(Date.parse(a.start_time) - ms) ? b : a; });
+    schBkConfirm(pick.start_time);
+  }
+  function schBkRenderSummary(){
+    var sum = el('sch-bk-summary'); if (!sum) return;
+    var when = schEdFmt(schedBook.chosen, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+    sum.innerHTML = 'Book <b>' + esc(schedBook.applicant ? schedBook.applicant.name : 'prospect') + '</b> with <b>' + esc(schedBook.agentName) + '</b>' + (schedBook.eventTypeName ? ' for <b>' + esc(schedBook.eventTypeName) + '</b>' : '') + ' on <b>' + esc(when) + '</b>.';
+  }
   function schBkConfirm(startIso){
     schedBook.chosen = startIso;
     schUnlock('sch-bk-step-confirm', true);
     if (el('sch-bk-loc') && !el('sch-bk-loc').value) el('sch-bk-loc').value = schedBook.locDefault;
-    var sum = el('sch-bk-summary');
-    if (sum){
-      var when = schEdFmt(startIso, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-      sum.innerHTML = 'Book <b>' + esc(schedBook.applicant ? schedBook.applicant.name : 'prospect') + '</b> with <b>' + esc(schedBook.agentName) + '</b>' + (schedBook.eventTypeName ? ' for <b>' + esc(schedBook.eventTypeName) + '</b>' : '') + ' on <b>' + esc(when) + '</b>.';
+    var sel = el('sch-bk-time');
+    if (sel){
+      var daySlots = schBkSlotsForDay(Date.parse(startIso));
+      if (!daySlots.length) daySlots = [{ start_time: startIso }];
+      sel.innerHTML = daySlots.map(function(sl){
+        var lab = schEdFmt(sl.start_time, { hour: 'numeric', minute: '2-digit', hour12: true });
+        return '<option value="' + esc(sl.start_time) + '"' + (sl.start_time === startIso ? ' selected' : '') + '>' + esc(lab) + '</option>';
+      }).join('');
     }
+    var dl = el('sch-bk-daylab'); if (dl) dl.textContent = schEdFmt(startIso, { weekday: 'long', month: 'short', day: 'numeric' });
+    schBkRenderSummary();
     var rb = el('sch-bk-result'); if (rb){ rb.style.display = 'none'; rb.innerHTML = ''; }
     var step = el('sch-bk-step-confirm'); if (step && step.scrollIntoView) try { step.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e){}
   }
@@ -7482,6 +7517,8 @@ window.addEventListener('error', function(e){
     var bac = el('sch-bk-agent-chips'); if (bac) bac.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickAgent(b.getAttribute('data-aid')); });
     var bet = el('sch-bk-ettype'); if (bet) bet.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickEventType(b.getAttribute('data-uri'), b.getAttribute('data-name'), b.getAttribute('data-dur')); });
     var brl = el('sch-bk-reload'); if (brl) brl.addEventListener('click', schBkLoadCalendar);
+    var bso = el('sch-bk-showopen'); if (bso) bso.addEventListener('change', function(){ if (schedBook.agentId && schedBook.eventType) schBkRenderCal(); });
+    var btm = el('sch-bk-time'); if (btm) btm.addEventListener('change', function(){ schedBook.chosen = this.value; schBkRenderSummary(); });
     var bwin = el('sch-bk-window'); if (bwin) bwin.addEventListener('change', function(){ if (schedBook.agentId && schedBook.eventType) schBkLoadCalendar(); });
     var blc = el('sch-bk-loc'); if (blc) blc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(schBkUnitSearch, 280); });
     var blr = el('sch-bk-loc-results'); if (blr) blr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-bk-loc')) el('sch-bk-loc').value = b.getAttribute('data-addr') || ''; blr.innerHTML = ''; });

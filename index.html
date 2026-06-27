@@ -1136,6 +1136,22 @@ window.addEventListener('error', function(e){
   .schres:hover{border-color:var(--clay)}
   .schres b{font-size:.92rem}
   .schres span{font-size:.76rem;color:var(--ink-soft)}
+  .schlanding{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+  .schbigbtn{flex:1 1 240px;min-width:220px;text-align:left;display:flex;flex-direction:column;gap:6px;padding:18px;border:1px solid var(--hairline-dark);border-radius:14px;background:rgba(255,255,255,.03);cursor:pointer;font-family:var(--sans);color:var(--ink);transition:border-color .15s,transform .1s}
+  .schbigbtn:hover{border-color:var(--clay);transform:translateY(-1px)}
+  .schbigttl{font-size:1.05rem;font-weight:700;color:var(--ink)}
+  .schbigsub{font-size:.82rem;color:var(--ink-soft);font-weight:400}
+  .schback{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-family:var(--sans);font-size:.85rem;margin:8px 0 0 2px}
+  .schback:hover{color:var(--clay)}
+  .schcal-legend{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0}
+  .schleg{font-size:.74rem;color:var(--ink-soft);display:inline-flex;align-items:center;gap:5px}
+  .schleg:before{content:'';width:11px;height:11px;border-radius:3px;display:inline-block}
+  .schleg-open:before{background:#5E8E4B}
+  .schleg-show:before{background:#8a8f98}
+  .schleg-busy:before{background:#c9ccd1}
+  .fc-ev-open{cursor:pointer;font-weight:700}
+  #sch-bk-cal{margin-top:8px}
+  .schbooked{padding:10px 12px;border:1px solid var(--clay);border-radius:10px;background:var(--clay-soft);color:var(--ink);font-weight:600;margin-top:8px}
   .schbadge{display:inline-block;font-size:.62rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:1px 7px;vertical-align:middle}
   .schbadge-app{color:var(--ink-soft);background:rgba(255,255,255,.06);border:1px solid var(--hairline-dark)}
   .schbadge-lead{color:var(--clay);background:var(--clay-soft);border:1px solid var(--clay)}
@@ -1730,8 +1746,20 @@ window.addEventListener('error', function(e){
   </div>
 
   <div id="page-schedule" style="display:none">
-    <div class="card tablecard" style="margin-top:18px">
-      <div class="tablebar"><h2>Schedule a tour</h2><span class="count-note" id="sch-status">Find a prospect, pick an agent &amp; times, send a booking link that pre-fills their name &amp; email.</span></div>
+    <div id="sch-landing">
+      <div class="card tablecard" style="margin-top:18px">
+        <div class="tablebar"><h2>Schedule a tour</h2><span class="count-note">Choose how to set up this tour.</span></div>
+        <div class="schlanding">
+          <button type="button" class="schbigbtn" id="sch-go-book"><span class="schbigttl">Book for the prospect</span><span class="schbigsub">Pick a time on the agent&rsquo;s calendar and book it directly &mdash; no link to send.</span></button>
+          <button type="button" class="schbigbtn" id="sch-go-offer"><span class="schbigttl">Offer times</span><span class="schbigsub">Send a single-use link with the times you choose; the prospect picks one.</span></button>
+        </div>
+        <div id="sch-landing-picked"></div>
+      </div>
+    </div>
+    <div id="sch-view-offer" style="display:none">
+      <button type="button" class="schback" id="sch-back-offer">&larr; Back</button>
+    <div class="card tablecard" style="margin-top:8px">
+      <div class="tablebar"><h2>Offer times</h2><span class="count-note" id="sch-status">Find a prospect, pick an agent &amp; times, send a booking link that pre-fills their name &amp; email.</span></div>
       <div class="schwiz">
         <div class="schstep">
           <div class="schnum">1</div>
@@ -1805,6 +1833,81 @@ window.addEventListener('error', function(e){
     <div class="card tablecard" style="margin-top:14px">
       <div class="tablebar"><h2 style="font-size:1rem">Recent offers</h2><span class="count-note" id="sch-offers-note"></span></div>
       <div id="sch-offers" class="schoffers"></div>
+    </div>
+    </div>
+    <div id="sch-view-book" style="display:none">
+      <button type="button" class="schback" id="sch-back-book">&larr; Back</button>
+      <div class="card tablecard" style="margin-top:8px">
+        <div class="tablebar"><h2>Book a tour</h2><span class="count-note" id="sch-bk-status">Pick a prospect, agent &amp; event type, then click an open time on the calendar to book it.</span></div>
+        <div class="schwiz">
+          <div class="schstep">
+            <div class="schnum">1</div>
+            <div class="schmain">
+              <label class="schlbl">Who is the tour for?</label>
+              <input type="text" id="sch-bk-app-search" placeholder="Search applicant or lead name, email or phone&hellip;" autocomplete="off">
+              <div id="sch-bk-app-results" class="schresults"></div>
+              <div id="sch-bk-app-picked"></div>
+              <div id="sch-bk-app-manual" style="display:none">
+                <div class="schmanual">
+                  <input type="text" id="sch-bk-m-name" placeholder="Full name">
+                  <input type="email" id="sch-bk-m-email" placeholder="Email">
+                  <input type="text" id="sch-bk-m-phone" placeholder="Phone (optional)">
+                  <button type="button" class="mybtn" id="sch-bk-m-use">Use this prospect</button>
+                </div>
+              </div>
+              <button type="button" class="linklike" id="sch-bk-app-manual-toggle">+ enter a prospect manually</button>
+            </div>
+          </div>
+          <div class="schstep schlocked" id="sch-bk-step-agent">
+            <div class="schnum">2</div>
+            <div class="schmain">
+              <label class="schlbl">Tour with which agent?</label>
+              <div id="sch-bk-agent-chips" class="chipset schchips"></div>
+            </div>
+          </div>
+          <div class="schstep schlocked" id="sch-bk-step-event">
+            <div class="schnum">3</div>
+            <div class="schmain">
+              <label class="schlbl">Which event type?</label>
+              <div id="sch-bk-ettype" class="chipset schchips"></div>
+            </div>
+          </div>
+          <div class="schstep schlocked" id="sch-bk-step-cal">
+            <div class="schnum">4</div>
+            <div class="schmain">
+              <label class="schlbl">Pick an open time on the calendar</label>
+              <div class="schrow">
+                <label class="schsub" style="margin:0">Through</label>
+                <select id="sch-bk-window" style="width:auto">
+                  <option value="7">next 7 days</option>
+                  <option value="14" selected>next 14 days</option>
+                  <option value="21">next 21 days</option>
+                  <option value="28">next 28 days</option>
+                </select>
+                <button type="button" class="rfreshbtn" id="sch-bk-reload">&#8635; Refresh</button>
+                <span class="count-note" id="sch-bk-cal-note"></span>
+              </div>
+              <div class="schcal-legend"><span class="schleg schleg-open">Open (click to book)</span><span class="schleg schleg-show">Showing</span><span class="schleg schleg-busy">Busy</span></div>
+              <div id="sch-bk-cal"></div>
+            </div>
+          </div>
+          <div class="schstep schlocked" id="sch-bk-step-confirm">
+            <div class="schnum">5</div>
+            <div class="schmain">
+              <label class="schlbl">Confirm &amp; book</label>
+              <div class="schloc">
+                <label class="schsub">Tour location <span class="schsublite">&mdash; sent to the prospect; type to search our units</span></label>
+                <input type="text" id="sch-bk-loc" placeholder="Unit address" autocomplete="off">
+                <div id="sch-bk-loc-results" class="schresults"></div>
+              </div>
+              <div class="schsummary" id="sch-bk-summary"></div>
+              <button type="button" class="mybtn schgen" id="sch-bk-go">Book this tour</button>
+              <div id="sch-bk-result" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+        <div class="note" style="margin-top:12px">Booking creates the tour directly in Calendly and emails the prospect a confirmation. Times are in Edmonton time. Every booking is logged.</div>
+      </div>
     </div>
   </div>
 
@@ -6559,19 +6662,20 @@ window.addEventListener('error', function(e){
     if (pendingLeadCard) openLeadDeepLink('card_id=' + encodeURIComponent(pendingLeadCard));
     else if (pendingLeadEmail) openLeadDeepLink('email=' + encodeURIComponent(pendingLeadEmail));
   }
-  // Open the Schedule tab and pre-fill the prospect from an Aptly lead (by card id or email).
+  // Open the Schedule tab from an Aptly lead deep link (by card id or email): land on the
+  // two-button landing with the prospect pre-loaded so the coordinator picks Book vs Offer.
   // Runs inside an async .then() (after boot) so a failure can never abort init.
   function openLeadDeepLink(query){
     pendingLeadCard = ''; pendingLeadEmail = '';   // consume once
     try { showTab('schedule'); } catch (e) {}   // also lazy-loads agents (showTab)
-    var s = el('sch-status'); if (s) s.textContent = 'Loading lead…';
+    if (typeof schShowView === 'function') schShowView('landing');
+    var sub = el('sch-landing-picked'); if (sub) sub.innerHTML = '<div class="note">Loading lead…</div>';
     authFetch('/tour-lead?' + query).then(function(j){
       var L = j && j.lead;
-      if (!L){ if (s) s.textContent = 'Lead not found.'; return; }
-      if (typeof schPickApplicant === 'function')
-        schPickApplicant({ application_id: null, name: L.name, email: L.email, phone: L.phone, property: '', unit_number: '', unit_address: L.location, aptly_card_id: L.card_id });
-      if (s) s.textContent = 'Prospect pre-filled from the lead — pick an agent and times.';
-    }).catch(function(e){ if (String(e.message) !== 'AUTH' && s) s.textContent = 'Could not load that lead.'; });
+      if (!L){ if (sub) sub.innerHTML = '<div class="note">Lead not found.</div>'; return; }
+      schedProspect = { application_id: null, name: L.name, email: L.email, phone: L.phone, property: '', unit_number: '', unit_address: L.location, aptly_card_id: L.card_id };
+      if (typeof renderLandingPicked === 'function') renderLandingPicked();
+    }).catch(function(e){ if (String(e.message) !== 'AUTH' && sub) sub.innerHTML = '<div class="note">Could not load that lead.</div>'; });
   }
   function checkToken(tok){
     return fetch(API + '/check', { headers: { 'Authorization': 'Bearer ' + tok } })
@@ -6911,7 +7015,7 @@ window.addEventListener('error', function(e){
   var schSearchT = null, schLocT = null;
   var schSearchRows = [], schLeadRows = [];
   function loadSchedule(){
-    authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; renderSchedAgents(); })
+    authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; renderSchedAgents(); renderBkAgents(); })
       .catch(function(e){ if (String(e.message) !== 'AUTH'){ var s = el('sch-status'); if (s) s.textContent = 'Could not load agents.'; } });
     loadTourOffers();
   }
@@ -7115,6 +7219,180 @@ window.addEventListener('error', function(e){
       if (noteEl) noteEl.textContent = 'Could not generate the link: ' + (e && e.message ? e.message : 'error');
     });
   }
+  // ── Book-for-prospect flow (auto-book via Calendly Create Event Invitee) ───────────
+  var schedProspect = null;   // prospect from a lead deep link, carried to either flow
+  var schedBook = { applicant:null, agentId:null, agentName:'', eventType:null, eventTypeName:'', duration:0, locDefault:'', chosen:null };
+  var bkcal = null, schBkSearchT = null, schBkLocT = null, schBkSearchRows = [], schBkLeadRows = [], bkData = { showings:[], busy:[], slots:[] };
+  function schShowView(v){
+    var L = el('sch-landing'), O = el('sch-view-offer'), B = el('sch-view-book');
+    if (L) L.style.display = v === 'landing' ? 'block' : 'none';
+    if (O) O.style.display = v === 'offer' ? 'block' : 'none';
+    if (B) B.style.display = v === 'book' ? 'block' : 'none';
+    if (v === 'book' && bkcal) setTimeout(function(){ try { bkcal.updateSize(); } catch(e){} }, 30);
+  }
+  function renderLandingPicked(){
+    var box = el('sch-landing-picked'); if (!box) return;
+    if (!schedProspect){ box.innerHTML = ''; return; }
+    var o = schedProspect;
+    box.innerHTML = '<div class="schpicked"><div><b>' + esc(o.name || 'Prospect') + '</b><br><span>' + esc([o.email, o.phone].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="schpx" id="sch-landing-clear" title="Clear">&times;</button></div><div class="note" style="margin-top:6px">Pre-filled from the lead &mdash; choose how to schedule.</div>';
+    var c = el('sch-landing-clear'); if (c) c.addEventListener('click', function(){ schedProspect = null; renderLandingPicked(); });
+  }
+  function renderBkAgents(){
+    var box = el('sch-bk-agent-chips'); if (!box) return;
+    box.innerHTML = (schedAgents || []).map(function(a){
+      return '<button type="button" class="chip-mini" data-aid="' + esc(a.id) + '">' + esc(a.display_name) + '</button>';
+    }).join('') || '<span class="count-note">Loading agents…</span>';
+  }
+  function schBkDoSearch(){
+    var q = (el('sch-bk-app-search').value || '').trim(); var res = el('sch-bk-app-results');
+    if (q.length < 2){ res.innerHTML = ''; return; }
+    Promise.all([
+      authFetch('/tour-applicant-search?q=' + encodeURIComponent(q)).catch(function(e){ if (String(e.message) === 'AUTH') throw e; return { results: [] }; }),
+      authFetch('/tour-lead-search?q=' + encodeURIComponent(q)).catch(function(){ return { results: [] }; })
+    ]).then(function(parts){
+      var apps = (parts[0] && parts[0].results) || []; schBkSearchRows = apps;
+      var leads = (parts[1] && parts[1].results) || []; schBkLeadRows = leads;
+      var ae = {}; apps.forEach(function(a){ var e = (a.applicant_email || '').toLowerCase(); if (e) ae[e] = 1; });
+      var dl = leads.filter(function(l){ var e = (l.email || '').toLowerCase(); return !(e && ae[e]); });
+      if (!apps.length && !dl.length){ res.innerHTML = '<span class="count-note">No matches.</span>'; return; }
+      var html = '';
+      apps.forEach(function(r){
+        var sub = [r.applicant_email, r.applicant_phone].filter(Boolean).join(' · ');
+        var ctx = [r.property_name, r.unit_number ? 'Unit ' + r.unit_number : '', r.application_status].filter(Boolean).join(' · ');
+        html += '<button type="button" class="schres" data-kind="app" data-app="' + esc(r.application_id) + '"><b>' + esc(r.applicant_name || '(no name)') + '</b> <span class="schbadge schbadge-app">Application</span><span>' + esc(sub) + '</span>' + (ctx ? '<span>' + esc(ctx) + '</span>' : '') + '</button>';
+      });
+      dl.forEach(function(r){
+        var sub = [r.email, r.phone].filter(Boolean).join(' · ');
+        var ctx = [r.location, r.stage].filter(Boolean).join(' · ');
+        html += '<button type="button" class="schres" data-kind="lead" data-card="' + esc(r.card_id) + '"><b>' + esc(r.name || '(no name)') + '</b> <span class="schbadge schbadge-lead">Lead</span><span>' + esc(sub) + '</span>' + (ctx ? '<span>' + esc(ctx) + '</span>' : '') + '</button>';
+      });
+      res.innerHTML = html;
+    }).catch(function(e){ if (String(e.message) !== 'AUTH') res.innerHTML = '<span class="count-note">Search failed.</span>'; });
+  }
+  function schBkPickProspect(o){
+    schedBook.applicant = o;
+    schedBook.locDefault = o.unit_address || (o.property ? o.property + (o.unit_number ? ' ' + o.unit_number : '') : '');
+    var box = el('sch-bk-app-picked');
+    if (box){
+      box.innerHTML = '<div class="schpicked"><div><b>' + esc(o.name || 'Prospect') + '</b><br><span>' + esc([o.email, o.phone].filter(Boolean).join(' · ')) + (o.property ? ' · ' + esc(o.property) : '') + '</span></div><button type="button" class="schpx" id="sch-bk-app-clear" title="Clear">&times;</button></div>';
+      var c = el('sch-bk-app-clear'); if (c) c.addEventListener('click', schBkClearProspect);
+    }
+    if (el('sch-bk-app-results')) el('sch-bk-app-results').innerHTML = '';
+    if (el('sch-bk-app-search')) el('sch-bk-app-search').value = '';
+    if (el('sch-bk-app-manual')) el('sch-bk-app-manual').style.display = 'none';
+    if (el('sch-bk-loc') && !el('sch-bk-loc').value) el('sch-bk-loc').value = schedBook.locDefault;
+    schUnlock('sch-bk-step-agent', true);
+  }
+  function schBkClearProspect(){ schedBook.applicant = null; if (el('sch-bk-app-picked')) el('sch-bk-app-picked').innerHTML = ''; schUnlock('sch-bk-step-agent', false); }
+  function schBkPickAgent(aid){
+    var a = (schedAgents || []).filter(function(x){ return String(x.id) === String(aid); })[0]; if (!a) return;
+    schedBook.agentId = a.id; schedBook.agentName = a.display_name; schedBook.eventType = null; schedBook.eventTypeName = '';
+    var box = el('sch-bk-agent-chips'); if (box) box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-aid') === String(aid)); });
+    schUnlock('sch-bk-step-event', true); schUnlock('sch-bk-step-cal', false); schUnlock('sch-bk-step-confirm', false);
+    var et = el('sch-bk-ettype'); if (et) et.innerHTML = '<span class="count-note">Loading event types…</span>';
+    authFetch('/agent-event-types?agent_id=' + encodeURIComponent(a.id)).then(function(j){
+      var types = (j.event_types || []).filter(function(t){ return t.active !== false; });
+      if (!types.length){ if (et) et.innerHTML = '<span class="count-note">No event types found — using the agent default.</span>'; return; }
+      if (et) et.innerHTML = types.map(function(t){ return '<button type="button" class="chip-mini" data-uri="' + esc(t.uri) + '" data-name="' + esc(t.name || '') + '" data-dur="' + esc(t.duration || 15) + '">' + esc(t.name || 'Tour') + '</button>'; }).join('');
+    }).catch(function(e){ if (String(e.message) !== 'AUTH' && et) et.innerHTML = '<span class="count-note">Could not load event types.</span>'; });
+  }
+  function schBkPickEventType(uri, name, dur){
+    schedBook.eventType = uri; schedBook.eventTypeName = name || ''; schedBook.duration = parseInt(dur, 10) || 15;
+    var et = el('sch-bk-ettype'); if (et) et.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-uri') === uri); });
+    schUnlock('sch-bk-step-cal', true);
+    schBkLoadCalendar();
+  }
+  function schBkLoadCalendar(){
+    if (!schedBook.agentId) return;
+    var days = parseInt((el('sch-bk-window').value || '14'), 10) || 14;
+    var to = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    var note = el('sch-bk-cal-note'); if (note) note.textContent = 'Loading…';
+    var aid = encodeURIComponent(schedBook.agentId);
+    Promise.all([
+      authFetch('/agent-schedule?agent_id=' + aid + '&to=' + to).catch(function(){ return { showings: [], busy: [] }; }),
+      authFetch('/agent-availability?agent_id=' + aid + (schedBook.eventType ? '&event_type=' + encodeURIComponent(schedBook.eventType) : '') + '&to=' + to).catch(function(){ return { slots: [] }; })
+    ]).then(function(parts){
+      var sched = parts[0] || {}, avail = parts[1] || {};
+      bkData.showings = sched.showings || []; bkData.busy = sched.busy || []; bkData.slots = avail.slots || [];
+      schedBook.duration = avail.duration_minutes || schedBook.duration || 15;
+      if (note) note.textContent = bkData.slots.length + ' open slot' + (bkData.slots.length === 1 ? '' : 's') + ' · ' + bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' — click a green slot to book';
+      schBkRenderCal();
+    }).catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });
+  }
+  function schBkRenderCal(){
+    if (!window.FullCalendar){ var n = el('sch-bk-cal'); if (n) n.innerHTML = '<div class="note">Calendar library not loaded.</div>'; return; }
+    var dur = schedBook.duration || 15, evs = [];
+    bkData.showings.forEach(function(s){
+      evs.push({ id: 'show_' + s.start, title: (s.title || 'Tour') + (s.location ? ' — ' + s.location : ''), start: s.start, end: s.end || undefined, backgroundColor: '#8a8f98', borderColor: '#8a8f98', textColor: '#15110D', classNames: ['fc-ev-show'], extendedProps: { kind: 'show' } });
+    });
+    bkData.busy.forEach(function(b){
+      evs.push({ id: 'busy_' + b.start, title: 'Busy', start: b.start, end: b.end || undefined, display: 'background', backgroundColor: '#c9ccd1', classNames: ['fc-ev-busy'], extendedProps: { kind: 'busy' } });
+    });
+    bkData.slots.forEach(function(sl){
+      var end = new Date(Date.parse(sl.start_time) + dur * 60000).toISOString();
+      evs.push({ id: 'open_' + sl.start_time, title: 'Open', start: sl.start_time, end: end, backgroundColor: '#5E8E4B', borderColor: '#3f6b30', textColor: '#fff', classNames: ['fc-ev-open'], extendedProps: { kind: 'open', start_time: sl.start_time } });
+    });
+    if (!bkcal){
+      var mob = isMobile();
+      bkcal = new FullCalendar.Calendar(el('sch-bk-cal'), {
+        initialView: mob ? 'timeGridDay' : 'timeGridWeek',
+        headerToolbar: { left: 'prev,next today', center: 'title', right: mob ? 'timeGridDay,timeGridWeek' : 'timeGridWeek,timeGridDay,dayGridMonth' },
+        height: 620, nowIndicator: true, firstDay: 0, expandRows: true, slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
+        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); if (info.event.extendedProps.kind === 'open') schBkConfirm(info.event.extendedProps.start_time); }
+      });
+      bkcal.render();
+    }
+    bkcal.getEventSources().forEach(function(s){ s.remove(); });
+    bkcal.addEventSource(evs);
+    if (bkData.slots.length){ try { bkcal.gotoDate(bkData.slots[0].start_time); } catch(e){} }
+    setTimeout(function(){ try { bkcal.updateSize(); } catch(e){} }, 30);
+  }
+  function schBkConfirm(startIso){
+    schedBook.chosen = startIso;
+    schUnlock('sch-bk-step-confirm', true);
+    if (el('sch-bk-loc') && !el('sch-bk-loc').value) el('sch-bk-loc').value = schedBook.locDefault;
+    var sum = el('sch-bk-summary');
+    if (sum){
+      var when = schEdFmt(startIso, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+      sum.innerHTML = 'Book <b>' + esc(schedBook.applicant ? schedBook.applicant.name : 'prospect') + '</b> with <b>' + esc(schedBook.agentName) + '</b>' + (schedBook.eventTypeName ? ' for <b>' + esc(schedBook.eventTypeName) + '</b>' : '') + ' on <b>' + esc(when) + '</b>.';
+    }
+    var rb = el('sch-bk-result'); if (rb){ rb.style.display = 'none'; rb.innerHTML = ''; }
+    var step = el('sch-bk-step-confirm'); if (step && step.scrollIntoView) try { step.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e){}
+  }
+  function schBkUnitSearch(){
+    var q = (el('sch-bk-loc').value || '').trim(); var res = el('sch-bk-loc-results'); if (!res) return;
+    if (q.length < 3){ res.innerHTML = ''; return; }
+    authFetch('/tour-unit-search?q=' + encodeURIComponent(q)).then(function(j){
+      var rows = j.results || []; if (!rows.length){ res.innerHTML = ''; return; }
+      res.innerHTML = rows.map(function(u){ return '<button type="button" class="schres" data-addr="' + esc(u.address) + '"><b>' + esc(u.address || (u.property_name + ' ' + (u.unit_number || ''))) + '</b><span>' + esc([u.property_name, u.unit_number ? 'Unit ' + u.unit_number : ''].filter(Boolean).join(' · ')) + '</span></button>'; }).join('');
+    }).catch(function(){ /* ignore */ });
+  }
+  function schBkGo(){
+    var p = schedBook.applicant; if (!p || !schedBook.agentId || !schedBook.chosen) return;
+    var actor = getActor(), rb = el('sch-bk-result');
+    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Pick your name on the sign-in screen first (so the booking is logged to you).</div>'; } return; }
+    var loc = ((el('sch-bk-loc') && el('sch-bk-loc').value) || '').trim();
+    var btn = el('sch-bk-go'), orig = btn.textContent; btn.textContent = 'Booking…'; btn.disabled = true;
+    postJSON('/tour-book', {
+      actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,
+      prospect_name: p.name, prospect_email: p.email, prospect_phone: p.phone || null,
+      application_id: p.application_id || null, aptly_card_id: (p && p.aptly_card_id) || null,
+      location: loc, start_time: schedBook.chosen
+    }).then(function(j){
+      btn.textContent = orig; btn.disabled = false;
+      if (rb){
+        var when = schEdFmt(j.start_time || schedBook.chosen, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        rb.style.display = 'block';
+        rb.innerHTML = '<div class="schbooked">✓ Booked ' + esc(when) + ' with ' + esc(schedBook.agentName) + '. The prospect was emailed a confirmation.</div>';
+      }
+      schUnlock('sch-bk-step-confirm', false);
+      schBkLoadCalendar();   // the new booking now shows + that slot is gone
+    }).catch(function(e){
+      btn.textContent = orig; btn.disabled = false;
+      if (rb){ var m = (e && e.message) ? e.message : 'error'; rb.style.display = 'block'; rb.innerHTML = '<div class="note">Could not book: ' + esc(m) + (/taken|already|conflict|busy|available|open/i.test(m) ? ' — pick another time.' : '') + '</div>'; }
+      schBkLoadCalendar();
+    });
+  }
   (function(){
     if (!el('page-schedule')) return;   // Working Rule #9: one guard over every binding
     var s = el('sch-app-search');
@@ -7165,6 +7443,40 @@ window.addEventListener('error', function(e){
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done).catch(function(){ window.prompt('Copy link:', v); });
       else window.prompt('Copy link:', v);
     });
+    // Landing + view switching
+    var gOffer = el('sch-go-offer'); if (gOffer) gOffer.addEventListener('click', function(){ schShowView('offer'); if (schedProspect) schPickApplicant(schedProspect); });
+    var gBook = el('sch-go-book'); if (gBook) gBook.addEventListener('click', function(){ schShowView('book'); renderBkAgents(); if (schedProspect) schBkPickProspect(schedProspect); });
+    var bOff = el('sch-back-offer'); if (bOff) bOff.addEventListener('click', function(){ schShowView('landing'); });
+    var bBk = el('sch-back-book'); if (bBk) bBk.addEventListener('click', function(){ schShowView('landing'); });
+    // Book flow
+    var bsearch = el('sch-bk-app-search'); if (bsearch) bsearch.addEventListener('input', function(){ clearTimeout(schBkSearchT); schBkSearchT = setTimeout(schBkDoSearch, 260); });
+    var bres = el('sch-bk-app-results');
+    if (bres) bres.addEventListener('click', function(e){
+      var b = e.target.closest('.schres'); if (!b) return;
+      if (b.getAttribute('data-kind') === 'lead'){
+        var cid = b.getAttribute('data-card');
+        var l = schBkLeadRows.filter(function(x){ return String(x.card_id) === String(cid); })[0];
+        if (l) schBkPickProspect({ application_id: null, name: l.name, email: l.email, phone: l.phone, property: '', unit_number: '', unit_address: l.location, aptly_card_id: l.card_id });
+        return;
+      }
+      var id = b.getAttribute('data-app');
+      var r = schBkSearchRows.filter(function(x){ return String(x.application_id) === String(id); })[0];
+      if (r) schBkPickProspect({ application_id: r.application_id, name: r.applicant_name, email: r.applicant_email, phone: r.applicant_phone, property: r.property_name, unit_number: r.unit_number, unit_address: r.unit_address });
+    });
+    var bmt = el('sch-bk-app-manual-toggle'); if (bmt) bmt.addEventListener('click', function(){ var m = el('sch-bk-app-manual'); if (m) m.style.display = (m.style.display === 'none' ? 'block' : 'none'); });
+    var bmu = el('sch-bk-m-use');
+    if (bmu) bmu.addEventListener('click', function(){
+      var nm = (el('sch-bk-m-name').value || '').trim(), em = (el('sch-bk-m-email').value || '').trim(), ph = (el('sch-bk-m-phone').value || '').trim();
+      if (!nm || !em || em.indexOf('@') < 0){ alert('Enter a name and a valid email.'); return; }
+      schBkPickProspect({ application_id: null, name: nm, email: em, phone: ph, property: '', unit_number: '', unit_address: '' });
+    });
+    var bac = el('sch-bk-agent-chips'); if (bac) bac.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickAgent(b.getAttribute('data-aid')); });
+    var bet = el('sch-bk-ettype'); if (bet) bet.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickEventType(b.getAttribute('data-uri'), b.getAttribute('data-name'), b.getAttribute('data-dur')); });
+    var brl = el('sch-bk-reload'); if (brl) brl.addEventListener('click', schBkLoadCalendar);
+    var bwin = el('sch-bk-window'); if (bwin) bwin.addEventListener('change', function(){ if (schedBook.agentId && schedBook.eventType) schBkLoadCalendar(); });
+    var blc = el('sch-bk-loc'); if (blc) blc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(schBkUnitSearch, 280); });
+    var blr = el('sch-bk-loc-results'); if (blr) blr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-bk-loc')) el('sch-bk-loc').value = b.getAttribute('data-addr') || ''; blr.innerHTML = ''; });
+    var bgo = el('sch-bk-go'); if (bgo) bgo.addEventListener('click', schBkGo);
   })();
 
   window.__llBooted = true;   // synchronous init finished without throwing — disarms the boot-crash guard

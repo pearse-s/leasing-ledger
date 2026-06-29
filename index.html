@@ -1759,7 +1759,7 @@ window.addEventListener('error', function(e){
         </div>
         <label class="toggle"><input type="checkbox" id="r-showings"> showings only</label>
         <button type="button" class="mybtn" id="r-mine">&#128100; My tours</button>
-        <button type="button" class="mybtn" id="r-needsconf" title="Upcoming tours Calendly asked the prospect to confirm, but they haven't replied yet">&#9203; Needs confirmation</button>
+        <button type="button" class="mybtn" id="r-needsconf" title="Upcoming tours not yet confirmed by the prospect">&#9203; Needs confirmation</button>
         <div class="agentlegend" id="r-agents"></div>
       </div>
       <div class="r-calbar" id="r-calbar">
@@ -6172,6 +6172,8 @@ window.addEventListener('error', function(e){
     var st = reconState(r);
     if (st === 'confirmed') return '<span class="chip c-ok" title="Prospect reconfirmed">&#10003; confirmed</span>';
     if (st === 'awaiting')  return '<span class="chip c-warm" title="Reconfirmation sent — awaiting reply">&#9203; unconfirmed</span>';
+    // upcoming tour Calendly hasn't asked yet, but still needs confirming → neutral flag
+    if (r.status === 'active' && Date.parse(r.start_time) >= Date.now()) return '<span class="chip c-cold" title="Upcoming — not yet confirmed">to confirm</span>';
     return '';
   }
   function fmtReconWhen(ts){ var t = Date.parse(ts); return isNaN(t) ? '' : new Date(t).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
@@ -6234,7 +6236,7 @@ window.addEventListener('error', function(e){
       if (isNaN(Date.parse(r.start_time))) return false;
       if (anyAg && !rAgents[r.agent || 'Unknown']) return false;
       if (anySt && !rStatus[tourStatusOf(r)]) return false;
-      if (rNeedsConf && !(tourStatusOf(r) === 'upcoming' && r.status === 'active' && r.reconfirmation_requested_at && !r.reconfirmation_confirmed_at)) return false;
+      if (rNeedsConf && !(tourStatusOf(r) === 'upcoming' && r.status === 'active' && !r.reconfirmation_confirmed_at)) return false;
       if (!q) return true;
       return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.matched_unit_number||'') + ' ' + (r.event_name||'') + ' ' + (r.invitee_name||'') + ' ' + (r.invitee_email||'')).toLowerCase().indexOf(q) >= 0;
     });

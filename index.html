@@ -6183,14 +6183,20 @@ window.addEventListener('error', function(e){
   }
   // Manual, tours-scoped re-pull (the Refresh button). No veil — feedback is on the
   // button only — and existing data stays put on failure, so the calendar/table/map
-  // never flash or lose their view state. Webhooks keep the DB fresh in seconds, so
-  // a click instantly surfaces the newest tours.
+  // never flash or lose their view state. Webhooks keep the DB fresh in seconds for
+  // new/canceled bookings, but reconfirmations (Calendly "confirm your tour") fire NO
+  // webhook — so a click also LIVE re-polls reconfirmation sent/accepted for upcoming
+  // tours (/tours/refresh-reconfirm), then re-pulls /tours so the rows + calendar reflect
+  // it. The re-poll is best-effort: if it fails we still refresh from the mirror.
   function refreshTours(){
     var btn = el('r-refresh');
     if (!btn || btn.disabled) return;
     var label = btn.innerHTML;
     btn.disabled = true; btn.classList.remove('okflash'); btn.innerHTML = 'Refreshing…';
-    fetchTours()
+    var actor = (getActor() || '').trim() || 'dashboard';
+    postJSON('/tours/refresh-reconfirm', { actor: actor })
+      .catch(function(){ return null; })   // best-effort: still re-pull from the mirror
+      .then(function(){ return fetchTours(); })
       .then(function(){
         btn.classList.add('okflash'); btn.innerHTML = 'Updated ✓';
         setTimeout(function(){ btn.classList.remove('okflash'); btn.innerHTML = label; btn.disabled = false; }, 1200);

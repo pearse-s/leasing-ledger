@@ -327,6 +327,10 @@ window.addEventListener('error', function(e){
   .kdelta.kflat{color:var(--ink-soft);background:var(--paper-deep)}
   .kspark{flex:none;opacity:.92}
   .tile .kx{margin-top:7px}
+  .kasof{margin-top:8px;font-size:.62rem;line-height:1.55;color:var(--ink-soft);position:relative;z-index:2;border-top:1px dashed var(--line,rgba(255,255,255,.08));padding-top:6px}
+  .kasof div{margin-top:2px}
+  .kasof b{font-weight:800;color:inherit}
+  .kasof .kdelta{font-size:.55rem;padding:1px 6px;margin-left:3px;vertical-align:middle}
   /* gauge KPI — operational vacancy ring */
   .kpi.gauge{grid-column:span 2;display:flex;align-items:center;gap:16px}
   .kpi.gauge .lbl{margin-bottom:4px}
@@ -2809,6 +2813,61 @@ window.addEventListener('error', function(e){
     if (!box){ box = document.createElement('div'); box.className = 'kx'; host.appendChild(box); }
     box.innerHTML = html;
   }
+  // ── "as of <end date>" point-in-time overlay for stock KPIs (from payload.kpis_asof) ──
+  // Shown only when the user is viewing a HISTORICAL end date (state.to < today): each stock
+  // card gains a line "as of <date>: <then> -> now <live> (delta)" so you can see where the
+  // number stood on the window's last day vs right now. Values come from daily snapshots.
+  var ASOF_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function fmtAsofWhen(s){ if (!s) return ''; var p = String(s).split('-'); return ASOF_MON[(+p[1]||1)-1] + ' ' + (+p[2]||''); }
+  function setKpiAsof(host, html){
+    if (!host) return;
+    var box = host.querySelector('.kasof');
+    if (!html){ if (box && box.parentNode) box.parentNode.removeChild(box); return; }
+    if (!box){ box = document.createElement('div'); box.className = 'kasof'; host.appendChild(box); }
+    box.innerHTML = html;
+  }
+  function asofDeltaChip(asof, now, isPct, good){
+    if (now == null) return '';
+    var diff = now - asof;
+    if (diff === 0) return ' <span class="kdelta kflat">no change</span>';
+    var improving = (good === 'down') ? (diff < 0) : (diff > 0);
+    var cls = improving ? 'kgood' : 'kbad';
+    var arrow = diff > 0 ? '&#9650; ' : '&#9660; ';
+    var mag = isPct ? (Math.abs(diff).toFixed(1) + ' pts') : fmtNum(Math.abs(diff));
+    return ' <span class="kdelta ' + cls + '">' + arrow + mag + '</span>';
+  }
+  function asofRow(a, nowVal, fmt, isPct, good, label){
+    if (!a || a.value == null) return '';
+    var asof = +a.value, now = (nowVal == null ? null : +nowVal);
+    var pre = label || ('as of ' + fmtAsofWhen(a.as_of));
+    return '<div>' + pre + ': <b>' + fmt(asof) + '</b> &rarr; now <b>' + (now == null ? '&ndash;' : fmt(now)) + '</b>' + asofDeltaChip(asof, now, isPct, good) + '</div>';
+  }
+  function renderAsOf(d){
+    var totHost = el('k-totrate') ? el('k-totrate').closest('.kpi') : null;
+    var riskHost = el('k-risk') ? el('k-risk').closest('.kpi') : null;
+    var idHosts = ['kpi-oprate','kpi-vacant','kpi-pre','kpi-tasks','kpi-needs','kpi-missed'];
+    var a = d && d.kpis_asof;
+    // only overlay when looking at a historical end date; otherwise strip any prior lines
+    if (!a || !(state.to < winToday())){
+      idHosts.forEach(function(id){ setKpiAsof(el(id), ''); });
+      setKpiAsof(totHost, ''); setKpiAsof(riskHost, '');
+      return;
+    }
+    var v = (d && d.vacancy) || {}, k = (d && d.kpis) || {}, money = (d && d.money) || {};
+    var cur = function(o){ return (o && o.cur != null) ? o.cur : null; };
+    setKpiAsof(el('kpi-oprate'), asofRow(a.op_vacancy,    v.op_vacancy_rate,    pct,      true,  'down'));
+    setKpiAsof(totHost,          asofRow(a.total_vacancy, v.total_vacancy_rate, pct,      true,  'down'));
+    setKpiAsof(el('kpi-vacant'), asofRow(a.vacant_units,  v.vacant_total,       fmtNum,   false, 'down'));
+    setKpiAsof(riskHost,         asofRow(a.rent_at_risk,  money.rent_at_risk,   fmtMoney, false, 'down'));
+    setKpiAsof(el('kpi-pre'),    asofRow(a.pre_leased,    v.pre_leased,         fmtNum,   false, 'up'));
+    setKpiAsof(el('kpi-tasks'),
+      asofRow(a.open_tasks, cur(k.open_tasks), fmtNum, false, 'down')
+      + asofRow(a.overdue_tasks, cur(k.overdue_tasks), fmtNum, false, 'down',
+                'overdue, as of ' + fmtAsofWhen(a.overdue_tasks && a.overdue_tasks.as_of)));
+    setKpiAsof(el('kpi-needs'),  asofRow(a.needs_followup, cur(k.needs_followup), fmtNum, false, 'down'));
+    setKpiAsof(el('kpi-missed'), asofRow(a.missed_calls, cur(k.missed_calls), fmtNum, false, 'down',
+                '7 days to ' + fmtAsofWhen(a.missed_calls && a.missed_calls.as_of)));
+  }
   function renderKpiExtras(k){
     if (!k) return;
     var GOLD = '#F7D982';
@@ -4376,6 +4435,7 @@ window.addEventListener('error', function(e){
     else countUp('k-retention', rt.rate_pct, pct);
     el('k-retention-sub').innerHTML = 'trailing 12 mo &middot; ' + fmtNum(rt.renewed || 0) + ' renewed / ' + fmtNum((rt.renewed || 0) + (rt.moved_out || 0)) + ' term-ends';
     if (d.kpis) renderKpiExtras(d.kpis);
+    renderAsOf(d);
 
     var ag = d.aging || {}; var op = ag.op_vacant || {}; var nl = ag.never_leased || {};
     var stackTotals = {

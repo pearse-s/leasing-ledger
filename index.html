@@ -1098,6 +1098,11 @@ window.addEventListener('error', function(e){
     .sidefilters{padding-top:0}
     .sidefilters .fgroup{flex:none;width:100%}
     .g2,.g3{grid-template-columns:1fr}
+    /* let single-column grid items shrink so a wide table inside a card scrolls
+       INSIDE its .scrolly instead of blowing the grid track past the viewport —
+       a horizontal overflow widens the layout viewport and detaches the fixed
+       #mobnav from the visual viewport (the Phones tab's two table cards). */
+    .g2>*,.g3>*{min-width:0}
     .tiles{flex-wrap:wrap}
     .tile{min-width:45%}
     .mobnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:55;

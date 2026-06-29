@@ -915,6 +915,14 @@ window.addEventListener('error', function(e){
   .fc-ev-t{flex:1 1 auto;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fcloc{font-size:.66rem;opacity:.92;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fc-list-event td{cursor:pointer}
+  /* day "+N more" popover (month view): FC backs the popover with --fc-page-bg-color, which #rcal sets transparent, so the opened day list was see-through + unreadable over the grid. Give it a solid dark-glass panel. */
+  .fc .fc-popover{background:rgba(20,24,38,.98);border:1px solid var(--glass-brd);border-radius:var(--r-sm);box-shadow:0 18px 50px rgba(0,0,0,.6);backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));overflow:hidden;z-index:50}
+  .fc .fc-popover-header{background:var(--clay-soft);color:var(--ink);font:600 .8rem "Schibsted Grotesk",Verdana,sans-serif;padding:7px 10px}
+  .fc .fc-popover-title{color:var(--ink)}
+  .fc .fc-popover-close{color:var(--ink-soft);opacity:.85;font-size:1.1rem;transition:color .15s,opacity .15s}
+  .fc .fc-popover-close:hover{color:var(--ink);opacity:1}
+  .fc .fc-popover-body{padding:7px 9px;color:var(--ink);max-height:60vh;overflow:auto}
+  .fc .fc-more-popover .fc-popover-body{min-width:220px}
   /* tours: view switcher + agent colour legend/filter + cancelled markers + mobile sizing */
   .toursfilters{display:flex;align-items:center;gap:9px 14px;flex-wrap:wrap;margin:2px 0 12px}
   .agentlegend{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -6227,6 +6235,9 @@ window.addEventListener('error', function(e){
           right: mob ? 'timeGridDay,listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
         height: 640, nowIndicator: true, firstDay: 0, expandRows: true, dayMaxEvents: true,
         slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
+        // month view defaults timed events to "list-item" (a tiny dot + plain text), which hides
+        // the per-agent colour; render them as filled blocks so the agent colour shows in every view.
+        eventDisplay: 'block',
         eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); openTourDetail(info.event.id); },
         eventContent: function(arg){
           var wrap = document.createElement('div');

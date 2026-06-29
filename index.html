@@ -8008,7 +8008,7 @@ window.addEventListener('error', function(e){
     var p = schedBook.applicant; if (!p || !schedBook.agentId || !schedBook.chosen) return;
     var actor = getActor(), rb = el('sch-bk-result');
     if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Pick your name on the sign-in screen first (so the booking is logged to you).</div>'; } return; }
-    var loc = schedBook.isGroup ? '' : (((el('sch-bk-loc') && el('sch-bk-loc').value) || '').trim());   // open houses book at their own fixed location
+    var loc = schedBook.isGroup ? (schedBook.ohLocation || '') : (((el('sch-bk-loc') && el('sch-bk-loc').value) || '').trim());   // open houses book at their own fixed location (server matches the kind)
     var btn = el('sch-bk-go'), orig = btn.textContent; btn.textContent = schedBook.isGroup ? 'Adding…' : 'Booking…'; btn.disabled = true;
     postJSON('/tour-book', {
       actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,

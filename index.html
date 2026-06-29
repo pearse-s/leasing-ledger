@@ -1066,7 +1066,12 @@ window.addEventListener('error', function(e){
   @media(max-width:460px){ .kpis{grid-template-columns:1fr} .kpi.gauge{grid-column:auto} }
   @media(max-width:900px){
     .wrap{grid-template-columns:1fr;gap:14px;--barh:calc(58px + env(safe-area-inset-bottom))}
-    .content{padding-bottom:78px}
+    /* clip any stray horizontal overflow so the page can NEVER scroll sideways on
+       mobile — a widened layout viewport detaches the fixed #mobnav. Wide tables
+       still scroll inside their own .scrolly; nothing on mobile is meant to overflow
+       the content column. overflow-x:clip (not hidden) so .content stays a non-scroll,
+       non-containing-block box (fixed overlays + sticky theads unaffected). */
+    .content{padding-bottom:78px;overflow-x:clip}
     /* the sidebar slides up as a "More" sheet; the fixed bottom bar handles primary nav */
     /* compact bottom sheet: sits ABOVE the tab bar, hugs its content, easy to dismiss */
     .sidebar{position:fixed;left:0;right:0;bottom:var(--barh);top:auto;height:auto;min-height:0;

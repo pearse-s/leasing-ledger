@@ -1188,6 +1188,10 @@ window.addEventListener('error', function(e){
   #sch-bk-cal{margin-top:8px}
   .schbooked{padding:10px 12px;border:1px solid var(--clay);border-radius:10px;background:var(--clay-soft);color:var(--ink);font-weight:600;margin-top:8px}
   .schleg-stop:before{background:#E8B43E}
+  .schleg-oh:before{background:#E8B43E}
+  .schleg-full:before{background:#9aa0a6}
+  .schgrp{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:rgba(232,180,62,.25);color:var(--ink);border-radius:6px;padding:1px 5px;margin-left:6px}
+  .schohaddr{font-weight:600;color:var(--ink);padding:8px 11px;border:1px solid var(--glass-2);border-radius:9px;background:var(--paper);display:inline-block;margin-top:3px}
   .schstop{display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid var(--hairline-dark);border-radius:10px;margin-bottom:6px;background:rgba(255,255,255,.02)}
   .schstop-n{flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--clay);color:var(--on-accent,#15110D);font-size:.72rem;font-weight:700;display:flex;align-items:center;justify-content:center}
   .schstop-body{flex:1 1 auto;min-width:0}
@@ -1943,7 +1947,7 @@ window.addEventListener('error', function(e){
                 <button type="button" class="rfreshbtn" id="sch-bk-reload">&#8635; Refresh</button>
                 <span class="count-note" id="sch-bk-cal-note"></span>
               </div>
-              <div class="schcal-legend"><span class="schleg schleg-show">Showing</span><span class="schleg schleg-busy">Busy</span><span class="schhint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><label class="schtgl"><input type="checkbox" id="sch-bk-multi"> Book several back-to-back</label><label class="schtgl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label></div>
+              <div class="schcal-legend"><span class="schleg schleg-show">Showing</span><span class="schleg schleg-busy">Busy</span><span class="schleg schleg-oh" id="sch-bk-leg-oh" style="display:none">Open house &middot; spots left</span><span class="schleg schleg-full" id="sch-bk-leg-full" style="display:none">Full</span><span class="schhint" id="sch-bk-hint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><span class="schhint" id="sch-bk-oh-hint" style="display:none">Open houses run at set times &mdash; tap a slot to add the prospect. Numbers show spots still open.</span><label class="schtgl" id="sch-bk-multi-lbl"><input type="checkbox" id="sch-bk-multi"> Book several back-to-back</label><label class="schtgl" id="sch-bk-showopen-lbl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label></div>
               <div id="sch-bk-cal"></div>
             </div>
           </div>
@@ -1953,10 +1957,14 @@ window.addEventListener('error', function(e){
               <label class="schlbl">Confirm &amp; book</label>
               <div id="sch-bk-single-wrap">
                 <div class="schrow"><label class="schsub" style="margin:0">Time</label> <select id="sch-bk-time" style="width:auto"></select> <span class="schsublite" id="sch-bk-daylab"></span></div>
-                <div class="schloc">
+                <div class="schloc" id="sch-bk-locwrap">
                   <label class="schsub">Tour location <span class="schsublite">&mdash; sent to the prospect; type to search our units</span></label>
                   <input type="text" id="sch-bk-loc" placeholder="Unit address" autocomplete="off">
                   <div id="sch-bk-loc-results" class="schresults"></div>
+                </div>
+                <div class="schloc" id="sch-bk-ohloc" style="display:none">
+                  <label class="schsub">Open house location <span class="schsublite">&mdash; fixed; set by the open house</span></label>
+                  <div class="schohaddr" id="sch-bk-ohaddr"></div>
                 </div>
                 <div class="schsummary" id="sch-bk-summary"></div>
                 <button type="button" class="mybtn schgen" id="sch-bk-go">Book this tour</button>
@@ -7631,7 +7639,7 @@ window.addEventListener('error', function(e){
   }
   // ── Book-for-prospect flow (auto-book via Calendly Create Event Invitee) ───────────
   var schedProspect = null;   // prospect from a lead deep link, carried to either flow
-  var schedBook = { applicant:null, agentId:null, agentName:'', eventType:null, eventTypeName:'', duration:0, locDefault:'', chosen:null };
+  var schedBook = { applicant:null, agentId:null, agentName:'', eventType:null, eventTypeName:'', duration:0, locDefault:'', chosen:null, isGroup:false, capacity:0, ohLocation:'', scheduled:[] };
   var bkcal = null, schBkSearchT = null, schBkLocT = null, schBkSearchRows = [], schBkLeadRows = [], bkData = { showings:[], busy:[], slots:[] };
   var schBkMulti = false, schBkStops = [], schBkStopT = null;   // back-to-back run: [{start_time, location}]
   function schShowView(v){
@@ -7705,15 +7713,40 @@ window.addEventListener('error', function(e){
     authFetch('/agent-event-types?agent_id=' + encodeURIComponent(a.id)).then(function(j){
       var types = (j.event_types || []).filter(function(t){ return t.active !== false; });
       if (!types.length){ if (et) et.innerHTML = '<span class="count-note">No event types found — using the agent default.</span>'; return; }
-      if (et) et.innerHTML = types.map(function(t){ return '<button type="button" class="chip-mini" data-uri="' + esc(t.uri) + '" data-name="' + esc(t.name || '') + '" data-dur="' + esc(t.duration || 15) + '">' + esc(t.name || 'Tour') + '</button>'; }).join('');
+      if (et) et.innerHTML = types.map(function(t){ return '<button type="button" class="chip-mini" data-uri="' + esc(t.uri) + '" data-name="' + esc(t.name || '') + '" data-dur="' + esc(t.duration || 15) + '" data-kind="' + esc(t.kind || '') + '">' + esc(t.name || 'Tour') + (t.kind === 'group' ? '<span class="schgrp">group</span>' : '') + '</button>'; }).join('');
     }).catch(function(e){ if (String(e.message) !== 'AUTH' && et) et.innerHTML = '<span class="count-note">Could not load event types.</span>'; });
   }
-  function schBkPickEventType(uri, name, dur){
+  function schBkPickEventType(uri, name, dur, kind){
     schedBook.eventType = uri; schedBook.eventTypeName = name || ''; schedBook.duration = parseInt(dur, 10) || 15;
+    // Provisional flag so the UI doesn't flash the wrong mode; the server (/agent-availability)
+    // confirms is_group + capacity on load.
+    schedBook.isGroup = (kind === 'group'); schedBook.capacity = 0; schedBook.ohLocation = ''; schedBook.scheduled = [];
     var et = el('sch-bk-ettype'); if (et) et.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-uri') === uri); });
     schBkStops = []; schBkRenderStops();   // event type changed → times differ, start fresh
+    schBkApplyMode();
     schUnlock('sch-bk-step-cal', true);
     schBkLoadCalendar();
+  }
+  // Toggle the open-house-specific UI (no back-to-back / no show-all-open toggles; fixed address).
+  function schBkApplyMode(){
+    var g = !!schedBook.isGroup;
+    if (g && schBkMulti) schBkSetMulti(false);   // back-to-back N/A for a pooled open house
+    var ml = el('sch-bk-multi-lbl'); if (ml) ml.style.display = g ? 'none' : '';
+    var so = el('sch-bk-showopen-lbl'); if (so) so.style.display = g ? 'none' : '';
+    var hn = el('sch-bk-hint'); if (hn) hn.style.display = g ? 'none' : '';
+    var oh = el('sch-bk-oh-hint'); if (oh) oh.style.display = g ? '' : 'none';
+    var lo = el('sch-bk-leg-oh'); if (lo) lo.style.display = g ? '' : 'none';
+    var lf = el('sch-bk-leg-full'); if (lf) lf.style.display = g ? '' : 'none';
+    var lw = el('sch-bk-locwrap'); if (lw) lw.style.display = g ? 'none' : '';
+    var ow = el('sch-bk-ohloc'); if (ow) ow.style.display = g ? '' : 'none';
+  }
+  // Spots still open for a given start time (availability invitees_remaining, else limit-active).
+  function schBkRemainingFor(startIso){
+    var sl = (bkData.slots || []).filter(function(s){ return s.start_time === startIso; })[0];
+    if (sl && sl.invitees_remaining != null) return Number(sl.invitees_remaining);
+    var sc = (schedBook.scheduled || []).filter(function(s){ return s.start_time === startIso; })[0];
+    if (sc) return Math.max(0, (Number(sc.limit) || 0) - (Number(sc.active) || 0));
+    return null;
   }
   function schBkLoadCalendar(){
     if (!schedBook.agentId) return;
@@ -7728,16 +7761,26 @@ window.addEventListener('error', function(e){
       var sched = parts[0] || {}, avail = parts[1] || {};
       bkData.showings = sched.showings || []; bkData.busy = sched.busy || []; bkData.slots = avail.slots || [];
       schedBook.duration = avail.duration_minutes || schedBook.duration || 15;
-      // Defensive: drop open slots that overlap a known showing/busy block, in case Calendly
-      // availability didn't cross-block (e.g. a booking on the agent's OTHER event type).
-      var durMs = (schedBook.duration || 15) * 60000;
-      var blocks = bkData.showings.concat(bkData.busy).map(function(b){ return [Date.parse(b.start), Date.parse(b.end || b.start)]; }).filter(function(x){ return x[0] && x[1] && x[1] > x[0]; });
-      bkData.slots = bkData.slots.filter(function(sl){
-        var s = Date.parse(sl.start_time); if (!s) return true; var e = s + durMs;
-        for (var i = 0; i < blocks.length; i++){ if (s < blocks[i][1] && e > blocks[i][0]) return false; }
-        return true;
-      });
-      if (note) note.textContent = bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' · ' + bkData.slots.length + ' open time' + (bkData.slots.length === 1 ? '' : 's') + ' — click any empty time to book';
+      // Open-house (group) context confirmed by the server.
+      schedBook.isGroup = !!avail.is_group; schedBook.capacity = avail.capacity || 0;
+      schedBook.ohLocation = avail.oh_location || ''; schedBook.scheduled = avail.scheduled || [];
+      schBkApplyMode();
+      if (schedBook.isGroup){
+        // Open houses POOL invitees and the agent hosts them, so other showings/busy blocks must
+        // NOT remove an open-house slot — show every configured window with room as-is.
+        if (note) note.textContent = bkData.slots.length + ' open-house time' + (bkData.slots.length === 1 ? '' : 's') + ' with room — tap one to add the prospect';
+      } else {
+        // Defensive: drop open slots that overlap a known showing/busy block, in case Calendly
+        // availability didn't cross-block (e.g. a booking on the agent's OTHER event type).
+        var durMs = (schedBook.duration || 15) * 60000;
+        var blocks = bkData.showings.concat(bkData.busy).map(function(b){ return [Date.parse(b.start), Date.parse(b.end || b.start)]; }).filter(function(x){ return x[0] && x[1] && x[1] > x[0]; });
+        bkData.slots = bkData.slots.filter(function(sl){
+          var s = Date.parse(sl.start_time); if (!s) return true; var e = s + durMs;
+          for (var i = 0; i < blocks.length; i++){ if (s < blocks[i][1] && e > blocks[i][0]) return false; }
+          return true;
+        });
+        if (note) note.textContent = bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' · ' + bkData.slots.length + ' open time' + (bkData.slots.length === 1 ? '' : 's') + ' — click any empty time to book';
+      }
       schBkRenderCal();
     }).catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });
   }
@@ -7757,18 +7800,37 @@ window.addEventListener('error', function(e){
     bkData.busy.forEach(function(b){
       evs.push({ id: 'busy_' + b.start, title: 'Busy', start: b.start, end: b.end || undefined, display: 'background', backgroundColor: '#c9ccd1', classNames: ['fc-ev-busy'], extendedProps: { kind: 'busy' } });
     });
-    if (showOpen){
+    if (schedBook.isGroup){
+      // Open-house mode: every configured window with room is bookable (gold, shows spots left);
+      // already-FULL scheduled windows (dropped by the availability call) show greyed + locked.
+      var cap = schedBook.capacity || 0, openKeys = {};
       bkData.slots.forEach(function(sl){
-        if (schBkMulti && schBkStops.some(function(s){ return s.start_time === sl.start_time; })) return;   // already a stop
+        openKeys[sl.start_time] = true;
+        var rem = (sl.invitees_remaining == null) ? null : Number(sl.invitees_remaining);
         var end = new Date(Date.parse(sl.start_time) + dur * 60000).toISOString();
-        evs.push({ id: 'open_' + sl.start_time, title: 'Open', start: sl.start_time, end: end, backgroundColor: '#5E8E4B', borderColor: '#3f6b30', textColor: '#fff', classNames: ['fc-ev-open'], extendedProps: { kind: 'open', start_time: sl.start_time } });
+        var lab = (rem == null) ? 'Open house' : (rem + (cap ? ' of ' + cap : '') + ' left');
+        evs.push({ id: 'oh_' + sl.start_time, title: lab, start: sl.start_time, end: end, backgroundColor: '#E8B43E', borderColor: '#caa233', textColor: '#15110D', classNames: ['fc-ev-oh'], extendedProps: { kind: 'open', start_time: sl.start_time } });
       });
-    }
-    if (schBkMulti){
-      schBkStops.forEach(function(s, i){
+      (schedBook.scheduled || []).forEach(function(s){
+        if (openKeys[s.start_time]) return;                                  // already shown as bookable
+        if (Math.max(0, (Number(s.limit) || 0) - (Number(s.active) || 0)) > 0) return;   // has room but outside the availability windows — skip (avoid a false FULL)
         var end = new Date(Date.parse(s.start_time) + dur * 60000).toISOString();
-        evs.push({ id: 'stop_' + s.start_time, title: 'Stop ' + (i + 1), start: s.start_time, end: end, backgroundColor: '#E8B43E', borderColor: '#caa233', textColor: '#15110D', classNames: ['fc-ev-stop'], extendedProps: { kind: 'stop', start_time: s.start_time } });
+        evs.push({ id: 'ohfull_' + s.start_time, title: 'Full', start: s.start_time, end: end, backgroundColor: '#9aa0a6', borderColor: '#7d828a', textColor: '#15110D', classNames: ['fc-ev-ohfull'], extendedProps: { kind: 'full' } });
       });
+    } else {
+      if (showOpen){
+        bkData.slots.forEach(function(sl){
+          if (schBkMulti && schBkStops.some(function(s){ return s.start_time === sl.start_time; })) return;   // already a stop
+          var end = new Date(Date.parse(sl.start_time) + dur * 60000).toISOString();
+          evs.push({ id: 'open_' + sl.start_time, title: 'Open', start: sl.start_time, end: end, backgroundColor: '#5E8E4B', borderColor: '#3f6b30', textColor: '#fff', classNames: ['fc-ev-open'], extendedProps: { kind: 'open', start_time: sl.start_time } });
+        });
+      }
+      if (schBkMulti){
+        schBkStops.forEach(function(s, i){
+          var end = new Date(Date.parse(s.start_time) + dur * 60000).toISOString();
+          evs.push({ id: 'stop_' + s.start_time, title: 'Stop ' + (i + 1), start: s.start_time, end: end, backgroundColor: '#E8B43E', borderColor: '#caa233', textColor: '#15110D', classNames: ['fc-ev-stop'], extendedProps: { kind: 'stop', start_time: s.start_time } });
+        });
+      }
     }
     if (!bkcal){
       var mob = isMobile();
@@ -7776,14 +7838,15 @@ window.addEventListener('error', function(e){
         initialView: mob ? 'timeGridDay' : 'timeGridWeek',
         headerToolbar: { left: 'prev,next today', center: 'title', right: mob ? 'timeGridDay,timeGridWeek' : 'timeGridWeek,timeGridDay,dayGridMonth' },
         height: 620, nowIndicator: true, firstDay: 0, expandRows: true, snapDuration: '00:15:00', slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
-        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); var k = info.event.extendedProps.kind; if (k === 'stop') schBkRemoveStop(info.event.extendedProps.start_time); else if (k === 'open') schBkPickTime(info.event.extendedProps.start_time); },
-        dateClick: function(info){ schBkPickTime(info.date.getTime()); }
+        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); var k = info.event.extendedProps.kind; if (k === 'stop') schBkRemoveStop(info.event.extendedProps.start_time); else if (k === 'open') schBkPickTime(info.event.extendedProps.start_time); else if (k === 'full'){ var nt = el('sch-bk-cal-note'); if (nt) nt.textContent = 'That open house is full — pick another time.'; } },
+        dateClick: function(info){ if (schedBook.isGroup) return; schBkPickTime(info.date.getTime()); }   // open houses: must tap a slot, not empty grid
       });
       bkcal.render();
     }
     bkcal.getEventSources().forEach(function(s){ s.remove(); });
     bkcal.addEventSource(evs);
-    if (bkData.slots.length){ try { bkcal.gotoDate(bkData.slots[0].start_time); } catch(e){} }
+    var jumpTo = (bkData.slots[0] && bkData.slots[0].start_time) || (schedBook.isGroup && schedBook.scheduled[0] && schedBook.scheduled[0].start_time);
+    if (jumpTo){ try { bkcal.gotoDate(jumpTo); } catch(e){} }
     setTimeout(function(){ try { bkcal.updateSize(); } catch(e){} }, 30);
   }
   // Snap a clicked time (ms or ISO) to the nearest OPEN slot — same day if possible — then confirm.
@@ -7903,13 +7966,22 @@ window.addEventListener('error', function(e){
   }
   function schBkRenderSummary(){
     var sum = el('sch-bk-summary'); if (!sum) return;
+    var who = esc(schedBook.applicant ? schedBook.applicant.name : 'prospect');
     var when = schEdFmt(schedBook.chosen, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-    sum.innerHTML = 'Book <b>' + esc(schedBook.applicant ? schedBook.applicant.name : 'prospect') + '</b> with <b>' + esc(schedBook.agentName) + '</b>' + (schedBook.eventTypeName ? ' for <b>' + esc(schedBook.eventTypeName) + '</b>' : '') + ' on <b>' + esc(when) + '</b>.';
+    if (schedBook.isGroup){
+      var rem = schBkRemainingFor(schedBook.chosen), cap = schedBook.capacity || 0;
+      sum.innerHTML = 'Add <b>' + who + '</b> to ' + (schedBook.eventTypeName ? '<b>' + esc(schedBook.eventTypeName) + '</b>' : 'the open house') + ' with <b>' + esc(schedBook.agentName) + '</b> on <b>' + esc(when) + '</b>' + (schedBook.ohLocation ? ' at <b>' + esc(schedBook.ohLocation) + '</b>' : '') + (rem != null ? ' &middot; <b>' + rem + (cap ? ' of ' + cap : '') + '</b> spot' + (rem === 1 ? '' : 's') + ' left' : '') + '.';
+      return;
+    }
+    sum.innerHTML = 'Book <b>' + who + '</b> with <b>' + esc(schedBook.agentName) + '</b>' + (schedBook.eventTypeName ? ' for <b>' + esc(schedBook.eventTypeName) + '</b>' : '') + ' on <b>' + esc(when) + '</b>.';
   }
   function schBkConfirm(startIso){
     schedBook.chosen = startIso;
     schUnlock('sch-bk-step-confirm', true);
-    if (el('sch-bk-loc') && !el('sch-bk-loc').value) el('sch-bk-loc').value = schedBook.locDefault;
+    if (schedBook.isGroup){
+      var oa = el('sch-bk-ohaddr'); if (oa) oa.textContent = schedBook.ohLocation || 'Set by the open house';
+    } else if (el('sch-bk-loc') && !el('sch-bk-loc').value) { el('sch-bk-loc').value = schedBook.locDefault; }
+    var gb = el('sch-bk-go'); if (gb) gb.textContent = schedBook.isGroup ? 'Add to the open house' : 'Book this tour';
     var sel = el('sch-bk-time');
     if (sel){
       var daySlots = schBkSlotsForDay(Date.parse(startIso));
@@ -7936,8 +8008,8 @@ window.addEventListener('error', function(e){
     var p = schedBook.applicant; if (!p || !schedBook.agentId || !schedBook.chosen) return;
     var actor = getActor(), rb = el('sch-bk-result');
     if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Pick your name on the sign-in screen first (so the booking is logged to you).</div>'; } return; }
-    var loc = ((el('sch-bk-loc') && el('sch-bk-loc').value) || '').trim();
-    var btn = el('sch-bk-go'), orig = btn.textContent; btn.textContent = 'Booking…'; btn.disabled = true;
+    var loc = schedBook.isGroup ? '' : (((el('sch-bk-loc') && el('sch-bk-loc').value) || '').trim());   // open houses book at their own fixed location
+    var btn = el('sch-bk-go'), orig = btn.textContent; btn.textContent = schedBook.isGroup ? 'Adding…' : 'Booking…'; btn.disabled = true;
     postJSON('/tour-book', {
       actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,
       prospect_name: p.name, prospect_email: p.email, prospect_phone: p.phone || null,
@@ -7948,7 +8020,7 @@ window.addEventListener('error', function(e){
       if (rb){
         var when = schEdFmt(j.start_time || schedBook.chosen, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
         rb.style.display = 'block';
-        rb.innerHTML = '<div class="schbooked">✓ Booked ' + esc(when) + ' with ' + esc(schedBook.agentName) + '. The prospect was emailed a confirmation.</div>';
+        rb.innerHTML = '<div class="schbooked">' + (schedBook.isGroup ? '✓ Added ' + esc(schedBook.applicant ? schedBook.applicant.name : 'the prospect') + ' to the open house on ' + esc(when) + ' with ' + esc(schedBook.agentName) : '✓ Booked ' + esc(when) + ' with ' + esc(schedBook.agentName)) + '. The prospect was emailed a confirmation.</div>';
       }
       schUnlock('sch-bk-step-confirm', false);
       schBkLoadCalendar();   // the new booking now shows + that slot is gone
@@ -8036,7 +8108,7 @@ window.addEventListener('error', function(e){
       schBkPickProspect({ application_id: null, name: nm, email: em, phone: ph, property: '', unit_number: '', unit_address: '' });
     });
     var bac = el('sch-bk-agent-chips'); if (bac) bac.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickAgent(b.getAttribute('data-aid')); });
-    var bet = el('sch-bk-ettype'); if (bet) bet.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickEventType(b.getAttribute('data-uri'), b.getAttribute('data-name'), b.getAttribute('data-dur')); });
+    var bet = el('sch-bk-ettype'); if (bet) bet.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickEventType(b.getAttribute('data-uri'), b.getAttribute('data-name'), b.getAttribute('data-dur'), b.getAttribute('data-kind')); });
     var brl = el('sch-bk-reload'); if (brl) brl.addEventListener('click', schBkLoadCalendar);
     var bso = el('sch-bk-showopen'); if (bso) bso.addEventListener('change', function(){ if (schedBook.agentId && schedBook.eventType) schBkRenderCal(); });
     var btm = el('sch-bk-time'); if (btm) btm.addEventListener('change', function(){ schedBook.chosen = this.value; schBkRenderSummary(); });

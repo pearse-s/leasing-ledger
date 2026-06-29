@@ -966,6 +966,16 @@ window.addEventListener('error', function(e){
   /* tour modal — action rows, prospect strip, activity feed, pinned composer */
   .rm-actrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
   .rm-actrow:empty{display:none}
+  .rm-recon{margin:0 0 10px}
+  .rm-recon:empty{display:none}
+  .rm-recon .rcbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:9px 11px;border-radius:var(--r-sm);background:var(--glass-2);border:1px solid var(--rim)}
+  .rm-recon .rctxt{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .rm-recon .rclab{font-size:.82rem;font-weight:700;display:flex;align-items:center;gap:6px}
+  .rm-recon .rcsub{font-size:.72rem;color:var(--ink-soft)}
+  .rm-recon .rcacts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+  .rm-recon .rcbtn{font-size:.76rem;padding:5px 10px;border-radius:999px;border:1px solid var(--rim);background:var(--glass);color:var(--ink);cursor:pointer;text-decoration:none;white-space:nowrap}
+  .rm-recon .rcbtn.gold{background:var(--clay);color:var(--on-accent);border-color:transparent;font-weight:700}
+  .rm-recon .rcbtn:hover{filter:brightness(1.08)}
   .rmact{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-align:center;padding:10px 12px;font-size:.8rem}
   .rm-navrow{display:flex;flex-wrap:wrap;gap:8px;padding:2px 12px 11px}
   .rmact2{flex:1 1 calc(50% - 4px);display:inline-flex;align-items:center;justify-content:center;gap:5px;text-align:center;padding:9px 10px;font-size:.76rem}
@@ -1380,7 +1390,7 @@ window.addEventListener('error', function(e){
 
     <section class="panel">
       <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg></span><h2>Leasing funnel</h2><span class="ph-sub">turning demand into signed leases</span></div>
-      <div class="panel-kpis pk-2">
+      <div class="panel-kpis pk-3">
         <div class="kpi click" id="kpi-signed-mtd" title="New leases signed this month — open My hub">
           <div class="lbl">Signed this month</div>
           <div class="num" id="k-signed-mtd">&ndash;</div>
@@ -1390,6 +1400,11 @@ window.addEventListener('error', function(e){
           <div class="lbl">Showing &rarr; lease</div>
           <div class="num" id="k-conv">&ndash;</div>
           <div class="sub">conversion &middot; last 30 days</div>
+        </div>
+        <div class="kpi click" id="kpi-tourconf" title="Tours the prospect reconfirmed ÷ tours Calendly asked, last 30 days — open Tours">
+          <div class="lbl">Tour confirmation</div>
+          <div class="num" id="k-tourconf">&ndash;</div>
+          <div class="sub">reconfirmed &middot; last 30 days</div>
         </div>
       </div>
       <div class="grid g3">
@@ -1434,6 +1449,7 @@ window.addEventListener('error', function(e){
           <div class="note" id="sh-note">click a row to open the Tours tab</div>
           <div class="pair click" data-go="tours"><span class="pl">Showings booked</span><span class="pv" id="sh-booked">&ndash;</span></div>
           <div class="pair click" data-go="tours"><span class="pl">&mdash; completed / canceled</span><span class="pv" id="sh-dc">&ndash;</span></div>
+          <div class="pair" id="sh-recon-row" title="Tours the prospect reconfirmed &divide; tours Calendly asked to confirm, in this window"><span class="pl">Confirmation rate</span><span class="pv" id="sh-recon">&ndash;</span></div>
           <div class="agents" id="sh-agents"></div>
           <div class="warnchip" id="caly-warn"></div>
         </div>
@@ -1743,6 +1759,7 @@ window.addEventListener('error', function(e){
         </div>
         <label class="toggle"><input type="checkbox" id="r-showings"> showings only</label>
         <button type="button" class="mybtn" id="r-mine">&#128100; My tours</button>
+        <button type="button" class="mybtn" id="r-needsconf" title="Upcoming tours Calendly asked the prospect to confirm, but they haven't replied yet">&#9203; Needs confirmation</button>
         <div class="agentlegend" id="r-agents"></div>
       </div>
       <div class="r-calbar" id="r-calbar">
@@ -2158,6 +2175,7 @@ window.addEventListener('error', function(e){
         <button type="button" id="rm-cancel" class="btn rmact">&#10006; Cancel</button>
       </div>
       <div id="rm-contact"></div>
+      <div id="rm-recon" class="rm-recon"></div>
       <div id="rm-roster"></div>
       <details id="rm-detwrap"><summary>Tour details</summary>
         <div id="rm-body"></div>
@@ -2543,7 +2561,7 @@ window.addEventListener('error', function(e){
   var aWin = { mode:'global', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 };
   var rView = 'cal', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [], curTour = null, tourPickMode = 'listing';
-  var rAgents = {}, rStatus = {}, agentColorMap = {};
+  var rAgents = {}, rStatus = {}, agentColorMap = {}, rNeedsConf = false;
   var AGENT_PALETTE = ['#E8B43E','#6CA0DC','#7FA76B','#C77DAE','#E0875F','#5BC0BE','#B59CE0','#D4A24E','#8FB996','#5FA8D3','#CDA434','#79C0A6'];
   var uView = 'list', umap = null, umapLayer = null, umapSig = '';
   var keysAll = null, kSort = { k:'property_name', d:1 }, kSel = {}, kCur = null;
@@ -2806,6 +2824,8 @@ window.addEventListener('error', function(e){
       setKpiExtra(el('kpi-signed-mtd'), deltaChip(k.signed_month, false) + sparkSVG(k.signed_month.series, GOLD)); }
     if (k.conversion){ var cv = el('k-conv'); if (cv) cv.textContent = (k.conversion.cur == null ? '—' : k.conversion.cur + '%');
       setKpiExtra(el('kpi-conv'), deltaChip(k.conversion, true) + sparkSVG(k.conversion.series, GOLD)); }
+    if (k.tour_confirmation_rate){ var tcv = el('k-tourconf'); if (tcv) tcv.textContent = (k.tour_confirmation_rate.cur == null ? '—' : k.tour_confirmation_rate.cur + '%');
+      setKpiExtra(el('kpi-tourconf'), deltaChip(k.tour_confirmation_rate, true) + sparkSVG(k.tour_confirmation_rate.series, GOLD)); }
     if (k.needs_followup){ countUp('k-needs', k.needs_followup.cur == null ? 0 : k.needs_followup.cur, fmtNum); setKpiExtra(el('kpi-needs'), deltaChip(k.needs_followup, false) + sparkSVG(k.needs_followup.series, GOLD)); }
     if (k.missed_calls){ countUp('k-missed', k.missed_calls.cur == null ? 0 : k.missed_calls.cur, fmtNum); setKpiExtra(el('kpi-missed'), deltaChip(k.missed_calls, false) + sparkSVG(k.missed_calls.series, GOLD)); }
     if (k.outreach){ countUp('k-outreach', k.outreach.cur == null ? 0 : k.outreach.cur, fmtNum);
@@ -2818,6 +2838,7 @@ window.addEventListener('error', function(e){
     if (el('kpi-outreach'))   el('kpi-outreach').addEventListener('click', goHub);
     if (el('kpi-needs'))      el('kpi-needs').addEventListener('click', goHub);
     if (el('kpi-conv'))       el('kpi-conv').addEventListener('click', function(){ showTab('applications'); });
+    if (el('kpi-tourconf'))   el('kpi-tourconf').addEventListener('click', function(){ showTab('tours'); });
   })();
 
   /* ── tabs ─────────────────────────────────── */
@@ -4514,6 +4535,18 @@ window.addEventListener('error', function(e){
     el('sh-booked').textContent = fmtNum(sh.booked);
     el('sh-dc').innerHTML = fmtNum(sh.completed) + ' <small>/</small> ' + fmtNum(sh.canceled);
 
+    var rcS = sh.reconfirmation || {}, rcEl = el('sh-recon');
+    if (rcEl) {
+      if (rcS.asked) {
+        rcEl.innerHTML = (rcS.rate_pct == null ? '—' : rcS.rate_pct + '%')
+          + ' <small>' + fmtNum(rcS.confirmed) + '/' + fmtNum(rcS.asked) + ' asked</small>'
+          + (rcS.pending ? ' <span class="chip c-warm" title="upcoming tours asked but not yet confirmed">' + fmtNum(rcS.pending) + ' pending</span>' : '');
+      } else {
+        rcEl.innerHTML = '<small>no asks in window</small>'
+          + (rcS.pending ? ' <span class="chip c-warm" title="upcoming tours asked but not yet confirmed">' + fmtNum(rcS.pending) + ' pending</span>' : '');
+      }
+    }
+
     var agents = sh.by_agent || [];
     var ahtml = '';
     if (agents.length) {
@@ -6126,6 +6159,30 @@ window.addEventListener('error', function(e){
     if (r.matched_property_name) return r.matched_property_name + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
     return r.location_text || 'Tour';
   }
+  // Reconfirmation (Calendly "confirm your tour"): confirmed_at set = confirmed,
+  // requested_at set without confirm = awaiting reply, neither = not asked yet.
+  function reconState(r){
+    if (!r) return 'none';
+    if (r.reconfirmation_confirmed_at) return 'confirmed';
+    if (r.reconfirmation_requested_at) return 'awaiting';
+    return 'none';
+  }
+  // small chip for list rows / calendar (only confirmed / awaiting — keeps rows clean)
+  function reconChip(r){
+    var st = reconState(r);
+    if (st === 'confirmed') return '<span class="chip c-ok" title="Prospect reconfirmed">&#10003; confirmed</span>';
+    if (st === 'awaiting')  return '<span class="chip c-warm" title="Reconfirmation sent — awaiting reply">&#9203; unconfirmed</span>';
+    return '';
+  }
+  function fmtReconWhen(ts){ var t = Date.parse(ts); return isNaN(t) ? '' : new Date(t).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
+  // prefilled LF-voice reconfirmation chase text
+  function reconMsg(name, addr, whenStr, agent){
+    var first = (String(name || '').trim().split(/\s+/)[0]) || 'there';
+    var ag = String(agent || '').trim();
+    return 'Hi ' + first + ", it's " + (ag ? ag + ' ' : '') + 'with Live Furnished — just confirming your tour'
+      + (addr ? ' at ' + addr : '') + (whenStr ? ' on ' + whenStr : '')
+      + '. Reply YES to confirm, or let me know if another time works better!';
+  }
   // list-view "People" cell: headcount badge for multi-attendee (open-house) slots
   function tourPeopleCell(r){
     var n = r.attendee_count || 1, tot = r.attendee_total || n;
@@ -6177,6 +6234,7 @@ window.addEventListener('error', function(e){
       if (isNaN(Date.parse(r.start_time))) return false;
       if (anyAg && !rAgents[r.agent || 'Unknown']) return false;
       if (anySt && !rStatus[tourStatusOf(r)]) return false;
+      if (rNeedsConf && !(tourStatusOf(r) === 'upcoming' && r.status === 'active' && r.reconfirmation_requested_at && !r.reconfirmation_confirmed_at)) return false;
       if (!q) return true;
       return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.matched_unit_number||'') + ' ' + (r.event_name||'') + ' ' + (r.invitee_name||'') + ' ' + (r.invitee_email||'')).toLowerCase().indexOf(q) >= 0;
     });
@@ -6197,7 +6255,7 @@ window.addEventListener('error', function(e){
       html += '<tr class="' + cls + '" data-uri="' + esc(r.uri) + '">' +
         '<td>' + esc(when) + '</td>' +
         '<td><span class="agdotrow" style="background:' + agentColor(r.agent) + '"></span>' + esc(r.agent || '–') + '</td>' +
-        '<td>' + st + (r.applied ? ' <span class="chip c-ok" title="This prospect applied">applied</span>' : '') + '</td>' +
+        '<td>' + st + (reconChip(r) ? ' ' + reconChip(r) : '') + (r.applied ? ' <span class="chip c-ok" title="This prospect applied">applied</span>' : '') + '</td>' +
         '<td>' + esc(r.matched_unit_number || '–') + '</td>' +
         '<td>' + esc(r.location_text || '–') + '</td>' +
         '<td>' + esc(r.matched_property_name || '–') + '</td>' +
@@ -6224,7 +6282,7 @@ window.addEventListener('error', function(e){
         end: r.end_time || undefined,
         backgroundColor: col, borderColor: col, textColor: '#15110D',
         classNames: canceled ? ['fc-ev-cxl'] : [],
-        extendedProps: { canceled: canceled, noshow: !!r.is_no_show, n: r.attendee_count || 0 }
+        extendedProps: { canceled: canceled, noshow: !!r.is_no_show, n: r.attendee_count || 0, recon: reconState(r) }
       };
     });
     if (!rcal) {
@@ -6246,7 +6304,10 @@ window.addEventListener('error', function(e){
                 : (arg.event.extendedProps.noshow ? '<span class="fcx">&#8856;</span>' : '');
           var n = arg.event.extendedProps.n || 0;
           var nb = n > 1 ? '<span class="fc-ev-n" title="' + n + ' people booked" style="flex:0 0 auto;align-self:center;margin-left:4px;font-weight:800;background:rgba(0,0,0,.28);border-radius:7px;padding:0 5px;font-size:.74em;white-space:nowrap">&#128101; ' + n + '</span>' : '';
-          wrap.innerHTML = x + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' + nb;
+          // upcoming tours Calendly asked but the prospect hasn't reconfirmed → ⏳ prefix
+          var rcm = (arg.event.extendedProps.recon === 'awaiting' && !arg.event.extendedProps.canceled)
+            ? '<span class="fcx" title="awaiting reconfirmation" style="color:#15110D">&#9203;</span>' : '';
+          wrap.innerHTML = x + rcm + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' + nb;
           return { domNodes: [wrap] };
         }
       });
@@ -6304,6 +6365,7 @@ window.addEventListener('error', function(e){
       pc += '</div></div>';
     }
     el('rm-contact').innerHTML = pc;
+    renderReconBlock(r);
     // Open-house roster — when a slot holds multiple attendees, list everyone with the
     // suite they asked about (per-attendee resolution); single-invitee tours skip it.
     var rosterBox = el('rm-roster');
@@ -6341,6 +6403,59 @@ window.addEventListener('error', function(e){
     el('rm-feedlab').textContent = ''; el('rm-feed').innerHTML = '';
     loadProspectFeed(r);
     openModal('rmodal');
+  }
+  // Reconfirmation status + chase actions inside the tour modal. Shown for upcoming
+  // showing-type tours and any tour that already has reconfirmation info.
+  function renderReconBlock(r){
+    var box = el('rm-recon'); if (!box) return;
+    var st = reconState(r);
+    var upcoming = tourStatusOf(r) === 'upcoming' && r.status === 'active';
+    if (st === 'none' && !(upcoming && r.counts_as_showing)) { box.innerHTML = ''; return; }
+    var cls, lab, sub;
+    if (st === 'confirmed') {
+      cls = 'c-ok'; lab = '&#10003; Confirmed';
+      sub = 'Prospect reconfirmed' + (r.reconfirmation_confirmed_at ? ' · ' + fmtReconWhen(r.reconfirmation_confirmed_at) : '');
+    } else if (st === 'awaiting') {
+      cls = 'c-warm'; lab = '&#9203; Not confirmed yet';
+      sub = 'Calendly asked' + (r.reconfirmation_requested_at ? ' ' + fmtReconWhen(r.reconfirmation_requested_at) : '') + ' — no reply yet';
+    } else {
+      cls = 'c-cold'; lab = '&#9203; Not asked yet';
+      sub = 'Calendly sends the confirmation request closer to the tour';
+    }
+    var acts = '';
+    if (upcoming && st !== 'confirmed' && r.invitee_phone) {
+      var tel = r.invitee_phone.replace(/[^0-9+]/g, '');
+      var when = isNaN(Date.parse(r.start_time)) ? '' : new Date(Date.parse(r.start_time)).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      var msg = reconMsg(r.invitee_name, tourAddr(r), when, getActor());
+      acts += '<a class="rcbtn gold" href="' + rcText(esc(tel), msg) + '">&#128172; Confirm by text</a>';
+      acts += '<a class="rcbtn" href="' + rcCall(esc(tel)) + '">&#128222; Call</a>';
+    }
+    acts += '<button type="button" class="rcbtn" id="rm-check">&#8635; Check now</button>';
+    box.innerHTML = '<div class="rcbar"><span class="chip ' + cls + '">' + lab + '</span>'
+      + '<span class="rctxt"><span class="rcsub">' + esc(sub) + '</span></span>'
+      + '<span class="rcacts">' + acts + '</span></div>';
+    var cb = el('rm-check'); if (cb) cb.addEventListener('click', function(){ checkReconNow(r); });
+  }
+  // "Check now": live-pull this event's invitees from Calendly via /tour/refresh so a
+  // just-made reconfirmation shows up on demand (it never arrives via webhook).
+  function checkReconNow(r){
+    var cb = el('rm-check'); if (!cb) return;
+    var actor = (getActor() || '').trim() || 'dashboard';
+    var lbl = cb.innerHTML; cb.disabled = true; cb.innerHTML = 'Checking…';
+    postJSON('/tour/refresh', { event_uri: r.uri, actor: actor })
+      .then(function(j){
+        var to = j && j.tour;
+        if (to) {
+          r.reconfirmation_requested_at = to.reconfirmation_requested_at;
+          r.reconfirmation_confirmed_at = to.reconfirmation_confirmed_at;
+          r.reconfirmation_status = to.reconfirmation_status;
+          var m = (toursAll || []).filter(function(x){ return x.uri === r.uri; })[0];
+          if (m) { m.reconfirmation_requested_at = to.reconfirmation_requested_at; m.reconfirmation_confirmed_at = to.reconfirmation_confirmed_at; m.reconfirmation_status = to.reconfirmation_status; }
+        }
+        renderReconBlock(r);
+        drawTours();
+      })
+      .catch(function(err){ cb.disabled = false; cb.innerHTML = lbl; alert('Could not check reconfirmation: ' + String((err && err.message) || err)); });
   }
   // Activity feed: this prospect's showings + notes (across ALL their tours, keyed by
   // email), merged newest-first. Also fills the prospect stat line + no-show flag.
@@ -6668,6 +6783,10 @@ window.addEventListener('error', function(e){
       if (!Object.keys(rAgents).length) calNote('No tours found under “' + me + '”');
     }
     drawAgentLegend(); drawTours();
+  });
+  el('r-needsconf').addEventListener('click', function(){
+    rNeedsConf = el('r-needsconf').classList.toggle('on');
+    drawTours();
   });
   el('r-today').addEventListener('click', function(){
     if (rView !== 'cal') { rView = 'cal'; applyRView(); }
@@ -7075,19 +7194,31 @@ window.addEventListener('error', function(e){
     var rows = all.filter(function(r){ return hubFuFilter === 'all' || r.bucket === hubFuFilter; });
     var h = '';
     rows.slice(0, 200).forEach(function(r){
+      var isConf = r.bucket === 'unconfirmed_tour';
       var contact = '';
       if (r.phone){
-        contact = '<a href="' + rcCall(esc(r.phone)) + '" class="fubtn">&#128222; Call</a> <a href="' + rcText(esc(r.phone)) + '" class="fubtn">&#128172; Text</a>';
+        if (isConf){
+          var whenC = r.last_at ? new Date(Date.parse(r.last_at)).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+          var addrC = (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : '');
+          var msgC = reconMsg(r.tenant_name, addrC, whenC, hubAgent);
+          contact = '<a href="' + rcCall(esc(r.phone)) + '" class="fubtn">&#128222; Call</a> <a href="' + rcText(esc(r.phone), msgC) + '" class="fubtn">&#128172; Confirm text</a>';
+        } else {
+          contact = '<a href="' + rcCall(esc(r.phone)) + '" class="fubtn">&#128222; Call</a> <a href="' + rcText(esc(r.phone)) + '" class="fubtn">&#128172; Text</a>';
+        }
       } else if (r.email){
         contact = '<a href="mailto:' + esc(r.email) + '" class="fubtn">&#9993; Email</a>';
       }
-      var tag = r.bucket === 'approved_unsigned' ? '<span class="pill" style="background:rgba(232,180,62,.18);color:var(--clay)">approved · close it</span>'
+      var tag = isConf ? '<span class="pill" style="background:rgba(232,180,62,.18);color:var(--clay)">confirm tour</span>'
+              : r.bucket === 'approved_unsigned' ? '<span class="pill" style="background:rgba(232,180,62,.18);color:var(--clay)">approved · close it</span>'
               : r.bucket === 'applied_pending' ? '<span class="pill" style="color:#9fe1cb">applied · pending</span>'
               : '<span class="pill" style="color:var(--ink-soft)">no application</span>';
+      var ageTxt = isConf
+        ? (r.age_days != null ? (r.age_days <= 0 ? 'tour today' : 'tour in ' + r.age_days + 'd') : 'upcoming tour')
+        : (r.age_days != null ? r.age_days + 'd ago' : '');
       h += '<div class="fucard">' +
         '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">' +
           '<b>' + esc(r.tenant_name || r.email || 'Prospect') + '</b>' +
-          '<span style="font-size:.72rem;color:var(--ink-soft)">' + (r.age_days != null ? r.age_days + 'd ago' : '') + '</span></div>' +
+          '<span style="font-size:.72rem;color:var(--ink-soft)">' + esc(ageTxt) + '</span></div>' +
         '<div style="font-size:.82rem;color:var(--ink-soft);margin:2px 0 6px">' + esc((r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : '')) + ' &mdash; ' + tag + '</div>' +
         hubFuComms(r) +
         (contact ? '<div class="fubtns">' + contact + '</div>' : '') + '</div>';
@@ -7101,7 +7232,7 @@ window.addEventListener('error', function(e){
     var all = hubFollow || [];
     function n(k){ return all.filter(function(r){ return r.bucket === k; }).length; }
     function chip(k, label, cnt){ return '<button type="button" class="qchip' + (hubFuFilter === k ? ' on' : '') + '" data-f="' + k + '">' + label + ' <span class="qn">' + cnt + '</span></button>'; }
-    c.innerHTML = chip('all', 'All', all.length) + chip('approved_unsigned', 'Approved', n('approved_unsigned')) + chip('applied_pending', 'Pending', n('applied_pending')) + chip('toured_no_app', 'No app', n('toured_no_app'));
+    c.innerHTML = chip('all', 'All', all.length) + chip('unconfirmed_tour', 'Confirm tour', n('unconfirmed_tour')) + chip('approved_unsigned', 'Approved', n('approved_unsigned')) + chip('applied_pending', 'Pending', n('applied_pending')) + chip('toured_no_app', 'No app', n('toured_no_app'));
   }
   function hubAct(id, act){
     var actor = getActor();

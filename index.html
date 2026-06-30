@@ -824,6 +824,16 @@ window.addEventListener('error', function(e){
   #tm-detwrap .note{margin:2px 12px 10px}
   /* owner modal — pattern redesign: action row + identity strip + collapsed details + portfolio */
   #om-actrow{margin-bottom:12px}
+  /* owner-report customize modal */
+  #orcfg .lmcard{max-width:560px}
+  .orcfg-grp{margin:14px 0 0}
+  .orcfg-grp.dim{opacity:.4;pointer-events:none}
+  .orcfg-h{font-size:.64rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px;border-bottom:1px solid var(--hairline);padding-bottom:4px}
+  .orcfg-rows{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px}
+  .orcfg-row{display:flex;align-items:center;gap:9px;font-size:.85rem;color:var(--ink);cursor:pointer;padding:4px 2px}
+  .orcfg-row input{width:16px;height:16px;accent-color:var(--clay);cursor:pointer;flex:none}
+  .orcfg-note{font-size:.72rem;color:var(--ink-soft);font-style:italic;margin-top:5px}
+  @media(max-width:560px){ .orcfg-rows{grid-template-columns:1fr} }
   .ndsect{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin:10px 0 6px}
   .ndsect .qn{opacity:.7;font-weight:600}
   .ndnote{border-left:2px solid var(--clay);background:var(--glass-2);border-radius:var(--r-sm);padding:7px 10px;margin:6px 0}
@@ -2437,6 +2447,57 @@ window.addEventListener('error', function(e){
       <div class="rm-feedwrap"><div class="rm-feedlab" id="om-portlab"></div><div class="propchips" id="om-props"></div></div>
       <div class="sect">Notes &amp; documents</div>
       <div id="om-notesdocs" class="lmphnote">&nbsp;</div>
+    </div>
+  </div>
+</div>
+
+<div class="lmodal" id="orcfg">
+  <div class="lmback" data-close="orcfg"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="orcfg">&times;</button>
+    <div class="lmhead">
+      <h3>Customize report</h3>
+      <div class="lmsub" id="orcfg-sub"></div>
+    </div>
+    <div class="lmbody">
+      <div class="orcfg-grp">
+        <div class="orcfg-h">Sections to include</div>
+        <div class="orcfg-rows">
+          <label class="orcfg-row"><input type="checkbox" data-sec="highlight"> Highlight summary</label>
+          <label class="orcfg-row"><input type="checkbox" data-sec="glance"> Portfolio at a glance</label>
+          <label class="orcfg-row"><input type="checkbox" data-sec="charts"> Occupancy &amp; week-over-week</label>
+          <label class="orcfg-row"><input type="checkbox" data-sec="activity"> Leasing activity</label>
+          <label class="orcfg-row"><input type="checkbox" data-sec="vacants"> Vacant units</label>
+          <label class="orcfg-row"><input type="checkbox" data-sec="renewals"> Upcoming renewals (90 days)</label>
+          <label class="orcfg-row"><input type="checkbox" data-sec="next"> What&rsquo;s next</label>
+        </div>
+      </div>
+      <div class="orcfg-grp" id="orcfg-vacgrp">
+        <div class="orcfg-h">Vacant-units columns</div>
+        <div class="orcfg-rows">
+          <label class="orcfg-row"><input type="checkbox" data-vac="beds"> Beds</label>
+          <label class="orcfg-row"><input type="checkbox" data-vac="days"> Days vacant</label>
+          <label class="orcfg-row"><input type="checkbox" data-vac="rent"> Listed rent</label>
+          <label class="orcfg-row"><input type="checkbox" data-vac="status"> Status</label>
+        </div>
+        <div class="orcfg-note">Unit name is always shown.</div>
+      </div>
+      <div class="orcfg-grp" id="orcfg-rengrp">
+        <div class="orcfg-h">Renewal columns</div>
+        <div class="orcfg-rows">
+          <label class="orcfg-row"><input type="checkbox" data-ren="tenant"> Tenant</label>
+          <label class="orcfg-row"><input type="checkbox" data-ren="end"> Current lease end</label>
+          <label class="orcfg-row"><input type="checkbox" data-ren="status"> Status</label>
+          <label class="orcfg-row"><input type="checkbox" data-ren="current_rent"> Current rent</label>
+          <label class="orcfg-row"><input type="checkbox" data-ren="new_rent"> Proposed rent</label>
+          <label class="orcfg-row"><input type="checkbox" data-ren="change"> Rent change %</label>
+        </div>
+        <div class="orcfg-note">Unit name is always shown.</div>
+      </div>
+      <div class="rm-actrow" style="margin-top:16px">
+        <button type="button" class="btn primary rmact" id="orcfg-download">Download PDF &darr;</button>
+        <button type="button" class="btn rmact" data-close="orcfg">Cancel</button>
+      </div>
     </div>
   </div>
 </div>
@@ -5980,15 +6041,63 @@ window.addEventListener('error', function(e){
     closeModal('omodal');
     if (curOwner) gotoUnitsWithSearch(curOwner.display_name || '');
   });
-  // Owner PDF report — raw fetch + blob (NOT authFetch/postJSON, which JSON-parse
-  // the body). Period = the global ledger window (windowDates), same from/to that
-  // drive /stats. Mirrors the hubExport blob-download pattern.
+  // Owner PDF report — clicking opens a per-report customize panel (sections +
+  // table columns, remembered in localStorage); Download then streams the PDF via a
+  // raw fetch + blob (NOT authFetch/postJSON, which JSON-parse the body). Period =
+  // the global ledger window (windowDates). Mirrors the hubExport blob-download pattern.
+  var ORCFG_KEY = 'ledger_orcfg_v1';
+  var ORCFG_DEF = {
+    sec: ['highlight', 'glance', 'charts', 'activity', 'vacants', 'renewals', 'next'],
+    vac: ['beds', 'days', 'rent', 'status'],
+    ren: ['tenant', 'end', 'status', 'current_rent', 'new_rent', 'change'],
+  };
+  function orcfgLoad(){
+    try { var s = JSON.parse(localStorage.getItem(ORCFG_KEY) || 'null'); if (s && s.sec && s.vac && s.ren) return s; } catch(e){}
+    return { sec: ORCFG_DEF.sec.slice(), vac: ORCFG_DEF.vac.slice(), ren: ORCFG_DEF.ren.slice() };
+  }
+  function orcfgSecOn(k){ var cb = document.querySelector('#orcfg [data-sec="' + k + '"]'); return cb ? cb.checked : false; }
+  function orcfgSyncDim(){
+    [['orcfg-vacgrp', 'vacants'], ['orcfg-rengrp', 'renewals']].forEach(function(pair){
+      var g = el(pair[0]); if (!g) return;
+      var on = orcfgSecOn(pair[1]);
+      g.classList.toggle('dim', !on);
+      Array.prototype.forEach.call(g.querySelectorAll('input'), function(cb){ cb.disabled = !on; });
+    });
+  }
+  function orcfgPaint(cfg){
+    Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-sec]'), function(cb){ cb.checked = cfg.sec.indexOf(cb.getAttribute('data-sec')) >= 0; });
+    Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-vac]'), function(cb){ cb.checked = cfg.vac.indexOf(cb.getAttribute('data-vac')) >= 0; });
+    Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-ren]'), function(cb){ cb.checked = cfg.ren.indexOf(cb.getAttribute('data-ren')) >= 0; });
+    orcfgSyncDim();
+  }
+  function orcfgCollect(){
+    var out = { sec: [], vac: [], ren: [] };
+    Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-sec]'), function(cb){ if (cb.checked) out.sec.push(cb.getAttribute('data-sec')); });
+    Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-vac]'), function(cb){ if (cb.checked) out.vac.push(cb.getAttribute('data-vac')); });
+    Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-ren]'), function(cb){ if (cb.checked) out.ren.push(cb.getAttribute('data-ren')); });
+    return out;
+  }
   if (el('om-report')) el('om-report').addEventListener('click', function(){
     if (!curOwner) return;
     var w = windowDates();
-    var btn = el('om-report'); var prev = btn.textContent;
+    if (el('orcfg-sub')) el('orcfg-sub').textContent = (curOwner.display_name || 'Owner') + '  ·  ' + w.from + ' → ' + w.to;
+    orcfgPaint(orcfgLoad());
+    openModal('orcfg');
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-sec]'), function(cb){ cb.addEventListener('change', orcfgSyncDim); });
+  if (el('orcfg-download')) el('orcfg-download').addEventListener('click', function(){
+    if (!curOwner) return;
+    var cfg = orcfgCollect();
+    try { localStorage.setItem(ORCFG_KEY, JSON.stringify(cfg)); } catch(e){}
+    var w = windowDates();
+    var btn = el('orcfg-download'); var prev = btn.textContent;
     btn.disabled = true; btn.textContent = 'Building report…';
-    var qp = '?owner_id=' + encodeURIComponent(curOwner.buildium_id) + '&from=' + w.from + '&to=' + w.to;
+    // Unit name is always shown — prepend it to the column lists.
+    var vacCols = ['unit'].concat(cfg.vac), renCols = ['unit'].concat(cfg.ren);
+    var qp = '?owner_id=' + encodeURIComponent(curOwner.buildium_id) + '&from=' + w.from + '&to=' + w.to
+      + '&sections=' + encodeURIComponent(cfg.sec.join(','))
+      + '&vac_cols=' + encodeURIComponent(vacCols.join(','))
+      + '&ren_cols=' + encodeURIComponent(renCols.join(','));
     fetch(API + '/owner-report' + qp, { headers: { 'Authorization': 'Bearer ' + TOKEN } })
       .then(function(r){
         if (r.status === 401) { onAuthFail(); throw new Error('AUTH'); }
@@ -6001,6 +6110,7 @@ window.addEventListener('error', function(e){
         a.download = (curOwner.display_name || 'owner').replace(/[^\w]+/g, '_') + '_portfolio_' + w.from + '_' + w.to + '.pdf';
         document.body.appendChild(a); a.click();
         setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
+        closeModal('orcfg');
       })
       .catch(function(e){ if (e && e.message !== 'AUTH') alert('Could not build report: ' + (e && e.message ? e.message : 'error')); })
       .finally(function(){ btn.disabled = false; btn.textContent = prev; });

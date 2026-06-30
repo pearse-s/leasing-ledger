@@ -2285,8 +2285,10 @@ window.addEventListener('error', function(e){
       </div>
       <div class="sect">Key</div>
       <div id="um-keys" class="lmphnote" data-keypanel>&nbsp;</div>
-      <div class="sect">Notes &amp; documents</div>
+      <div class="sect">Unit notes &amp; documents</div>
       <div id="um-notesdocs" class="lmphnote">&nbsp;</div>
+      <div class="sect">Building notes &amp; documents</div>
+      <div id="um-notesdocs-bldg" class="lmphnote">&nbsp;</div>
       <details id="um-detwrap"><summary>Unit details</summary>
         <div class="fgrid" id="um-fields"></div>
         <div class="umd-sect">Tenants</div>
@@ -5579,6 +5581,7 @@ window.addEventListener('error', function(e){
     openModal('umodal');
     mountKeyPanel(el('um-keys'), uid, (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : ''));
     mountNotesDocs(el('um-notesdocs'), 'unit', uid);
+    mountNotesDocs(el('um-notesdocs-bldg'), 'property', r.property_id);
     mountIncomingPanel(el('um-incoming'), uid);
     mountTaskPanel(el('um-tasks'), uid);
     // tenants → identity strip (primary) + full list in details

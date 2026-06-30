@@ -2317,6 +2317,8 @@ window.addEventListener('error', function(e){
         <div class="fgrid" id="om-fields"></div>
       </details>
       <div class="rm-feedwrap"><div class="rm-feedlab" id="om-portlab"></div><div class="propchips" id="om-props"></div></div>
+      <div class="sect">Buildium notes</div>
+      <div id="om-notesdocs" class="lmphnote">&nbsp;</div>
     </div>
   </div>
 </div>
@@ -2350,6 +2352,8 @@ window.addEventListener('error', function(e){
       <details id="am-detwrap"><summary>Application details</summary>
         <div class="fgrid" id="am-fields"></div>
       </details>
+      <div class="sect">Buildium notes</div>
+      <div id="am-notesdocs" class="lmphnote" style="margin-bottom:10px">&nbsp;</div>
       <div class="rm-feedwrap">
         <div class="rm-feedlab" id="am-feedlab"></div>
         <div class="lm-feedchips" id="am-feedchips"></div>
@@ -5821,6 +5825,7 @@ window.addEventListener('error', function(e){
     el('om-props').innerHTML = props.map(function(p){ return '<span>' + esc(p) + '</span>'; }).join('') || '<span>–</span>';
     if (el('om-report')) el('om-report').textContent = 'Download report · ' + winFmt(state.from) + '–' + winFmt(state.to);
     openModal('omodal');
+    mountNotesDocs(el('om-notesdocs'), 'owner', r.buildium_id);
   });
   el('om-viewunits').addEventListener('click', function(){
     closeModal('omodal');
@@ -5988,6 +5993,7 @@ window.addEventListener('error', function(e){
     el('am-feed').innerHTML = '<span class="count-note">Loading…</span>';
     amFeed = null; amFeedFilter = 'all'; amCurAid = r.application_id;
     openModal('amodal');
+    mountNotesDocs(el('am-notesdocs'), 'applicant', r.applicant_id);
     if (r.application_id) loadAppFeed(r.application_id);
   }
   // Small label for a phone/name-based link (email matches show nothing — they're the

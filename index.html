@@ -2469,7 +2469,6 @@ window.addEventListener('error', function(e){
           <label class="orcfg-row"><input type="checkbox" data-sec="activity"> Leasing activity</label>
           <label class="orcfg-row"><input type="checkbox" data-sec="vacants"> Vacant units</label>
           <label class="orcfg-row"><input type="checkbox" data-sec="renewals"> Upcoming renewals (90 days)</label>
-          <label class="orcfg-row"><input type="checkbox" data-sec="next"> What&rsquo;s next</label>
         </div>
       </div>
       <div class="orcfg-grp" id="orcfg-vacgrp">
@@ -6047,7 +6046,7 @@ window.addEventListener('error', function(e){
   // the global ledger window (windowDates). Mirrors the hubExport blob-download pattern.
   var ORCFG_KEY = 'ledger_orcfg_v1';
   var ORCFG_DEF = {
-    sec: ['highlight', 'glance', 'charts', 'activity', 'vacants', 'renewals', 'next'],
+    sec: ['highlight', 'glance', 'charts', 'activity', 'vacants', 'renewals'],
     vac: ['beds', 'days', 'rent', 'status'],
     ren: ['tenant', 'end', 'status', 'current_rent', 'new_rent', 'change'],
   };

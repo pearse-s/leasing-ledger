@@ -832,6 +832,10 @@ window.addEventListener('error', function(e){
   .ndfile{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px solid var(--hairline-dark)}
   .ndfile-dl{color:var(--clay);text-decoration:none;font-size:.86rem;font-weight:600}
   .ndfile-dl:hover{text-decoration:underline}
+  .ndfile-l{min-width:0;display:flex;gap:8px;align-items:baseline}
+  .ndfile-prev{color:var(--clay);text-decoration:none;font-size:.86rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ndfile-prev:hover{text-decoration:underline}
+  .ndfile-dlmini{font-weight:700;opacity:.65;flex:none}
   .ndfile-m{font-size:.7rem;color:var(--ink-soft);white-space:nowrap}
   #om-detwrap{margin:6px 0 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
   #om-detwrap summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
@@ -3826,7 +3830,15 @@ window.addEventListener('error', function(e){
         if (!files.length) h += '<div class="lmphnote">No documents on file.</div>';
         else h += files.map(function(f){
           var meta = [f.category_name, fmtFileSize(f.size), (f.uploaded_at || '').slice(0,10)].filter(Boolean).map(esc).join(' &middot; ');
-          return '<div class="ndfile"><a href="#" class="ndfile-dl" data-fileid="' + f.buildium_id + '" data-fname="' + esc(f.title || ('file-' + f.buildium_id)) + '">&#128196; ' + esc(f.title || 'Document') + '</a>' +
+          var name = f.title || ('file-' + f.buildium_id);
+          var ct = f.content_type || '';
+          var canPrev = (ct === 'application/pdf' || /^image\//.test(ct) || f.is_image);
+          var titleHtml = '&#128196; ' + esc(f.title || 'Document');
+          var left = canPrev
+            ? '<a href="#" class="ndfile-prev" data-fileid="' + f.buildium_id + '" data-fname="' + esc(name) + '" data-ftype="' + esc(ct) + '" title="Open a preview in a new tab">' + titleHtml + '</a>' +
+              '<a href="#" class="ndfile-dl ndfile-dlmini" data-fileid="' + f.buildium_id + '" data-fname="' + esc(name) + '" title="Download">&#8595;</a>'
+            : '<a href="#" class="ndfile-dl" data-fileid="' + f.buildium_id + '" data-fname="' + esc(name) + '">' + titleHtml + '</a>';
+          return '<div class="ndfile"><span class="ndfile-l">' + left + '</span>' +
             (meta ? '<span class="ndfile-m">' + meta + '</span>' : '') + '</div>';
         }).join('');
       }
@@ -3844,6 +3856,28 @@ window.addEventListener('error', function(e){
       .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
       .then(function(b){ var u = URL.createObjectURL(b); var x = document.createElement('a'); x.href = u; x.download = nm; x.style.display = 'none'; document.body.appendChild(x); x.click(); setTimeout(function(){ URL.revokeObjectURL(u); if (x.parentNode) x.parentNode.removeChild(x); }, 5000); })
       .catch(function(){ alert('Could not download this file.'); });
+  });
+  // document PREVIEW — open PDFs/images inline in a new tab via an authenticated blob
+  // URL (browser-native viewer: zoom/search/print). The tab is opened synchronously on
+  // the click so it isn't popup-blocked; the blob is fetched then navigated to. We re-tag
+  // the blob with the file's content_type so it renders inline instead of downloading.
+  document.addEventListener('click', function(ev){
+    var a = ev.target && ev.target.closest ? ev.target.closest('a.ndfile-prev[data-fileid]') : null;
+    if (!a) return;
+    ev.preventDefault();
+    var fid = a.getAttribute('data-fileid'), ftype = a.getAttribute('data-ftype') || '';
+    var w = window.open('', '_blank');
+    try { if (w && w.document) w.document.write('<title>Loading preview…</title><body style="font:14px sans-serif;padding:24px;color:#333">Loading preview…</body>'); } catch (e) {}
+    fetch(API + '/file-dl?file_id=' + encodeURIComponent(fid) + '&proxy=1',
+          { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .then(function(b){
+        var blob = ftype ? b.slice(0, b.size, ftype) : b;   // force inline-renderable MIME
+        var u = URL.createObjectURL(blob);
+        if (w) w.location = u; else window.open(u, '_blank');
+        setTimeout(function(){ URL.revokeObjectURL(u); }, 60000);
+      })
+      .catch(function(){ try { if (w) w.document.body.innerHTML = 'Could not load preview — try Download instead.'; } catch (e) {} });
   });
 
   /* history feed tab */

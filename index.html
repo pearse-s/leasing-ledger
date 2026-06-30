@@ -2493,6 +2493,15 @@ window.addEventListener('error', function(e){
         </div>
         <div class="orcfg-note">Unit name is always shown.</div>
       </div>
+      <div class="orcfg-grp" id="orcfg-rstatgrp">
+        <div class="orcfg-h">Renewal statuses to include</div>
+        <div class="orcfg-rows">
+          <label class="orcfg-row"><input type="checkbox" data-rstat="renewing_signed"> Signed</label>
+          <label class="orcfg-row"><input type="checkbox" data-rstat="renewal_pending"> Pending</label>
+          <label class="orcfg-row"><input type="checkbox" data-rstat="not_renewing"> Not renewing</label>
+          <label class="orcfg-row"><input type="checkbox" data-rstat="undecided"> Offer sent</label>
+        </div>
+      </div>
       <div class="rm-actrow" style="margin-top:16px">
         <button type="button" class="btn primary rmact" id="orcfg-download">Download PDF &darr;</button>
         <button type="button" class="btn rmact" data-close="orcfg">Cancel</button>
@@ -6049,14 +6058,15 @@ window.addEventListener('error', function(e){
     sec: ['highlight', 'glance', 'charts', 'activity', 'vacants', 'renewals'],
     vac: ['beds', 'days', 'rent', 'status'],
     ren: ['tenant', 'end', 'status', 'current_rent', 'new_rent', 'change'],
+    rstat: ['renewing_signed', 'renewal_pending', 'not_renewing', 'undecided'],
   };
   function orcfgLoad(){
-    try { var s = JSON.parse(localStorage.getItem(ORCFG_KEY) || 'null'); if (s && s.sec && s.vac && s.ren) return s; } catch(e){}
-    return { sec: ORCFG_DEF.sec.slice(), vac: ORCFG_DEF.vac.slice(), ren: ORCFG_DEF.ren.slice() };
+    try { var s = JSON.parse(localStorage.getItem(ORCFG_KEY) || 'null'); if (s && s.sec && s.vac && s.ren) { if (!s.rstat) s.rstat = ORCFG_DEF.rstat.slice(); return s; } } catch(e){}
+    return { sec: ORCFG_DEF.sec.slice(), vac: ORCFG_DEF.vac.slice(), ren: ORCFG_DEF.ren.slice(), rstat: ORCFG_DEF.rstat.slice() };
   }
   function orcfgSecOn(k){ var cb = document.querySelector('#orcfg [data-sec="' + k + '"]'); return cb ? cb.checked : false; }
   function orcfgSyncDim(){
-    [['orcfg-vacgrp', 'vacants'], ['orcfg-rengrp', 'renewals']].forEach(function(pair){
+    [['orcfg-vacgrp', 'vacants'], ['orcfg-rengrp', 'renewals'], ['orcfg-rstatgrp', 'renewals']].forEach(function(pair){
       var g = el(pair[0]); if (!g) return;
       var on = orcfgSecOn(pair[1]);
       g.classList.toggle('dim', !on);
@@ -6067,13 +6077,15 @@ window.addEventListener('error', function(e){
     Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-sec]'), function(cb){ cb.checked = cfg.sec.indexOf(cb.getAttribute('data-sec')) >= 0; });
     Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-vac]'), function(cb){ cb.checked = cfg.vac.indexOf(cb.getAttribute('data-vac')) >= 0; });
     Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-ren]'), function(cb){ cb.checked = cfg.ren.indexOf(cb.getAttribute('data-ren')) >= 0; });
+    Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-rstat]'), function(cb){ cb.checked = (cfg.rstat || []).indexOf(cb.getAttribute('data-rstat')) >= 0; });
     orcfgSyncDim();
   }
   function orcfgCollect(){
-    var out = { sec: [], vac: [], ren: [] };
+    var out = { sec: [], vac: [], ren: [], rstat: [] };
     Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-sec]'), function(cb){ if (cb.checked) out.sec.push(cb.getAttribute('data-sec')); });
     Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-vac]'), function(cb){ if (cb.checked) out.vac.push(cb.getAttribute('data-vac')); });
     Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-ren]'), function(cb){ if (cb.checked) out.ren.push(cb.getAttribute('data-ren')); });
+    Array.prototype.forEach.call(document.querySelectorAll('#orcfg [data-rstat]'), function(cb){ if (cb.checked) out.rstat.push(cb.getAttribute('data-rstat')); });
     return out;
   }
   if (el('om-report')) el('om-report').addEventListener('click', function(){
@@ -6096,7 +6108,8 @@ window.addEventListener('error', function(e){
     var qp = '?owner_id=' + encodeURIComponent(curOwner.buildium_id) + '&from=' + w.from + '&to=' + w.to
       + '&sections=' + encodeURIComponent(cfg.sec.join(','))
       + '&vac_cols=' + encodeURIComponent(vacCols.join(','))
-      + '&ren_cols=' + encodeURIComponent(renCols.join(','));
+      + '&ren_cols=' + encodeURIComponent(renCols.join(','))
+      + '&ren_status=' + encodeURIComponent((cfg.rstat || []).join(','));
     fetch(API + '/owner-report' + qp, { headers: { 'Authorization': 'Bearer ' + TOKEN } })
       .then(function(r){
         if (r.status === 401) { onAuthFail(); throw new Error('AUTH'); }

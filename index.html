@@ -2317,7 +2317,7 @@ window.addEventListener('error', function(e){
         <div class="fgrid" id="om-fields"></div>
       </details>
       <div class="rm-feedwrap"><div class="rm-feedlab" id="om-portlab"></div><div class="propchips" id="om-props"></div></div>
-      <div class="sect">Buildium notes</div>
+      <div class="sect">Notes &amp; documents</div>
       <div id="om-notesdocs" class="lmphnote">&nbsp;</div>
     </div>
   </div>
@@ -3805,7 +3805,7 @@ window.addEventListener('error', function(e){
     if (!box) return;
     if (!entityId){ box.innerHTML = '<span class="lmphnote">No linked Buildium record.</span>'; return; }
     box.innerHTML = '<span class="lmphnote">Loading notes &amp; documents&hellip;</span>';
-    var canFiles = (scope === 'unit' || scope === 'property');
+    var canFiles = (scope === 'unit' || scope === 'property' || scope === 'owner');
     Promise.all([
       authFetch('/buildium-notes?scope=' + encodeURIComponent(scope) + '&entity_id=' + encodeURIComponent(entityId)).catch(function(){ return { notes: [] }; }),
       canFiles ? authFetch('/files?scope=' + encodeURIComponent(scope) + '&entity_id=' + encodeURIComponent(entityId)).catch(function(){ return { files: [] }; }) : Promise.resolve({ files: [] })

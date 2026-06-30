@@ -1114,8 +1114,9 @@ window.addEventListener('error', function(e){
     .navitem{width:100%}
     .navitem.on::before{display:none}
     .navitem.on{box-shadow:inset 0 -2px 0 var(--clay)}
-    /* the four tabs that live in the bottom bar are hidden inside the sheet's nav list */
-    .navitem[data-tab="units"],.navitem[data-tab="applications"],.navitem[data-tab="tours"],.navitem[data-tab="keys"]{display:none}
+    /* the four tabs that live in the bottom bar are hidden inside the sheet's nav list
+       (Hub/Units/Tours/Keys are in #mobnav; Apps now lives in the More sheet) */
+    .navitem[data-tab="hub"],.navitem[data-tab="units"],.navitem[data-tab="tours"],.navitem[data-tab="keys"]{display:none}
     .sidefilters{padding-top:0}
     .sidefilters .fgroup{flex:none;width:100%}
     .g2,.g3{grid-template-columns:1fr}
@@ -1580,13 +1581,35 @@ window.addEventListener('error', function(e){
     #page-hub .fubtn:hover{background:var(--clay-soft)}
     #page-hub .hubact{font-size:.78rem;padding:3px 11px;border:1px solid var(--clay);border-radius:8px;background:transparent;color:var(--ink);cursor:pointer}
     #page-hub .hubact:hover{background:var(--clay);color:#1a130b}
+    /* My-view vs admin Team-overview: one class flip on #page-hub toggles which set shows */
+    #page-hub.teamview .hubmine{display:none}
+    #page-hub:not(.teamview) #hub-team{display:none}
+    #page-hub .r-calbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+    #page-hub #hub-tours-cal{min-height:380px;margin-top:6px}
+    #page-hub #hub-team-health{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px}
     @media(max-width:560px){#page-hub .hubfunnel{grid-template-columns:1fr}#page-hub .hubfunnel>div:nth-child(2),#page-hub .hubfunnel>div:nth-child(4){display:none}}
+    @media(max-width:768px){
+      #page-hub .hubact{padding:9px 14px;min-height:40px;font-size:.85rem}
+      #page-hub .fubtn{padding:8px 12px;min-height:40px}
+      #page-hub #hub-tours-cal{min-height:340px}
+      /* action tables → stacked label cards (no horizontal scroll for tap targets) */
+      #hubsigned thead,#hub-team-leases thead{display:none}
+      #hubsigned tr,#hub-team-leases tr{display:block;border-bottom:1px solid rgba(244,236,225,.1);padding:8px 2px}
+      #hubsigned td,#hub-team-leases td{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:3px 2px;border:none;text-align:right}
+      #hubsigned td::before,#hub-team-leases td::before{content:attr(data-label);color:var(--ink-soft);font-size:.72rem;text-align:left;flex:0 0 auto}
+      /* stat tables → keep scroll but pin the Agent column so the name stays visible */
+      #hublead th:first-child,#hublead td:first-child,#hub-team-table th:first-child,#hub-team-table td:first-child{position:sticky;left:0;background:var(--paper)}
+    }
     </style>
     <div class="card" style="margin-top:18px">
       <div class="hubhead">
         <h2 style="margin:0">My hub</h2>
+        <div class="presets adminonly" id="hub-view" title="Admins: switch between your own hub and the whole-team leasing overview">
+          <button type="button" data-view="mine" class="on">My view</button>
+          <button type="button" data-view="team">Team overview</button>
+        </div>
         <div class="hubctl">
-          <select id="hub-agent" class="hubsel" aria-label="Agent"></select>
+          <select id="hub-agent" class="hubsel hubmine" aria-label="Agent"></select>
           <div class="qchips" id="hub-win">
             <button type="button" class="qchip" data-d="30">30d</button>
             <button type="button" class="qchip on" data-d="90">90d</button>
@@ -1595,19 +1618,44 @@ window.addEventListener('error', function(e){
           </div>
         </div>
       </div>
-      <div class="hubfunnel" id="hub-funnel"></div>
+      <div class="hubfunnel hubmine" id="hub-funnel"></div>
     </div>
 
-    <div class="hubgrid">
+    <div class="card tablecard hubmine" id="hub-tours-card" style="margin-top:18px">
+      <div class="tablebar">
+        <h2>My tours</h2>
+        <div class="presets" id="hub-tours-view">
+          <button type="button" data-v="day" class="on">Day</button>
+          <button type="button" data-v="upcoming">Upcoming</button>
+          <button type="button" data-v="past">Past</button>
+        </div>
+        <span class="count-note" id="hub-tours-count"></span>
+      </div>
+      <div class="r-calbar" id="hub-tours-daybar">
+        <button type="button" id="hub-tours-prev" class="rfreshbtn">&lsaquo; Prev</button>
+        <button type="button" id="hub-tours-today" class="rfreshbtn">Today</button>
+        <button type="button" id="hub-tours-next" class="rfreshbtn">Next &rsaquo;</button>
+        <span class="count-note" id="hub-tours-daynote"></span>
+      </div>
+      <div id="hub-tours-cal"></div>
+      <div class="scrolly tallscroll" id="hub-tours-list" style="display:none"></div>
+    </div>
+
+    <div class="hubgrid hubmine">
       <div class="card tablecard">
         <div class="tablebar"><h2>Follow up</h2><span class="count-note" id="hub-fu-count"></span></div>
         <div class="qchips" id="hub-fu-chips"></div>
         <div class="scrolly tallscroll" id="hub-fu-list"></div>
       </div>
       <div class="card tablecard">
-        <div class="tablebar"><h2>My signed leases</h2>
+        <div class="tablebar"><h2>Signed leases</h2>
           <button type="button" id="hub-export" class="rfreshbtn">&#8681; Export CSV</button>
           <span class="count-note" id="hub-signed-count"></span></div>
+        <div class="qchips" id="hub-signed-scope" title="Mine = credited to you · Available to claim = the unclaimed pool everyone can grab · All = everything">
+          <button type="button" class="qchip on" data-s="mine">Mine</button>
+          <button type="button" class="qchip" data-s="pool">Available to claim</button>
+          <button type="button" class="qchip" data-s="all">All</button>
+        </div>
         <div class="qchips" id="hub-signed-chips"></div>
         <div class="scrolly tallscroll">
           <table id="hubsigned"><thead><tr>
@@ -1617,7 +1665,7 @@ window.addEventListener('error', function(e){
       </div>
     </div>
 
-    <div class="card tablecard" style="margin-top:18px">
+    <div class="card tablecard hubmine" style="margin-top:18px">
       <div class="tablebar"><h2>Team leaderboard</h2><span class="count-note">all agents &middot; window applies</span></div>
       <div class="scrolly">
         <table id="hublead"><thead><tr>
@@ -1626,7 +1674,32 @@ window.addEventListener('error', function(e){
       </div>
     </div>
 
-    <div class="card" id="hub-rc" style="margin-top:18px"></div>
+    <div class="card hubmine" id="hub-rc" style="margin-top:18px"></div>
+
+    <!-- Admin-only Team overview (toggled by #hub-view → #page-hub.teamview). Aggregated client-side from /agent-scorecard + /signed-leases + /tours. -->
+    <div id="hub-team">
+      <div class="card" style="margin-top:18px">
+        <div class="tablebar"><h2>Leasing overview</h2><span class="count-note" id="hub-team-note"></span></div>
+        <div id="hub-team-health"></div>
+      </div>
+      <div class="card tablecard" style="margin-top:18px">
+        <div class="tablebar"><h2>By agent</h2><span class="count-note">signed &middot; pending &middot; conversion &middot; tour confirmations &middot; window applies</span></div>
+        <div class="scrolly">
+          <table id="hub-team-table"><thead><tr>
+            <th>Agent</th><th class="rt">Signed</th><th class="rt">Pending</th><th class="rt">Showings</th><th class="rt">Apps</th><th class="rt">Conv.</th><th class="rt">Tour conf.</th><th class="rt">Calls</th><th class="rt">Texts</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="card tablecard" style="margin-top:18px">
+        <div class="tablebar"><h2>All signed leases</h2><span class="count-note" id="hub-team-leases-note"></span></div>
+        <div class="qchips" id="hub-team-leases-chips"></div>
+        <div class="scrolly tallscroll">
+          <table id="hub-team-leases"><thead><tr>
+            <th>Property &middot; unit</th><th>Signed</th><th>Tenant</th><th>Credited</th><th>Status</th><th>Actions</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="page-units" style="display:none">
@@ -2189,8 +2262,8 @@ window.addEventListener('error', function(e){
   </div>
   </main>
   <nav class="mobnav" id="mobnav" aria-label="Primary navigation">
+    <button type="button" class="mobnav-btn" data-tab="hub"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8V3h-8zM3 21h8v-6H3z"/></svg><span>Hub</span></button>
     <button type="button" class="mobnav-btn" data-tab="units"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg><span>Units</span></button>
-    <button type="button" class="mobnav-btn" data-tab="applications"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg><span>Apps</span></button>
     <button type="button" class="mobnav-btn" data-tab="tours"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Tours</span></button>
     <button type="button" class="mobnav-btn" data-tab="keys"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 19 4m-3 0 3 3-2.5 2.5L14 7"/></svg><span>Keys</span></button>
     <button type="button" class="mobnav-btn" id="mobmore"><svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg><span>More</span></button>
@@ -6560,7 +6633,8 @@ window.addEventListener('error', function(e){
     rcal.addEventSource(events);
   }
   function openTourDetail(uri){
-    var r = (toursAll || []).filter(function(x){ return x.uri === uri; })[0];
+    // resolve from the Tours tab's set OR the hub's My-tours set (whichever loaded)
+    var r = (toursAll || []).concat(hubTours || []).filter(function(x){ return x.uri === uri; })[0];
     if (!r) return;
     curTour = r;
     var t = Date.parse(r.start_time);
@@ -7285,7 +7359,10 @@ window.addEventListener('error', function(e){
   }
   /* ── Agent Hub ─────────────────────────────────────────── */
   var hubLoaded = null, hubScore = null, hubAgent = '', hubDays = 90,
-      hubSigned = null, hubFollow = null, hubSignedFilter = 'all', hubFuFilter = 'all';
+      hubSigned = null, hubFollow = null, hubSignedFilter = 'all', hubFuFilter = 'all',
+      hubSignedScope = 'mine',
+      hubTours = null, hubToursView = 'day', hubCal = null, hubDay = null,
+      hubView = 'mine', hubTeamSigned = null, hubTeamTours = null, hubTeamLeasesFilter = 'all';
   function hubWindow(){ return { from: dstr(new Date(Date.now() - hubDays * 86400000)), to: dstr(new Date()) }; }
   function hubFirstTok(s){ return (s || '').trim().toLowerCase().split(/\s+/)[0] || ''; }
   function hubSameAgent(a, b){ if (!a || !b) return false; a = a.toLowerCase(); b = b.toLowerCase(); return a === b || hubFirstTok(a) === hubFirstTok(b); }
@@ -7297,7 +7374,7 @@ window.addEventListener('error', function(e){
     var ft = hubFirstTok(actor);
     return agents.filter(function(g){ return hubFirstTok(g) === ft; })[0] || agents[0];
   }
-  function loadHub(){ hubLoaded = 1; loadHubScore(true); }
+  function loadHub(){ hubLoaded = 1; loadHubScore(true); loadHubTours(); }
   function loadHubScore(pickDefault){
     var w = hubWindow();
     authFetch('/agent-scorecard?from=' + w.from + '&to=' + w.to).then(function(j){
@@ -7314,14 +7391,22 @@ window.addEventListener('error', function(e){
     }).catch(function(){ if (el('hub-funnel')) el('hub-funnel').innerHTML = '<div class="note">Could not load hub stats.</div>'; });
   }
   function loadHubAgent(){
-    if (!hubAgent){ hubSigned = []; hubFollow = []; hubRenderSigned(); hubRenderFollow(); return; }
-    var w = hubWindow();
-    authFetch('/signed-leases?from=' + w.from + '&to=' + w.to + '&agent=' + encodeURIComponent(hubAgent))
-      .then(function(j){ hubSigned = j.signed || []; hubRenderSigned(); })
-      .catch(function(){ hubSigned = []; hubRenderSigned(); });
+    hubLoadSigned();   // scope-aware: 'mine' needs hubAgent; 'pool'/'all' don't
+    if (!hubAgent){ hubFollow = []; hubRenderFollow(); return; }
     authFetch('/agent-followups?agent=' + encodeURIComponent(hubAgent))
       .then(function(j){ hubFollow = j.followups || []; hubRenderFollow(); })
       .catch(function(){ hubFollow = []; hubRenderFollow(); });
+  }
+  // Signed-leases panel honours the scope toggle: Mine (credited to you) /
+  // Available to claim (the shared status='suggested' pool, all agents) / All.
+  function hubLoadSigned(){
+    var w = hubWindow(), url;
+    if (hubSignedScope === 'pool') url = '/signed-leases?from=' + w.from + '&to=' + w.to + '&status=suggested';
+    else if (hubSignedScope === 'all') url = '/signed-leases?from=' + w.from + '&to=' + w.to;
+    else { if (!hubAgent){ hubSigned = []; hubRenderSigned(); return; }
+      url = '/signed-leases?from=' + w.from + '&to=' + w.to + '&agent=' + encodeURIComponent(hubAgent); }
+    authFetch(url).then(function(j){ hubSigned = j.signed || []; hubRenderSigned(); })
+      .catch(function(){ hubSigned = []; hubRenderSigned(); });
   }
   function hubScoreFor(agent){
     var r = (hubScore || []).filter(function(x){ return x.agent === agent; })[0];
@@ -7412,14 +7497,19 @@ window.addEventListener('error', function(e){
         credit = '<span class="pill" style="background:rgba(93,202,165,.16);color:#9fe1cb">&#10003; ' + esc(r.credited_agent || '?') + '</span>';
       } else {
         var mine = hubSameAgent(r.suggested_agent, hubAgent);
-        credit = hubBasisChip(r.suggestion_basis) + ' <button type="button" class="hubact" data-act="' + (mine ? 'confirm' : 'claim') + '" data-id="' + r.lease_id + '">' + (mine ? 'Confirm' : 'Claim for me') + '</button>';
+        // In the browse scopes show who the system thinks it belongs to, so an agent
+        // self-selects correctly; data-sug arms the cross-agent claim guard.
+        var hint = (hubSignedScope !== 'mine' && r.suggested_agent && !mine)
+          ? ' <span class="pill" style="color:var(--ink-soft)">&rarr; ' + esc(r.suggested_agent) + '</span>' : '';
+        var sugAttr = (!mine && r.suggested_agent) ? ' data-sug="' + esc(r.suggested_agent) + '"' : '';
+        credit = hubBasisChip(r.suggestion_basis) + hint + ' <button type="button" class="hubact" data-act="' + (mine ? 'confirm' : 'claim') + '" data-id="' + r.lease_id + '"' + sugAttr + '>' + (mine ? 'Confirm' : 'Claim for me') + '</button>';
       }
       h += '<tr>' +
-        '<td>' + esc(r.property_name || '–') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') + '</td>' +
-        '<td>' + esc((r.signed_date || '').slice(0, 10)) + '</td>' +
-        '<td class="rt">' + (r.rent != null ? fmtMoney(r.rent) : '–') + '</td>' +
-        '<td>' + esc(r.tenant_name || '–') + '</td>' +
-        '<td>' + credit + '</td></tr>';
+        '<td data-label="Property &middot; unit">' + esc(r.property_name || '–') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') + '</td>' +
+        '<td data-label="Signed">' + esc((r.signed_date || '').slice(0, 10)) + '</td>' +
+        '<td class="rt" data-label="Rent">' + (r.rent != null ? fmtMoney(r.rent) : '–') + '</td>' +
+        '<td data-label="Tenant">' + esc(r.tenant_name || '–') + '</td>' +
+        '<td data-label="Credit">' + credit + '</td></tr>';
     });
     tb.innerHTML = h || emptyRow('hubsigned', 'No signed leases in this window');
     if (el('hub-signed-count')) el('hub-signed-count').textContent = rows.length + ' of ' + all.length;
@@ -7501,12 +7591,244 @@ window.addEventListener('error', function(e){
     document.body.appendChild(a); a.click();
     setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
   }
-  if (el('hub-agent')) el('hub-agent').addEventListener('change', function(){ hubAgent = this.value; hubRenderFunnel(); hubRenderLeaderboard(); loadHubAgent(); });
+  /* ── My tours (Day view default) — the acting/selected agent's tours ───────
+     Fetches all tours once over a broad window (independent of the activity
+     window, since the day view navigates by day) and filters client-side to
+     hubAgent. Reuses the Tours-tab modal (openTourDetail). ── */
+  function loadHubTours(){
+    if (hubTours !== null){ hubRenderTours(); return; }
+    var from = dstr(new Date(Date.now() - 90 * 86400000)), to = dstr(new Date(Date.now() + 60 * 86400000));
+    authFetch('/tours?from=' + from + '&to=' + to)
+      .then(function(j){ hubTours = j.tours || []; hubRenderTours(); })
+      .catch(function(){ hubTours = []; hubRenderTours(); });
+  }
+  function hubMineTours(){ return (hubTours || []).filter(function(r){ return hubSameAgent(r.agent, hubAgent); }); }
+  function hubSameDay(a, b){ return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+  function hubTourEvents(rows){
+    return rows.map(function(r){
+      var s = tourStatusOf(r);
+      var col = s === 'cancelled' ? '#d9735f' : (s === 'upcoming' ? '#E8B43E' : '#5dcaa5');
+      return { id: r.uri, title: tourAddr(r), start: r.start_time, end: r.end_time || undefined,
+        backgroundColor: col, borderColor: col, textColor: '#15110D',
+        classNames: s === 'cancelled' ? ['fc-ev-cxl'] : [],
+        extendedProps: { canceled: r.status === 'canceled', recon: reconState(r) } };
+    });
+  }
+  function hubBuildCal(events){
+    var box = el('hub-tours-cal'); if (!box || !window.FullCalendar) return;
+    if (!hubCal){
+      hubCal = new FullCalendar.Calendar(box, {
+        initialView: 'timeGridDay', initialDate: hubDay || new Date(),
+        headerToolbar: false, height: 460, nowIndicator: true, firstDay: 0,
+        allDaySlot: false, slotMinTime: '07:00:00', slotMaxTime: '21:00:00', expandRows: true,
+        eventDisplay: 'block',
+        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); openTourDetail(info.event.id); },
+        eventContent: function(arg){
+          var wrap = document.createElement('div'); wrap.className = 'fc-ev-wrap';
+          var x = arg.event.extendedProps.canceled ? '<span class="fcx">&#10006;</span>' : '';
+          var rcm = arg.event.extendedProps.canceled ? ''
+            : (arg.event.extendedProps.recon === 'confirmed' ? '<span class="fcbk-ok" title="confirmed">&#10003;</span>'
+            : (arg.event.extendedProps.recon === 'awaiting' ? '<span class="fcx" title="awaiting reconfirmation" style="color:#15110D">&#9203;</span>' : ''));
+          wrap.innerHTML = x + rcm + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>';
+          return { domNodes: [wrap] };
+        }
+      });
+      hubCal.render();
+    }
+    hubCal.getEventSources().forEach(function(s){ s.remove(); });
+    hubCal.addEventSource(events);
+    hubCal.updateSize();
+  }
+  function hubUpdateDayNote(mine){
+    var note = el('hub-tours-daynote'); if (!note) return;
+    var d = hubDay || new Date();
+    var n = mine.filter(function(r){ var t = Date.parse(r.start_time); return !isNaN(t) && hubSameDay(new Date(t), d); }).length;
+    note.textContent = d.toLocaleDateString('en-CA', { weekday:'short', month:'short', day:'numeric' }) + ' · ' + n + ' tour' + (n === 1 ? '' : 's');
+  }
+  function hubRenderTourList(mine, view){
+    var box = el('hub-tours-list'); if (!box) return;
+    var now = Date.now();
+    var rows = mine.filter(function(r){ var up = Date.parse(r.start_time) >= now; return view === 'upcoming' ? up : !up; });
+    rows.sort(function(a, b){ var d = Date.parse(a.start_time) - Date.parse(b.start_time); return view === 'upcoming' ? d : -d; });
+    var h = '';
+    rows.forEach(function(r){
+      var t = Date.parse(r.start_time);
+      var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      var rc = reconChip(r);
+      h += '<div class="fucard rowlink" data-uri="' + esc(r.uri) + '" style="cursor:pointer">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b>' + esc(when) + '</b>' + tourPill(r) + '</div>' +
+        '<div style="font-size:.82rem;color:var(--ink-soft);margin:2px 0 4px">' + esc(tourAddr(r)) + '</div>' +
+        '<div style="font-size:.8rem">' + esc(r.invitee_name || r.invitee_email || 'Prospect') + (rc ? ' ' + rc : '') + '</div></div>';
+    });
+    box.innerHTML = h || '<div class="note" style="padding:14px">No ' + view + ' tours.</div>';
+    var cnt = el('hub-tours-count'); if (cnt) cnt.textContent = rows.length + ' ' + view;
+  }
+  function hubRenderTours(){
+    if (!el('hub-tours-card') || hubTours === null) return;
+    var mine = hubMineTours();
+    var cal = el('hub-tours-cal'), daybar = el('hub-tours-daybar'), list = el('hub-tours-list');
+    if (hubToursView === 'day' && window.FullCalendar){
+      if (cal) cal.style.display = ''; if (daybar) daybar.style.display = ''; if (list) list.style.display = 'none';
+      if (!hubDay) hubDay = new Date();
+      hubBuildCal(hubTourEvents(mine));
+      if (hubCal) hubCal.gotoDate(hubDay);
+      hubUpdateDayNote(mine);
+      var cnt = el('hub-tours-count'); if (cnt) cnt.textContent = mine.length + ' tour' + (mine.length === 1 ? '' : 's');
+    } else {
+      if (cal) cal.style.display = 'none'; if (daybar) daybar.style.display = 'none'; if (list) list.style.display = '';
+      hubRenderTourList(mine, hubToursView === 'past' ? 'past' : 'upcoming');   // day view w/o FullCalendar → upcoming list
+    }
+  }
+  function hubDayShift(days){
+    var d = hubDay || new Date(); hubDay = new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+    if (hubCal) hubCal.gotoDate(hubDay); hubUpdateDayNote(hubMineTours());
+  }
+
+  /* ── Admin Team overview (admin-only, toggled by #hub-view) — aggregated
+     client-side from /agent-scorecard (hubScore) + /signed-leases + /tours. ── */
+  function loadHubTeam(){
+    var w = hubWindow();
+    var pSigned = authFetch('/signed-leases?from=' + w.from + '&to=' + w.to);
+    var pTours = (hubTours !== null) ? Promise.resolve({ tours: hubTours })
+      : authFetch('/tours?from=' + dstr(new Date(Date.now() - 90 * 86400000)) + '&to=' + dstr(new Date(Date.now() + 60 * 86400000)));
+    Promise.all([pSigned, pTours]).then(function(res){
+      hubTeamSigned = (res[0] && res[0].signed) || [];
+      hubTeamTours = (res[1] && res[1].tours) || [];
+      if (hubTours === null) hubTours = hubTeamTours;
+      hubRenderTeam();
+    }).catch(function(){
+      var tb = el('hub-team-table'); if (tb) tb.querySelector('tbody').innerHTML = emptyRow('hub-team-table', 'Could not load team overview.');
+    });
+  }
+  function hubRenderTeam(){ hubRenderTeamHealth(); hubRenderTeamTable(); hubRenderTeamLeases(); }
+  function hubRenderTeamHealth(){
+    var box = el('hub-team-health'); if (!box) return;
+    var all = hubTeamSigned || [];
+    var conf = all.filter(function(r){ return r.status === 'confirmed'; }).length;
+    var orphan = all.filter(function(r){ return r.status !== 'confirmed' && (r.suggestion_basis === 'none' || !r.suggested_agent); }).length;
+    box.innerHTML = hubTileHtml('Total signed', fmtNum(all.length)) +
+      hubTileHtml('Confirmed', fmtNum(conf), 'agent-claimed') +
+      hubTileHtml('Unconfirmed', fmtNum(all.length - conf), 'still suggested') +
+      hubTileHtml('No guess', fmtNum(orphan), 'needs a claim');
+    var note = el('hub-team-note'); if (note) note.textContent = 'last ' + hubDays + ' days';
+  }
+  function hubRenderTeamTable(){
+    var t = el('hub-team-table'); if (!t) return; var tb = t.querySelector('tbody');
+    var signed = hubTeamSigned || [], tours = hubTeamTours || [], score = hubScore || [];
+    var map = {};
+    function row(a){ if (!map[a]) map[a] = { agent:a, confirmed:0, pending:0, showings:0, apps:0, calls:0, texts:0, tconf:0, tup:0 }; return map[a]; }
+    score.forEach(function(s){ if (!s.agent) return; var r = row(s.agent); r.showings = s.showings||0; r.apps = s.applications||0; r.calls = (s.calls_out||0)+(s.calls_in||0); r.texts = (s.texts_out||0)+(s.texts_in||0); });
+    signed.forEach(function(s){ if (s.status === 'confirmed'){ if (s.credited_agent) row(s.credited_agent).confirmed++; } else { row(s.suggested_agent || 'Unassigned').pending++; } });
+    tours.forEach(function(r){ if (!r.agent) return; if (tourStatusOf(r) === 'upcoming' && r.status === 'active'){ var rr = row(r.agent); rr.tup++; if (reconState(r) === 'confirmed') rr.tconf++; } });
+    var rows = Object.keys(map).map(function(k){ return map[k]; });
+    rows.sort(function(a, b){ return (b.confirmed - a.confirmed) || (b.pending - a.pending) || (b.showings - a.showings); });
+    var h = '';
+    rows.forEach(function(r){
+      var conv = r.apps ? Math.round(r.confirmed / r.apps * 100) + '%' : '–';
+      var tconf = r.tup ? Math.round(r.tconf / r.tup * 100) + '%' : '–';
+      var un = r.agent === 'Unassigned';
+      h += '<tr' + (un ? '' : ' class="rowlink" data-agent="' + esc(r.agent) + '"') + '>' +
+        '<td data-label="Agent">' + (un ? '' : '<span class="agdotrow" style="background:' + agentColor(r.agent) + '"></span>') + esc(r.agent) + '</td>' +
+        '<td class="rt" data-label="Signed">' + fmtNum(r.confirmed) + '</td>' +
+        '<td class="rt" data-label="Pending" style="color:var(--ink-soft)">' + fmtNum(r.pending) + '</td>' +
+        '<td class="rt" data-label="Showings">' + fmtNum(r.showings) + '</td>' +
+        '<td class="rt" data-label="Apps">' + fmtNum(r.apps) + '</td>' +
+        '<td class="rt" data-label="Conv.">' + conv + '</td>' +
+        '<td class="rt" data-label="Tour conf.">' + tconf + '</td>' +
+        '<td class="rt" data-label="Calls">' + fmtNum(r.calls) + '</td>' +
+        '<td class="rt" data-label="Texts">' + fmtNum(r.texts) + '</td></tr>';
+    });
+    tb.innerHTML = h || emptyRow('hub-team-table', 'No data in this window');
+  }
+  function hubRenderTeamLeases(){
+    var t = el('hub-team-leases'); if (!t) return; var tb = t.querySelector('tbody');
+    var all = hubTeamSigned || [];
+    var rows = all.filter(function(r){ if (hubTeamLeasesFilter === 'confirmed') return r.status === 'confirmed'; if (hubTeamLeasesFilter === 'pending') return r.status !== 'confirmed'; return true; });
+    var h = '';
+    rows.slice(0, 500).forEach(function(r){
+      var sc = r.status === 'confirmed' ? '<span class="chip c-ok">confirmed</span>' : '<span class="chip c-warm">suggested</span>';
+      var credited = r.status === 'confirmed' ? esc(r.credited_agent || '?')
+        : (r.suggested_agent ? '<span style="color:var(--ink-soft)">&rarr; ' + esc(r.suggested_agent) + '</span>' : '<span style="color:var(--ink-soft)">no guess</span>');
+      var acts = '<button type="button" class="hubact" data-act="reassign" data-id="' + r.lease_id + '">Reassign</button> ' +
+                 '<button type="button" class="hubact" data-act="exclude" data-id="' + r.lease_id + '">Exclude</button>';
+      h += '<tr>' +
+        '<td data-label="Property &middot; unit">' + esc(r.property_name || '–') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') + '</td>' +
+        '<td data-label="Signed">' + esc((r.signed_date || '').slice(0, 10)) + '</td>' +
+        '<td data-label="Tenant">' + esc(r.tenant_name || '–') + '</td>' +
+        '<td data-label="Credited">' + credited + '</td>' +
+        '<td data-label="Status">' + sc + '</td>' +
+        '<td data-label="Actions">' + acts + '</td></tr>';
+    });
+    tb.innerHTML = h || emptyRow('hub-team-leases', 'No signed leases in this window');
+    var note = el('hub-team-leases-note'); if (note) note.textContent = rows.length + ' of ' + all.length;
+    hubRenderTeamLeasesChips();
+  }
+  function hubRenderTeamLeasesChips(){
+    var c = el('hub-team-leases-chips'); if (!c) return;
+    var all = hubTeamSigned || [];
+    var conf = all.filter(function(r){ return r.status === 'confirmed'; }).length;
+    function chip(k, label, n){ return '<button type="button" class="qchip' + (hubTeamLeasesFilter === k ? ' on' : '') + '" data-f="' + k + '">' + label + ' <span class="qn">' + n + '</span></button>'; }
+    c.innerHTML = chip('all', 'All', all.length) + chip('pending', 'Unconfirmed', all.length - conf) + chip('confirmed', 'Confirmed', conf);
+  }
+  function hubTeamAct(id, act){
+    if (!IS_ADMIN) return;
+    var actor = getActor();
+    if (!actor){ alert('Pick your name first (on the sign-in screen).'); return; }
+    if (act === 'reassign'){
+      var ag = prompt('Reassign this lease to which agent? (type the exact name)'); if (!ag) return; ag = ag.trim(); if (!ag) return;
+      postJSON('/lease/reassign', { lease_id: Number(id), agent: ag, actor: actor })
+        .then(function(){ loadHubTeam(); loadHubScore(false); })
+        .catch(function(e){ alert('Could not reassign: ' + (e && e.message ? e.message : 'error')); });
+    } else if (act === 'exclude'){
+      if (!confirm('Exclude this lease from attribution? It will no longer count toward any agent.')) return;
+      postJSON('/lease/exclude', { lease_id: Number(id), actor: actor })
+        .then(function(){ loadHubTeam(); loadHubScore(false); })
+        .catch(function(e){ alert('Could not exclude: ' + (e && e.message ? e.message : 'error')); });
+    }
+  }
+
+  if (el('hub-agent')) el('hub-agent').addEventListener('change', function(){ hubAgent = this.value; hubRenderFunnel(); hubRenderLeaderboard(); hubRenderTours(); loadHubAgent(); });
   if (el('hub-win')) el('hub-win').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return;
     hubDays = Number(b.getAttribute('data-d')) || 90;
     el('hub-win').querySelectorAll('.qchip').forEach(function(x){ x.classList.toggle('on', x === b); });
     loadHubScore(false);
+    if (hubView === 'team') loadHubTeam();
+  });
+  // My-tours view toggle (Day / Upcoming / Past), day navigation, and row tap
+  if (el('hub-tours-view')) el('hub-tours-view').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-v]'); if (!b) return;
+    hubToursView = b.getAttribute('data-v');
+    el('hub-tours-view').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
+    hubRenderTours();
+  });
+  if (el('hub-tours-prev')) el('hub-tours-prev').addEventListener('click', function(){ hubDayShift(-1); });
+  if (el('hub-tours-next')) el('hub-tours-next').addEventListener('click', function(){ hubDayShift(1); });
+  if (el('hub-tours-today')) el('hub-tours-today').addEventListener('click', function(){ hubDay = new Date(); if (hubCal) hubCal.gotoDate(hubDay); hubUpdateDayNote(hubMineTours()); });
+  if (el('hub-tours-list')) el('hub-tours-list').addEventListener('click', function(e){
+    var row = e.target.closest('[data-uri]'); if (!row) return; openTourDetail(row.getAttribute('data-uri'));
+  });
+  // Admin Team-overview switch + actions
+  if (el('hub-view')) el('hub-view').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-view]'); if (!b || !IS_ADMIN) return;
+    hubView = b.getAttribute('data-view');
+    el('hub-view').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
+    el('page-hub').classList.toggle('teamview', hubView === 'team');
+    if (hubView === 'team') loadHubTeam();
+  });
+  if (el('hub-team-leases-chips')) el('hub-team-leases-chips').addEventListener('click', function(e){
+    var b = e.target.closest('.qchip'); if (!b) return; hubTeamLeasesFilter = b.getAttribute('data-f'); hubRenderTeamLeases();
+  });
+  if (el('hub-team-leases')) el('hub-team-leases').addEventListener('click', function(e){
+    var b = e.target.closest('.hubact'); if (!b) return; hubTeamAct(b.getAttribute('data-id'), b.getAttribute('data-act'));
+  });
+  if (el('hub-team-table')) el('hub-team-table').addEventListener('click', function(e){
+    var tr = e.target.closest('tr[data-agent]'); if (!tr) return;
+    hubAgent = tr.getAttribute('data-agent'); if (el('hub-agent')) el('hub-agent').value = hubAgent;
+    hubView = 'mine';
+    if (el('hub-view')) el('hub-view').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x.getAttribute('data-view') === 'mine'); });
+    el('page-hub').classList.remove('teamview');
+    hubRenderFunnel(); hubRenderLeaderboard(); hubRenderTours(); loadHubAgent();
   });
   if (el('hub-signed-chips')) el('hub-signed-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return; hubSignedFilter = b.getAttribute('data-f'); hubRenderSigned();
@@ -7514,8 +7836,20 @@ window.addEventListener('error', function(e){
   if (el('hub-fu-chips')) el('hub-fu-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return; hubFuFilter = b.getAttribute('data-f'); hubRenderFollow();
   });
+  if (el('hub-signed-scope')) el('hub-signed-scope').addEventListener('click', function(e){
+    var b = e.target.closest('.qchip'); if (!b) return;
+    hubSignedScope = b.getAttribute('data-s');
+    el('hub-signed-scope').querySelectorAll('.qchip').forEach(function(x){ x.classList.toggle('on', x === b); });
+    hubLoadSigned();
+  });
   if (el('hubsigned')) el('hubsigned').addEventListener('click', function(e){
-    var b = e.target.closest('.hubact'); if (!b) return; hubAct(b.getAttribute('data-id'), b.getAttribute('data-act'));
+    var b = e.target.closest('.hubact'); if (!b) return;
+    var act = b.getAttribute('data-act'), id = b.getAttribute('data-id'), sug = b.getAttribute('data-sug') || '';
+    // double-claim guard: claiming a lease the system suggested for someone else asks first
+    if (act === 'claim' && sug && !hubSameAgent(sug, hubAgent)){
+      if (!confirm('This lease was suggested for ' + sug + '. Claim it for ' + hubAgent + ' instead?')) return;
+    }
+    hubAct(id, act);
   });
   if (el('hublead')) el('hublead').addEventListener('click', function(e){
     var tr = e.target.closest('tr[data-agent]'); if (!tr) return;

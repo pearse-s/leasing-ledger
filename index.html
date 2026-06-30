@@ -1587,11 +1587,35 @@ window.addEventListener('error', function(e){
     #page-hub .r-calbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
     #page-hub #hub-tours-cal{min-height:380px;margin-top:6px}
     #page-hub #hub-team-health{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px}
-    @media(max-width:560px){#page-hub .hubfunnel{grid-template-columns:1fr}#page-hub .hubfunnel>div:nth-child(2),#page-hub .hubfunnel>div:nth-child(4){display:none}}
+    /* funnel/KPI tiles (also the team-health tiles) — class-based so they compact on mobile */
+    #page-hub .hubtile{background:var(--glass);border-radius:14px;padding:14px 12px;text-align:center}
+    #page-hub .hubtile-l{font-size:.72rem;color:var(--ink-soft);letter-spacing:.05em;text-transform:uppercase}
+    #page-hub .hubtile-v{font-size:1.7rem;font-weight:800;color:var(--ink);line-height:1.2}
+    #page-hub .hubtile-s{font-size:.72rem;color:var(--ink-soft)}
+    /* MyHub activity-window control — shares state.from/to with the sidebar; drops DOWN from the header */
+    #page-hub .hubwin{position:relative}
+    #page-hub .hubwin .winsummary{width:auto;min-width:158px;padding:7px 11px}
+    #page-hub .hubwin .winpop{top:calc(100% + 6px);left:auto;right:0;z-index:41}
+    @media(max-width:560px){
+      /* shrink the first overview card: tiles in a tight 3-across row, smaller type */
+      #page-hub .hubfunnel{grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+      #page-hub .hubfunnel>div:nth-child(2),#page-hub .hubfunnel>div:nth-child(4){display:none}
+      #page-hub .hubtile{padding:9px 5px;border-radius:11px}
+      #page-hub .hubtile-l{font-size:.58rem;letter-spacing:.02em}
+      #page-hub .hubtile-v{font-size:1.2rem}
+      #page-hub .hubtile-s{font-size:.56rem}
+      #page-hub .hubwin{width:100%}
+      #page-hub .hubwin .winsummary{width:100%}
+      #page-hub .hubwin .winpop{left:0;right:auto}
+    }
     @media(max-width:768px){
       #page-hub .hubact{padding:9px 14px;min-height:40px;font-size:.85rem}
       #page-hub .fubtn{padding:8px 12px;min-height:40px}
       #page-hub #hub-tours-cal{min-height:340px}
+      /* let the hub's long lists flow with the PAGE so a finger over a table scrolls the page
+         down, not a trapped nested scroll region (.tallscroll has no horizontal overflow on
+         mobile, so dropping the inner scroll is safe) */
+      #page-hub .tallscroll{max-height:none;overflow:visible}
       /* action tables → stacked label cards (no horizontal scroll for tap targets) */
       #hubsigned thead,#hub-team-leases thead{display:none}
       #hubsigned tr,#hub-team-leases tr{display:block;border-bottom:1px solid rgba(244,236,225,.1);padding:8px 2px}
@@ -1610,11 +1634,26 @@ window.addEventListener('error', function(e){
         </div>
         <div class="hubctl">
           <select id="hub-agent" class="hubsel hubmine" aria-label="Agent"></select>
-          <div class="qchips" id="hub-win">
-            <button type="button" class="qchip" data-d="30">30d</button>
-            <button type="button" class="qchip on" data-d="90">90d</button>
-            <button type="button" class="qchip" data-d="180">6mo</button>
-            <button type="button" class="qchip" data-d="365">1y</button>
+          <div class="hubwin">
+            <button type="button" class="winsummary" id="hub-winsummary" title="Activity window — shared with the sidebar; applies to all tabs">
+              <span><span class="wsum-big" id="hub-wsum-big">&ndash;</span><span class="wsum-sub" id="hub-wsum-sub">&ndash;</span></span>
+              <span class="wsum-ic"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="10" cy="8" r="2.4" fill="var(--bg-1)"/><circle cx="15" cy="16" r="2.4" fill="var(--bg-1)"/></svg></span>
+            </button>
+            <div class="winpop" id="hub-winpop">
+              <button type="button" class="windone" id="hub-windone">Done</button>
+              <div class="sf-label">Activity window &middot; all tabs</div>
+              <div class="windates">
+                <div><span class="winlbl">From</span><input type="date" id="hub-f-from"></div>
+                <div><span class="winlbl">To</span><input type="date" id="hub-f-to"></div>
+              </div>
+              <div class="winchips" id="hub-winchips">
+                <button type="button" class="winchip" data-d="7">1w</button>
+                <button type="button" class="winchip" data-d="30">1mo</button>
+                <button type="button" class="winchip" data-d="90">3mo</button>
+                <button type="button" class="winchip" data-d="182">6mo</button>
+                <button type="button" class="winchip" data-d="365">1y</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -7217,6 +7256,8 @@ window.addEventListener('error', function(e){
     if (el('page-applications').style.display === 'block') loadApps();
     if (el('page-tours').style.display === 'block') loadTours();
     if (el('page-phones') && el('page-phones').style.display === 'block') { phonesData = null; loadPhones(); }
+    // MyHub shares the window → refresh its scorecard/funnel/signed/follow-ups + team overview
+    if (hubLoaded) { loadHubScore(false); if (hubView === 'team') loadHubTeam(); }
   }
   // ── activity window: explicit From/To range with a "Last N days" stepper ──
   // The sidebar summary shows the range; clicking opens the popover. ±/typing N
@@ -7238,6 +7279,7 @@ window.addEventListener('error', function(e){
     Array.prototype.forEach.call(el('winchips').children, function(c){
       c.classList.toggle('on', endsToday && n === parseInt(c.getAttribute('data-d'), 10));
     });
+    hubWinRender();   // keep the MyHub window control in lock-step with the sidebar
   }
   function winSetDays(n){
     n = Math.max(1, Math.min(730, Math.round(n)));
@@ -7358,12 +7400,12 @@ window.addEventListener('error', function(e){
     showLogin();
   }
   /* ── Agent Hub ─────────────────────────────────────────── */
-  var hubLoaded = null, hubScore = null, hubAgent = '', hubDays = 90,
+  var hubLoaded = null, hubScore = null, hubAgent = '',
       hubSigned = null, hubFollow = null, hubSignedFilter = 'all', hubFuFilter = 'all',
       hubSignedScope = 'mine',
       hubTours = null, hubToursView = 'day', hubCal = null, hubDay = null,
       hubView = 'mine', hubTeamSigned = null, hubTeamTours = null, hubTeamLeasesFilter = 'all';
-  function hubWindow(){ return { from: dstr(new Date(Date.now() - hubDays * 86400000)), to: dstr(new Date()) }; }
+  function hubWindow(){ return windowDates(); }   // unified with the global sidebar Activity window (state.from/to)
   function hubFirstTok(s){ return (s || '').trim().toLowerCase().split(/\s+/)[0] || ''; }
   function hubSameAgent(a, b){ if (!a || !b) return false; a = a.toLowerCase(); b = b.toLowerCase(); return a === b || hubFirstTok(a) === hubFirstTok(b); }
   function hubMatchAgent(actor, agents){
@@ -7374,7 +7416,7 @@ window.addEventListener('error', function(e){
     var ft = hubFirstTok(actor);
     return agents.filter(function(g){ return hubFirstTok(g) === ft; })[0] || agents[0];
   }
-  function loadHub(){ hubLoaded = 1; loadHubScore(true); loadHubTours(); }
+  function loadHub(){ hubLoaded = 1; hubWinRender(); loadHubScore(true); loadHubTours(); }
   function loadHubScore(pickDefault){
     var w = hubWindow();
     authFetch('/agent-scorecard?from=' + w.from + '&to=' + w.to).then(function(j){
@@ -7413,10 +7455,10 @@ window.addEventListener('error', function(e){
     return r || { showings:0, applications:0, signed:0, signed_suggested:0 };
   }
   function hubTileHtml(label, val, sub){
-    return '<div style="background:var(--glass);border-radius:14px;padding:14px 12px;text-align:center">' +
-      '<div style="font-size:.72rem;color:var(--ink-soft);letter-spacing:.05em;text-transform:uppercase">' + esc(label) + '</div>' +
-      '<div style="font-size:1.7rem;font-weight:800;color:var(--ink);line-height:1.2">' + val + '</div>' +
-      (sub ? '<div style="font-size:.72rem;color:var(--ink-soft)">' + sub + '</div>' : '') + '</div>';
+    return '<div class="hubtile">' +
+      '<div class="hubtile-l">' + esc(label) + '</div>' +
+      '<div class="hubtile-v">' + val + '</div>' +
+      (sub ? '<div class="hubtile-s">' + sub + '</div>' : '') + '</div>';
   }
   function hubRenderFunnel(){
     var f = el('hub-funnel'); if (!f) return;
@@ -7710,7 +7752,7 @@ window.addEventListener('error', function(e){
       hubTileHtml('Confirmed', fmtNum(conf), 'agent-claimed') +
       hubTileHtml('Unconfirmed', fmtNum(all.length - conf), 'still suggested') +
       hubTileHtml('No guess', fmtNum(orphan), 'needs a claim');
-    var note = el('hub-team-note'); if (note) note.textContent = 'last ' + hubDays + ' days';
+    var note = el('hub-team-note'); if (note) note.textContent = winFmt(state.from) + ' – ' + winFmt(state.to);
   }
   function hubRenderTeamTable(){
     var t = el('hub-team-table'); if (!t) return; var tb = t.querySelector('tbody');
@@ -7788,13 +7830,43 @@ window.addEventListener('error', function(e){
   }
 
   if (el('hub-agent')) el('hub-agent').addEventListener('change', function(){ hubAgent = this.value; hubRenderFunnel(); hubRenderLeaderboard(); hubRenderTours(); loadHubAgent(); });
-  if (el('hub-win')) el('hub-win').addEventListener('click', function(e){
-    var b = e.target.closest('.qchip'); if (!b) return;
-    hubDays = Number(b.getAttribute('data-d')) || 90;
-    el('hub-win').querySelectorAll('.qchip').forEach(function(x){ x.classList.toggle('on', x === b); });
-    loadHubScore(false);
-    if (hubView === 'team') loadHubTeam();
+  // MyHub activity-window control — reads/writes the SAME global state.from/to as the
+  // sidebar window, so the two stay in lock-step and either one refreshes every tab.
+  function hubWinRender(){
+    if (!el('hub-wsum-big')) return;
+    var n = winDays();
+    el('hub-wsum-big').textContent = winFmt(state.from) + ' – ' + winFmt(state.to);
+    el('hub-wsum-sub').textContent = n + ' days · ' + winWLabel(n);
+    if (el('hub-f-from')) el('hub-f-from').value = state.from;
+    if (el('hub-f-to')) el('hub-f-to').value = state.to;
+    var endsToday = state.to === winToday();
+    if (el('hub-winchips')) Array.prototype.forEach.call(el('hub-winchips').children, function(c){
+      c.classList.toggle('on', endsToday && n === parseInt(c.getAttribute('data-d'), 10));
+    });
+  }
+  function hubWinClose(){ if (el('hub-winpop')) el('hub-winpop').classList.remove('open'); }
+  function hubWinApply(){ winRender(); onWindowChange(); }   // winRender syncs both summaries; onWindowChange refreshes all tabs incl. the hub
+  if (el('hub-winsummary')) el('hub-winsummary').addEventListener('click', function(ev){
+    ev.stopPropagation();
+    var p = el('hub-winpop');
+    if (p.classList.contains('open')) hubWinClose();
+    else { hubWinRender(); p.classList.add('open'); }
   });
+  if (el('hub-winpop')) el('hub-winpop').addEventListener('click', function(ev){ ev.stopPropagation(); });
+  if (el('hub-windone')) el('hub-windone').addEventListener('click', function(ev){ ev.stopPropagation(); hubWinClose(); });
+  if (el('hub-winchips')) el('hub-winchips').addEventListener('click', function(e){
+    var b = e.target.closest('.winchip'); if (!b) return;
+    var d = parseInt(b.getAttribute('data-d'), 10) || 7;
+    state.to = winToday(); state.from = dstr(new Date(Date.parse(state.to) - d * 86400000));
+    hubWinApply();
+  });
+  if (el('hub-f-from')) el('hub-f-from').addEventListener('change', function(){
+    var v = this.value; if (v && v < state.to) { state.from = v; hubWinApply(); } else hubWinRender();
+  });
+  if (el('hub-f-to')) el('hub-f-to').addEventListener('change', function(){
+    var v = this.value; if (v && v > state.from && v <= winToday()) { state.to = v; hubWinApply(); } else hubWinRender();
+  });
+  document.addEventListener('click', hubWinClose);
   // My-tours view toggle (Day / Upcoming / Past), day navigation, and row tap
   if (el('hub-tours-view')) el('hub-tours-view').addEventListener('click', function(e){
     var b = e.target.closest('button[data-v]'); if (!b) return;

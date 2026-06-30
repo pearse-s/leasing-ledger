@@ -942,6 +942,9 @@ window.addEventListener('error', function(e){
   .toursbar{position:sticky;top:0;z-index:6;background:var(--paper);padding:6px 0;border-radius:var(--r-sm)}
   .agdotrow{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;flex:none}
   .fcx{color:#ff6b6b;font-weight:900;margin-right:3px}
+  /* booking calendar: confirmed-tour green check + awaiting hourglass (sit centred in the flex row) */
+  .fcbk-ok{flex:0 0 auto;align-self:center;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#1f9d3f;color:#fff;font-size:.62rem;font-weight:900;margin-right:4px;line-height:1}
+  .fcbk-wait{flex:0 0 auto;align-self:center;margin-right:3px;font-size:.82em;line-height:1}
   .fc-ev-cxl .fc-ev-t{text-decoration:line-through}
   .fc-ev-cxl{opacity:.6!important}
   .rm-unit{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0}
@@ -7810,6 +7813,7 @@ window.addEventListener('error', function(e){
   function schBkDayKey(ms){ var d = new Date(ms); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
   function schBkSlotsForDay(ms){ var k = schBkDayKey(ms); return (bkData.slots || []).filter(function(sl){ return schBkDayKey(Date.parse(sl.start_time)) === k; }); }
   function schBkShowingTitle(s){
+    if (s.addr && String(s.addr).trim()) return String(s.addr).trim();   // matched property · unit, when resolved
     var t = (s.location && String(s.location).trim()) ? String(s.location) : String(s.title || 'Tour');
     return t.replace(/^.*?Rental Tour\s*[—–-]\s*/i, '');   // drop the "Live Furnished Rental Tour — " prefix
   }
@@ -7818,7 +7822,7 @@ window.addEventListener('error', function(e){
     var dur = schedBook.duration || 15, evs = [];
     var showOpen = !!(el('sch-bk-showopen') && el('sch-bk-showopen').checked);
     bkData.showings.forEach(function(s){
-      evs.push({ id: 'show_' + s.start, title: schBkShowingTitle(s), start: s.start, end: s.end || undefined, backgroundColor: '#8a8f98', borderColor: '#6f757e', textColor: '#15110D', classNames: ['fc-ev-show'], extendedProps: { kind: 'show' } });
+      evs.push({ id: 'show_' + s.start, title: schBkShowingTitle(s), start: s.start, end: s.end || undefined, backgroundColor: '#8a8f98', borderColor: '#6f757e', textColor: '#15110D', classNames: ['fc-ev-show'], extendedProps: { kind: 'show', recon: s.recon || 'none' } });
     });
     bkData.busy.forEach(function(b){
       evs.push({ id: 'busy_' + b.start, title: 'Busy', start: b.start, end: b.end || undefined, display: 'background', backgroundColor: '#c9ccd1', classNames: ['fc-ev-busy'], extendedProps: { kind: 'busy' } });
@@ -7861,6 +7865,20 @@ window.addEventListener('error', function(e){
         initialView: mob ? 'timeGridDay' : 'timeGridWeek',
         headerToolbar: { left: 'prev,next today', center: 'title', right: mob ? 'timeGridDay,timeGridWeek' : 'timeGridWeek,timeGridDay,dayGridMonth' },
         height: 620, nowIndicator: true, firstDay: 0, expandRows: true, snapDuration: '00:15:00', slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
+        // Lead with the address (no default time text — the block is already placed at its time),
+        // and flag the prospect's confirmation at a glance: green ✓ confirmed / ⏳ awaiting.
+        eventContent: function(arg){
+          var ep = arg.event.extendedProps || {};
+          var wrap = document.createElement('div');
+          wrap.className = 'fc-ev-wrap';
+          var mark = '';
+          if (ep.kind === 'show'){
+            if (ep.recon === 'confirmed') mark = '<span class="fcbk-ok" title="Confirmed by the prospect">&#10003;</span>';
+            else if (ep.recon === 'awaiting') mark = '<span class="fcbk-wait" title="Awaiting the prospect’s confirmation">&#9203;</span>';
+          }
+          wrap.innerHTML = mark + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>';
+          return { domNodes: [wrap] };
+        },
         eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); var k = info.event.extendedProps.kind; if (k === 'stop') schBkRemoveStop(info.event.extendedProps.start_time); else if (k === 'open') schBkPickTime(info.event.extendedProps.start_time); else if (k === 'full'){ var nt = el('sch-bk-cal-note'); if (nt) nt.textContent = 'That open house is full — pick another time.'; } },
         dateClick: function(info){ if (schedBook.isGroup) return; schBkPickTime(info.date.getTime()); }   // open houses: must tap a slot, not empty grid
       });

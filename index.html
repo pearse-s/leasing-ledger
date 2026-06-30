@@ -6279,13 +6279,29 @@ window.addEventListener('error', function(e){
   // tour modal: load + render the per-attendee roster (each person + their suite)
   function loadRoster(r){
     var box = el('rm-roster'); if (!box) return;
-    box.innerHTML = '<div class="rm-feedlab">Attendees</div><div class="count-note" style="padding:2px 0">Loading…</div>';
+    box.innerHTML = '<div class="count-note" style="padding:2px 0">Loading…</div>';   // neutral: branch fills attendees (group) or "Their answers" (1:1)
     authFetch('/open-house-attendees?event_uri=' + encodeURIComponent(r.uri))
       .then(function(d){ renderRoster(box, (d && d.attendees) || []); })
       .catch(function(){ box.innerHTML = ''; });
   }
+  // one attendee's questions + answers as a small block ('' when they answered nothing)
+  function tourQaHtml(a){
+    var qaArr = (a && a.questions_and_answers) || [];
+    if (!qaArr.length) return '';
+    var qrows = qaArr.filter(function(q){ return q && q.answer != null && String(q.answer).trim() !== ''; }).map(function(q){
+      return '<div style="margin-top:2px"><span style="color:var(--ink-soft)">' + esc(q.question || '') + '</span> &middot; ' + esc(String(q.answer).trim()) + '</div>';
+    });
+    return qrows.length ? '<div style="font-size:.78rem;line-height:1.35;padding:1px 0 2px 2px">' + qrows.join('') + '</div>' : '';
+  }
   function renderRoster(box, atts){
     if (!atts.length) { box.innerHTML = ''; return; }
+    // 1:1 tour: the prospect strip already shows name/contact + the modal has Cancel, so surface
+    // ONLY their answers (transparency into what they told us); nothing if they answered nothing.
+    if (atts.length === 1){
+      var solo = tourQaHtml(atts[0]);
+      box.innerHTML = solo ? ('<div class="rm-feedlab">Their answers</div>' + solo) : '';
+      return;
+    }
     var going = atts.filter(function(a){ return a.invitee_status === 'active'; }).length;
     var h = '<div class="rm-feedlab">Attendees · ' + going + ' going'
           + (atts.length > going ? ' · ' + (atts.length - going) + ' canceled' : '') + '</div>';
@@ -6301,15 +6317,7 @@ window.addEventListener('error', function(e){
       var unitBtn = a.resolved_unit_id ? ' <a href="#" class="rmatt-unit" data-uid="' + a.resolved_unit_id + '" title="Open unit">unit &rarr;</a>' : '';
       // per-attendee cancel (open this one invitee's hosted Calendly cancel page — cancels only them)
       var cancelBtn = (!cxl && a.cancel_url) ? ' <a href="' + esc(a.cancel_url) + '" target="_blank" rel="noopener" class="rmatt-cxl" title="Cancel just this attendee in Calendly" style="font-size:.74rem;color:var(--clay);white-space:nowrap">&#10005; cancel</a>' : '';
-      // each attendee's questions + answers
-      var qa = '';
-      var qaArr = a.questions_and_answers || [];
-      if (qaArr.length){
-        var qrows = qaArr.filter(function(q){ return q && q.answer != null && String(q.answer).trim() !== ''; }).map(function(q){
-          return '<div style="margin-top:2px"><span style="color:var(--ink-soft)">' + esc(q.question || '') + '</span> &middot; ' + esc(String(q.answer).trim()) + '</div>';
-        });
-        if (qrows.length) qa = '<div style="font-size:.78rem;line-height:1.35;padding:1px 0 2px 2px">' + qrows.join('') + '</div>';
-      }
+      var qa = tourQaHtml(a);
       h += '<div style="padding:6px 0;border-top:1px solid var(--rim)' + (cxl ? ';opacity:.5' : '') + '">'
         + '<div style="display:flex;align-items:center;gap:8px">'
           + '<span style="flex:1;min-width:0;font-weight:600;font-size:.83rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(nm) + (cxl ? ' <span class="chip c-hot">canceled</span>' : '') + '</span>'
@@ -6466,10 +6474,11 @@ window.addEventListener('error', function(e){
     }
     el('rm-contact').innerHTML = pc;
     renderReconBlock(r);
-    // Open-house roster — when a slot holds multiple attendees, list everyone with the
-    // suite they asked about (per-attendee resolution); single-invitee tours skip it.
+    // Attendees + their Calendly answers. Multi-attendee open houses list everyone with the
+    // suite they asked about; a 1:1 tour shows just "Their answers" (renderRoster branches on
+    // count). Always load so the prospect's questions are visible on every tour.
     var rosterBox = el('rm-roster');
-    if (rosterBox) { rosterBox.innerHTML = ''; if ((r.attendee_total || r.attendee_count || 1) > 1) loadRoster(r); }
+    if (rosterBox) { rosterBox.innerHTML = ''; loadRoster(r); }
     el('rm-pick').innerHTML = '';
     el('rm-link').innerHTML = ''; el('rm-link').removeAttribute('data-open');
     el('rm-linkbtn').innerHTML = r.matched_property_id ? '&#128279; Change link' : '&#128279; Link to a unit';

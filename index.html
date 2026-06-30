@@ -6607,7 +6607,7 @@ window.addEventListener('error', function(e){
         headerToolbar: { left:'prev,next today', center:'title',
           right: mob ? 'timeGridDay,listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
         height: 640, nowIndicator: true, firstDay: 0, expandRows: true, dayMaxEvents: true,
-        slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
+        slotMinTime: '09:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
         // month view defaults timed events to "list-item" (a tiny dot + plain text), which hides
         // the per-agent colour; render them as filled blocks so the agent colour shows in every view.
         eventDisplay: 'block',
@@ -7620,7 +7620,7 @@ window.addEventListener('error', function(e){
       hubCal = new FullCalendar.Calendar(box, {
         initialView: 'timeGridDay', initialDate: hubDay || new Date(),
         headerToolbar: false, height: 460, nowIndicator: true, firstDay: 0,
-        allDaySlot: false, slotMinTime: '07:00:00', slotMaxTime: '21:00:00', expandRows: true,
+        allDaySlot: false, slotMinTime: '09:00:00', slotMaxTime: '21:00:00', expandRows: true,
         eventDisplay: 'block',
         eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); openTourDetail(info.event.id); },
         eventContent: function(arg){
@@ -8330,7 +8330,7 @@ window.addEventListener('error', function(e){
       bkcal = new FullCalendar.Calendar(el('sch-bk-cal'), {
         initialView: mob ? 'timeGridDay' : 'timeGridWeek',
         headerToolbar: { left: 'prev,next today', center: 'title', right: mob ? 'timeGridDay,timeGridWeek' : 'timeGridWeek,timeGridDay,dayGridMonth' },
-        height: 620, nowIndicator: true, firstDay: 0, expandRows: true, snapDuration: '00:15:00', slotMinTime: '07:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
+        height: 620, nowIndicator: true, firstDay: 0, expandRows: true, snapDuration: '00:15:00', slotMinTime: '09:00:00', slotMaxTime: '21:00:00', allDaySlot: false,
         // Lead with the address (no default time text — the block is already placed at its time),
         // and flag the prospect's confirmation at a glance: green ✓ confirmed / ⏳ awaiting.
         eventContent: function(arg){

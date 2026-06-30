@@ -824,6 +824,15 @@ window.addEventListener('error', function(e){
   #tm-detwrap .note{margin:2px 12px 10px}
   /* owner modal — pattern redesign: action row + identity strip + collapsed details + portfolio */
   #om-actrow{margin-bottom:12px}
+  .ndsect{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin:10px 0 6px}
+  .ndsect .qn{opacity:.7;font-weight:600}
+  .ndnote{border-left:2px solid var(--clay);background:var(--glass-2);border-radius:var(--r-sm);padding:7px 10px;margin:6px 0}
+  .ndnote-b{font-size:.86rem;color:var(--ink);line-height:1.4}
+  .ndnote-m{font-size:.7rem;color:var(--ink-soft);margin-top:3px}
+  .ndfile{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px solid var(--hairline-dark)}
+  .ndfile-dl{color:var(--clay);text-decoration:none;font-size:.86rem;font-weight:600}
+  .ndfile-dl:hover{text-decoration:underline}
+  .ndfile-m{font-size:.7rem;color:var(--ink-soft);white-space:nowrap}
   #om-detwrap{margin:6px 0 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:var(--glass-2)}
   #om-detwrap summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
   #om-detwrap summary::-webkit-details-marker{display:none}
@@ -2245,6 +2254,8 @@ window.addEventListener('error', function(e){
       </div>
       <div class="sect">Key</div>
       <div id="lm-keys" class="lmphnote" data-keypanel style="margin-bottom:12px">&nbsp;</div>
+      <div class="sect">Notes &amp; documents</div>
+      <div id="lm-notesdocs" class="lmphnote" style="margin-bottom:12px">&nbsp;</div>
       <details id="lm-detwrap"><summary>Listing details</summary>
         <div class="lmdesc" id="lm-desc"></div>
         <div class="lmamen" id="lm-amen"></div>
@@ -2274,6 +2285,8 @@ window.addEventListener('error', function(e){
       </div>
       <div class="sect">Key</div>
       <div id="um-keys" class="lmphnote" data-keypanel>&nbsp;</div>
+      <div class="sect">Notes &amp; documents</div>
+      <div id="um-notesdocs" class="lmphnote">&nbsp;</div>
       <details id="um-detwrap"><summary>Unit details</summary>
         <div class="fgrid" id="um-fields"></div>
         <div class="umd-sect">Tenants</div>
@@ -3771,6 +3784,62 @@ window.addEventListener('error', function(e){
     var act = b.getAttribute('data-keyact'); if (act) showKeyForm(act);   // jump straight to the sign-out / check-in form
   });
 
+  /* ── N1 + F1: live Buildium notes + documents panel (mounted in unit/listing modals) ── */
+  function fmtNoteWhen(at){
+    var t = Date.parse(at); if (isNaN(t)) return '';
+    return new Date(t).toLocaleDateString('en-CA', { month:'short', day:'numeric', year:'numeric' });
+  }
+  function fmtFileSize(n){
+    if (n == null) return ''; n = +n; if (isNaN(n)) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return Math.round(n/1024) + ' KB';
+    return (n/1048576).toFixed(1) + ' MB';
+  }
+  // scope = unit|property|lease|applicant|owner. Notes are LIVE from Buildium (/buildium-notes,
+  // on-demand passthrough); documents come from the buildium.files mirror (/files, non-image).
+  function mountNotesDocs(box, scope, entityId){
+    if (!box) return;
+    if (!entityId){ box.innerHTML = '<span class="lmphnote">No linked Buildium record.</span>'; return; }
+    box.innerHTML = '<span class="lmphnote">Loading notes &amp; documents&hellip;</span>';
+    var canFiles = (scope === 'unit' || scope === 'property');
+    Promise.all([
+      authFetch('/buildium-notes?scope=' + encodeURIComponent(scope) + '&entity_id=' + encodeURIComponent(entityId)).catch(function(){ return { notes: [] }; }),
+      canFiles ? authFetch('/files?scope=' + encodeURIComponent(scope) + '&entity_id=' + encodeURIComponent(entityId)).catch(function(){ return { files: [] }; }) : Promise.resolve({ files: [] })
+    ]).then(function(res){
+      var notes = (res[0] && res[0].notes) || [];
+      var files = (res[1] && res[1].files) || [];
+      var h = '';
+      h += '<div class="ndsect">Buildium notes <span class="qn">' + notes.length + '</span></div>';
+      if (!notes.length) h += '<div class="lmphnote">No notes in Buildium.</div>';
+      else h += notes.map(function(n){
+        return '<div class="ndnote"><div class="ndnote-b">' + esc(n.note || '').replace(/\n/g, '<br>') + '</div>' +
+          '<div class="ndnote-m">' + (n.author ? esc(n.author) + ' &middot; ' : '') + esc(fmtNoteWhen(n.at)) + '</div></div>';
+      }).join('');
+      if (canFiles) {
+        h += '<div class="ndsect">Documents <span class="qn">' + files.length + '</span></div>';
+        if (!files.length) h += '<div class="lmphnote">No documents on file.</div>';
+        else h += files.map(function(f){
+          var meta = [f.category_name, fmtFileSize(f.size), (f.uploaded_at || '').slice(0,10)].filter(Boolean).map(esc).join(' &middot; ');
+          return '<div class="ndfile"><a href="#" class="ndfile-dl" data-fileid="' + f.buildium_id + '" data-fname="' + esc(f.title || ('file-' + f.buildium_id)) + '">&#128196; ' + esc(f.title || 'Document') + '</a>' +
+            (meta ? '<span class="ndfile-m">' + meta + '</span>' : '') + '</div>';
+        }).join('');
+      }
+      box.innerHTML = h;
+    }).catch(function(){ box.innerHTML = '<span class="lmphnote">Notes &amp; documents unavailable right now.</span>'; });
+  }
+  // document download via authenticated blob (no token in URL), mirrors the photo "save" links
+  document.addEventListener('click', function(ev){
+    var a = ev.target && ev.target.closest ? ev.target.closest('a.ndfile-dl[data-fileid]') : null;
+    if (!a) return;
+    ev.preventDefault();
+    var fid = a.getAttribute('data-fileid'), nm = a.getAttribute('data-fname') || ('file-' + fid);
+    fetch(API + '/file-dl?file_id=' + encodeURIComponent(fid) + '&proxy=1&name=' + encodeURIComponent(nm),
+          { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .then(function(b){ var u = URL.createObjectURL(b); var x = document.createElement('a'); x.href = u; x.download = nm; x.style.display = 'none'; document.body.appendChild(x); x.click(); setTimeout(function(){ URL.revokeObjectURL(u); if (x.parentNode) x.parentNode.removeChild(x); }, 5000); })
+      .catch(function(){ alert('Could not download this file.'); });
+  });
+
   /* history feed tab */
   var H_CHIPS = [['all','All'],['checkout','Check-outs'],['checkin','Check-ins'],['status_change','Status'],['note','Notes'],['create','Added'],['import','Imports']];
   function loadHistory(){
@@ -4737,15 +4806,31 @@ window.addEventListener('error', function(e){
     }
     noteEl.textContent = photos.length + ' photo' + (photos.length === 1 ? '' : 's') + ' — hover for download';
     var html = '';
-    photos.forEach(function(p){
-      html += '<figure class="lmph">' +
-        '<a class="full" href="' + esc(p.url) + '" target="_blank" rel="noopener"></a>' +
-        '<img loading="lazy" src="' + esc(p.url) + '" alt="' + esc(p.name || 'listing photo') + '">';
+    photos.forEach(function(p, idx){
+      // Listed units carry a direct p.url. UNLISTED units (P1, from the /rentals/.../images
+      // endpoint) have no URL — render a blank <img data-proxy> and hydrate its src below
+      // via the authenticated /photo-dl blob (no token in the DOM).
+      html += '<figure class="lmph">';
+      if (p.url) html += '<a class="full" href="' + esc(p.url) + '" target="_blank" rel="noopener"></a>';
+      if (p.url) html += '<img loading="lazy" src="' + esc(p.url) + '" alt="' + esc(p.name || 'listing photo') + '">';
+      else html += '<img loading="lazy" data-proxy="' + idx + '" alt="' + esc(p.name || 'photo') + '">';
       if (p.image_id != null) html += '<a class="dl" href="#" data-scope="' + esc(p.scope) + '" data-eid="' + p.entity_id + '" data-iid="' + p.image_id + '" data-name="' + esc(p.name || ('photo-' + p.image_id + '.jpg')) + '">&#8595; save</a>';
       html += '</figure>';
     });
     listEl.innerHTML = html;
     dlBtn.classList.toggle('show', photos.some(function(p){ return p.image_id != null; }));
+    // Hydrate proxy photos (unlisted units): fetch each via /photo-dl with the Bearer
+    // header → object URL → <img src>. Few per modal (≤40) and short-lived.
+    var proxies = listEl.querySelectorAll('img[data-proxy]');
+    Array.prototype.forEach.call(proxies, function(img){
+      var p = photos[+img.getAttribute('data-proxy')];
+      if (!p || p.image_id == null) return;
+      fetch(API + '/photo-dl?scope=' + encodeURIComponent(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id + '&proxy=1',
+            { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+        .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+        .then(function(b){ img.src = URL.createObjectURL(b); })
+        .catch(function(){});
+    });
   }
   function downloadAll(photos, btn, noteEl){
     var list = photos.filter(function(p){ return p.image_id != null; });
@@ -4840,6 +4925,7 @@ window.addEventListener('error', function(e){
     curPhotosLm = [];
     openModal('lmodal');
     mountKeyPanel(el('lm-keys'), uid, (r.property || '') + (r.unit ? ' · ' + r.unit : ''));
+    mountNotesDocs(el('lm-notesdocs'), 'unit', uid);
     authFetch('/photos?unit_id=' + encodeURIComponent(uid))
       .then(function(j){
         curPhotosLm = (j && j.photos) || [];
@@ -5488,6 +5574,7 @@ window.addEventListener('error', function(e){
     el('um-phbar').style.display = 'none';
     openModal('umodal');
     mountKeyPanel(el('um-keys'), uid, (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : ''));
+    mountNotesDocs(el('um-notesdocs'), 'unit', uid);
     mountIncomingPanel(el('um-incoming'), uid);
     mountTaskPanel(el('um-tasks'), uid);
     // tenants → identity strip (primary) + full list in details
@@ -5515,22 +5602,23 @@ window.addEventListener('error', function(e){
         })
         .catch(function(){ el('um-tenants').textContent = 'Contacts unavailable right now.'; });
     }
-    // photos (if listed) — compact strip + view-all
-    if (r.is_listed) {
-      el('um-phbar').style.display = 'flex';
-      el('um-photoacts').style.display = 'flex';
-      el('um-phnote').textContent = 'Loading photos…';
-      authFetch('/photos?unit_id=' + encodeURIComponent(uid))
-        .then(function(j){
-          curPhotosUm = (j && j.photos) || [];
-          renderPhotos(el('um-photos'), el('um-phnote'), el('um-dlall'), curPhotosUm);
-          el('um-photos').classList.add('compact');
-          var n = curPhotosUm.length, va = el('um-viewall');
-          if (n > 2) { va.style.display = ''; va.setAttribute('data-exp', '0'); va.textContent = 'View all (' + n + ')'; }
-          else va.style.display = 'none';
-        })
-        .catch(function(){ el('um-phnote').textContent = 'Photos unavailable right now.'; });
-    }
+    // photos — listed units carry listing photos; UNLISTED units fall back to the
+    // unit + property image lists server-side (P1). Always attempt; reveal the strip
+    // only if any photos come back (occupied/unlisted units now show photos too).
+    el('um-phbar').style.display = 'flex';
+    el('um-phnote').textContent = 'Loading photos…';
+    authFetch('/photos?unit_id=' + encodeURIComponent(uid))
+      .then(function(j){
+        curPhotosUm = (j && j.photos) || [];
+        if (!curPhotosUm.length) { el('um-phbar').style.display = 'none'; el('um-photoacts').style.display = 'none'; return; }
+        el('um-photoacts').style.display = 'flex';
+        renderPhotos(el('um-photos'), el('um-phnote'), el('um-dlall'), curPhotosUm);
+        el('um-photos').classList.add('compact');
+        var n = curPhotosUm.length, va = el('um-viewall');
+        if (n > 2) { va.style.display = ''; va.setAttribute('data-exp', '0'); va.textContent = 'View all (' + n + ')'; }
+        else va.style.display = 'none';
+      })
+      .catch(function(){ el('um-phbar').style.display = 'none'; el('um-photoacts').style.display = 'none'; });
     // activity feed — applications + tours + key history + renewals + lease
     el('um-feedlab').textContent = 'Activity · everything on this unit';
     el('um-feedchips').innerHTML = '';

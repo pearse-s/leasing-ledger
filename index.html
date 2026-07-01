@@ -4857,8 +4857,10 @@ window.addEventListener('error', function(e){
     var convSigned = act.leases_signed || 0;
     var shDen = (act.showings || {}).completed || 0;
     var shPct = shDen > 0 ? Math.round(1000 * convSigned / shDen) / 10 : null;
-    var rhtml = '<div class="sect">Conversion</div>';
-    rhtml += '<div class="pair" title="Leases signed ÷ completed showings in this window"><span class="pl">Showing &rarr; lease conversion</span><span class="pv">' + pct(shPct) +
+    // "· this window" distinguishes these from the KPI tile's trailing-30d
+    // "Conversion" (labeled "last 30 days"), which is a different period basis.
+    var rhtml = '<div class="sect">Conversion &middot; this window</div>';
+    rhtml += '<div class="pair" title="Leases signed ÷ completed showings in the selected reporting window (differs from the trailing-30-day KPI tile)"><span class="pl">Showing &rarr; lease conversion</span><span class="pv">' + pct(shPct) +
       ' <small>' + fmtNum(convSigned) + ' signed / ' + fmtNum(shDen) + ' showings</small></span></div>';
     rhtml += '<div class="pair" title="Leases signed ÷ inbound leads in this window"><span class="pl">Lead &rarr; lease conversion</span><span class="pv" id="lead-conv"><span class="skel skel-line"></span></span></div>';
     el('activity-rates').innerHTML = rhtml;

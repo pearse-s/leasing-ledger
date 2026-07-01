@@ -3698,16 +3698,16 @@ window.addEventListener('error', function(e){
   });
   el('km-form').addEventListener('input', function(e){
     if (!e.target) return;
-    if (e.target.id === 'kf-unitq') renderLinkResults(e.target.value);
+    if (e.target.id === 'kf-unitq') renderKeyLinkResults(e.target.value);
     if (e.target.id === 'kf-keyq') renderAttachResults(e.target.value);
   });
 
   // ── admin: "Link to unit" picker (key -> unit) ──
   function initUnitPicker(){
-    if (unitsAll === null) { var b = el('kf-unitres'); if (b) b.textContent = 'Loading units…'; loadUnits(function(){ renderLinkResults(''); }); }
-    else renderLinkResults('');
+    if (unitsAll === null) { var b = el('kf-unitres'); if (b) b.textContent = 'Loading units…'; loadUnits(function(){ renderKeyLinkResults(''); }); }
+    else renderKeyLinkResults('');
   }
-  function renderLinkResults(q){
+  function renderKeyLinkResults(q){
     var box = el('kf-unitres'); if (!box) return;
     q = (q || '').toLowerCase().trim();
     if (!q) { box.innerHTML = '<div class="kunote">Start typing to find a unit.</div>'; return; }
@@ -7090,12 +7090,12 @@ window.addEventListener('error', function(e){
       h += '<div id="rm-linkres"></div>';
       if (curTour && curTour.is_manual_link) h += '<button type="button" class="rmlinkunlink" data-act="unlink">&#8617; Remove manual link (use auto-match)</button>';
       panel.innerHTML = h;
-      renderLinkResults('');
+      renderTourLinkResults('');
     };
     if (unitsAll === null) { panel.innerHTML = '<div class="rmpicklab">Loading units…</div>'; loadUnits(build); }
     else build();
   }
-  function renderLinkResults(q){
+  function renderTourLinkResults(q){
     var r = curTour; if (!r) return;
     var h = '';
     if (linkProp) {
@@ -7150,13 +7150,13 @@ window.addEventListener('error', function(e){
   el('rm-link').addEventListener('click', function(e){
     var b = e.target.closest('[data-act]'); if (!b) return;
     var act = b.getAttribute('data-act');
-    if (act === 'prop') { linkProp = tourPropList().filter(function(x){ return String(x.property_id) === String(b.getAttribute('data-pid')); })[0]; renderLinkResults(''); }
-    else if (act === 'back') { linkProp = null; renderLinkResults((el('rm-linksearch') || {}).value || ''); }
+    if (act === 'prop') { linkProp = tourPropList().filter(function(x){ return String(x.property_id) === String(b.getAttribute('data-pid')); })[0]; renderTourLinkResults(''); }
+    else if (act === 'back') { linkProp = null; renderTourLinkResults((el('rm-linksearch') || {}).value || ''); }
     else if (act === 'unit') { if (linkProp) saveTourLink(linkProp.property_id, b.getAttribute('data-uid')); }
     else if (act === 'whole') { if (linkProp) saveTourLink(linkProp.property_id, null); }
     else if (act === 'unlink') { unlinkTour(); }
   });
-  el('rm-link').addEventListener('input', function(e){ if (e.target.id === 'rm-linksearch') renderLinkResults(e.target.value); });
+  el('rm-link').addEventListener('input', function(e){ if (e.target.id === 'rm-linksearch') renderTourLinkResults(e.target.value); });
   /* ── tours map (Leaflet, mirrors the Units map) ── */
   function drawTourMap(rows){
     if (!window.L) return;

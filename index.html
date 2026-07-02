@@ -1307,7 +1307,6 @@ window.addEventListener('error', function(e){
       <button type="button" class="navitem" data-tab="tours"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Tours</span></button>
       <button type="button" class="navitem" data-tab="schedule"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><circle cx="16" cy="15.5" r="3.2"/><path d="M16 14v1.7l1.1.7"/></svg><span>Schedule tour</span></button>
       <button type="button" class="navitem" data-tab="renewals"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg><span>Renewals</span></button>
-      <button type="button" class="navitem" data-tab="sleases"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M9 14l2 2 4-4"/></svg><span>Signed leases</span></button>
       <button type="button" class="navitem" data-tab="owners"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Owners</span></button>
       <button type="button" class="navitem" data-tab="keys"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 19 4m-3 0 3 3-2.5 2.5L14 7"/></svg><span>Keys</span></button>
       <button type="button" class="navitem" data-tab="tasks"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 3v3h8V3M8 13l2 2 4-4"/></svg><span>Tasks</span></button>
@@ -1745,7 +1744,7 @@ window.addEventListener('error', function(e){
         <div class="qchips" id="hub-team-leases-chips"></div>
         <div class="scrolly tallscroll">
           <table id="hub-team-leases"><thead><tr>
-            <th>Property &middot; unit</th><th>Signed</th><th>Tenant</th><th>Credited</th><th>Status</th><th>Actions</th>
+            <th data-k="property_name">Property &middot; unit</th><th data-k="signed_date">Signed</th><th data-k="tenant_name">Tenant</th><th data-k="credited_agent">Credited</th><th data-k="move_in_date">Move-in</th><th>Actions</th>
           </tr></thead><tbody></tbody></table>
         </div>
       </div>
@@ -1891,32 +1890,6 @@ window.addEventListener('error', function(e){
         </table>
       </div>
       <div class="note" style="margin-top:10px">Current renewal cycle from Buildium &mdash; <b>Pending</b> = offer sent, awaiting signature; <b>Signed</b> = fully signed; <b>Cancelled</b> = offer cancelled. Scope filters apply. Click a row to open the unit.</div>
-    </div>
-  </div>
-
-  <div id="page-sleases" style="display:none">
-    <div class="card tablecard" style="margin-top:18px">
-      <div class="tablebar">
-        <h2>Signed leases</h2>
-        <input type="text" id="sl-search" placeholder="Search property, unit, tenant, agent&hellip;">
-        <span class="count-note" id="sl-count"></span>
-      </div>
-      <div class="qchips" id="sl-chips"></div>
-      <div class="scrolly tallscroll">
-        <table id="sltable">
-          <thead><tr>
-            <th>Property &middot; unit</th>
-            <th>Tenant</th>
-            <th>Signed</th>
-            <th>Move-in</th>
-            <th class="rt">Rent</th>
-            <th>Credit</th>
-            <th></th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="note" style="margin-top:10px"><b>Move-in</b> follows the lease start date unless you override it here (an <b>edited</b> tag shows when overridden). Overridden dates flow into the owner report&rsquo;s Signed-leases table. <b>Remove</b> hides a lease from this list and from owner reports; <b>Restore</b> brings it back (admin only). Scope filters apply.</div>
     </div>
   </div>
 
@@ -3192,7 +3165,7 @@ window.addEventListener('error', function(e){
   })();
 
   /* ── tabs ─────────────────────────────────── */
-  var PAGES = { ledger:'app', hub:'page-hub', phones:'page-phones', units:'page-units', applications:'page-applications', tours:'page-tours', schedule:'page-schedule', renewals:'page-renewals', sleases:'page-sleases', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
+  var PAGES = { ledger:'app', hub:'page-hub', phones:'page-phones', units:'page-units', applications:'page-applications', tours:'page-tours', schedule:'page-schedule', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
   var ACTIVE_TAB = 'ledger';   // which tab is showing; render() only reveals the Ledger (#app) when this is 'ledger'
   var statsLoaded = false;     // a /stats load has succeeded at least once (Ledger DOM is populated)
   var statsLoading = false;    // a /stats load is currently in flight
@@ -3215,7 +3188,6 @@ window.addEventListener('error', function(e){
     if (key === 'tours') { if (toursAll === null) loadTours(); else applyRView(); }
     if (key === 'schedule' && schedAgents === null) loadSchedule();
     if (key === 'renewals' && renewalsAll === null) loadRenewals();
-    if (key === 'sleases' && sleasesAll === null) loadSleases();
     if (key === 'keys' && keysAll === null) loadKeys();
     if (key === 'hub' && hubLoaded === null) loadHub();
     if (key === 'phones' && phonesData === null) loadPhones();
@@ -3382,7 +3354,6 @@ window.addEventListener('error', function(e){
     if (tasksAll !== null) { drawTaskChips(); drawTasks(); }
     if (el('page-history').style.display === 'block') { historyAll = null; loadHistory(); }
     renewalsAll = null; loadRenewals();   // tile + tab are scope-aware
-    sleasesAll = null; if (el('page-sleases') && el('page-sleases').style.display === 'block') loadSleases();
   }
 
   /* ════════════ Key Manager + History ════════════ */
@@ -4519,6 +4490,13 @@ window.addEventListener('error', function(e){
     htable: { rows:function(){ return historyAll || []; }, redraw:function(){ drawHistory(); }, cols:{
       event_type:{ t:'enum', label:'Event', disp:function(v){ return CF_EVT[v] || v; } },
       created_at:{ t:'date', label:'When', get:function(r){ return (r.created_at||'').slice(0,10); } }
+    }},
+    'hub-team-leases': { rows:function(){ return hubTeamSigned || []; }, redraw:function(){ hubRenderTeamLeases(); }, cols:{
+      property_name:{ t:'auto', label:'Property' },
+      signed_date:{ t:'date', label:'Signed', get:function(r){ return (r.signed_date||'').slice(0,10); } },
+      tenant_name:{ t:'auto', label:'Tenant' },
+      credited_agent:{ t:'enum', label:'Credited', get:function(r){ return r.status === 'confirmed' ? (r.credited_agent||'') : (r.suggested_agent||''); } },
+      move_in_date:{ t:'date', label:'Move-in', get:function(r){ return (r.move_in_date||'').slice(0,10); } }
     }}
   };
   var COLF = {};
@@ -4531,7 +4509,8 @@ window.addEventListener('error', function(e){
     otable: { get:function(){ return oSort; }, set:function(c,d){ oSort={k:c,d:d}; drawOwners(); } },
     ktable: { get:function(){ return kSort; }, set:function(c,d){ kSort={k:c,d:d}; drawKeys(); } },
     ttable: { get:function(){ return tSort; }, set:function(c,d){ tSort={k:c,d:d}; drawTasks(); } },
-    htable: { get:function(){ return hSort; }, set:function(c,d){ hSort={k:c,d:d}; drawHistory(); } }
+    htable: { get:function(){ return hSort; }, set:function(c,d){ hSort={k:c,d:d}; drawHistory(); } },
+    'hub-team-leases': { get:function(){ return hubTeamLeasesSort; }, set:function(c,d){ hubTeamLeasesSort={k:c,d:d}; hubRenderTeamLeases(); } }
   };
   var AUTO_MAX = 300;   // an unconfigured header with <= this many distinct values shows a value checklist; else text search
   function colDef(tid, col){ return (COLF_DEF[tid] && COLF_DEF[tid].cols[col]) || { t:'auto' }; }
@@ -6579,116 +6558,40 @@ window.addEventListener('error', function(e){
   el('pair-rn-pending').addEventListener('click', function(){ gotoRenewals('Pending'); });
   el('pair-rn-ending').addEventListener('click', function(){ gotoUnitsColFilter(function(){ colfState('utable','unit_event').sel = { 'Notice to Vacate':1 }; }); });
 
-  /* ── Signed-leases manager ───────────────── */
-  var sleasesAll = null, sleasesLoading = false, slFilter = 'active', slEditId = null;
-  function loadSleases(){
-    if (sleasesLoading) return;
-    sleasesLoading = true;
-    var p = new URLSearchParams(); p.set('include_removed', '1'); appendScope(p);
-    authFetch('/signed-leases?' + p.toString())
-      .then(function(j){ sleasesAll = j.signed || []; sleasesLoading = false; slDrawChips(); slDraw(); })
-      .catch(function(){ sleasesLoading = false; var t = el('sltable'); if (t) t.querySelector('tbody').innerHTML = emptyRow('sltable', 'Could not load signed leases.'); });
-  }
-  function slFilteredRows(){
-    return (sleasesAll || []).filter(function(r){
-      if (slFilter === 'active') return !r.is_excluded;
-      if (slFilter === 'removed') return !!r.is_excluded;
-      return true;
-    });
-  }
-  function slDrawChips(){
-    var c = el('sl-chips'); if (!c || sleasesAll === null) return;
-    var all = sleasesAll, act = all.filter(function(r){ return !r.is_excluded; }).length;
-    function chip(k, label, n){ return '<button type="button" class="qchip' + (slFilter === k ? ' on' : '') + '" data-q="' + k + '">' + label + ' <span class="qn">' + n + '</span></button>'; }
-    c.innerHTML = chip('active', 'Active', act) + chip('removed', 'Removed', all.length - act) + chip('all', 'All', all.length);
-  }
-  function slDraw(){
-    if (sleasesAll === null) return;
-    var t = el('sltable'); if (!t) return;
-    var q = ((el('sl-search') && el('sl-search').value) || '').toLowerCase();
-    var rows = slFilteredRows().filter(function(r){
-      if (!q) return true;
-      return ((r.property_name || '') + ' ' + (r.unit_number || '') + ' ' + (r.tenant_name || '') + ' ' + (r.credited_agent || '')).toLowerCase().indexOf(q) >= 0;
-    });
-    var html = '';
-    rows.forEach(function(r){
-      var mi = (r.move_in_date || '').slice(0, 10);
-      var edited = r.move_in_date_source === 'manual';
-      var miCell = (mi ? esc(mi) : '–') + (edited ? ' <span class="pill" style="background:rgba(232,180,62,.18);color:var(--clay)">edited</span>' : '');
-      var credit = r.is_excluded
-        ? '<span class="pill" style="color:var(--ink-soft)">Removed</span>'
-        : (r.status === 'confirmed'
-            ? '<span class="pill" style="background:rgba(93,202,165,.16);color:#9fe1cb">&#10003; ' + esc(r.credited_agent || '?') + '</span>'
-            : '<span class="pill" style="color:var(--ink-soft)">' + esc(r.status || '–') + '</span>');
-      var actions = '<button type="button" class="hubact" data-act="edit" data-id="' + r.lease_id + '">Edit move&#8209;in</button>';
-      actions += r.is_excluded
-        ? ' <button type="button" class="hubact adminonly" data-act="restore" data-id="' + r.lease_id + '">Restore</button>'
-        : ' <button type="button" class="hubact adminonly" data-act="remove" data-id="' + r.lease_id + '">Remove</button>';
-      html += '<tr' + (r.is_excluded ? ' style="opacity:.5"' : '') + '>' +
-        '<td>' + esc(r.property_name || '–') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') + '</td>' +
-        '<td>' + esc(r.tenant_name || '–') + '</td>' +
-        '<td>' + (esc((r.signed_date || '').slice(0, 10)) || '–') + '</td>' +
-        '<td>' + miCell + '</td>' +
-        '<td class="rt">' + (r.rent != null ? fmtMoney(r.rent) : '–') + '</td>' +
-        '<td>' + credit + '</td>' +
-        '<td class="slact">' + actions + '</td></tr>';
-    });
-    t.querySelector('tbody').innerHTML = html || emptyRow('sltable', 'Nothing matches');
-    if (el('sl-count')) el('sl-count').textContent = rows.length + ' of ' + (sleasesAll || []).length;
-  }
-  function slFindRow(id){ return (sleasesAll || []).filter(function(x){ return String(x.lease_id) === String(id); })[0]; }
-  function slOpenEdit(id){
-    var r = slFindRow(id); if (!r) return;
-    slEditId = r.lease_id;
+  /* ── Move-in edit modal (shared #slmodal) — edits the move-in override on a
+     signed lease from the Team-overview "All signed leases" table; the same
+     override flows into the owner report (same DB). ── */
+  var hubMiEditId = null;
+  function hubMiFind(id){ return (hubTeamSigned || []).filter(function(x){ return String(x.lease_id) === String(id); })[0]; }
+  function hubMiOpenEdit(id){
+    var r = hubMiFind(id); if (!r) return;
+    hubMiEditId = r.lease_id;
     if (el('sl-ed-sub')) el('sl-ed-sub').textContent = (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : '') + (r.tenant_name ? '  —  ' + r.tenant_name : '');
     var start = (r.lease_start_date || '').slice(0, 10), cur = (r.move_in_date || '').slice(0, 10);
     if (el('sl-ed-start')) el('sl-ed-start').innerHTML = 'Lease start: <b>' + (esc(start) || '—') + '</b>' + (r.move_in_date_source === 'manual' ? ' &middot; move-in overridden to <b>' + esc(cur) + '</b>' : ' &middot; move-in follows the lease start');
     if (el('sl-ed-date')) el('sl-ed-date').value = cur || start || '';
     openModal('slmodal');
   }
-  function slSaveMoveIn(dateStr){
-    if (slEditId == null) return;
+  function hubMiSave(dateStr){
+    if (hubMiEditId == null) return;
     var actor = getActor();
     if (!actor){ alert('Pick your name first (on the sign-in screen) so the change is logged.'); return; }
-    var id = slEditId;
+    var id = hubMiEditId;
     postJSON('/lease/move-in', { lease_id: Number(id), move_in_date: dateStr, actor: actor })
       .then(function(res){
         var lease = res && res.lease;
-        sleasesAll = (sleasesAll || []).map(function(x){
+        hubTeamSigned = (hubTeamSigned || []).map(function(x){
           if (String(x.lease_id) !== String(id)) return x;
           if (lease) return Object.assign({}, x, lease);
           var mi = dateStr || (x.lease_start_date || '').slice(0, 10);
           return Object.assign({}, x, { move_in_date: mi, move_in_date_source: dateStr ? 'manual' : 'buildium' });
         });
-        closeModal('slmodal'); slDraw();
+        closeModal('slmodal'); if (typeof hubRenderTeamLeases === 'function') hubRenderTeamLeases();
       })
       .catch(function(e){ if (e && e.message !== 'AUTH') alert('Could not save move-in date: ' + (e && e.message ? e.message : 'error')); });
   }
-  function slSetExcluded(id, restore){
-    var actor = getActor();
-    if (!actor){ alert('Pick your name first (on the sign-in screen).'); return; }
-    if (!restore && !confirm('Remove this lease from the signed-leases list and owner reports? You can restore it later.')) return;
-    postJSON(restore ? '/lease/restore' : '/lease/exclude', { lease_id: Number(id), actor: actor })
-      .then(function(){
-        sleasesAll = (sleasesAll || []).map(function(x){ return String(x.lease_id) === String(id) ? Object.assign({}, x, { is_excluded: !restore }) : x; });
-        slDrawChips(); slDraw();
-      })
-      .catch(function(e){ if (e && e.message !== 'AUTH') alert('Could not update: ' + (e && e.message ? e.message : 'error')); });
-  }
-  if (el('sl-chips')) el('sl-chips').addEventListener('click', function(e){
-    var b = e.target.closest('.qchip'); if (!b) return;
-    slFilter = b.getAttribute('data-q'); slDrawChips(); slDraw();
-  });
-  if (el('sl-search')) el('sl-search').addEventListener('input', deb(slDraw));
-  if (el('sltable')) el('sltable').addEventListener('click', function(e){
-    var b = e.target.closest('.hubact'); if (!b) return;
-    var act = b.getAttribute('data-act'), id = b.getAttribute('data-id');
-    if (act === 'edit') slOpenEdit(id);
-    else if (act === 'remove') slSetExcluded(id, false);
-    else if (act === 'restore') slSetExcluded(id, true);
-  });
-  if (el('sl-ed-save')) el('sl-ed-save').addEventListener('click', function(){ slSaveMoveIn((el('sl-ed-date') && el('sl-ed-date').value) || ''); });
-  if (el('sl-ed-reset')) el('sl-ed-reset').addEventListener('click', function(){ slSaveMoveIn(''); });
+  if (el('sl-ed-save')) el('sl-ed-save').addEventListener('click', function(){ hubMiSave((el('sl-ed-date') && el('sl-ed-date').value) || ''); });
+  if (el('sl-ed-reset')) el('sl-ed-reset').addEventListener('click', function(){ hubMiSave(''); });
 
   /* ── Tours directory ──────────────────────── */
   function toursQuery(){
@@ -7722,7 +7625,7 @@ window.addEventListener('error', function(e){
       hubSigned = null, hubFollow = null, hubSignedFilter = 'all', hubFuFilter = 'all',
       hubSignedScope = 'mine',
       hubTours = null, hubToursView = 'day', hubCal = null, hubDay = null,
-      hubView = 'mine', hubTeamSigned = null, hubTeamTours = null, hubTeamLeasesFilter = 'all';
+      hubView = 'mine', hubTeamSigned = null, hubTeamTours = null, hubTeamLeasesFilter = 'all', hubTeamLeasesSort = { k:'signed_date', d:-1 };
   function hubWindow(){ return windowDates(); }   // unified with the global sidebar Activity window (state.from/to)
   function hubFirstTok(s){ return (s || '').trim().toLowerCase().split(/\s+/)[0] || ''; }
   function hubSameAgent(a, b){ if (!a || !b) return false; a = a.toLowerCase(); b = b.toLowerCase(); return a === b || hubFirstTok(a) === hubFirstTok(b); }
@@ -8103,20 +8006,33 @@ window.addEventListener('error', function(e){
   function hubRenderTeamLeases(){
     var t = el('hub-team-leases'); if (!t) return; var tb = t.querySelector('tbody');
     var all = hubTeamSigned || [];
-    var rows = all.filter(function(r){ if (hubTeamLeasesFilter === 'confirmed') return r.status === 'confirmed'; if (hubTeamLeasesFilter === 'pending') return r.status !== 'confirmed'; return true; });
+    var rows = all.filter(function(r){
+      if (!colfPass('hub-team-leases', r)) return false;
+      if (hubTeamLeasesFilter === 'confirmed') return r.status === 'confirmed';
+      if (hubTeamLeasesFilter === 'pending') return r.status !== 'confirmed';
+      return true;
+    });
+    var raw = (hubTeamLeasesSort.k === 'signed_date' || hubTeamLeasesSort.k === 'move_in_date');
+    rows.sort(cmpRows(hubTeamLeasesSort.k, hubTeamLeasesSort.d, raw));
     var h = '';
     rows.slice(0, 500).forEach(function(r){
-      var sc = r.status === 'confirmed' ? '<span class="chip c-ok">confirmed</span>' : '<span class="chip c-warm">suggested</span>';
-      var credited = r.status === 'confirmed' ? esc(r.credited_agent || '?')
-        : (r.suggested_agent ? '<span style="color:var(--ink-soft)">&rarr; ' + esc(r.suggested_agent) + '</span>' : '<span style="color:var(--ink-soft)">no guess</span>');
-      var acts = '<button type="button" class="hubact" data-act="reassign" data-id="' + r.lease_id + '">Reassign</button> ' +
+      // Credited colour = attribution state: confirmed/assigned = green (no arrow),
+      // suggested = amber with a → arrow, unmatched = grey "no guess".
+      var credited = r.status === 'confirmed'
+        ? '<span style="color:var(--moss)">' + esc(r.credited_agent || '?') + '</span>'
+        : (r.suggested_agent ? '<span style="color:var(--clay)">&rarr; ' + esc(r.suggested_agent) + '</span>' : '<span style="color:var(--ink-soft)">no guess</span>');
+      var mi = (r.move_in_date || '').slice(0, 10);
+      var edited = r.move_in_date_source === 'manual';
+      var miCell = (mi ? esc(mi) : '–') + (edited ? ' <span class="pill" style="background:rgba(232,180,62,.18);color:var(--clay)">edited</span>' : '');
+      var acts = '<button type="button" class="hubact" data-act="editmi" data-id="' + r.lease_id + '">Move&#8209;in</button> ' +
+                 '<button type="button" class="hubact" data-act="reassign" data-id="' + r.lease_id + '">Reassign</button> ' +
                  '<button type="button" class="hubact" data-act="exclude" data-id="' + r.lease_id + '">Exclude</button>';
       h += '<tr>' +
         '<td data-label="Property &middot; unit">' + esc(r.property_name || '–') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') + '</td>' +
         '<td data-label="Signed">' + esc((r.signed_date || '').slice(0, 10)) + '</td>' +
         '<td data-label="Tenant">' + esc(r.tenant_name || '–') + '</td>' +
         '<td data-label="Credited">' + credited + '</td>' +
-        '<td data-label="Status">' + sc + '</td>' +
+        '<td data-label="Move-in">' + miCell + '</td>' +
         '<td data-label="Actions">' + acts + '</td></tr>';
     });
     tb.innerHTML = h || emptyRow('hub-team-leases', 'No signed leases in this window');
@@ -8131,6 +8047,7 @@ window.addEventListener('error', function(e){
     c.innerHTML = chip('all', 'All', all.length) + chip('pending', 'Unconfirmed', all.length - conf) + chip('confirmed', 'Confirmed', conf);
   }
   function hubTeamAct(id, act){
+    if (act === 'editmi'){ hubMiOpenEdit(id); return; }   // move-in edit (team overview is admin-only anyway)
     if (!IS_ADMIN) return;
     var actor = getActor();
     if (!actor){ alert('Pick your name first (on the sign-in screen).'); return; }
@@ -8211,6 +8128,10 @@ window.addEventListener('error', function(e){
   });
   if (el('hub-team-leases')) el('hub-team-leases').addEventListener('click', function(e){
     var b = e.target.closest('.hubact'); if (!b) return; hubTeamAct(b.getAttribute('data-id'), b.getAttribute('data-act'));
+  });
+  if (el('hub-team-leases')) el('hub-team-leases').querySelector('thead').addEventListener('click', function(e){
+    var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;
+    openCol('hub-team-leases', k, th);
   });
   if (el('hub-team-table')) el('hub-team-table').addEventListener('click', function(e){
     var tr = e.target.closest('tr[data-agent]'); if (!tr) return;

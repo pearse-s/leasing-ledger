@@ -1641,13 +1641,20 @@ window.addEventListener('error', function(e){
     #page-today .tdroles{display:flex;gap:6px;flex-wrap:wrap}
     #page-today .tdgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px}
     #page-today .tdwide{grid-column:1/-1}
-    @media (max-width:880px){ #page-today .tdgrid{grid-template-columns:1fr} #page-today .tdwide{grid-column:auto} #page-today .tdact{padding:10px 12px} }
-    #page-today .tdq{margin-top:0}
+    @media (max-width:880px){ #page-today .tdgrid{grid-template-columns:minmax(0,1fr)} #page-today .tdwide{grid-column:auto} #page-today .tdact{padding:10px 12px} }
+    #page-today .tdq{margin-top:0;min-width:0}
     #page-today .tdq h3{margin:0 0 10px;font-size:1rem;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
     #page-today .qn2{font-size:.76rem;color:var(--ink-soft);font-weight:600}
     #page-today .tdact{font-family:var(--sans);font-size:.74rem;border:1px solid var(--hairline-dark);border-radius:8px;padding:5px 9px;color:var(--ink);text-decoration:none;white-space:nowrap;background:none;cursor:pointer;flex:0 0 auto}
     #page-today .tdact:hover{border-color:var(--clay)}
     #page-today .tdmore{margin-top:10px}
+    #page-today .tdsched{display:flex;gap:12px;overflow-x:auto;align-items:flex-start;padding:2px 2px 8px}
+    #page-today .tdcol{flex:0 0 252px;min-width:0;border:1px solid var(--hairline-dark);border-radius:12px;background:var(--glass-2);padding:10px}
+    #page-today .tdcol-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+    #page-today .tdcol-hr{display:flex;gap:6px;align-items:center;flex:0 0 auto}
+    #page-today .tdcol .schoffer{flex-wrap:wrap;margin-bottom:8px}
+    #page-today .tdcol .schoffer:last-child{margin-bottom:0}
+    #page-today .tdrowact{flex:1 0 100%;display:flex;gap:6px;margin-top:6px}
     </style>
     <div class="tdhead">
       <div>
@@ -3485,10 +3492,12 @@ window.addEventListener('error', function(e){
     var g = el('td-grid'); if (!g) return;
     var role = tdRole();
     if (role === 'coordinator'){
-      tdSub('Coordinator — chase tour confirmations, watch offers that never turned into bookings.');
-      g.innerHTML = tdPanel('td-conf', 'Tours to confirm', 'tours', 'Open Tours') +
-                    tdPanel('td-off', 'Offers not booked yet', 'schedule', 'Open Schedule');
-      tdLoadConf(); tdLoadOffers();
+      tdSub("Coordinator — every agent's upcoming schedule at a glance; book straight into the Schedule flow.");
+      g.innerHTML = '<section class="panel tdq tdwide"><h3>Agent schedules <span class="qn2" id="td-sched-n"></span></h3>' +
+        '<div class="tdsched" id="td-sched"><div class="note">Loading&hellip;</div></div>' +
+        '<div class="tdmore"><button type="button" class="tdact" data-book="">Book a tour &rarr;</button> <button type="button" class="tdact" data-goto="schedule">Open Schedule &rarr;</button> <button type="button" class="tdact" data-goto="tours">Open Tours &rarr;</button></div></section>' +
+        tdPanel('td-off', 'Offers not booked yet', 'schedule', 'Open Schedule');
+      tdLoadSched(); tdLoadOffers();
     } else if (role === 'manager'){
       tdSub('Manager — renewals waiting on a decision, keys overdue, team pulse.');
       g.innerHTML = tdPanel('td-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
@@ -3502,26 +3511,78 @@ window.addEventListener('error', function(e){
       tdLoadAgent();
     }
   }
-  function tdLoadConf(){
-    authFetch('/tours?' + toursQuery().toString()).then(function(j){
-      var now = Date.now();
-      var rows = (j.tours || []).filter(function(r){
-        return r.status === 'active' && Date.parse(r.start_time) >= now && reconState(r) !== 'confirmed';
-      }).sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
-      var h = '';
-      rows.slice(0, 8).forEach(function(r){
-        var addrRaw = (r.matched_property_name || r.location_text || '') + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
-        var when = schEdFmt(r.start_time, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
-        var act = '';
-        if (r.invitee_phone){
-          var msg = reconMsg(r.invitee_name, addrRaw, when, r.agent || '');
-          act = ' <a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222;</a> <a href="' + rcText(esc(r.invitee_phone), msg) + '" class="tdact">&#128172; Confirm</a>';
-        }
-        h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.invitee_name || 'Prospect') + '</b>' + (addrRaw ? ' &middot; ' + esc(addrRaw) : '') +
-          '<div class="schoffer-sub">' + esc(when) + (r.agent ? ' &middot; ' + esc(r.agent) : '') + '</div></div>' + reconChip(r) + act + '</div>';
-      });
-      tdFill('td-conf', h, rows.length, 'No upcoming tours waiting on confirmation.');
-    }).catch(function(e){ if (String(e.message) !== 'AUTH') tdFail('td-conf', 'tours'); });
+  // personal outreach text (coordinator voice) — NOT the confirm-chase; confirms stay the agent's job
+  function tdOutreachMsg(name, addr, whenStr, agent){
+    var first = (String(name || '').trim().split(/\s+/)[0]) || 'there';
+    var me = String(getActor() || '').trim().split(/\s+/)[0] || '';
+    var ag = String(agent || '').trim().split(/\s+/)[0] || '';
+    return ('Hi ' + first + ", it's " + (me ? me + ' ' : '') + 'with Live Furnished — wanted to personally reach out about your showing'
+      + (addr ? ' at ' + addr : '') + (whenStr ? ' on ' + whenStr : '')
+      + (ag ? ' — ' + ag + ' will be meeting you there' : '')
+      + '. Any questions before then, just reply here — happy to help!').replace(/\.\./g, '.');
+  }
+  // drill into the Schedule tab's BOOK flow, optionally preselecting the agent
+  function tdGotoBook(aid){
+    showTab('schedule');
+    var tries = 0;
+    (function arm(){
+      if (schedAgents !== null){
+        schShowView('book'); renderBkAgents();
+        if (aid !== null && aid !== '') schBkPickAgent(String(aid));
+        return;
+      }
+      if (++tries > 40){ schShowView('book'); return; }   // ~6s cap: open the book view even if agents never load
+      setTimeout(arm, 150);
+    })();
+  }
+  function tdSchedRow(r){
+    var addrRaw = (r.matched_property_name || r.location_text || '') + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
+    var when = schEdFmt(r.start_time, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
+    var act = '';
+    if (r.invitee_phone){
+      var msg = tdOutreachMsg(r.invitee_name, addrRaw, when, r.agent);
+      act = '<div class="tdrowact"><a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(r.invitee_phone), msg) + '" class="tdact">&#128172; Text</a></div>';
+    }
+    return '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.invitee_name || 'Prospect') + '</b>' +
+      '<div class="schoffer-sub">' + esc(when) + '</div>' +
+      (addrRaw ? '<div class="schoffer-sub">' + esc(addrRaw) + '</div>' : '') +
+      '</div>' + reconChip(r) + act + '</div>';
+  }
+  function tdLoadSched(){
+    var fin = { tours: null, agents: null }, done = 0;
+    var step = function(){ if (++done === 2) tdRenderSched(fin); };
+    authFetch('/tours?' + toursQuery().toString())
+      .then(function(j){ fin.tours = j.tours || []; }).catch(function(){ fin.tours = null; }).then(step);
+    authFetch('/tour-agents')
+      .then(function(j){ fin.agents = j.agents || []; }).catch(function(){ fin.agents = []; }).then(step);
+  }
+  function tdRenderSched(fin){
+    var box = el('td-sched'); if (!box) return;
+    if (fin.tours === null){ box.innerHTML = '<div class="note">Could not load tours.</div>'; return; }
+    var now = Date.now(), horizon = now + 7 * 86400000;
+    var upcoming = fin.tours.filter(function(r){
+      var t = Date.parse(r.start_time);
+      return r.status === 'active' && t >= now && t <= horizon;
+    }).sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+    // one column per bookable agent (/tour-agents), plus any tour agent name not in that list
+    var firstTok = function(s){ return String(s || '').trim().split(/\s+/)[0].toLowerCase(); };
+    var cols = (fin.agents || []).map(function(a){ return { key: firstTok(a.display_name), name: a.display_name, aid: a.id, rows: [] }; });
+    var byKey = {};
+    cols.forEach(function(c){ byKey[c.key] = c; });
+    upcoming.forEach(function(r){
+      var k = firstTok(r.agent || 'Unknown');
+      if (!byKey[k]){ byKey[k] = { key: k, name: r.agent || 'Unknown', aid: null, rows: [] }; cols.push(byKey[k]); }
+      byKey[k].rows.push(r);
+    });
+    var n = el('td-sched-n'); if (n) n.textContent = upcoming.length + ' showings · next 7 days';
+    if (!cols.length){ box.innerHTML = '<div class="note">No tour agents configured yet.</div>'; return; }
+    box.innerHTML = cols.map(function(c){
+      var h = '<div class="tdcol"><div class="tdcol-h"><b>' + esc(c.name) + '</b><span class="tdcol-hr"><span class="qn2">' + c.rows.length + '</span>' +
+        (c.aid != null ? '<button type="button" class="tdact" data-book="' + esc(String(c.aid)) + '">Book</button>' : '') + '</span></div>';
+      h += c.rows.length ? c.rows.slice(0, 6).map(tdSchedRow).join('') : '<div class="note">No upcoming tours.</div>';
+      if (c.rows.length > 6) h += '<div class="note">+' + (c.rows.length - 6) + ' more &mdash; see Tours</div>';
+      return h + '</div>';
+    }).join('');
   }
   function tdLoadOffers(){
     authFetch('/tour-offers?limit=50').then(function(j){
@@ -3639,6 +3700,8 @@ window.addEventListener('error', function(e){
         else window.prompt('Copy link:', v);
         return;
       }
+      var bk = e.target.closest('[data-book]');
+      if (bk){ tdGotoBook(bk.getAttribute('data-book')); return; }
       var b = e.target.closest('[data-goto]'); if (!b) return;
       showTab(b.getAttribute('data-goto'));
     });

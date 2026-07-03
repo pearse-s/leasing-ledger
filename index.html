@@ -358,10 +358,18 @@ window.addEventListener('error', function(e){
      stranded under a full row (the old 4-then-1 wrap). align-items:stretch keeps
      cards in a row the same height even when one carries a sparkline. */
   .panel-kpis{display:grid;gap:14px;margin-bottom:16px;align-items:stretch}
-  .ribbon{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-top:4px}
-  .ribbon .kpi{padding:11px 12px}
-  .ribbon .kpi .num{font-size:1.3rem}
+  /* Ribbon: explicit tracks per width band — auto-fit orphans a 7th tile, so never use it here.
+     Wide = 8 tracks (gauge spans 2 → one balanced row); mid = 4 (gauge+2 / 4); narrow = 2. */
+  .ribbon{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;margin-top:4px}
+  .ribbon .kpi{padding:11px 12px;min-width:0}
+  .ribbon .kpi .num{font-size:clamp(1.25rem,1.3vw,1.7rem)}
   .ribbon .kpi .sub{font-size:.6rem}
+  .ribbon .gsub-more{display:none}
+  .ribbon .kpi.gauge{gap:12px;grid-column:span 2}
+  .ribbon .gaugewrap{width:64px;height:64px}
+  .ribbon .gctr .num{font-size:1.05rem}
+  @media(max-width:1440px){ .ribbon{grid-template-columns:repeat(4,minmax(0,1fr))} }
+  @media(max-width:700px){ .ribbon{grid-template-columns:repeat(2,minmax(0,1fr))} }
   summary.panel-head{cursor:pointer;list-style:none;-webkit-user-select:none;user-select:none}
   summary.panel-head::-webkit-details-marker{display:none}
   .ph-chev{flex:none;margin-left:8px;color:var(--ink-soft);font-size:.72rem;transition:transform .18s ease;transform:rotate(90deg)}
@@ -4810,7 +4818,7 @@ window.addEventListener('error', function(e){
     var gb = opr < 8 ? { c:'var(--moss)', w:'Healthy' } : (opr <= 13 ? { c:'var(--amber)', w:'Elevated' } : { c:'var(--clay)', w:'High' });
     el('kpi-oprate').style.setProperty('--g', Math.max(0, Math.min(100, opr)));
     el('kpi-oprate').style.setProperty('--gc', gb.c);
-    el('k-oprate-sub').innerHTML = '<div class="gband" style="color:' + gb.c + '">' + gb.w + ' &middot; target &lt;8%</div>' + fmtNum(v.op_vacant) + ' vacant &divide; ' + fmtNum((v.total_units||0)-(v.never_leased||0)) + ' ever-leased<br>(' + fmtNum(v.never_leased) + ' never-leased units excluded)';
+    el('k-oprate-sub').innerHTML = '<div class="gband" style="color:' + gb.c + '">' + gb.w + ' &middot; target &lt;8%</div><span class="gsub-more">' + fmtNum(v.op_vacant) + ' vacant &divide; ' + fmtNum((v.total_units||0)-(v.never_leased||0)) + ' ever-leased<br>(' + fmtNum(v.never_leased) + ' never-leased units excluded)</span>';
     countUp('k-totrate', v.total_vacancy_rate, pct);
     el('k-totrate-sub').innerHTML = fmtNum(v.vacant_total) + ' vacant &divide; ' + fmtNum(v.total_units) + ' total units<br>(incl. never-leased new inventory)';
     var upc = (v.upcoming_move_ins != null) ? v.upcoming_move_ins : v.pre_leased;

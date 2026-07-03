@@ -364,19 +364,28 @@ window.addEventListener('error', function(e){
      Sparklines hidden in the ribbon per Pearse 2026-07-03 — sparkSVG machinery stays intact. */
   .ribbon{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;margin-top:4px}
   .ribbon .kspark{display:none}
-  .ribbon .kpi{padding:12px 14px;min-width:0;overflow:hidden}
-  .ribbon .kpi:not(.gauge){display:flex;flex-direction:column;align-items:flex-start;min-height:118px}
-  .ribbon .kpi .lbl{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.12em;margin-bottom:6px}
-  .ribbon .kpi .num{font-size:clamp(1.35rem,1.5vw,1.9rem)}
-  .ribbon .kpi .sub{max-width:100%;font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ribbon .kpi{padding:14px 16px;min-width:0;overflow:hidden}
+  .ribbon .kpi:not(.gauge){display:flex;flex-direction:column;align-items:flex-start;min-height:132px}
+  .ribbon .kpi .lbl{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.12em;margin-bottom:8px;font-size:.72rem}
+  .ribbon .kpi .num{font-size:clamp(1.5rem,2vw,2.6rem)}
+  .ribbon .kpi .sub{max-width:100%;font-size:clamp(.66rem,.72vw,.85rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ribbon .kpi .sub ~ .sub{display:none}
   .ribbon .kpi:not(.gauge) .kx{margin-top:auto;width:100%;padding-top:8px}
+  .ribbon .kdelta{font-size:.68rem;padding:3px 10px}
   .ribbon .gsub-more{display:none}
-  .ribbon .kpi.gauge{gap:12px;grid-column:span 2;position:relative}
-  .ribbon .kpi.gauge .kx{position:absolute;right:12px;bottom:12px;margin:0}
-  .ribbon .gaugewrap{width:64px;height:64px}
-  .ribbon .gctr .num{font-size:1.05rem}
-  .ribbon .gband{white-space:nowrap}
+  .ribbon .kpi.gauge{gap:14px;grid-column:span 2;position:relative}
+  .ribbon .kpi.gauge .kx{position:absolute;right:14px;bottom:14px;margin:0}
+  .ribbon .gaugewrap{width:78px;height:78px}
+  .ribbon .gctr .num{font-size:1.25rem}
+  .ribbon .gband{white-space:nowrap;font-size:.7rem}
+  @media(min-width:1800px){
+    .ribbon{gap:14px}
+    .ribbon .kpi{padding:18px 20px}
+    .ribbon .kpi:not(.gauge){min-height:152px}
+    .ribbon .kpi .lbl{font-size:.78rem}
+    .ribbon .gaugewrap{width:92px;height:92px}
+    .ribbon .gctr .num{font-size:1.45rem}
+  }
   @media(max-width:1440px){ .ribbon{grid-template-columns:repeat(4,minmax(0,1fr))} }
   @media(max-width:700px){ .ribbon{grid-template-columns:repeat(2,minmax(0,1fr))} }
   summary.panel-head{cursor:pointer;list-style:none;-webkit-user-select:none;user-select:none}

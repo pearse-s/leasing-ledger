@@ -360,9 +360,10 @@ window.addEventListener('error', function(e){
   .panel-kpis{display:grid;gap:14px;margin-bottom:16px;align-items:stretch}
   /* Ribbon: explicit tracks per width band — auto-fit orphans a 7th tile, so never use it here.
      Wide = 8 tracks (gauge spans 2 → one balanced row); mid = 4 (gauge+2 / 4); narrow = 2.
-     Tiles are CALM stat tiles: one-line label, number, ONE one-line context sub, extras pinned
-     to the bottom edge. Verbose detail lives in tooltips + the panels, not here. */
+     Calm stat tiles: one-line label, number, ONE context sub, delta chip pinned to the bottom.
+     Sparklines hidden in the ribbon per Pearse 2026-07-03 — sparkSVG machinery stays intact. */
   .ribbon{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;margin-top:4px}
+  .ribbon .kspark{display:none}
   .ribbon .kpi{padding:12px 14px;min-width:0;overflow:hidden}
   .ribbon .kpi:not(.gauge){display:flex;flex-direction:column;align-items:flex-start;min-height:118px}
   .ribbon .kpi .lbl{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.12em;margin-bottom:6px}
@@ -382,8 +383,9 @@ window.addEventListener('error', function(e){
   summary.panel-head::-webkit-details-marker{display:none}
   .ph-chev{flex:none;margin-left:8px;color:var(--ink-soft);font-size:.72rem;transition:transform .18s ease;transform:rotate(90deg)}
   details.pnl:not([open]) > summary .ph-chev{transform:rotate(0deg)}
-  .ph-count{margin-left:10px;font-size:.7rem;color:var(--ink-soft);white-space:nowrap}
+  .ph-count{margin-left:10px;font-size:.7rem;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .ph-count b{font-size:.82rem}
+  @media(max-width:700px){ .panel-head .ph-sub{display:none} }
   .schfunnel{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:0 0 14px}
   .schfunnel .sf-seg{flex:1;min-width:92px;background:var(--glass);border:1px solid var(--hairline);border-radius:12px;padding:8px 10px;text-align:center}
   .schfunnel .sfv{font-size:1.12rem;font-weight:700}

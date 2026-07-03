@@ -358,6 +358,21 @@ window.addEventListener('error', function(e){
      stranded under a full row (the old 4-then-1 wrap). align-items:stretch keeps
      cards in a row the same height even when one carries a sparkline. */
   .panel-kpis{display:grid;gap:14px;margin-bottom:16px;align-items:stretch}
+  .ribbon{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-top:4px}
+  .ribbon .kpi{padding:11px 12px}
+  .ribbon .kpi .num{font-size:1.3rem}
+  .ribbon .kpi .sub{font-size:.6rem}
+  summary.panel-head{cursor:pointer;list-style:none;-webkit-user-select:none;user-select:none}
+  summary.panel-head::-webkit-details-marker{display:none}
+  .ph-chev{flex:none;margin-left:8px;color:var(--ink-soft);font-size:.72rem;transition:transform .18s ease;transform:rotate(90deg)}
+  details.pnl:not([open]) > summary .ph-chev{transform:rotate(0deg)}
+  .ph-count{margin-left:10px;font-size:.7rem;color:var(--ink-soft);white-space:nowrap}
+  .ph-count b{font-size:.82rem}
+  .schfunnel{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:0 0 14px}
+  .schfunnel .sf-seg{flex:1;min-width:92px;background:var(--glass);border:1px solid var(--hairline);border-radius:12px;padding:8px 10px;text-align:center}
+  .schfunnel .sfv{font-size:1.12rem;font-weight:700}
+  .schfunnel .sfl{font-size:.6rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px}
+  .schfunnel .sf-arrow{align-self:center;color:var(--ink-soft);font-size:.8rem}
   .panel-kpis>.kpi{max-width:none;width:auto}
   /* 5 stats incl. the gauge → 3 cols with the gauge spanning 2, so BOTH rows fill
      completely: [ gauge · gauge · stat ] / [ stat · stat · stat ]. */
@@ -1386,37 +1401,61 @@ window.addEventListener('error', function(e){
   </div>
 
   <div id="app" style="display:none">
-    <section class="panel">
-      <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg></span><h2>Occupancy &amp; vacancy</h2><span class="ph-sub">where the portfolio stands right now</span></div>
-      <div class="panel-kpis pk-occ">
-        <div class="kpi gauge" id="kpi-oprate">
-          <div class="gaugewrap"><div class="gring"></div>
-            <div class="gctr"><div class="num" id="k-oprate">&ndash;</div></div></div>
-          <div class="gmeta">
-            <div class="lbl">Operational vacancy</div>
-            <div class="sub" id="k-oprate-sub"></div>
-          </div>
+    <div class="ribbon" id="ribbon">
+      <div class="kpi gauge" id="kpi-oprate">
+        <div class="gaugewrap"><div class="gring"></div>
+          <div class="gctr"><div class="num" id="k-oprate">&ndash;</div></div></div>
+        <div class="gmeta">
+          <div class="lbl">Operational vacancy</div>
+          <div class="sub" id="k-oprate-sub"></div>
         </div>
+      </div>
+      <div class="kpi alert click" id="kpi-vacant" title="See the vacant units below">
+        <div class="lbl">Vacant units</div>
+        <div class="num" id="k-vacant">&ndash;</div>
+        <div class="sub" id="k-vacant-sub"></div>
+        <div class="sub"><b style="color:var(--clay)" id="k-unlisted">&ndash;</b> unlisted &middot; not being marketed</div>
+      </div>
+      <div class="kpi click" id="kpi-pre" title="Units with a signed future lease — pre-leased vacancies + flips. Click for the move-in list.">
+        <div class="lbl">Pre-leased / upcoming</div>
+        <div class="num" id="k-pre">&ndash;</div>
+        <div class="sub" id="k-pre-sub">signed future lease &mdash; click for move-ins</div>
+      </div>
+      <div class="kpi click" id="kpi-signed-mtd" title="New leases signed this month — open My hub">
+        <div class="lbl">Signed this month</div>
+        <div class="num" id="k-signed-mtd">&ndash;</div>
+        <div class="sub" id="k-signed-mtd-sub">new rent this month</div>
+      </div>
+      <div class="kpi click" id="kpi-conv" title="Showings that became signed leases, last 30 days — open Applications">
+        <div class="lbl">Showing &rarr; lease</div>
+        <div class="num" id="k-conv">&ndash;</div>
+        <div class="sub">conversion &middot; last 30 days</div>
+      </div>
+      <div class="kpi alert click" id="kpi-needs" title="Prospects you toured but haven't called or texted in 7+ days — open My hub">
+        <div class="lbl">Needs follow-up</div>
+        <div class="num" id="k-needs">&ndash;</div>
+        <div class="sub">toured &middot; no contact in 7 days</div>
+      </div>
+      <div class="kpi alert" id="kpi-missed" title="Inbound calls not answered, last 7 days">
+        <div class="lbl">Missed calls</div>
+        <div class="num" id="k-missed">&ndash;</div>
+        <div class="sub">inbound, last 7 days</div>
+      </div>
+    </div>
+
+    <section class="panel">
+      <details class="pnl" id="pnl-occ" open>
+      <summary class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg></span><h2>Occupancy &amp; vacancy</h2><span class="ph-count"><b id="phc-occ">&ndash;</b> rent at risk/mo</span><span class="ph-sub">where the portfolio stands right now</span><span class="ph-chev">&#9656;</span></summary>
+      <div class="panel-kpis pk-occ">
         <div class="kpi">
           <div class="lbl">Total vacancy</div>
           <div class="num" id="k-totrate">&ndash;</div>
           <div class="sub" id="k-totrate-sub"></div>
         </div>
-        <div class="kpi alert click" id="kpi-vacant" title="See the vacant units below">
-          <div class="lbl">Vacant units</div>
-          <div class="num" id="k-vacant">&ndash;</div>
-          <div class="sub" id="k-vacant-sub"></div>
-          <div class="sub"><b style="color:var(--clay)" id="k-unlisted">&ndash;</b> unlisted &middot; not being marketed</div>
-        </div>
         <div class="kpi">
           <div class="lbl">Rent at risk</div>
           <div class="num" id="k-risk">&ndash;</div>
           <div class="sub">listed/lease rent of vacant units, per month</div>
-        </div>
-        <div class="kpi click" id="kpi-pre" title="Units with a signed future lease — pre-leased vacancies + flips. Click for the move-in list.">
-          <div class="lbl">Pre-leased / upcoming</div>
-          <div class="num" id="k-pre">&ndash;</div>
-          <div class="sub" id="k-pre-sub">signed future lease &mdash; click for move-ins</div>
         </div>
       </div>
       <div class="grid g2">
@@ -1431,21 +1470,13 @@ window.addEventListener('error', function(e){
           <div class="chartbox tall" id="trendbox"><canvas id="ch-trend"></canvas></div>
         </div>
       </div>
+      </details>
     </section>
 
     <section class="panel">
-      <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg></span><h2>Leasing funnel</h2><span class="ph-sub">turning demand into signed leases</span></div>
+      <details class="pnl" id="pnl-funnel">
+      <summary class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg></span><h2>Leasing funnel</h2><span class="ph-count"><b id="phc-funnel">&ndash;</b> tour confirmation</span><span class="ph-sub">turning demand into signed leases</span><span class="ph-chev">&#9656;</span></summary>
       <div class="panel-kpis pk-3">
-        <div class="kpi click" id="kpi-signed-mtd" title="New leases signed this month — open My hub">
-          <div class="lbl">Signed this month</div>
-          <div class="num" id="k-signed-mtd">&ndash;</div>
-          <div class="sub" id="k-signed-mtd-sub">new rent this month</div>
-        </div>
-        <div class="kpi click" id="kpi-conv" title="Showings that became signed leases, last 30 days — open Applications">
-          <div class="lbl">Showing &rarr; lease</div>
-          <div class="num" id="k-conv">&ndash;</div>
-          <div class="sub">conversion &middot; last 30 days</div>
-        </div>
         <div class="kpi click" id="kpi-tourconf" title="Tours the prospect reconfirmed ÷ tours Calendly asked, last 30 days — open Tours">
           <div class="lbl">Tour confirmation</div>
           <div class="num" id="k-tourconf">&ndash;</div>
@@ -1499,10 +1530,12 @@ window.addEventListener('error', function(e){
           <div class="warnchip" id="caly-warn"></div>
         </div>
       </div>
+      </details>
     </section>
 
     <section class="panel">
-      <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg></span><h2>Renewals &amp; retention</h2><span class="ph-sub">keeping the units we have</span></div>
+      <details class="pnl" id="pnl-renew">
+      <summary class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg></span><h2>Renewals &amp; retention</h2><span class="ph-count"><b id="phc-renew">&ndash;</b> pending &middot; <b id="phc-reten">&ndash;</b> retention</span><span class="ph-sub">keeping the units we have</span><span class="ph-chev">&#9656;</span></summary>
       <div class="panel-kpis pk-2">
         <div class="kpi click" id="kpi-renewals" title="Lease renewals this cycle — open the Renewals tab">
           <div class="lbl">Renewals pending</div>
@@ -1531,10 +1564,12 @@ window.addEventListener('error', function(e){
           <div class="pair"><span class="pl">&#128682; Moved out</span><span class="pv" id="o-move">&ndash;</span></div>
         </div>
       </div>
+      </details>
     </section>
 
     <section class="panel">
-      <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 3v3h8V3M8 13l2 2 4-4"/></svg></span><h2>Operations</h2><span class="ph-sub">maintenance &amp; to-do tasks</span></div>
+      <details class="pnl" id="pnl-ops">
+      <summary class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 3v3h8V3M8 13l2 2 4-4"/></svg></span><h2>Operations</h2><span class="ph-count"><b id="phc-tasks">&ndash;</b> open &middot; <b id="phc-overdue">&ndash;</b> overdue</span><span class="ph-sub">maintenance &amp; to-do tasks</span><span class="ph-chev">&#9656;</span></summary>
       <div class="panel-kpis pk-1">
         <div class="kpi click" id="kpi-tasks" title="Open Buildium tasks (maintenance + to-do) — open the Tasks tab">
           <div class="lbl">Open tasks</div>
@@ -1543,27 +1578,20 @@ window.addEventListener('error', function(e){
           <div class="sub"><b style="color:var(--clay)" id="k-overdue">&ndash;</b> overdue &middot; past due date</div>
         </div>
       </div>
+      </details>
     </section>
 
     <section class="panel">
-      <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h2>Team activity</h2><span class="ph-sub">agent follow-up &amp; outreach</span></div>
-      <div class="panel-kpis pk-3">
-        <div class="kpi alert click" id="kpi-needs" title="Prospects you toured but haven't called or texted in 7+ days — open My hub">
-          <div class="lbl">Needs follow-up</div>
-          <div class="num" id="k-needs">&ndash;</div>
-          <div class="sub">toured &middot; no contact in 7 days</div>
-        </div>
-        <div class="kpi alert" id="kpi-missed" title="Inbound calls not answered, last 7 days">
-          <div class="lbl">Missed calls</div>
-          <div class="num" id="k-missed">&ndash;</div>
-          <div class="sub">inbound, last 7 days</div>
-        </div>
+      <details class="pnl" id="pnl-team">
+      <summary class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h2>Team activity</h2><span class="ph-count"><b id="phc-outreach">&ndash;</b> outreach this week</span><span class="ph-sub">agent follow-up &amp; outreach</span><span class="ph-chev">&#9656;</span></summary>
+      <div class="panel-kpis pk-1">
         <div class="kpi click" id="kpi-outreach" title="Team calls + texts, last 7 days — open My hub">
           <div class="lbl">Outreach this week</div>
           <div class="num" id="k-outreach">&ndash;</div>
           <div class="sub" id="k-outreach-sub">calls &middot; texts</div>
         </div>
       </div>
+      </details>
     </section>
 
     <!-- Marketed-units table retired in Phase 2b; all units (with Occupancy / Marketing / Days-vacant filters) live on the Units board -->
@@ -1944,6 +1972,7 @@ window.addEventListener('error', function(e){
   </div>
 
   <div id="page-schedule" style="display:none">
+    <div class="schfunnel" id="sch-funnel" style="display:none"></div>
     <div id="sch-landing">
       <div class="card tablecard" style="margin-top:18px">
         <div class="tablebar"><h2>Schedule a tour</h2><span class="count-note">Choose how to set up this tour.</span></div>
@@ -3187,6 +3216,7 @@ window.addEventListener('error', function(e){
     if (key === 'applications' && appsAll === null) loadApps();
     if (key === 'tours') { if (toursAll === null) loadTours(); else applyRView(); }
     if (key === 'schedule' && schedAgents === null) loadSchedule();
+    if (key === 'schedule') loadSchedFunnel();
     if (key === 'renewals' && renewalsAll === null) loadRenewals();
     if (key === 'keys' && keysAll === null) loadKeys();
     if (key === 'hub' && hubLoaded === null) loadHub();
@@ -4769,6 +4799,9 @@ window.addEventListener('error', function(e){
     // (hidden) Ledger DOM so it's fresh when they switch back.
     if (ACTIVE_TAB === 'ledger') el('app').style.display = 'block';
     setAura(d);
+    // mirror folded-KPI values into the collapsed panel headers (once now for cached
+    // values, once after the countUp animations have settled on final text)
+    setTimeout(syncPanelCounts, 80); setTimeout(syncPanelCounts, 1500);
 
     var v = d.vacancy || {};
     countUp('k-vacant', v.vacant_total, fmtNum);
@@ -5043,6 +5076,53 @@ window.addEventListener('error', function(e){
   }
 
   /* ── vacant units table (Ledger tab) ──────── */
+  // ── Ledger fold-out panels (WS1-D1): remembered open state + header mirrors ──
+  var PNL_KEY = 'ledger_panels_v1';
+  var PNL_IDS = ['pnl-occ','pnl-funnel','pnl-renew','pnl-ops','pnl-team'];
+  function pnlApplySaved(){
+    try{
+      var s = JSON.parse(localStorage.getItem(PNL_KEY) || '{}');
+      PNL_IDS.forEach(function(id){
+        var d = el(id); if (!d) return;
+        if (typeof s[id] === 'boolean') d.open = s[id];
+        d.addEventListener('toggle', function(){
+          try{
+            var cur = JSON.parse(localStorage.getItem(PNL_KEY) || '{}');
+            cur[id] = d.open; localStorage.setItem(PNL_KEY, JSON.stringify(cur));
+            // charts initialized while hidden need a resize nudge when their panel opens
+            if (d.open && window.Chart && Chart.getChart) {
+              d.querySelectorAll('canvas').forEach(function(c){ var ch = Chart.getChart(c); if (ch) ch.resize(); });
+            }
+          }catch(e){}
+        });
+      });
+    }catch(e){}
+  }
+  pnlApplySaved();
+  function syncPanelCounts(){
+    try{
+      [['k-risk','phc-occ'],['k-tourconf','phc-funnel'],['k-renewals','phc-renew'],['k-retention','phc-reten'],
+       ['k-tasks','phc-tasks'],['k-overdue','phc-overdue'],['k-outreach','phc-outreach']].forEach(function(p){
+        var src = el(p[0]), dst = el(p[1]); if (!src || !dst) return;
+        dst.textContent = src.textContent;
+      });
+    }catch(e){}
+  }
+  // ── Schedule-tab funnel strip (offers → booked → toured → applied → signed) ──
+  var schFunnelReq = 0;
+  function loadSchedFunnel(){
+    var box = el('sch-funnel'); if (!box) return;
+    var w = windowDates(); var q = ++schFunnelReq;
+    authFetch('/schedule-funnel?from=' + w.from + '&to=' + w.to).then(function(r){ return r.json(); }).then(function(d){
+      if (q !== schFunnelReq || !d || d.error) return;
+      var segs = [['Offers sent', d.offers], ['Booked direct', d.booked], ['Showings', d.toured], ['Applications', d.applied], ['Leases signed', d.signed]];
+      box.innerHTML = segs.map(function(s, i){
+        return (i ? '<span class="sf-arrow">&rarr;</span>' : '') +
+          '<div class="sf-seg"><div class="sfv">' + fmtNum(s[1] || 0) + '</div><div class="sfl">' + s[0] + '</div></div>';
+      }).join('');
+      box.style.display = 'flex';
+    }).catch(function(){});
+  }
   function chipFor(days, unknown){
     if (unknown) return '<span class="chip c-cold">unknown</span>';
     var cls = days <= 30 ? 'c-ok' : days <= 60 ? 'c-warm' : 'c-hot';
@@ -7477,6 +7557,7 @@ window.addEventListener('error', function(e){
     if (el('page-applications').style.display === 'block') loadApps();
     if (el('page-tours').style.display === 'block') loadTours();
     if (el('page-phones') && el('page-phones').style.display === 'block') { phonesData = null; loadPhones(); }
+    if (el('page-schedule') && el('page-schedule').style.display === 'block') loadSchedFunnel();
     // MyHub shares the window → refresh its scorecard/funnel/signed/follow-ups + team overview
     if (hubLoaded) { loadHubScore(false); if (hubView === 'team') loadHubTeam(); }
   }

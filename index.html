@@ -359,15 +359,23 @@ window.addEventListener('error', function(e){
      cards in a row the same height even when one carries a sparkline. */
   .panel-kpis{display:grid;gap:14px;margin-bottom:16px;align-items:stretch}
   /* Ribbon: explicit tracks per width band — auto-fit orphans a 7th tile, so never use it here.
-     Wide = 8 tracks (gauge spans 2 → one balanced row); mid = 4 (gauge+2 / 4); narrow = 2. */
+     Wide = 8 tracks (gauge spans 2 → one balanced row); mid = 4 (gauge+2 / 4); narrow = 2.
+     Tiles are CALM stat tiles: one-line label, number, ONE one-line context sub, extras pinned
+     to the bottom edge. Verbose detail lives in tooltips + the panels, not here. */
   .ribbon{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;margin-top:4px}
-  .ribbon .kpi{padding:11px 12px;min-width:0}
-  .ribbon .kpi .num{font-size:clamp(1.25rem,1.3vw,1.7rem)}
-  .ribbon .kpi .sub{font-size:.6rem}
+  .ribbon .kpi{padding:12px 14px;min-width:0;overflow:hidden}
+  .ribbon .kpi:not(.gauge){display:flex;flex-direction:column;align-items:flex-start;min-height:118px}
+  .ribbon .kpi .lbl{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.12em;margin-bottom:6px}
+  .ribbon .kpi .num{font-size:clamp(1.35rem,1.5vw,1.9rem)}
+  .ribbon .kpi .sub{max-width:100%;font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ribbon .kpi .sub ~ .sub{display:none}
+  .ribbon .kpi:not(.gauge) .kx{margin-top:auto;width:100%;padding-top:8px}
   .ribbon .gsub-more{display:none}
-  .ribbon .kpi.gauge{gap:12px;grid-column:span 2}
+  .ribbon .kpi.gauge{gap:12px;grid-column:span 2;position:relative}
+  .ribbon .kpi.gauge .kx{position:absolute;right:12px;bottom:12px;margin:0}
   .ribbon .gaugewrap{width:64px;height:64px}
   .ribbon .gctr .num{font-size:1.05rem}
+  .ribbon .gband{white-space:nowrap}
   @media(max-width:1440px){ .ribbon{grid-template-columns:repeat(4,minmax(0,1fr))} }
   @media(max-width:700px){ .ribbon{grid-template-columns:repeat(2,minmax(0,1fr))} }
   summary.panel-head{cursor:pointer;list-style:none;-webkit-user-select:none;user-select:none}
@@ -1425,7 +1433,7 @@ window.addEventListener('error', function(e){
         <div class="sub"><b style="color:var(--clay)" id="k-unlisted">&ndash;</b> unlisted &middot; not being marketed</div>
       </div>
       <div class="kpi click" id="kpi-pre" title="Units with a signed future lease — pre-leased vacancies + flips. Click for the move-in list.">
-        <div class="lbl">Pre-leased / upcoming</div>
+        <div class="lbl">Pre-leased</div>
         <div class="num" id="k-pre">&ndash;</div>
         <div class="sub" id="k-pre-sub">signed future lease &mdash; click for move-ins</div>
       </div>

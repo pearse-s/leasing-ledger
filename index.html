@@ -1740,17 +1740,23 @@ window.addEventListener('error', function(e){
     #page-today .tdcal-h{margin:0 0 10px;font-size:1rem;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
     #page-today .tdcalbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
     #page-today #td-cal-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-    /* ── condensed booking bar — prospect/agent/event-type flow inline; numbered wizard chrome hidden ── */
+    /* ── booking selection: prospect card stays slim; agent + event type live ON the team calendar ── */
     #sch-view-book .schwiz{flex-direction:row;flex-wrap:wrap;gap:12px;align-items:flex-start}
     #sch-view-book .schstep{flex:1 1 250px;min-width:0;padding:12px}
     #sch-view-book .schnum{display:none}
     #sch-view-book .schlbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft)}
     #sch-view-book #sch-bk-step-cal{display:none}
-    /* the confirm step floats as a dock pinned to the viewport bottom — confirmation happens AT the calendar */
-    #sch-bk-step-confirm{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:54;flex:none;width:min(760px,calc(100vw - 28px));max-height:60vh;overflow:auto;background:#1b1723;border:1px solid var(--clay);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.55)}
-    #sch-bk-step-confirm.schlocked{display:none}
-    @media (max-width:880px){ #sch-bk-step-confirm{bottom:74px;width:calc(100vw - 16px);max-height:52vh} }
-    #sch-bk-dock-x{position:absolute;top:6px;right:8px;background:none;border:none;color:var(--ink-soft);font-size:1.05rem;cursor:pointer;padding:4px 9px}
+    /* event type picker — sits above the team calendar, revealed once an agent is picked (display toggled in JS) */
+    #page-today #sch-bk-step-event{background:none;border:none;padding:0;margin:0 0 8px;align-items:center}
+    #page-today #sch-bk-step-event .schnum{display:none}
+    #page-today #sch-bk-step-event .schmain{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
+    #page-today #sch-bk-step-event .schlbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:0}
+    /* nearest-opening notice when a click snaps to a different day */
+    #sch-bk-daynote{color:var(--clay);font-size:.82rem;margin:2px 0 6px}
+    #sch-bk-daynote:empty{display:none}
+    /* confirm & book — a centered modal (reuses .lmodal/.lmcard); no more viewport-pinned dock */
+    #sch-bk-modal .lmbody{padding-bottom:20px}
+    #sch-bk-modal .schrow{margin:0 0 10px}
     #page-today .tdcalutil{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 8px}
     #page-today .tdcalutil .schcal-legend{margin:0}
     /* ── Manager brief + portfolio pulse ── */
@@ -1863,7 +1869,7 @@ window.addEventListener('error', function(e){
     </div>
     <div id="sch-view-book" style="display:none">
       <div class="card tablecard" style="margin-top:8px">
-        <div class="tablebar"><h2>Schedule a tour</h2><span class="count-note" id="sch-bk-status">Pick a prospect, agent &amp; event type, then click an open time on the team calendar below to book it.</span><button type="button" class="tdact" id="sch-to-offer" style="margin-left:auto">Offer times by link &rarr;</button></div>
+        <div class="tablebar"><h2>Schedule a tour</h2><span class="count-note" id="sch-bk-status">Pick who the tour is for &mdash; then choose the agent and an open time on the calendar below.</span><button type="button" class="tdact" id="sch-to-offer" style="margin-left:auto">Offer times by link &rarr;</button></div>
         <div class="schwiz">
           <div class="schstep">
             <div class="schnum">1</div>
@@ -1883,57 +1889,6 @@ window.addEventListener('error', function(e){
               <button type="button" class="linklike" id="sch-bk-app-manual-toggle">+ enter a prospect manually</button>
             </div>
           </div>
-          <div class="schstep schlocked" id="sch-bk-step-agent">
-            <div class="schnum">2</div>
-            <div class="schmain">
-              <label class="schlbl">Tour with which agent?</label>
-              <div id="sch-bk-agent-chips" class="chipset schchips"></div>
-            </div>
-          </div>
-          <div class="schstep schlocked" id="sch-bk-step-event">
-            <div class="schnum">3</div>
-            <div class="schmain">
-              <label class="schlbl">Which event type?</label>
-              <div id="sch-bk-ettype" class="chipset schchips"></div>
-            </div>
-          </div>
-          <div class="schstep schlocked" id="sch-bk-step-cal">
-            <div class="schnum">4</div>
-            <div class="schmain">
-              <label class="schlbl">Pick an open time on the team calendar below</label>
-              <div id="sch-bk-cal"></div>
-            </div>
-          </div>
-          <div class="schstep schlocked" id="sch-bk-step-confirm">
-            <div class="schnum">5</div>
-            <button type="button" id="sch-bk-dock-x" aria-label="Close" title="Close">&times;</button>
-            <div class="schmain">
-              <label class="schlbl">Confirm &amp; book</label>
-              <div id="sch-bk-single-wrap">
-                <div class="schrow"><label class="schsub" style="margin:0">Time</label> <select id="sch-bk-time" style="width:auto"></select> <span class="schsublite" id="sch-bk-daylab"></span></div>
-                <div class="schloc" id="sch-bk-locwrap">
-                  <label class="schsub">Tour location <span class="schsublite">&mdash; sent to the prospect; type to search our units</span></label>
-                  <input type="text" id="sch-bk-loc" placeholder="Unit address" autocomplete="off">
-                  <div id="sch-bk-loc-results" class="schresults"></div>
-                </div>
-                <div class="schloc" id="sch-bk-ohloc" style="display:none">
-                  <label class="schsub">Open house location <span class="schsublite">&mdash; fixed; set by the open house</span></label>
-                  <div class="schohaddr" id="sch-bk-ohaddr"></div>
-                </div>
-                <div class="schsummary" id="sch-bk-summary"></div>
-                <button type="button" class="mybtn schgen" id="sch-bk-go">Book this tour</button>
-                <div id="sch-bk-result" style="display:none"></div>
-              </div>
-              <div id="sch-bk-multi-wrap" style="display:none">
-                <div class="schsublite" style="margin-bottom:6px">Click each open time on the calendar above to add a stop, then set each stop&rsquo;s unit. The prospect gets <b>one text</b> (for the first tour).</div>
-                <div id="sch-bk-stops"></div>
-                <div id="sch-bk-stop-results" class="schresults"></div>
-                <div class="schsummary" id="sch-bk-multi-summary"></div>
-                <button type="button" class="mybtn schgen" id="sch-bk-book-all" disabled>Book all tours</button>
-                <div id="sch-bk-multi-result" style="display:none"></div>
-              </div>
-            </div>
-          </div>
         </div>
         <div class="note" style="margin-top:12px">Booking creates the tour directly in Calendly and emails the prospect a confirmation. Times are in Edmonton time. Every booking is logged.</div>
       </div>
@@ -1942,15 +1897,14 @@ window.addEventListener('error', function(e){
       <section class="panel">
         <h3 class="tdcal-h">Team calendar <span class="qn2" id="td-cal-n"></span></h3>
         <div class="tdcalbar" id="td-cal-ag"></div>
+        <div class="schstep" id="sch-bk-step-event" style="display:none">
+          <div class="schmain">
+            <label class="schlbl">Event type</label>
+            <div id="sch-bk-ettype" class="chipset schchips"></div>
+          </div>
+        </div>
         <div class="tdcalutil">
           <div class="schrow">
-            <label class="schsub" style="margin:0">Through</label>
-            <select id="sch-bk-window" style="width:auto">
-              <option value="7">next 7 days</option>
-              <option value="14" selected>next 14 days</option>
-              <option value="21">next 21 days</option>
-              <option value="28">next 28 days</option>
-            </select>
             <button type="button" class="rfreshbtn" id="sch-bk-reload">&#8635; Refresh</button>
             <span class="count-note" id="sch-bk-cal-note"></span>
           </div>
@@ -1958,6 +1912,14 @@ window.addEventListener('error', function(e){
         </div>
         <div id="td-cal"></div>
         <div id="td-cal-list"></div>
+        <div class="card tablecard" id="sch-bk-multi-wrap" style="display:none;margin-top:12px">
+          <div class="schsublite" style="margin-bottom:6px">Back-to-back run &mdash; click each open time on the calendar to add a stop, then set each stop&rsquo;s unit. The prospect gets <b>one text</b> (for the first tour).</div>
+          <div id="sch-bk-stops"></div>
+          <div id="sch-bk-stop-results" class="schresults"></div>
+          <div class="schsummary" id="sch-bk-multi-summary"></div>
+          <button type="button" class="mybtn schgen" id="sch-bk-book-all" disabled>Book all tours</button>
+          <div id="sch-bk-multi-result" style="display:none"></div>
+        </div>
       </section>
       <div class="card tablecard" style="margin-top:16px">
         <div class="tablebar"><h2 style="font-size:1rem">Tour offers &middot; awaiting booking</h2><span class="count-note" id="sch-offers-note"></span></div>
@@ -2684,6 +2646,35 @@ window.addEventListener('error', function(e){
     <div class="lmbody">
       <div class="lm-feedchips" id="mi-chips"></div>
       <div id="mi-list"><span class="count-note">Loading&hellip;</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="lmodal" id="sch-bk-modal">
+  <div class="lmback" data-close="sch-bk-modal"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="sch-bk-modal">&times;</button>
+    <div class="lmhead">
+      <h3>Confirm &amp; book</h3>
+      <div class="lmsub" id="sch-bk-modal-sub">Check the time and location, then book &mdash; the prospect gets an email confirmation.</div>
+    </div>
+    <div class="lmbody">
+      <div id="sch-bk-single-wrap">
+        <div class="schrow"><label class="schsub" style="margin:0">Time</label> <select id="sch-bk-time" style="width:auto"></select> <span class="schsublite" id="sch-bk-daylab"></span></div>
+        <div id="sch-bk-daynote"></div>
+        <div class="schloc" id="sch-bk-locwrap">
+          <label class="schsub">Tour location <span class="schsublite">&mdash; sent to the prospect; type to search our units</span></label>
+          <input type="text" id="sch-bk-loc" placeholder="Unit address" autocomplete="off">
+          <div id="sch-bk-loc-results" class="schresults"></div>
+        </div>
+        <div class="schloc" id="sch-bk-ohloc" style="display:none">
+          <label class="schsub">Open house location <span class="schsublite">&mdash; fixed; set by the open house</span></label>
+          <div class="schohaddr" id="sch-bk-ohaddr"></div>
+        </div>
+        <div class="schsummary" id="sch-bk-summary"></div>
+        <button type="button" class="mybtn schgen" id="sch-bk-go">Book this tour</button>
+        <div id="sch-bk-result" style="display:none"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -3713,10 +3704,6 @@ window.addEventListener('error', function(e){
       var c = cols[tdFt(a.display_name)] || '#7c8597';
       h += '<button type="button" class="agchip' + (tdCalAgent === a.display_name ? ' on' : '') + '" data-ag="' + esc(a.display_name) + '" style="--agc:' + c + '"><span class="agdot" style="background:' + c + '"></span>' + esc(a.display_name) + '</button>';
     });
-    if (tdCalAgent){
-      var picked = (tdCalAgents || []).filter(function(a){ return a.display_name === tdCalAgent; })[0];
-      if (picked) h += '<button type="button" class="tdact" data-book="' + esc(String(picked.id)) + '">Book ' + esc(tdCalAgent) + ' &rarr;</button>';
-    }
     box.innerHTML = h;
   }
   function tdCalFiltered(){
@@ -4024,8 +4011,13 @@ window.addEventListener('error', function(e){
       var bk = e.target.closest('[data-book]');
       if (bk){ tdGotoBook(bk.getAttribute('data-book')); return; }
       var b = e.target.closest('.agchip'); if (!b) return;
-      tdCalAgent = b.getAttribute('data-ag') || '';
-      tdDrawCal();
+      var ag = b.getAttribute('data-ag') || '';
+      // the calendar's agent chips ARE the booking agent picker now: a specific agent arms
+      // booking (fetches their event types + availability); "All agents" filters + disarms.
+      if (!ag){ tdCalAgent = ''; schBkDisarmAgent(); tdDrawCal(); return; }
+      var a = (tdCalAgents || []).filter(function(x){ return x.display_name === ag; })[0];
+      if (a) schBkPickAgent(String(a.id));   // sets tdCalAgent + redraws + loads event types/availability
+      else { tdCalAgent = ag; tdDrawCal(); }
     });
   })();
 
@@ -9241,13 +9233,26 @@ window.addEventListener('error', function(e){
     tdBkStatus('Prospect set — now pick the agent.');
   }
   function schBkClearProspect(){ schedBook.applicant = null; if (el('sch-bk-app-picked')) el('sch-bk-app-picked').innerHTML = ''; schUnlock('sch-bk-step-agent', false); }
+  // Confirm & book now lives in a centered modal (reuses openModal/closeModal) instead of a viewport-pinned dock.
+  function schBkOpenConfirm(){ var m = el('sch-bk-modal'); if (m && !m.classList.contains('open')) openModal('sch-bk-modal'); }
+  function schBkCloseConfirm(){ var m = el('sch-bk-modal'); if (m && m.classList.contains('open')) closeModal('sch-bk-modal'); }
+  // Disarm the booking when the calendar is set back to "All agents" — hide the event-type picker, drop the armed agent/type.
+  function schBkDisarmAgent(){
+    schedBook.agentId = null; schedBook.agentName = ''; schedBook.eventType = null; schedBook.eventTypeName = '';
+    schBkStops = []; schBkRenderStops(); schBkCloseConfirm();
+    var evStep = el('sch-bk-step-event'); if (evStep) evStep.style.display = 'none';
+    var et = el('sch-bk-ettype'); if (et) et.innerHTML = '';
+    var note = el('sch-bk-cal-note'); if (note) note.textContent = '';
+    tdBkStatus(schedBook.applicant ? 'Pick an agent chip to see their open times.' : 'Pick who the tour is for, then an agent.');
+  }
   function schBkPickAgent(aid){
     var a = (schedAgents || []).filter(function(x){ return String(x.id) === String(aid); })[0]; if (!a) return;
     schedBook.agentId = a.id; schedBook.agentName = a.display_name; schedBook.eventType = null; schedBook.eventTypeName = '';
     schBkStops = []; schBkRenderStops();   // a different agent → start the run fresh
     var box = el('sch-bk-agent-chips'); if (box) box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-aid') === String(aid)); });
     tdCalAgent = a.display_name; tdDrawCal();   // focus the team calendar on the agent being booked
-    schUnlock('sch-bk-step-event', true); schUnlock('sch-bk-step-cal', false); schUnlock('sch-bk-step-confirm', false);
+    var evStep = el('sch-bk-step-event'); if (evStep) evStep.style.display = '';   // reveal the event-type picker above the calendar
+    schBkCloseConfirm();
     tdBkStatus('Checking ' + a.display_name + "'s tour types…");
     var et = el('sch-bk-ettype'); if (et) et.innerHTML = '<span class="count-note">Loading event types…</span>';
     authFetch('/agent-event-types?agent_id=' + encodeURIComponent(a.id)).then(function(j){
@@ -9298,7 +9303,7 @@ window.addEventListener('error', function(e){
   }
   function schBkLoadCalendar(){
     if (!schedBook.agentId) return;
-    var days = parseInt((el('sch-bk-window').value || '14'), 10) || 14;
+    var days = 28;   // fixed horizon — the calendar's own prev/next handles navigation (window dropdown retired)
     var to = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
     var note = el('sch-bk-cal-note'); if (note) note.textContent = 'Loading…';
     var aid = encodeURIComponent(schedBook.agentId);
@@ -9352,19 +9357,23 @@ window.addEventListener('error', function(e){
   function schBkPickTime(when){
     var ms = (typeof when === 'number') ? when : Date.parse(when);
     if (!ms){ return; }
+    if (!schedBook.applicant){   // agent/type can be picked on the calendar with no prospect yet — require one before booking
+      tdBkStatus('First, pick who the tour is for (top of the page).');
+      var pf = el('sch-bk-app-search'); if (pf){ try { pf.scrollIntoView({ behavior: 'smooth', block: 'center' }); pf.focus(); } catch(e){} }
+      return;
+    }
     var day = schBkSlotsForDay(ms);
     var pool = day.length ? day : (bkData.slots || []);
-    if (!pool.length){ var note = el('sch-bk-cal-note'); if (note) note.textContent = 'No open times to book in this window — try another window or agent.'; return; }
+    if (!pool.length){ var note = el('sch-bk-cal-note'); if (note) note.textContent = 'No open times to book in this window — pick another agent.'; return; }
     var pick = pool.reduce(function(a, b){ return Math.abs(Date.parse(b.start_time) - ms) < Math.abs(Date.parse(a.start_time) - ms) ? b : a; });
-    if (schBkMulti) schBkAddStop(pick.start_time); else schBkConfirm(pick.start_time);
+    if (schBkMulti) schBkAddStop(pick.start_time); else schBkConfirm(pick.start_time, ms);
   }
   // ── Back-to-back run (one prospect, several units; text on the first only) ─────────
   function schBkSetMulti(on){
     schBkMulti = !!on;
-    var sw = el('sch-bk-single-wrap'), mw = el('sch-bk-multi-wrap');
-    if (sw) sw.style.display = on ? 'none' : '';
+    var mw = el('sch-bk-multi-wrap');
     if (mw) mw.style.display = on ? '' : 'none';
-    if (on) schUnlock('sch-bk-step-confirm', true);
+    if (on) schBkCloseConfirm();   // multi collects stops in the inline panel below the calendar, not the single modal
     schBkRenderStops();
     schBkRenderCal();
   }
@@ -9372,8 +9381,7 @@ window.addEventListener('error', function(e){
     if (schBkStops.some(function(s){ return s.start_time === startIso; })) return;   // dedupe
     schBkStops.push({ start_time: startIso, location: schedBook.locDefault || '' });
     schBkStops.sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
-    schUnlock('sch-bk-step-confirm', true);
-    schBkRenderStops();
+    schBkRenderStops();   // stops render in the inline multi panel (already visible in multi mode)
     schBkRenderCal();
   }
   function schBkRemoveStop(startIso){
@@ -9475,9 +9483,9 @@ window.addEventListener('error', function(e){
     }
     sum.innerHTML = 'Book <b>' + who + '</b> with <b>' + esc(schedBook.agentName) + '</b>' + (schedBook.eventTypeName ? ' for <b>' + esc(schedBook.eventTypeName) + '</b>' : '') + ' on <b>' + esc(when) + '</b>.';
   }
-  function schBkConfirm(startIso){
+  function schBkConfirm(startIso, clickedMs){
     schedBook.chosen = startIso;
-    schUnlock('sch-bk-step-confirm', true);
+    schBkOpenConfirm();
     if (schedBook.isGroup){
       var oa = el('sch-bk-ohaddr'); if (oa) oa.textContent = schedBook.ohLocation || 'Set by the open house';
     } else if (el('sch-bk-loc') && !el('sch-bk-loc').value) { el('sch-bk-loc').value = schedBook.locDefault; }
@@ -9492,9 +9500,15 @@ window.addEventListener('error', function(e){
       }).join('');
     }
     var dl = el('sch-bk-daylab'); if (dl) dl.textContent = schEdFmt(startIso, { weekday: 'long', month: 'short', day: 'numeric' });
+    // flag when the snap landed on a different day than the one clicked (nearest-opening surprise)
+    var dn = el('sch-bk-daynote');
+    if (dn){
+      dn.textContent = (clickedMs && schBkDayKey(clickedMs) !== schBkDayKey(Date.parse(startIso)))
+        ? 'Nearest opening — you clicked ' + schEdFmt(clickedMs, { weekday: 'long', month: 'short', day: 'numeric' }) + ', which had no open time.'
+        : '';
+    }
     schBkRenderSummary();
     var rb = el('sch-bk-result'); if (rb){ rb.style.display = 'none'; rb.innerHTML = ''; }
-    var step = el('sch-bk-step-confirm'); if (step && step.scrollIntoView) try { step.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e){}
   }
   function schBkUnitSearch(){
     var q = (el('sch-bk-loc').value || '').trim(); var res = el('sch-bk-loc-results'); if (!res) return;
@@ -9522,7 +9536,7 @@ window.addEventListener('error', function(e){
         rb.style.display = 'block';
         rb.innerHTML = '<div class="schbooked">' + (schedBook.isGroup ? '✓ Added ' + esc(schedBook.applicant ? schedBook.applicant.name : 'the prospect') + ' to the open house on ' + esc(when) + ' with ' + esc(schedBook.agentName) : '✓ Booked ' + esc(when) + ' with ' + esc(schedBook.agentName)) + '. The prospect was emailed a confirmation.</div>';
       }
-      schUnlock('sch-bk-step-confirm', false);
+      setTimeout(schBkCloseConfirm, 1500);   // let the ✓ land in the modal, then close it
       tdBkDone = Date.now();
       schBkLoadCalendar();   // the new booking now shows + that slot is gone
       tdLoadCal();           // refresh the team calendar's tours layer too
@@ -9619,13 +9633,11 @@ window.addEventListener('error', function(e){
     var brl = el('sch-bk-reload'); if (brl) brl.addEventListener('click', schBkLoadCalendar);
     var bso = el('sch-bk-showopen'); if (bso) bso.addEventListener('change', function(){ if (schedBook.agentId && schedBook.eventType) schBkRenderCal(); });
     var btm = el('sch-bk-time'); if (btm) btm.addEventListener('change', function(){ schedBook.chosen = this.value; schBkRenderSummary(); });
-    var bwin = el('sch-bk-window'); if (bwin) bwin.addEventListener('change', function(){ if (schedBook.agentId && schedBook.eventType) schBkLoadCalendar(); });
     var blc = el('sch-bk-loc'); if (blc) blc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(schBkUnitSearch, 280); });
     var blr = el('sch-bk-loc-results'); if (blr) blr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-bk-loc')) el('sch-bk-loc').value = b.getAttribute('data-addr') || ''; blr.innerHTML = ''; });
     var bgo = el('sch-bk-go'); if (bgo) bgo.addEventListener('click', schBkGo);
     // Back-to-back run
     var bmul = el('sch-bk-multi'); if (bmul) bmul.addEventListener('change', function(){ if (this.checked && !tdBookArmed()){ this.checked = false; var nt = el('sch-bk-cal-note'); if (nt) nt.textContent = 'Pick a prospect, agent and event type first.'; return; } schBkSetMulti(this.checked); });
-    var dkx = el('sch-bk-dock-x'); if (dkx) dkx.addEventListener('click', function(){ schUnlock('sch-bk-step-confirm', false); });
     var bba = el('sch-bk-book-all'); if (bba) bba.addEventListener('click', schBkBookAll);
     var bstops = el('sch-bk-stops');
     if (bstops){

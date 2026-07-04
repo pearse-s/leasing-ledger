@@ -1757,6 +1757,8 @@ window.addEventListener('error', function(e){
     /* confirm & book — a centered modal (reuses .lmodal/.lmcard); no more viewport-pinned dock */
     #sch-bk-modal .lmbody{padding-bottom:20px}
     #sch-bk-modal .schrow{margin:0 0 10px}
+    #sch-bk-modal .schloc{max-width:none}
+    #sch-bk-modal .schloc input[type=text]{width:100%;box-sizing:border-box}
     #page-today .tdcalutil{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 8px}
     #page-today .tdcalutil .schcal-legend{margin:0}
     /* ── Manager brief + portfolio pulse ── */
@@ -9264,8 +9266,9 @@ window.addEventListener('error', function(e){
         return;
       }
       if (et) et.innerHTML = types.map(function(t){ return '<button type="button" class="chip-mini" data-uri="' + esc(t.uri) + '" data-name="' + esc(t.name || '') + '" data-dur="' + esc(t.duration || 15) + '" data-kind="' + esc(t.kind || '') + '">' + esc(t.name || 'Tour') + (t.kind === 'group' ? '<span class="schgrp">group</span>' : '') + '</button>'; }).join('');
-      // one type = no decision to make — pick it automatically and load open times right away
-      if (types.length === 1) schBkPickEventType(types[0].uri, types[0].name || 'Tour', types[0].duration || 15, types[0].kind || '');
+      // default to "Rental Tour" so Denai can book immediately; fall back to the sole type. The chip can still be switched.
+      var pref = types.filter(function(t){ return /rental tour/i.test(t.name || ''); })[0] || (types.length === 1 ? types[0] : null);
+      if (pref) schBkPickEventType(pref.uri, pref.name || 'Tour', pref.duration || 15, pref.kind || '');
     }).catch(function(e){ if (String(e.message) !== 'AUTH' && et) et.innerHTML = '<span class="count-note">Could not load event types.</span>'; });
   }
   function schBkPickEventType(uri, name, dur, kind){
@@ -9334,7 +9337,7 @@ window.addEventListener('error', function(e){
         });
         if (note && !tdBkFresh()) note.textContent = bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' · ' + bkData.slots.length + ' open time' + (bkData.slots.length === 1 ? '' : 's') + ' — click any empty time to book';
       }
-      schBkRenderCal();
+      schBkRenderCal(true);   // initial availability load — jump the calendar to the first opening
       var tc = el('td-cal'); if (tc) tc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });   // slots are live — bring the calendar into view
       if (!tdBkFresh()) tdBkStatus(bkData.slots.length ? 'Click an open time on the calendar to book it.' : 'No open times in this window — widen it or pick another agent.');
     }).catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });
@@ -9348,8 +9351,11 @@ window.addEventListener('error', function(e){
   }
   // The booking overlay renders ON the team calendar (tdcal) — one calendar for
   // seeing every agent's schedule AND booking. (bkcal retired 2026-07-03.)
-  function schBkRenderCal(){
+  function schBkRenderCal(jump){
     tdDrawCal();
+    // Only the initial availability load jumps to the first opening. Re-renders from adding/removing
+    // stops (back-to-back) or toggling views keep the current week so you can click slots in place.
+    if (!jump) return;
     var jumpTo = (bkData.slots[0] && bkData.slots[0].start_time) || (schedBook.isGroup && schedBook.scheduled[0] && schedBook.scheduled[0].start_time);
     if (tdcal && jumpTo){ try { tdcal.gotoDate(jumpTo); } catch(e){} }
   }

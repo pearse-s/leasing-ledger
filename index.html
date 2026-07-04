@@ -3530,8 +3530,9 @@ window.addEventListener('error', function(e){
                     tdPanel('td-team', 'Team &middot; last 30 days', 'hub', 'Open My hub', true);
       tdLoadRenewals(); tdLoadKeys(); tdLoadTeam();
     } else {
-      tdSub('Agent — your follow-ups and unclaimed signed leases.');
-      g.innerHTML = tdPanel('td-fu', 'My follow-ups', 'hub', 'Open My hub') +
+      tdSub("Agent — today's tours first, then follow-ups and the unclaimed signed pool.");
+      g.innerHTML = tdPanel('td-mytours', 'My tours today', 'tours', 'Open Tours', true) +
+                    tdPanel('td-fu', 'My follow-ups', 'hub', 'Open My hub') +
                     tdPanel('td-sign', 'Signed pool &middot; needs claiming', 'hub', 'Review in My hub');
       tdLoadAgent();
     }
@@ -3552,6 +3553,51 @@ window.addEventListener('error', function(e){
     var loaded = todayLoaded !== null;
     showTab('today');
     if (loaded){ tdSyncRoles(); tdRender(); }
+  }
+  function tdDayKeyEd(d){ return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Edmonton', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
+  // post-tour thank-you + the unit's own Buildium application link (Pearse copy, 2026-07-03)
+  function tdThanksMsg(name, addr, applyUrl){
+    var first = (String(name || '').trim().split(/\s+/)[0]) || 'there';
+    var me = String(getActor() || '').trim().split(/\s+/)[0] || '';
+    return 'Hi ' + first + ", it's " + (me ? me + ' ' : '') + 'with Live Furnished — thank you for touring' + (addr ? ' ' + addr : ' the unit') + ' today. If you have any questions, let me know.'
+      + (applyUrl ? ' Here is the application link for this exact unit: ' + applyUrl : '');
+  }
+  // My tours today (agent role): the agent's own same-day tours — confirm chase while
+  // upcoming; once started/finished, a thank-you text with the unit-specific apply link.
+  function tdLoadMyTours(me){
+    authFetch('/tours?' + toursQuery().toString()).then(function(j){
+      var todayKey = tdDayKeyEd(new Date());
+      var rows = (j.tours || []).filter(function(r){
+        return r.status === 'active' && tdFt(r.agent) === tdFt(me) && tdDayKeyEd(new Date(Date.parse(r.start_time))) === todayKey;
+      }).sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+      var now = Date.now(), h = '';
+      rows.forEach(function(r){
+        var addrRaw = (r.matched_property_name || r.location_text || '') + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
+        var when = schEdFmt(r.start_time, { hour: 'numeric', minute: '2-digit', hour12: true });
+        var started = Date.parse(r.start_time) <= now;
+        var endMs = Date.parse(r.end_time || '') || (Date.parse(r.start_time) + 30 * 60000);
+        var stateChip;
+        if (!started) stateChip = reconChip(r);
+        else if (r.is_no_show) stateChip = '<span class="chip c-hot">no-show</span>';
+        else if (now <= endMs) stateChip = '<span class="chip c-warm">in progress</span>';
+        else stateChip = '<span class="chip c-ok">toured</span>';
+        var act = '';
+        if (r.invitee_phone){
+          if (!started){
+            var whenFull = schEdFmt(r.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+            act = '<div class="tdrowact"><a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(r.invitee_phone), reconMsg(r.invitee_name, addrRaw, whenFull, me)) + '" class="tdact">&#128172; Confirm</a></div>';
+          } else if (r.is_no_show){
+            act = '<div class="tdrowact"><a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(r.invitee_phone)) + '" class="tdact">&#128172; Text</a></div>';
+          } else {
+            act = '<div class="tdrowact"><a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(r.invitee_phone), tdThanksMsg(r.invitee_name, addrRaw, r.unit_listing_url)) + '" class="tdact">&#128172; Thanks + apply link</a></div>';
+          }
+        }
+        h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(when) + '</b> &middot; ' + esc(r.invitee_name || 'Prospect') +
+          (addrRaw ? '<div class="schoffer-sub">' + esc(addrRaw) + '</div>' : '') + '</div>' + stateChip + act + '</div>';
+      });
+      tdFill('td-mytours', h, 0, 'No tours today.');
+      var n = el('td-mytours-n'); if (n) n.textContent = rows.length ? rows.length + ' today' : '';
+    }).catch(function(e){ if (String(e.message) !== 'AUTH') tdFail('td-mytours', 'your tours'); });
   }
   // open the local BOOK flow, optionally preselecting the agent (workspace is on this page now)
   function tdGotoBook(aid){
@@ -3726,6 +3772,8 @@ window.addEventListener('error', function(e){
       var agents = (j.scorecard || []).map(function(r){ return r.agent; }).filter(Boolean).sort();
       var me = hubMatchAgent(getActor(), agents);
       tdSub(me ? ('Agent — working as ' + me + '. Confirm tours, close the loop on applications.') : 'Agent — no showing activity matched to your name yet.');
+      if (me) tdLoadMyTours(me);
+      else tdFill('td-mytours', '', 0, 'No tours matched to your name yet.');
       if (!me){ tdFill('td-fu', '', 0, 'No follow-ups yet.'); }
       else {
         authFetch('/agent-followups?agent=' + encodeURIComponent(me)).then(function(fj){

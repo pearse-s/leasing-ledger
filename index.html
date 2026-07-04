@@ -3724,6 +3724,23 @@ window.addEventListener('error', function(e){
     if (!tdCalAgent) return rows;
     return rows.filter(function(r){ return tdFt(r.agent) === tdFt(tdCalAgent); });
   }
+  // Non-tour BUSY blocks (Calendly/external calendar) for the filtered agent — parity
+  // with the old Schedule page's booking calendar, but available on a plain chip pick.
+  // Session-cached per agent (28-day window); [] doubles as the in-flight marker.
+  var tdCalBusyCache = {};
+  function tdCalEnsureBusy(){
+    if (!tdCalAgent) return;
+    var a = (tdCalAgents || []).filter(function(x){ return x.display_name === tdCalAgent; })[0];
+    if (!a) return;
+    var key = String(a.id);
+    if (tdCalBusyCache[key] !== undefined) return;
+    tdCalBusyCache[key] = [];
+    var from = new Date().toISOString().slice(0, 10);
+    var to = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
+    authFetch('/agent-schedule?agent_id=' + encodeURIComponent(a.id) + '&from=' + from + '&to=' + to)
+      .then(function(j){ tdCalBusyCache[key] = j.busy || []; tdDrawCal(); })
+      .catch(function(){ /* busy layer is best-effort — tours still render */ });
+  }
   function tdDrawCal(){
     var box = el('td-cal'); if (!box || tdCalRows === null) return;
     tdCalChips();
@@ -3744,6 +3761,17 @@ window.addEventListener('error', function(e){
       };
     });
     if (tdBookArmed()) events = events.concat(tdBookOverlay());
+    // single-agent view: the agent's non-tour BUSY blocks show without arming a booking;
+    // when armed, tdBookOverlay() already carries busy for the booking window — skip doubles.
+    var busyRow = tdCalAgent ? (tdCalAgents || []).filter(function(x){ return x.display_name === tdCalAgent; })[0] : null;
+    if (busyRow && !tdBookArmed()){
+      var bz = tdCalBusyCache[String(busyRow.id)];
+      if (bz === undefined) tdCalEnsureBusy();
+      (bz || []).forEach(function(b){
+        events.push({ id: 'busy_' + b.start, title: 'Busy', start: b.start, end: b.end || undefined, display: 'background', backgroundColor: '#c9ccd1', classNames: ['fc-ev-busy'], extendedProps: { kind: 'busy' } });
+      });
+      if (n && bz && bz.length) n.textContent += ' · busy time shown';
+    }
     if (!tdcal){
       var mob = isMobile();
       tdcal = new FullCalendar.Calendar(box, {

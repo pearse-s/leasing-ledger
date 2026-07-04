@@ -3767,7 +3767,7 @@ window.addEventListener('error', function(e){
         initialView: mob ? 'timeGridDay' : 'timeGridWeek',
         headerToolbar: { left:'prev,next today', center:'title', right: mob ? 'timeGridDay,listWeek' : 'timeGridWeek,timeGridDay,listWeek' },
         height: 620, nowIndicator: true, firstDay: 0, expandRows: true, dayMaxEvents: true, snapDuration: '00:15:00',
-        slotMinTime: '08:00:00', slotMaxTime: '21:00:00', allDaySlot: false, eventDisplay: 'block',
+        slotMinTime: '09:00:00', slotMaxTime: '20:00:00', allDaySlot: false, eventDisplay: 'block',
         eventClick: function(info){
           if (info.jsEvent) info.jsEvent.preventDefault();
           var k = (info.event.extendedProps || {}).kind;

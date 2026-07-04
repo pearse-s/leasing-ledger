@@ -3742,7 +3742,7 @@ window.addEventListener('error', function(e){
       var col = colors[tdFt(r.agent)] || '#7c8597';
       return {
         id: r.uri,
-        title: (tdCalAgent ? '' : (r.agent ? r.agent + ' · ' : '')) + tourAddr(r),
+        title: tourAddr(r),   // agent is already shown by the event colour + chips; show the address, not the name
         start: r.start_time, end: r.end_time || undefined,
         backgroundColor: col, borderColor: col, textColor: '#15110D',
         classNames: canceled ? ['fc-ev-cxl'] : [],

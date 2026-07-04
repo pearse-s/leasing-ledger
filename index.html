@@ -1664,6 +1664,14 @@ window.addEventListener('error', function(e){
     #sch-bk-dock-x{position:absolute;top:6px;right:8px;background:none;border:none;color:var(--ink-soft);font-size:1.05rem;cursor:pointer;padding:4px 9px}
     #page-today .tdcalutil{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 8px}
     #page-today .tdcalutil .schcal-legend{margin:0}
+    /* ── Manager brief + portfolio pulse ── */
+    #page-today .tdbrief{display:block;width:100%;text-align:left;background:none;border:none;border-left:3px solid var(--clay);border-radius:4px;padding:7px 10px;margin:0 0 6px;color:var(--ink);font-size:.92rem;cursor:pointer;font-family:var(--sans)}
+    #page-today .tdbrief:hover{background:var(--clay-soft)}
+    #page-today .tdpulse{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    #page-today .tdpulsec{display:flex;flex-direction:column;gap:2px;align-items:flex-start;background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:10px;padding:8px 12px;cursor:pointer;min-width:96px;font-family:var(--sans)}
+    #page-today .tdpulsec:hover{border-color:var(--clay)}
+    #page-today .tdp-v{font-size:1.05rem;font-weight:800;color:var(--ink)}
+    #page-today .tdp-l{font-size:.68rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em}
     </style>
     <div class="tdhead">
       <div>
@@ -3524,11 +3532,15 @@ window.addEventListener('error', function(e){
       return;
     }
     if (role === 'manager'){
-      tdSub('Manager — renewals waiting on a decision, keys overdue, team pulse.');
-      g.innerHTML = tdPanel('td-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
-                    tdPanel('td-keys', 'Keys overdue', 'keys', 'Open Keys') +
-                    tdPanel('td-team', 'Team &middot; last 30 days', 'hub', 'Open My hub', true);
-      tdLoadRenewals(); tdLoadKeys(); tdLoadTeam();
+      tdSub('Manager — the brief first, then tasks, renewals and unit movement across your scope.');
+      g.innerHTML = '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
+          '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div></section>' +
+        tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks') +
+        tdPanel('td-mgr-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
+        '<section class="panel tdq tdwide"><h3>Unit updates <span class="qn2" id="td-mgr-units-n"></span></h3>' +
+          '<div class="schoffers" id="td-mgr-units"><div class="note">Loading&hellip;</div></div>' +
+          '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>';
+      tdMgrAssemble();
     } else {
       tdSub("Agent — today's tours first, then follow-ups and the unclaimed signed pool.");
       g.innerHTML = tdPanel('td-mytours', 'My tours today', 'tours', 'Open Tours', true) +
@@ -3810,48 +3822,137 @@ window.addEventListener('error', function(e){
       }).catch(function(e){ if (String(e.message) !== 'AUTH') tdFail('td-sign', 'signed leases'); });
     }).catch(function(e){ if (String(e.message) !== 'AUTH'){ tdFail('td-fu', 'the scorecard'); tdFail('td-sign', 'signed leases'); } });
   }
-  function tdLoadRenewals(){
+  /* ── Manager Today (Option B) ──────────────────────────────────────────────
+     ONE assembly seam: tdMgrAssemble() gathers stats/tasks/renewals/units with
+     the EXISTING endpoints and hands one object to pure renderers. Option C
+     replaces this assembly with GET /manager-brief (new get_manager_brief RPC,
+     same shape + trend extras) — full contract in
+     Reports/manager-today-optionC-spec.md. Renderers stay untouched in C. ── */
+  function tdMgrScopePass(r){
+    var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
+    if (mg.length && mg.indexOf(String(r.property_manager_id)) < 0) return false;
+    if (ow.length && ow.indexOf(String(r.primary_owner_id)) < 0) return false;
+    if (pr.length && pr.indexOf(String(r.property_id)) < 0) return false;
+    return true;
+  }
+  // "needing attention" = actionable now; Deferred is parked on purpose, Completed/Closed are done
+  function tdMgrOpenTask(t){ return t.task_status === 'New' || t.task_status === 'InProgress'; }
+  function tdMgrDays(dateStr){
+    var t = Date.parse(dateStr || '');
+    return t ? Math.ceil((t - Date.now()) / 86400000) : null;
+  }
+  function tdMgrAssemble(){
+    var m = { stats: null, tasks: null, renewals: null, units: null }, done = 0;
+    var step = function(){ if (++done === 4) tdRenderMgr(m); };
+    authFetch('/stats?' + buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(){}).then(step);
+    authFetch('/tasks').then(function(j){ m.tasks = (j.tasks || []).filter(tdMgrScopePass).filter(tdMgrOpenTask); }).catch(function(){}).then(step);
     var p = new URLSearchParams(); appendScope(p);
-    authFetch('/renewals?' + p.toString()).then(function(j){
-      var rows = (j.renewals || []).filter(function(r){ return r.renewal_state === 'Pending'; });
-      var h = '';
-      rows.slice(0, 8).forEach(function(r){
-        h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.tenant_names || '–') + '</b> &middot; ' + esc(r.property_name || '') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') +
-          '<div class="schoffer-sub">' + (r.lease_to_date ? 'lease ends ' + esc(r.lease_to_date) : '') + '</div></div></div>';
-      });
-      tdFill('td-ren', h, rows.length, 'No renewals pending a decision.');
-    }).catch(function(e){ if (String(e.message) !== 'AUTH') tdFail('td-ren', 'renewals'); });
+    authFetch('/renewals?' + p.toString()).then(function(j){ m.renewals = (j.renewals || []).filter(function(r){ return r.renewal_state === 'Pending'; }); }).catch(function(){}).then(step);
+    authFetch('/units').then(function(j){ m.units = (j.units || []).filter(tdMgrScopePass); }).catch(function(){}).then(step);
   }
-  function tdLoadKeys(){
-    authFetch('/keys').then(function(j){
-      var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
-      var rows = (j.keys || []).filter(function(r){
-        if (mg.length && mg.indexOf(String(r.property_manager_id)) < 0) return false;
-        if (ow.length && ow.indexOf(String(r.primary_owner_id)) < 0) return false;
-        if (pr.length && pr.indexOf(String(r.property_id)) < 0) return false;
-        return !!r.is_overdue;
-      });
-      var h = '';
-      rows.slice(0, 8).forEach(function(r){
-        h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.label || '–') + '</b>' +
-          '<div class="schoffer-sub">' + (r.holder ? 'held by ' + esc(r.holder) : '') + (r.date_expected ? ' &middot; due ' + esc(r.date_expected) : '') + '</div></div><span class="schchip-cxl">overdue</span></div>';
-      });
-      tdFill('td-keys', h, rows.length, 'No keys overdue.');
-    }).catch(function(e){ if (String(e.message) !== 'AUTH') tdFail('td-keys', 'keys'); });
+  function tdRenderMgr(m){
+    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderUnits(m);
   }
-  function tdLoadTeam(){
-    var w = tdWin();
-    authFetch('/agent-scorecard?from=' + w.from + '&to=' + w.to).then(function(j){
-      var rows = (j.scorecard || []).slice();
-      var tS = 0, tA = 0, tG = 0, tGs = 0;
-      rows.forEach(function(r){ tS += r.showings || 0; tA += r.applications || 0; tG += r.signed || 0; tGs += r.signed_suggested || 0; });
-      rows.sort(function(a, b){ return ((b.signed || 0) - (a.signed || 0)) || ((b.showings || 0) - (a.showings || 0)); });
-      var h = '<div class="schoffer"><div class="schoffer-main">Showings <b>' + fmtNum(tS) + '</b> &middot; Applications <b>' + fmtNum(tA) + '</b> &middot; Signed <b>' + fmtNum(tG) + '</b>' + (tGs ? ' <span class="qn2">+' + fmtNum(tGs) + ' suggested</span>' : '') + '</div></div>';
-      rows.slice(0, 3).forEach(function(r){
-        h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.agent) + '</b><div class="schoffer-sub">' + fmtNum(r.showings || 0) + ' showings &middot; ' + fmtNum(r.applications || 0) + ' apps &middot; ' + fmtNum(r.signed || 0) + ' signed</div></div></div>';
-      });
-      tdFill('td-team', h, 0, 'No team activity in the last 30 days.');
-    }).catch(function(e){ if (String(e.message) !== 'AUTH') tdFail('td-team', 'the team scorecard'); });
+  function tdMgrRenderBrief(m){
+    var box = el('td-mgr-brief'); if (!box) return;
+    var L = [];
+    if (m.tasks){
+      var od = m.tasks.filter(function(t){ return !!t.is_overdue; });
+      if (od.length){
+        var oldest = 0; od.forEach(function(t){ oldest = Math.max(oldest, t.age_days || t.days_open || 0); });
+        L.push({ k: 'tasks', t: od.length + ' task' + (od.length === 1 ? '' : 's') + ' overdue' + (oldest ? ' (oldest ' + oldest + 'd)' : '') });
+      }
+    }
+    if (m.renewals){
+      var soon = m.renewals.filter(function(r){ var d = tdMgrDays(r.current_lease_end || r.lease_to_date); return d != null && d <= 30; });
+      if (soon.length) L.push({ k: 'renewals', t: soon.length + ' renewal' + (soon.length === 1 ? '' : 's') + ' undecided inside 30 days' });
+      else if (m.renewals.length) L.push({ k: 'renewals', t: m.renewals.length + ' renewal' + (m.renewals.length === 1 ? '' : 's') + ' pending a decision' });
+    }
+    if (m.units){
+      var ev = m.units.filter(function(u){ return u.unit_event === 'Eviction Pending'; }).length;
+      if (ev) L.push({ k: 'units', t: ev + ' eviction' + (ev === 1 ? '' : 's') + ' pending' });
+      var nt = m.units.filter(function(u){ return u.unit_event === 'Notice to Vacate'; }).length;
+      if (nt) L.push({ k: 'units', t: nt + ' notice' + (nt === 1 ? '' : 's') + ' to vacate in play' });
+      var mi = m.units.filter(function(u){ var d = tdMgrDays(u.future_move_in_date); return u.has_upcoming_move_in && d != null && d >= 0 && d <= 14; }).length;
+      if (mi) L.push({ k: 'units', t: mi + ' move-in' + (mi === 1 ? '' : 's') + ' landing in the next two weeks' });
+    }
+    if (m.stats && m.stats.vacancy){
+      var v = m.stats.vacancy, ag = m.stats.aging || {};
+      var old60 = (ag.d61_90 || 0) + (ag.d90 || 0);
+      L.push({ k: 'ledger', t: 'Op vacancy ' + (v.op_vacant != null ? v.op_vacant : '–') + (v.op_rate_pct != null ? ' (' + v.op_rate_pct + '%)' : '') + (old60 ? ' — ' + old60 + ' vacant 60+ days' : '') });
+    }
+    if (!L.length) L.push({ k: 'ledger', t: 'All clear — nothing needs you this morning.' });
+    box.innerHTML = L.map(function(x){ return '<button type="button" class="tdbrief" data-mgr="' + x.k + '">' + esc(x.t) + '</button>'; }).join('');
+  }
+  function tdMgrRenderPulse(m){
+    var box = el('td-mgr-pulse'); if (!box) return;
+    if (!m.stats){ box.innerHTML = ''; return; }
+    var v = m.stats.vacancy || {}, p = m.stats.pipeline || {}, k = m.stats.kpis || {};
+    function chip(label, val, go){ return '<button type="button" class="tdpulsec" data-goto="' + go + '"><span class="tdp-v">' + val + '</span><span class="tdp-l">' + label + '</span></button>'; }
+    box.innerHTML =
+      chip('op vacant', v.op_vacant != null ? fmtNum(v.op_vacant) : '–', 'units') +
+      chip('op rate', v.op_rate_pct != null ? v.op_rate_pct + '%' : '–', 'ledger') +
+      chip('rent at risk', v.rent_at_risk != null ? fmtMoney(v.rent_at_risk) : '–', 'units') +
+      chip('expiring 90d', p.expiring_90d != null ? fmtNum(p.expiring_90d) : '–', 'renewals') +
+      chip('undecided', p.undecided != null ? fmtNum(p.undecided) : '–', 'renewals') +
+      chip('signed MTD', (k.signed_month && k.signed_month.cur != null) ? fmtNum(k.signed_month.cur) : '–', 'ledger') +
+      chip('move-ins 30d', v.upcoming_move_ins != null ? fmtNum(v.upcoming_move_ins) : '–', 'units');
+  }
+  function tdMgrRenderTasks(m){
+    if (m.tasks === null){ tdFail('td-mgr-tasks', 'tasks'); return; }
+    var rows = m.tasks.slice().sort(function(a, b){
+      var d = (b.is_overdue ? 1 : 0) - (a.is_overdue ? 1 : 0); if (d) return d;
+      return (Date.parse(a.due_date || '') || 9e15) - (Date.parse(b.due_date || '') || 9e15);
+    });
+    var h = '';
+    rows.slice(0, 8).forEach(function(t){
+      var due = t.is_overdue ? '<span class="chip c-hot">overdue</span>' : (t.due_date ? '<span class="chip c-warm">due ' + esc(String(t.due_date).slice(0, 10)) + '</span>' : '');
+      var pri = (t.priority === 'High' || t.priority === 'Urgent') ? ' <span class="chip c-bad">' + esc(t.priority) + '</span>' : '';
+      h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(t.title || t.category_name || 'Task') + '</b>' +
+        '<div class="schoffer-sub">' + esc([t.property_name, t.unit_number].filter(Boolean).join(' · ')) + (t.assignee_name ? ' &middot; ' + esc(t.assignee_name) : '') + '</div></div>' + due + pri + '</div>';
+    });
+    tdFill('td-mgr-tasks', h, rows.length, 'No open tasks in scope.');
+  }
+  function tdMgrRenderRenewals(m){
+    if (m.renewals === null){ tdFail('td-mgr-ren', 'renewals'); return; }
+    var rows = m.renewals.slice().sort(function(a, b){
+      return (Date.parse(a.current_lease_end || a.lease_to_date || '') || 9e15) - (Date.parse(b.current_lease_end || b.lease_to_date || '') || 9e15);
+    });
+    var h = '';
+    rows.slice(0, 8).forEach(function(r){
+      var end = r.current_lease_end || r.lease_to_date;
+      var d = tdMgrDays(end);
+      var urg = d == null ? '' : (d <= 30 ? '<span class="chip c-hot">' + (d <= 0 ? 'ended' : d + 'd left') + '</span>' : '<span class="chip c-warm">' + d + 'd left</span>');
+      h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.tenant_names || '–') + '</b> &middot; ' + esc(r.property_name || '') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') +
+        '<div class="schoffer-sub">' + (r.rent != null ? fmtMoney(r.rent) + ' &middot; ' : '') + (end ? 'current lease ends ' + esc(String(end).slice(0, 10)) : '') + '</div></div>' + urg + '</div>';
+    });
+    tdFill('td-mgr-ren', h, rows.length, 'No renewals pending a decision.');
+  }
+  function tdMgrRenderUnits(m){
+    var box = el('td-mgr-units'); if (!box) return;
+    if (m.units === null){ box.innerHTML = '<div class="note">Could not load units.</div>'; return; }
+    var feed = [];
+    m.units.forEach(function(u){
+      var label = (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '');
+      var dOut = tdMgrDays(u.next_move_out), dIn = tdMgrDays(u.future_move_in_date);
+      if (u.unit_event === 'Eviction Pending') feed.push({ w: 0, chip: '<span class="chip c-bad">eviction</span>', t: label, sub: u.tenant_names || '', id: u.unit_id });
+      else if (u.unit_event === 'Notice to Vacate') feed.push({ w: 1, chip: '<span class="chip c-hot">notice</span>', t: label, sub: (u.next_move_out ? 'moving out ' + u.next_move_out : '') + (u.tenant_names ? ' · ' + u.tenant_names : ''), id: u.unit_id });
+      else if (u.unit_event === 'Upcoming Move-Out' || (dOut != null && dOut >= 0 && dOut <= 14)) feed.push({ w: 2, chip: '<span class="chip c-warm">move-out</span>', t: label, sub: u.next_move_out ? 'on ' + u.next_move_out : '', id: u.unit_id });
+      if (u.has_upcoming_move_in && dIn != null && dIn <= 14) feed.push({ w: 3, chip: '<span class="chip c-ok">move-in</span>', t: label, sub: u.future_move_in_date ? 'on ' + u.future_move_in_date : '', id: u.unit_id });
+      if (u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60) feed.push({ w: 4, chip: '<span class="chip c-cold">aging</span>', t: label, sub: 'vacant ' + u.days_vacant + 'd' + (u.is_listed ? ' · listed' : ' · NOT listed'), id: u.unit_id });
+    });
+    feed.sort(function(a, b){ return a.w - b.w; });
+    box.innerHTML = feed.slice(0, 10).map(function(f){
+      return '<div class="schoffer tdurow" data-uid="' + esc(String(f.id)) + '" role="button" tabindex="0"><div class="schoffer-main"><b>' + esc(f.t) + '</b>' + (f.sub ? '<div class="schoffer-sub">' + esc(f.sub) + '</div>' : '') + '</div>' + f.chip + '</div>';
+    }).join('') || '<div class="note">No unit movement right now.</div>';
+    var n = el('td-mgr-units-n'); if (n) n.textContent = feed.length ? feed.length + ' update' + (feed.length === 1 ? '' : 's') : '';
+  }
+  function tdMgrBriefGo(k){
+    if (k === 'ledger'){ showTab('ledger'); return; }
+    var id = k === 'tasks' ? 'td-mgr-tasks' : (k === 'renewals' ? 'td-mgr-ren' : 'td-mgr-units');
+    var box = el(id); if (!box) return;
+    var p = box.closest('section.panel') || box;
+    p.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   (function(){
     var tr = el('td-roles');
@@ -3872,6 +3973,10 @@ window.addEventListener('error', function(e){
       }
       var bk = e.target.closest('[data-book]');
       if (bk){ tdGotoBook(bk.getAttribute('data-book')); return; }
+      var ur = e.target.closest('.tdurow');
+      if (ur){ openUnitEnsure(ur.getAttribute('data-uid')); return; }
+      var br = e.target.closest('.tdbrief');
+      if (br){ tdMgrBriefGo(br.getAttribute('data-mgr')); return; }
       var b = e.target.closest('[data-goto]'); if (!b) return;
       showTab(b.getAttribute('data-goto'));
     });

@@ -3555,12 +3555,12 @@ window.addEventListener('error', function(e){
     if (loaded){ tdSyncRoles(); tdRender(); }
   }
   function tdDayKeyEd(d){ return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Edmonton', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
-  // post-tour thank-you + the unit's own Buildium application link (Pearse copy, 2026-07-03)
+  // post-tour thank-you + the unit's own Buildium application link (Pearse copy, friendlier pass 2026-07-03)
   function tdThanksMsg(name, addr, applyUrl){
     var first = (String(name || '').trim().split(/\s+/)[0]) || 'there';
     var me = String(getActor() || '').trim().split(/\s+/)[0] || '';
-    return 'Hi ' + first + ", it's " + (me ? me + ' ' : '') + 'with Live Furnished — thank you for touring' + (addr ? ' ' + addr : ' the unit') + ' today. If you have any questions, let me know.'
-      + (applyUrl ? ' Here is the application link for this exact unit: ' + applyUrl : '');
+    return 'Hi ' + first + "! It's " + (me ? me + ' ' : '') + 'with Live Furnished — thanks so much for coming to tour' + (addr ? ' ' + addr : ' the unit') + ' today, it was great meeting you. If any questions come up, just text me here anytime.'
+      + (applyUrl ? " And when you're ready, here's the application link for this exact unit: " + applyUrl : '');
   }
   // My tours today (agent role): the agent's own same-day tours — confirm chase while
   // upcoming; once started/finished, a thank-you text with the unit-specific apply link.

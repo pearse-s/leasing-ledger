@@ -1736,6 +1736,9 @@ window.addEventListener('error', function(e){
     #page-today .tdact:hover{border-color:var(--clay)}
     #page-today .tdmore{margin-top:10px}
     #page-today .schoffer{flex-wrap:wrap}
+    /* clickable tour address → opens the unit's listing (My tours today) */
+    #page-today .tdlisting{display:inline-block;background:none;border:none;padding:0;margin-top:2px;font-family:var(--sans);font-size:.74rem;color:var(--clay);cursor:pointer;text-align:left;line-height:1.35}
+    #page-today .tdlisting:hover{text-decoration:underline}
     #page-today .tdrowact{flex:1 0 100%;display:flex;gap:6px;margin-top:6px}
     #page-today .tdcal-h{margin:0 0 10px;font-size:1rem;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
     #page-today .tdcalbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
@@ -3580,6 +3583,21 @@ window.addEventListener('error', function(e){
   }
   // My tours today (agent role): the agent's own same-day tours — confirm chase while
   // upcoming; once started/finished, a thank-you text with the unit-specific apply link.
+  // Open a tour's listing (or the unit modal if unlisted) in place — used by the My-tours-today rows.
+  // Matched unit → straight to it; property-only match → resolve a unit at that property from the loaded set.
+  function tdOpenTourListing(uid, listed, pid){
+    var openOne = function(u, isL){ if (isL) openListing(u); else openUnit(u); };   // both read unitsAll
+    var go = function(){
+      if (uid){ openOne(uid, listed); return; }
+      var atProp = (unitsAll || []).filter(function(u){ return String(u.property_id) === String(pid); });
+      var listedU = atProp.filter(function(u){ return u.is_listed; });
+      var pool = listedU.length ? listedU : atProp;
+      if (pool.length === 1) openOne(pool[0].unit_id, pool[0].is_listed);
+      else if (pool.length > 1) openUnit(pool[0].unit_id);   // ambiguous → the property's first unit (its modal links the listing)
+      // 0 units at the property → nothing to show; leave the row as-is
+    };
+    if (unitsAll === null) loadUnits(go); else go();
+  }
   function tdLoadMyTours(me){
     authFetch('/tours?' + toursQuery().toString()).then(function(j){
       var todayKey = tdDayKeyEd(new Date());
@@ -3608,8 +3626,14 @@ window.addEventListener('error', function(e){
             act = '<div class="tdrowact"><a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(r.invitee_phone), tdThanksMsg(r.invitee_name, addrRaw, r.unit_listing_url)) + '" class="tdact">&#128172; Thanks + apply link</a></div>';
           }
         }
+        // the tour's unit address is clickable → opens the listing (or unit) right here in a modal
+        var canList = r.matched_unit_id || r.matched_property_id;
+        var addrHtml = !addrRaw ? ''
+          : (canList
+              ? '<button type="button" class="tdlisting" data-luid="' + esc(r.matched_unit_id || '') + '" data-llisted="' + (r.unit_is_listed ? '1' : '') + '" data-lpid="' + esc(r.matched_property_id || '') + '" title="View the listing">' + esc(addrRaw) + ' &rarr;</button>'
+              : '<div class="schoffer-sub">' + esc(addrRaw) + '</div>');
         h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(when) + '</b> &middot; ' + esc(r.invitee_name || 'Prospect') +
-          (addrRaw ? '<div class="schoffer-sub">' + esc(addrRaw) + '</div>' : '') + '</div>' + stateChip + act + '</div>';
+          addrHtml + '</div>' + stateChip + act + '</div>';
       });
       tdFill('td-mytours', h, 0, 'No tours today.');
       var n = el('td-mytours-n'); if (n) n.textContent = rows.length ? rows.length + ' today' : '';
@@ -4001,6 +4025,11 @@ window.addEventListener('error', function(e){
       }
       var bk = e.target.closest('[data-book]');
       if (bk){ tdGotoBook(bk.getAttribute('data-book')); return; }
+      var lt = e.target.closest('.tdlisting');
+      if (lt){
+        tdOpenTourListing(lt.getAttribute('data-luid'), lt.getAttribute('data-llisted') === '1', lt.getAttribute('data-lpid'));
+        return;
+      }
       var ur = e.target.closest('.tdurow');
       if (ur){ openUnitEnsure(ur.getAttribute('data-uid')); return; }
       var br = e.target.closest('.tdbrief');

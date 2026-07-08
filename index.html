@@ -4265,7 +4265,8 @@ window.addEventListener('error', function(e){
     el('km-detailview').style.display = ''; el('km-compose').style.display = '';
     el('km-title').textContent = r.property_name ? (r.property_name + ' · ' + (r.unit_number || '')) : r.label;
     var sub = [keyChip(r.status)];
-    if (r.property_name && r.label) sub.push('Monday: ' + esc(r.label));
+    if (r.group_label) sub.push('<b>' + esc(r.group_label) + '</b>');
+    if (r.property_name && r.label && r.monday_item_id) sub.push('Monday: ' + esc(r.label));
     if (r.holder) sub.push('held by <b>' + esc(r.holder) + '</b>' + (r.date_expected ? ', due ' + esc(r.date_expected) + (r.is_overdue ? ' <span class="ovr">overdue</span>' : '') : ''));
     el('km-sub').innerHTML = sub.join(' &middot; ');
     // prominent bin — the physical location everyone needs at a glance
@@ -4308,7 +4309,7 @@ window.addEventListener('error', function(e){
         var out = s.status === 'out_of_office';
         sw += '<button type="button" class="ksetchip' + (s.key_id === r.key_id ? ' on' : '') + '" data-setid="' + s.key_id + '">' +
           '<span class="ksetdot" style="background:' + keyDotColor(s.status) + '"></span>' +
-          '<span class="ksetn">Set ' + (i + 1) + '</span>' +
+          '<span class="ksetn">' + (s.group_label ? esc(s.group_label) : ('Set ' + (i + 1))) + '</span>' +
           '<span class="ksets">' + esc(KEYLBL(s.status)) + '</span>' +
           (out && s.holder ? '<span class="kseth">&middot; ' + esc(s.holder) + '</span>' : '') +
           '</button>';
@@ -4374,13 +4375,14 @@ window.addEventListener('error', function(e){
         (IS_ADMIN ? '<label>Bin</label><input id="kf-bin" value="' + esc((ctx.bin) || '') + '" placeholder="bin / location label">' : '') +
         '<div class="kfrow"><div><label>Who is picking it up</label><input id="kf-holder" placeholder="Name — leave blank if it stays in the office"></div>' +
         '<div><label>Expected back</label><input id="kf-exp" type="date" value="' + kPlus2() + '"></div></div>' +
-        '<label>Label (optional)</label><input id="kf-label" placeholder="auto-named if blank, e.g. Set 2">' +
+        '<label>Set name (optional)</label><input id="kf-setname" maxlength="40" placeholder="e.g. Tenant, Spare, Garage — auto-numbered if blank">' +
         '<label>Note (optional)</label><textarea id="kf-note" placeholder="anything worth recording"></textarea>';
     } else if (kind === 'edit') {
       // admin: edit detail fields (wholesale overwrite; blank clears each, except label)
       h = '<div class="kfh">Edit key details</div>' +
-        '<div class="kfrow"><div><label>Label</label><input id="kf-label" value="' + esc(r.label || '') + '"></div>' +
+        '<div class="kfrow"><div><label>Set name</label><input id="kf-setname" maxlength="40" value="' + esc(r.group_label || '') + '" placeholder="shown on the set chip"></div>' +
         '<div><label>Bin</label><input id="kf-bin" value="' + esc(r.bin || '') + '"></div></div>' +
+        '<label>Reference label</label><input id="kf-label" value="' + esc(r.label || '') + '">' +
         '<div class="kfrow"><div><label>Building fob 1</label><input id="kf-f1" value="' + esc(r.building_fob_1 || '') + '"></div>' +
         '<div><label>Building fob 2</label><input id="kf-f2" value="' + esc(r.building_fob_2 || '') + '"></div></div>' +
         '<div class="kfrow"><div><label>Parking stall</label><input id="kf-ps" value="' + esc(r.parking_stall || '') + '"></div>' +
@@ -4534,7 +4536,7 @@ window.addEventListener('error', function(e){
       var cbody = { actor: actor, note: note,
         unit_id: ctx.unit_id || null, property_id: ctx.property_id || null,
         bin: (IS_ADMIN && el('kf-bin')) ? (el('kf-bin').value.trim() || null) : (ctx.bin || null),
-        label: ((el('kf-label') && el('kf-label').value) || '').trim() || null,
+        group_label: ((el('kf-setname') && el('kf-setname').value) || '').trim() || null,
         holder: cHolder || null,
         expected: cHolder ? ((el('kf-exp') && el('kf-exp').value) || null) : null };
       postJSON('/key/create', cbody).then(function(j){
@@ -4582,7 +4584,7 @@ window.addEventListener('error', function(e){
     else if (kind === 'edit') {
       route = '/key/update';
       var gv = function(id){ return ((el(id) && el(id).value) || '').trim() || null; };
-      body.label = gv('kf-label'); body.bin = gv('kf-bin');
+      body.label = gv('kf-label'); body.bin = gv('kf-bin'); body.group_label = gv('kf-setname');
       body.building_fob_1 = gv('kf-f1'); body.building_fob_2 = gv('kf-f2');
       body.parking_stall = gv('kf-ps'); body.parking_pass = gv('kf-pp');
       body.garage_opener = gv('kf-go'); body.mailbox = gv('kf-mb');
@@ -4669,8 +4671,10 @@ window.addEventListener('error', function(e){
         return;
       }
       var addRow = '<div class="trow">' + addBtn + (IS_ADMIN ? linkBtn : '') + '</div>';
-      box.innerHTML = keys.map(function(k){
+      box.innerHTML = keys.map(function(k, ki){
         var meta = [];
+        var setnm = k.group_label || (keys.length > 1 ? ('Set ' + (ki + 1)) : '');
+        if (setnm) meta.push('<b>' + esc(setnm) + '</b>');
         if (k.bin) meta.push('Bin ' + esc(k.bin));
         if (k.status === 'out_of_office') meta.push('held by <b>' + esc(k.holder || '?') + '</b>' +
           (k.date_expected ? ', due ' + esc(k.date_expected) + (k.is_overdue ? ' <span class="ovr">overdue</span>' : '') : ''));

@@ -1801,81 +1801,6 @@ window.addEventListener('error', function(e){
         <div id="sch-landing-picked"></div>
       </div>
     </div>
-    <div id="sch-view-offer" style="display:none">
-      <button type="button" class="schback" id="sch-back-offer">&larr; Back</button>
-    <div class="card tablecard" style="margin-top:8px">
-      <div class="tablebar"><h2>Offer times</h2><span class="count-note" id="sch-status">Find a prospect, pick an agent &amp; times, send a booking link that pre-fills their name &amp; email.</span></div>
-      <div class="schwiz">
-        <div class="schstep">
-          <div class="schnum">1</div>
-          <div class="schmain">
-            <label class="schlbl">Who applied?</label>
-            <input type="text" id="sch-app-search" placeholder="Search applicant name, email or phone&hellip;" autocomplete="off">
-            <div id="sch-app-results" class="schresults"></div>
-            <div id="sch-app-picked"></div>
-            <div id="sch-app-manual" style="display:none">
-              <div class="schmanual">
-                <input type="text" id="sch-m-name" placeholder="Full name">
-                <input type="email" id="sch-m-email" placeholder="Email">
-                <input type="text" id="sch-m-phone" placeholder="Phone (optional)">
-                <button type="button" class="mybtn" id="sch-m-use">Use this prospect</button>
-              </div>
-            </div>
-            <button type="button" class="linklike" id="sch-app-manual-toggle">+ enter a prospect manually</button>
-          </div>
-        </div>
-        <div class="schstep schlocked" id="sch-step-agent">
-          <div class="schnum">2</div>
-          <div class="schmain">
-            <label class="schlbl">Tour with which agent?</label>
-            <div id="sch-agent-chips" class="chipset schchips"></div>
-          </div>
-        </div>
-        <div class="schstep schlocked" id="sch-step-slots">
-          <div class="schnum">3</div>
-          <div class="schmain">
-            <label class="schlbl">Pick the times to offer</label>
-            <div class="schrow">
-              <label class="schsub" style="margin:0">Through</label>
-              <select id="sch-window" style="width:auto">
-                <option value="7">next 7 days</option>
-                <option value="14" selected>next 14 days</option>
-                <option value="21">next 21 days</option>
-                <option value="28">next 28 days</option>
-              </select>
-              <button type="button" class="rfreshbtn" id="sch-load-avail">&#8635; Load availability</button>
-              <span class="count-note" id="sch-avail-note"></span>
-            </div>
-            <div id="sch-days" class="schdays"></div>
-            <div id="sch-slots" class="schslots"></div>
-            <div id="sch-selected" class="schselected"></div>
-          </div>
-        </div>
-        <div class="schstep schlocked" id="sch-step-send">
-          <div class="schnum">4</div>
-          <div class="schmain">
-            <label class="schlbl">Generate &amp; send</label>
-            <div class="schloc">
-              <label class="schsub">Tour location <span class="schsublite">&mdash; pre-fills on the booking page; type to search our units</span></label>
-              <input type="text" id="sch-loc" placeholder="Unit address" autocomplete="off">
-              <div id="sch-loc-results" class="schresults"></div>
-            </div>
-            <div class="schsummary" id="sch-summary"></div>
-            <button type="button" class="mybtn schgen" id="sch-generate">Generate booking link</button>
-            <div id="sch-result" style="display:none">
-              <div class="schlink"><input type="text" id="sch-link" readonly><button type="button" class="rfreshbtn" id="sch-copy">&#10697; Copy</button></div>
-              <div class="schsend">
-                <a id="sch-sms" class="ccbtn" target="_blank" rel="noopener">&#128172; Text</a>
-                <a id="sch-mail" class="ccbtn" target="_blank" rel="noopener">&#9993;&#65039; Email</a>
-              </div>
-              <div class="note" id="sch-result-note"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="note" style="margin-top:12px">The link is a single-use Calendly &ldquo;Share&rdquo; restricted to the times you pick and routed to the chosen agent &mdash; it opens with the prospect&rsquo;s name &amp; email already filled in. Times are in Edmonton time. Every link you generate is logged.</div>
-    </div>
-    </div>
     <div id="sch-view-book" style="display:none">
       <div class="card tablecard" style="margin-top:8px">
         <div class="tablebar"><h2>Schedule a tour</h2><span class="count-note" id="sch-bk-status">Pick who the tour is for &mdash; then choose the agent and an open time on the calendar below.</span><button type="button" class="tdact" id="sch-to-offer" style="margin-left:auto">Offer times by link &rarr;</button></div>
@@ -9017,12 +8942,9 @@ window.addEventListener('error', function(e){
   // ── Schedule-tour wizard ─────────────────────────────────────────────────
   // applicant search -> agent -> live availability slot picker -> Calendly Share link.
   var schedAgents = null;
-  var schedState = { applicant:null, agentId:null, agentName:'', eventType:null, duration:0, slots:{}, days:[], curDay:null, locDefault:'' };
-  var schSearchT = null, schLocT = null;
-  var schSearchRows = [], schLeadRows = [];
   function loadSchedule(){
-    authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; renderSchedAgents(); renderBkAgents(); })
-      .catch(function(e){ if (String(e.message) !== 'AUTH'){ var s = el('sch-status'); if (s) s.textContent = 'Could not load agents.'; } });
+    authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; renderBkAgents(); })
+      .catch(function(e){ /* agents load failed; the book flow surfaces its own status */ });
     loadTourOffers();
   }
   var schOfferMsgs = {};   // offer id -> composed message text, for the offers-panel "Copy message" button
@@ -9057,187 +8979,8 @@ window.addEventListener('error', function(e){
       }).join('');
     }).catch(function(e){ if (String(e.message) !== 'AUTH') box.innerHTML = '<div class="note">Could not load recent offers.</div>'; });
   }
-  function renderSchedAgents(){
-    var box = el('sch-agent-chips'); if (!box) return;
-    box.innerHTML = (schedAgents || []).map(function(a){
-      return '<button type="button" class="chip-mini" data-aid="' + esc(a.id) + '">' + esc(a.display_name) + '</button>';
-    }).join('') || '<span class="count-note">No tour agents configured.</span>';
-  }
   function schUnlock(id, on){ var n = el(id); if (n) n.classList.toggle('schlocked', !on); }
   function schEdFmt(iso, opts){ try { return new Intl.DateTimeFormat('en-CA', Object.assign({ timeZone:'America/Edmonton' }, opts)).format(new Date(iso)); } catch(e){ return iso; } }
-  function schPickApplicant(o){
-    schedState.applicant = o;
-    schedState.locDefault = o.unit_address || (o.property ? o.property + (o.unit_number ? ' ' + o.unit_number : '') : '');
-    var box = el('sch-app-picked');
-    if (box){
-      box.innerHTML = '<div class="schpicked"><div><b>' + esc(o.name || 'Prospect') + '</b><br><span>' + esc([o.email, o.phone].filter(Boolean).join(' · ')) + (o.property ? ' · ' + esc(o.property) : '') + '</span></div><button type="button" class="schpx" id="sch-app-clear" title="Clear">&times;</button></div>';
-      var c = el('sch-app-clear'); if (c) c.addEventListener('click', schClearApplicant);
-    }
-    if (el('sch-app-results')) el('sch-app-results').innerHTML = '';
-    if (el('sch-app-search')) el('sch-app-search').value = '';
-    if (el('sch-app-manual')) el('sch-app-manual').style.display = 'none';
-    if (el('sch-loc') && !el('sch-loc').value) el('sch-loc').value = schedState.locDefault;   // default tour location from the applied-for unit
-    schUnlock('sch-step-agent', true);
-  }
-  function schClearApplicant(){
-    schedState.applicant = null;
-    if (el('sch-app-picked')) el('sch-app-picked').innerHTML = '';
-    schUnlock('sch-step-agent', false);
-  }
-  function schDoSearch(){
-    var q = (el('sch-app-search').value || '').trim();
-    var res = el('sch-app-results');
-    if (q.length < 2){ res.innerHTML = ''; return; }
-    // Search Buildium applications AND Aptly leads in parallel; merge into one list.
-    Promise.all([
-      authFetch('/tour-applicant-search?q=' + encodeURIComponent(q)).catch(function(e){ if (String(e.message) === 'AUTH') throw e; return { results: [] }; }),
-      authFetch('/tour-lead-search?q=' + encodeURIComponent(q)).catch(function(){ return { results: [] }; })
-    ]).then(function(parts){
-      var apps = (parts[0] && parts[0].results) || []; schSearchRows = apps;
-      var leads = (parts[1] && parts[1].results) || []; schLeadRows = leads;
-      // Dedupe a lead whose email matches an application row (the application wins).
-      var appEmails = {};
-      apps.forEach(function(a){ var e = (a.applicant_email || '').toLowerCase(); if (e) appEmails[e] = 1; });
-      var dedupLeads = leads.filter(function(l){ var e = (l.email || '').toLowerCase(); return !(e && appEmails[e]); });
-      if (!apps.length && !dedupLeads.length){ res.innerHTML = '<span class="count-note">No matches.</span>'; return; }
-      var html = '';
-      apps.forEach(function(r){
-        var sub = [r.applicant_email, r.applicant_phone].filter(Boolean).join(' · ');
-        var ctx = [r.property_name, r.unit_number ? 'Unit ' + r.unit_number : '', r.application_status].filter(Boolean).join(' · ');
-        html += '<button type="button" class="schres" data-kind="app" data-app="' + esc(r.application_id) + '"><b>' + esc(r.applicant_name || '(no name)') + '</b> <span class="schbadge schbadge-app">Application</span><span>' + esc(sub) + '</span>' + (ctx ? '<span>' + esc(ctx) + '</span>' : '') + '</button>';
-      });
-      dedupLeads.forEach(function(r){
-        var sub = [r.email, r.phone].filter(Boolean).join(' · ');
-        var ctx = [r.location, r.stage].filter(Boolean).join(' · ');
-        html += '<button type="button" class="schres" data-kind="lead" data-card="' + esc(r.card_id) + '"><b>' + esc(r.name || '(no name)') + '</b> <span class="schbadge schbadge-lead">Lead</span><span>' + esc(sub) + '</span>' + (ctx ? '<span>' + esc(ctx) + '</span>' : '') + '</button>';
-      });
-      res.innerHTML = html;
-    }).catch(function(e){ if (String(e.message) !== 'AUTH') res.innerHTML = '<span class="count-note">Search failed.</span>'; });
-  }
-  function schPickAgent(aid){
-    var a = (schedAgents || []).filter(function(x){ return String(x.id) === String(aid); })[0];
-    if (!a) return;
-    schedState.agentId = a.id; schedState.agentName = a.display_name;
-    schedState.eventType = a.default_event_type_uri; schedState.duration = a.duration_minutes || 15;
-    el('sch-agent-chips').querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-aid') === String(aid)); });
-    schedState.slots = {}; schedState.days = []; schedState.curDay = null;
-    if (el('sch-slots')) el('sch-slots').innerHTML = '';
-    if (el('sch-days')) el('sch-days').innerHTML = '';
-    if (el('sch-selected')) el('sch-selected').innerHTML = '';
-    if (el('sch-avail-note')) el('sch-avail-note').textContent = '';
-    schUnlock('sch-step-slots', true); schUnlock('sch-step-send', false);
-    if (el('sch-result')) el('sch-result').style.display = 'none';
-    schRenderSummary();
-    schLoadAvail();   // auto-load the chosen agent's real availability
-  }
-  function schLoadAvail(){
-    if (!schedState.agentId) return;
-    var days = parseInt((el('sch-window').value || '14'), 10) || 14;
-    var to = new Date(Date.now() + days * 86400000).toISOString().slice(0,10);
-    var note = el('sch-avail-note'); note.textContent = 'Loading…';
-    el('sch-slots').innerHTML = ''; el('sch-days').innerHTML = '';
-    authFetch('/agent-availability?agent_id=' + encodeURIComponent(schedState.agentId) + '&event_type=' + encodeURIComponent(schedState.eventType) + '&to=' + to).then(function(j){
-      schedState.duration = j.duration_minutes || schedState.duration || 15;
-      var slots = j.slots || [];
-      if (!slots.length){ note.textContent = 'No open times in that window.'; schedState.days = []; schRenderSelected(); return; }
-      var byDay = {}, order = [];
-      slots.forEach(function(s){
-        var key = schEdFmt(s.start_time, { year:'numeric', month:'2-digit', day:'2-digit' });
-        if (!byDay[key]){ byDay[key] = []; order.push(key); }
-        byDay[key].push(s.start_time);
-      });
-      schedState.days = order.map(function(key){ return { key: key, label: schEdFmt(byDay[key][0], { weekday:'short', month:'short', day:'numeric' }), times: byDay[key] }; });
-      note.textContent = slots.length + ' open time' + (slots.length === 1 ? '' : 's') + ' over ' + schedState.days.length + ' day' + (schedState.days.length === 1 ? '' : 's') + ' — pick a day, then tap times';
-      schRenderDays();
-      schSelectDay(schedState.days[0].key);
-      schRenderSelected();
-    }).catch(function(e){ if (String(e.message) !== 'AUTH') note.textContent = 'Could not load availability.'; });
-  }
-  function schRenderDays(){
-    var box = el('sch-days'); if (!box) return;
-    box.innerHTML = schedState.days.map(function(d){
-      var n = d.times.filter(function(t){ return schedState.slots[t]; }).length;
-      return '<button type="button" class="schday-chip' + (d.key === schedState.curDay ? ' on' : '') + '" data-day="' + esc(d.key) + '">' + esc(d.label) + (n ? ' <span class="schdaycount">' + n + '</span>' : '') + '</button>';
-    }).join('');
-  }
-  function schSelectDay(key){
-    schedState.curDay = key;
-    schRenderDays();
-    var d = schedState.days.filter(function(x){ return x.key === key; })[0];
-    var box = el('sch-slots'); if (!box) return;
-    if (!d){ box.innerHTML = ''; return; }
-    box.innerHTML = '<div class="schday"><span class="schdaylab">' + esc(d.label) + '</span>' + d.times.map(function(t){
-      var lab = schEdFmt(t, { hour:'numeric', minute:'2-digit', hour12:true });
-      return '<button type="button" class="schslot' + (schedState.slots[t] ? ' on' : '') + '" data-st="' + esc(t) + '">' + esc(lab) + '</button>';
-    }).join('') + '</div>';
-  }
-  function schToggleSlot(st){
-    if (schedState.slots[st]) delete schedState.slots[st]; else schedState.slots[st] = true;
-    var box = el('sch-slots'); if (box) box.querySelectorAll('.schslot').forEach(function(b){ b.classList.toggle('on', !!schedState.slots[b.getAttribute('data-st')]); });
-    schRenderDays();
-    schRenderSelected();
-    var n = Object.keys(schedState.slots).length;
-    schUnlock('sch-step-send', n > 0);
-    if (!n && el('sch-result')) el('sch-result').style.display = 'none';
-    schRenderSummary();
-  }
-  function schRenderSelected(){
-    var box = el('sch-selected'); if (!box) return;
-    var keys = Object.keys(schedState.slots).sort();
-    if (!keys.length){ box.innerHTML = ''; return; }
-    box.innerHTML = '<div class="schsellab">Offering ' + keys.length + ' time' + (keys.length === 1 ? '' : 's') + ' (tap to remove):</div>' + keys.map(function(t){
-      var lab = schEdFmt(t, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
-      return '<span class="schselpill" data-st="' + esc(t) + '">' + esc(lab) + ' <b>&times;</b></span>';
-    }).join('');
-  }
-  function schUnitSearch(){
-    var q = (el('sch-loc').value || '').trim();
-    var res = el('sch-loc-results'); if (!res) return;
-    if (q.length < 3){ res.innerHTML = ''; return; }
-    authFetch('/tour-unit-search?q=' + encodeURIComponent(q)).then(function(j){
-      var rows = j.results || [];
-      if (!rows.length){ res.innerHTML = ''; return; }
-      res.innerHTML = rows.map(function(u){
-        return '<button type="button" class="schres" data-addr="' + esc(u.address) + '"><b>' + esc(u.address || (u.property_name + ' ' + (u.unit_number || ''))) + '</b><span>' + esc([u.property_name, u.unit_number ? 'Unit ' + u.unit_number : ''].filter(Boolean).join(' · ')) + '</span></button>';
-      }).join('');
-    }).catch(function(){ /* ignore */ });
-  }
-  function schRenderSummary(){
-    var box = el('sch-summary'); if (!box) return;
-    var p = schedState.applicant, n = Object.keys(schedState.slots).length;
-    if (!p || !schedState.agentId){ box.textContent = ''; return; }
-    box.innerHTML = 'Offer <b>' + n + '</b> time' + (n === 1 ? '' : 's') + ' to <b>' + esc(p.name || 'prospect') + '</b> for a tour with <b>' + esc(schedState.agentName) + '</b>.';
-  }
-  function schGenerate(){
-    var p = schedState.applicant; if (!p || !schedState.agentId) return;
-    var slots = Object.keys(schedState.slots); if (!slots.length) return;
-    var actor = getActor(), noteEl = el('sch-result-note');
-    if (!actor){ el('sch-result').style.display = 'block'; if (noteEl) noteEl.textContent = 'Pick your name on the sign-in screen first (so the link is logged to you).'; return; }
-    var location = ((el('sch-loc') && el('sch-loc').value) || '').trim();
-    var btn = el('sch-generate'), orig = btn.textContent; btn.textContent = 'Generating…'; btn.disabled = true;
-    postJSON('/tour-offer', {
-      actor: actor, agent_id: schedState.agentId, event_type: schedState.eventType,
-      prospect_name: p.name, prospect_email: p.email, prospect_phone: p.phone || null,
-      application_id: p.application_id || null, aptly_card_id: (p && p.aptly_card_id) || null, location: location,
-      slots: slots.map(function(s){ return { start_time: s }; })
-    }).then(function(j){
-      btn.textContent = orig; btn.disabled = false;
-      el('sch-result').style.display = 'block';
-      el('sch-link').value = j.booking_url || '';
-      var sms = el('sch-sms');
-      if (sms){
-        if (p.phone){ var tel = String(p.phone).replace(/[^0-9+]/g, ''); sms.style.display = ''; sms.href = rcText(tel, j.message_text || ''); }   // route through RingCentral (content= prefills the message)
-        else sms.style.display = 'none';
-      }
-      var mail = el('sch-mail'); if (mail) mail.href = j.mailto_url || '#';
-      if (noteEl) noteEl.textContent = (j.offered_dates && j.offered_dates.length) ? ('Offered on: ' + j.offered_dates.join(', ') + '. The link is single-use and expires once booked or after those dates.') : '';
-      loadTourOffers();   // refresh the Recent offers list with the new one
-    }).catch(function(e){
-      btn.textContent = orig; btn.disabled = false;
-      el('sch-result').style.display = 'block';
-      if (noteEl) noteEl.textContent = 'Could not generate the link: ' + (e && e.message ? e.message : 'error');
-    });
-  }
   // ── Book-for-prospect flow (auto-book via Calendly Create Event Invitee) ───────────
   var schedProspect = null;   // prospect from a lead deep link, carried to either flow
   var schedBook = { applicant:null, agentId:null, agentName:'', eventType:null, eventTypeName:'', duration:0, locDefault:'', chosen:null, isGroup:false, capacity:0, ohLocation:'', scheduled:[] };
@@ -9245,9 +8988,8 @@ window.addEventListener('error', function(e){
   var schBkMode = 'single', schBkStops = [], schBkStopT = null;   // 'single' | 'multi' (back-to-back) | 'offer'; stops: [{start_time, location}]
   var schBkOffers = [], schBkShowOpenPrior = null, schBkOfferLast = null;   // offer run: [{start_time}] — alternative times for ONE visit, one optional shared location
   function schShowView(v){
-    var L = el('sch-landing'), O = el('sch-view-offer'), B = el('sch-view-book');
+    var L = el('sch-landing'), B = el('sch-view-book');
     if (L) L.style.display = v === 'landing' ? 'block' : 'none';
-    if (O) O.style.display = v === 'offer' ? 'block' : 'none';
     if (B) B.style.display = v === 'book' ? 'block' : 'none';
     if (v === 'book' && bkcal) setTimeout(function(){ try { bkcal.updateSize(); } catch(e){} }, 30);
   }
@@ -9739,46 +9481,6 @@ window.addEventListener('error', function(e){
   }
   (function(){
     if (!el('page-schedule')) return;   // Working Rule #9: one guard over every binding
-    var s = el('sch-app-search');
-    if (s) s.addEventListener('input', function(){ clearTimeout(schSearchT); schSearchT = setTimeout(schDoSearch, 260); });
-    var res = el('sch-app-results');
-    if (res) res.addEventListener('click', function(e){
-      var b = e.target.closest('.schres'); if (!b) return;
-      if (b.getAttribute('data-kind') === 'lead'){
-        var cid = b.getAttribute('data-card');
-        var l = schLeadRows.filter(function(x){ return String(x.card_id) === String(cid); })[0];
-        if (l) schPickApplicant({ application_id: null, name: l.name, email: l.email, phone: l.phone, property: '', unit_number: '', unit_address: l.location, aptly_card_id: l.card_id });
-        return;
-      }
-      var id = b.getAttribute('data-app');
-      var r = schSearchRows.filter(function(x){ return String(x.application_id) === String(id); })[0];
-      if (r) schPickApplicant({ application_id: r.application_id, name: r.applicant_name, email: r.applicant_email, phone: r.applicant_phone, property: r.property_name, unit_number: r.unit_number, unit_address: r.unit_address });
-    });
-    var mt = el('sch-app-manual-toggle');
-    if (mt) mt.addEventListener('click', function(){ var m = el('sch-app-manual'); if (m) m.style.display = (m.style.display === 'none' ? 'block' : 'none'); });
-    var mu = el('sch-m-use');
-    if (mu) mu.addEventListener('click', function(){
-      var nm = (el('sch-m-name').value || '').trim(), em = (el('sch-m-email').value || '').trim(), ph = (el('sch-m-phone').value || '').trim();
-      if (!nm || !em || em.indexOf('@') < 0){ alert('Enter a name and a valid email.'); return; }
-      schPickApplicant({ application_id: null, name: nm, email: em, phone: ph, property: '', unit_number: '', unit_address: '' });
-    });
-    var ac = el('sch-agent-chips');
-    if (ac) ac.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schPickAgent(b.getAttribute('data-aid')); });
-    var la = el('sch-load-avail'); if (la) la.addEventListener('click', schLoadAvail);
-    var dw = el('sch-window'); if (dw) dw.addEventListener('change', function(){ if (schedState.agentId) schLoadAvail(); });
-    var dys = el('sch-days'); if (dys) dys.addEventListener('click', function(e){ var b = e.target.closest('.schday-chip'); if (b) schSelectDay(b.getAttribute('data-day')); });
-    var sl = el('sch-slots'); if (sl) sl.addEventListener('click', function(e){ var b = e.target.closest('.schslot'); if (b) schToggleSlot(b.getAttribute('data-st')); });
-    var selb = el('sch-selected'); if (selb) selb.addEventListener('click', function(e){ var b = e.target.closest('.schselpill'); if (b) schToggleSlot(b.getAttribute('data-st')); });
-    var lc = el('sch-loc'); if (lc) lc.addEventListener('input', function(){ clearTimeout(schLocT); schLocT = setTimeout(schUnitSearch, 280); });
-    var lr = el('sch-loc-results'); if (lr) lr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-loc')) el('sch-loc').value = b.getAttribute('data-addr') || ''; lr.innerHTML = ''; });
-    var g = el('sch-generate'); if (g) g.addEventListener('click', schGenerate);
-    var cp = el('sch-copy');
-    if (cp) cp.addEventListener('click', function(){
-      var v = el('sch-link').value, self = this, orig = self.textContent;
-      var done = function(){ self.textContent = 'Copied ✓'; setTimeout(function(){ self.textContent = orig; }, 1500); };
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done).catch(function(){ window.prompt('Copy link:', v); });
-      else window.prompt('Copy link:', v);
-    });
     var off = el('sch-offers');
     if (off) off.addEventListener('click', function(e){
       var cm = e.target.closest('.schoffer-copymsg');
@@ -9799,7 +9501,6 @@ window.addEventListener('error', function(e){
     var gOffer = el('sch-go-offer'); if (gOffer) gOffer.addEventListener('click', function(){ schShowView('book'); renderBkAgents(); if (schedProspect) schBkPickProspect(schedProspect); if (schBkModeGuard('offer')) schBkSetMode('offer'); });
     var toOff = el('sch-to-offer'); if (toOff) toOff.addEventListener('click', function(){ schShowView('book'); if (schBkModeGuard('offer')) schBkSetMode('offer'); });
     var gBook = el('sch-go-book'); if (gBook) gBook.addEventListener('click', function(){ schShowView('book'); renderBkAgents(); if (schedProspect) schBkPickProspect(schedProspect); });
-    var bOff = el('sch-back-offer'); if (bOff) bOff.addEventListener('click', function(){ schShowView('book'); });   // book view IS the home now
     var bBk = el('sch-back-book'); if (bBk) bBk.addEventListener('click', function(){ schShowView('landing'); });
     // Book flow
     var bsearch = el('sch-bk-app-search'); if (bsearch) bsearch.addEventListener('input', function(){ clearTimeout(schBkSearchT); schBkSearchT = setTimeout(schBkDoSearch, 260); });

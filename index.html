@@ -1094,6 +1094,7 @@ window.addEventListener('error', function(e){
     .rmcard{width:calc(100vw - 14px);max-height:93vh}
     .rmact{flex:1 1 calc(50% - 4px);min-width:0;padding:12px 10px}
     .rmact-ghost{flex:1 1 calc(50% - 4px)}
+    .schoffer-copy,.schoffer-copymsg{padding:9px 12px;font-size:.9rem}
   }
   .rmrow{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--hairline-dark);font-size:.84rem}
   .rmrow:last-child{border-bottom:none}
@@ -1309,8 +1310,11 @@ window.addEventListener('error', function(e){
   .schoffer{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--hairline-dark);border-radius:10px;background:var(--glass-2)}
   .schoffer-main{flex:1 1 auto;min-width:0;font-size:.88rem}
   .schoffer-sub{font-size:.74rem;color:var(--ink-soft);margin-top:2px}
-  .schoffer-copy{flex:0 0 auto;background:none;border:1px solid var(--hairline-dark);border-radius:8px;color:var(--ink-soft);cursor:pointer;font-size:.85rem;padding:4px 8px}
+  .schoffer-copy,.schoffer-copymsg{flex:0 0 auto;background:none;border:1px solid var(--hairline-dark);border-radius:8px;color:var(--ink-soft);cursor:pointer;font-size:.85rem;padding:4px 8px}
   .schchip-sent{flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--ink-soft);background:rgba(255,255,255,.05);border:1px solid var(--hairline-dark);border-radius:999px;padding:4px 10px;white-space:nowrap}
+  .schoffer-times{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+  .schoffer-tpill{font-size:.7rem;color:var(--ink-soft);background:rgba(255,255,255,.05);border:1px solid var(--hairline-dark);border-radius:999px;padding:2px 8px}
+  .schoffer-tmore{font-style:italic}
   .schchip-booked{flex:0 0 auto;font-size:.72rem;font-weight:800;color:#0f2417;background:#9fe3b8;border-radius:999px;padding:4px 10px;white-space:nowrap}
   .schchip-cxl{flex:0 0 auto;font-size:.72rem;font-weight:700;color:#fff;background:#b5564e;border-radius:999px;padding:4px 10px;white-space:nowrap}
 </style>
@@ -1913,7 +1917,7 @@ window.addEventListener('error', function(e){
             <button type="button" class="rfreshbtn" id="sch-bk-reload">&#8635; Refresh</button>
             <span class="count-note" id="sch-bk-cal-note"></span>
           </div>
-          <div class="schcal-legend"><span class="schleg schleg-busy">Busy</span><span class="schleg schleg-oh" id="sch-bk-leg-oh" style="display:none">Open house &middot; spots left</span><span class="schleg schleg-full" id="sch-bk-leg-full" style="display:none">Full</span><span class="schhint" id="sch-bk-hint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><span class="schhint" id="sch-bk-oh-hint" style="display:none">Open houses run at set times &mdash; tap a slot to add the prospect. Numbers show spots still open.</span><label class="schtgl" id="sch-bk-multi-lbl"><input type="checkbox" id="sch-bk-multi"> Book several back-to-back</label><label class="schtgl" id="sch-bk-showopen-lbl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label></div>
+          <div class="schcal-legend"><span class="schleg schleg-busy">Busy</span><span class="schleg schleg-oh" id="sch-bk-leg-oh" style="display:none">Open house &middot; spots left</span><span class="schleg schleg-full" id="sch-bk-leg-full" style="display:none">Full</span><span class="schhint" id="sch-bk-hint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><span class="schhint" id="sch-bk-oh-hint" style="display:none">Open houses run at set times &mdash; tap a slot to add the prospect. Numbers show spots still open.</span><div class="chipset schchips" id="sch-bk-mode" style="margin-left:auto"><button type="button" class="chip-mini on" data-mode="single">Book one</button><button type="button" class="chip-mini" data-mode="multi">Back-to-back</button><button type="button" class="chip-mini" data-mode="offer">Offer times</button></div><label class="schtgl" id="sch-bk-showopen-lbl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label></div>
         </div>
         <div id="td-cal"></div>
         <div id="td-cal-list"></div>
@@ -1924,6 +1928,18 @@ window.addEventListener('error', function(e){
           <div class="schsummary" id="sch-bk-multi-summary"></div>
           <button type="button" class="mybtn schgen" id="sch-bk-book-all" disabled>Book all tours</button>
           <div id="sch-bk-multi-result" style="display:none"></div>
+        </div>
+        <div class="card tablecard" id="sch-bk-offer-wrap" style="display:none;margin-top:12px">
+          <div class="schsublite" style="margin-bottom:6px">Offer times &mdash; click each open time on the calendar above to add it, then create <b>one link</b> with all the times for the prospect to pick from. No prospect needed &mdash; you&rsquo;ll get a bare shareable link.</div>
+          <div id="sch-bk-offers"></div>
+          <div class="schloc" style="margin-top:8px">
+            <label class="schsub">Tour location <span class="schsublite">&mdash; optional; pre-fills on the booking page; type to search our units</span></label>
+            <input type="text" id="sch-bk-offer-loc" placeholder="Unit address" autocomplete="off">
+            <div id="sch-bk-offer-loc-results" class="schresults"></div>
+          </div>
+          <div class="schsummary" id="sch-bk-offer-summary"></div>
+          <button type="button" class="mybtn schgen" id="sch-bk-offer-go" disabled>Create offer link</button>
+          <div id="sch-bk-offer-result" style="display:none"></div>
         </div>
       </section>
       <div class="card tablecard" style="margin-top:16px">
@@ -3700,15 +3716,22 @@ window.addEventListener('error', function(e){
     } else {
       if (showOpen){
         bkData.slots.forEach(function(sl){
-          if (schBkMulti && schBkStops.some(function(s){ return s.start_time === sl.start_time; })) return;   // already a stop
+          if (schBkMode === 'multi' && schBkStops.some(function(s){ return s.start_time === sl.start_time; })) return;   // already a stop
+          if (schBkMode === 'offer' && schBkOffers.some(function(s){ return s.start_time === sl.start_time; })) return;   // already an offered time
           var end = new Date(Date.parse(sl.start_time) + dur * 60000).toISOString();
           evs.push({ id: 'open_' + sl.start_time, title: 'Open', start: sl.start_time, end: end, backgroundColor: '#5E8E4B', borderColor: '#3f6b30', textColor: '#fff', classNames: ['fc-ev-open'], extendedProps: { kind: 'open', start_time: sl.start_time } });
         });
       }
-      if (schBkMulti){
+      if (schBkMode === 'multi'){
         schBkStops.forEach(function(s, i){
           var end = new Date(Date.parse(s.start_time) + dur * 60000).toISOString();
           evs.push({ id: 'stop_' + s.start_time, title: 'Stop ' + (i + 1), start: s.start_time, end: end, backgroundColor: '#E8B43E', borderColor: '#caa233', textColor: '#15110D', classNames: ['fc-ev-stop'], extendedProps: { kind: 'stop', start_time: s.start_time } });
+        });
+      }
+      if (schBkMode === 'offer'){
+        schBkOffers.forEach(function(s, i){
+          var end = new Date(Date.parse(s.start_time) + dur * 60000).toISOString();
+          evs.push({ id: 'offer_' + s.start_time, title: 'Offer ' + (i + 1), start: s.start_time, end: end, backgroundColor: '#E8B43E', borderColor: '#caa233', textColor: '#15110D', classNames: ['fc-ev-stop'], extendedProps: { kind: 'offer', start_time: s.start_time } });
         });
       }
     }
@@ -3796,6 +3819,7 @@ window.addEventListener('error', function(e){
           if (info.jsEvent) info.jsEvent.preventDefault();
           var k = (info.event.extendedProps || {}).kind;
           if (k === 'stop'){ schBkRemoveStop(info.event.extendedProps.start_time); return; }
+          if (k === 'offer'){ schBkRemoveOffer(info.event.extendedProps.start_time); return; }
           if (k === 'open'){ schBkPickTime(info.event.extendedProps.start_time); return; }
           if (k === 'full'){ var nt = el('sch-bk-cal-note'); if (nt) nt.textContent = 'That open house is full — pick another time.'; return; }
           if (k === 'busy') return;
@@ -9001,6 +9025,7 @@ window.addEventListener('error', function(e){
       .catch(function(e){ if (String(e.message) !== 'AUTH'){ var s = el('sch-status'); if (s) s.textContent = 'Could not load agents.'; } });
     loadTourOffers();
   }
+  var schOfferMsgs = {};   // offer id -> composed message text, for the offers-panel "Copy message" button
   function loadTourOffers(){
     var box = el('sch-offers'); if (!box) return;
     authFetch('/tour-offers?limit=50').then(function(j){
@@ -9009,6 +9034,8 @@ window.addEventListener('error', function(e){
       if (!rows.length){ box.innerHTML = '<div class="note">No tour links generated yet.</div>'; if (noteEl) noteEl.textContent = ''; return; }
       var booked = rows.filter(function(r){ return r.is_booked; }).length;
       if (noteEl) noteEl.textContent = rows.length + ' recent · ' + booked + ' booked';
+      schOfferMsgs = {};
+      rows.forEach(function(r){ if (r.message_text) schOfferMsgs[r.id] = r.message_text; });
       box.innerHTML = rows.map(function(r){
         var chip;
         if (r.is_booked) chip = '<span class="schchip-booked">Booked ✓' + (r.booked_start_time ? ' ' + esc(schEdFmt(r.booked_start_time, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true })) : '') + '</span>';
@@ -9016,7 +9043,17 @@ window.addEventListener('error', function(e){
         else chip = '<span class="schchip-sent">Sent</span>';
         var when = schEdFmt(r.created_at, { month:'short', day:'numeric' });
         var sub = [r.actor, when, r.delivered_via].filter(Boolean).map(esc).join(' · ');
-        return '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.prospect_name || 'Prospect') + '</b> · ' + esc(r.agent_name || '') + ' · ' + (r.slot_count || 0) + ' time' + (r.slot_count === 1 ? '' : 's') + '<div class="schoffer-sub">' + sub + '</div></div>' + chip + (r.booking_url ? '<button type="button" class="schoffer-copy" data-url="' + esc(r.booking_url) + '" title="Copy link">⧉</button>' : '') + '</div>';
+        var noPer = !(r.prospect_name || r.prospect_email);   // no-prospect offers never auto-flip to Booked (view matches by email) — label the permanent "Sent"
+        var who = noPer ? '<b>No prospect · open link</b>' : ('<b>' + esc(r.prospect_name || 'Prospect') + '</b>');
+        var pills = '';
+        if (Array.isArray(r.slots) && r.slots.length){
+          var times = r.slots.map(function(s){ return (s && s.start_time) ? s.start_time : (typeof s === 'string' ? s : ''); }).filter(Boolean);
+          var shown = times.slice(0, 6);
+          pills = '<div class="schoffer-times">' + shown.map(function(t){ return '<span class="schoffer-tpill">' + esc(schEdFmt(t, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true })) + '</span>'; }).join('') + (times.length > shown.length ? '<span class="schoffer-tpill schoffer-tmore">+' + (times.length - shown.length) + ' more</span>' : '') + '</div>';
+        }
+        var copyLink = r.booking_url ? '<button type="button" class="schoffer-copy" data-url="' + esc(r.booking_url) + '" title="Copy link">⧉</button>' : '';
+        var copyMsg = r.message_text ? '<button type="button" class="schoffer-copymsg" data-id="' + esc(r.id) + '" title="Copy message">✎</button>' : '';
+        return '<div class="schoffer"><div class="schoffer-main">' + who + ' · ' + esc(r.agent_name || '') + ' · ' + (r.slot_count || 0) + ' time' + (r.slot_count === 1 ? '' : 's') + '<div class="schoffer-sub">' + sub + '</div>' + pills + '</div>' + chip + copyLink + copyMsg + '</div>';
       }).join('');
     }).catch(function(e){ if (String(e.message) !== 'AUTH') box.innerHTML = '<div class="note">Could not load recent offers.</div>'; });
   }
@@ -9205,7 +9242,8 @@ window.addEventListener('error', function(e){
   var schedProspect = null;   // prospect from a lead deep link, carried to either flow
   var schedBook = { applicant:null, agentId:null, agentName:'', eventType:null, eventTypeName:'', duration:0, locDefault:'', chosen:null, isGroup:false, capacity:0, ohLocation:'', scheduled:[] };
   var bkcal = null, schBkSearchT = null, schBkLocT = null, schBkSearchRows = [], schBkLeadRows = [], bkData = { showings:[], busy:[], slots:[] };
-  var schBkMulti = false, schBkStops = [], schBkStopT = null;   // back-to-back run: [{start_time, location}]
+  var schBkMode = 'single', schBkStops = [], schBkStopT = null;   // 'single' | 'multi' (back-to-back) | 'offer'; stops: [{start_time, location}]
+  var schBkOffers = [], schBkShowOpenPrior = null, schBkOfferLast = null;   // offer run: [{start_time}] — alternative times for ONE visit, one optional shared location
   function schShowView(v){
     var L = el('sch-landing'), O = el('sch-view-offer'), B = el('sch-view-book');
     if (L) L.style.display = v === 'landing' ? 'block' : 'none';
@@ -9274,7 +9312,12 @@ window.addEventListener('error', function(e){
   // Disarm the booking when the calendar is set back to "All agents" — hide the event-type picker, drop the armed agent/type.
   function schBkDisarmAgent(){
     schedBook.agentId = null; schedBook.agentName = ''; schedBook.eventType = null; schedBook.eventTypeName = '';
-    schBkStops = []; schBkRenderStops(); schBkCloseConfirm();
+    schBkMode = 'single';
+    schBkStops = []; schBkRenderStops();
+    schBkOffers = []; schBkRenderOffers();
+    var mw = el('sch-bk-multi-wrap'); if (mw) mw.style.display = 'none';
+    var ow = el('sch-bk-offer-wrap'); if (ow) ow.style.display = 'none';
+    schBkRenderModeChips(); schBkCloseConfirm();
     var evStep = el('sch-bk-step-event'); if (evStep) evStep.style.display = 'none';
     var et = el('sch-bk-ettype'); if (et) et.innerHTML = '';
     var note = el('sch-bk-cal-note'); if (note) note.textContent = '';
@@ -9283,7 +9326,7 @@ window.addEventListener('error', function(e){
   function schBkPickAgent(aid){
     var a = (schedAgents || []).filter(function(x){ return String(x.id) === String(aid); })[0]; if (!a) return;
     schedBook.agentId = a.id; schedBook.agentName = a.display_name; schedBook.eventType = null; schedBook.eventTypeName = '';
-    schBkStops = []; schBkRenderStops();   // a different agent → start the run fresh
+    schBkStops = []; schBkRenderStops(); schBkOffers = []; schBkRenderOffers();   // a different agent → start the run fresh
     var box = el('sch-bk-agent-chips'); if (box) box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-aid') === String(aid)); });
     tdCalAgent = a.display_name; tdDrawCal();   // focus the team calendar on the agent being booked
     var evStep = el('sch-bk-step-event'); if (evStep) evStep.style.display = '';   // reveal the event-type picker above the calendar
@@ -9310,7 +9353,7 @@ window.addEventListener('error', function(e){
     // confirms is_group + capacity on load.
     schedBook.isGroup = (kind === 'group'); schedBook.capacity = 0; schedBook.ohLocation = ''; schedBook.scheduled = [];
     var et = el('sch-bk-ettype'); if (et) et.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-uri') === uri); });
-    schBkStops = []; schBkRenderStops();   // event type changed → times differ, start fresh
+    schBkStops = []; schBkRenderStops(); schBkOffers = []; schBkRenderOffers();   // event type changed → times differ, start fresh
     schBkApplyMode();
     schUnlock('sch-bk-step-cal', true);
     tdBkStatus('Loading open times…');
@@ -9319,8 +9362,8 @@ window.addEventListener('error', function(e){
   // Toggle the open-house-specific UI (no back-to-back / no show-all-open toggles; fixed address).
   function schBkApplyMode(){
     var g = !!schedBook.isGroup;
-    if (g && schBkMulti) schBkSetMulti(false);   // back-to-back N/A for a pooled open house
-    var ml = el('sch-bk-multi-lbl'); if (ml) ml.style.display = g ? 'none' : '';
+    if (g && schBkMode !== 'single') schBkSetMode('single');   // back-to-back & offers N/A for a pooled open house
+    var mc = el('sch-bk-mode'); if (mc) mc.style.display = g ? 'none' : '';
     var so = el('sch-bk-showopen-lbl'); if (so) so.style.display = g ? 'none' : '';
     var hn = el('sch-bk-hint'); if (hn) hn.style.display = g ? 'none' : '';
     var oh = el('sch-bk-oh-hint'); if (oh) oh.style.display = g ? '' : 'none';
@@ -9396,7 +9439,7 @@ window.addEventListener('error', function(e){
   function schBkPickTime(when){
     var ms = (typeof when === 'number') ? when : Date.parse(when);
     if (!ms){ return; }
-    if (!schedBook.applicant){   // agent/type can be picked on the calendar with no prospect yet — require one before booking
+    if (!schedBook.applicant && schBkMode !== 'offer'){   // booking needs a prospect; offering times does not
       tdBkStatus('First, pick who the tour is for (top of the page).');
       var pf = el('sch-bk-app-search'); if (pf){ try { pf.scrollIntoView({ behavior: 'smooth', block: 'center' }); pf.focus(); } catch(e){} }
       return;
@@ -9405,15 +9448,38 @@ window.addEventListener('error', function(e){
     var pool = day.length ? day : (bkData.slots || []);
     if (!pool.length){ var note = el('sch-bk-cal-note'); if (note) note.textContent = 'No open times to book in this window — pick another agent.'; return; }
     var pick = pool.reduce(function(a, b){ return Math.abs(Date.parse(b.start_time) - ms) < Math.abs(Date.parse(a.start_time) - ms) ? b : a; });
-    if (schBkMulti) schBkAddStop(pick.start_time); else schBkConfirm(pick.start_time, ms);
+    if (schBkMode === 'multi') schBkAddStop(pick.start_time); else if (schBkMode === 'offer') schBkAddOffer(pick.start_time); else schBkConfirm(pick.start_time, ms);
   }
-  // ── Back-to-back run (one prospect, several units; text on the first only) ─────────
-  function schBkSetMulti(on){
-    schBkMulti = !!on;
-    var mw = el('sch-bk-multi-wrap');
-    if (mw) mw.style.display = on ? '' : 'none';
-    if (on) schBkCloseConfirm();   // multi collects stops in the inline panel below the calendar, not the single modal
+  // ── Mode control: Book one (single) · Back-to-back (multi) · Offer times (offer) ─────
+  function schBkRenderModeChips(){
+    var box = el('sch-bk-mode'); if (!box) return;
+    box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode') === schBkMode); });
+  }
+  // Guard a non-single mode: needs an armed agent + event type. Returns false + coaches when not ready.
+  function schBkModeGuard(mode){
+    if (mode === 'single' || tdBookArmed()) return true;
+    var nt = el('sch-bk-cal-note');
+    if (nt) nt.textContent = (mode === 'offer') ? 'Pick an agent first — then click times to offer.' : 'Pick a prospect, agent and event type first.';
+    return false;
+  }
+  function schBkSetMode(mode){
+    if (mode !== 'multi' && mode !== 'offer') mode = 'single';
+    var wasOffer = (schBkMode === 'offer');
+    schBkMode = mode;
+    // Offering needs the open slots visible to click; remember + force "Show all open", restore on exit.
+    var so = el('sch-bk-showopen');
+    if (mode === 'offer'){
+      if (!wasOffer && so){ schBkShowOpenPrior = so.checked; so.checked = true; }
+    } else if (wasOffer && so && schBkShowOpenPrior !== null){
+      so.checked = schBkShowOpenPrior; schBkShowOpenPrior = null;
+    }
+    var mw = el('sch-bk-multi-wrap'); if (mw) mw.style.display = (mode === 'multi') ? '' : 'none';
+    var ow = el('sch-bk-offer-wrap'); if (ow) ow.style.display = (mode === 'offer') ? '' : 'none';
+    if (mode !== 'single') schBkCloseConfirm();   // multi/offer collect in their inline panels, not the single confirm modal
+    if (mode === 'offer'){ var lo = el('sch-bk-offer-loc'); if (lo && !lo.value) lo.value = schedBook.locDefault || ''; }
+    schBkRenderModeChips();
     schBkRenderStops();
+    schBkRenderOffers();
     schBkRenderCal();
   }
   function schBkAddStop(startIso){
@@ -9510,6 +9576,88 @@ window.addEventListener('error', function(e){
         .catch(function(e){ if (String(e.message) === 'AUTH') { btn.textContent = orig; btn.disabled = false; return; } done[i] = { ok: false, err: (e && e.message) ? e.message : 'error' }; i++; paint(); next(); });
     }
     next();
+  }
+  // ── Offer times (ONE Calendly Share with several alternative times; prospect optional) ──
+  function schBkAddOffer(startIso){
+    if (schBkOffers.some(function(s){ return s.start_time === startIso; })) return;   // dedupe
+    schBkOffers.push({ start_time: startIso });
+    schBkOffers.sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+    schBkRenderOffers();
+    schBkRenderCal();
+  }
+  function schBkRemoveOffer(startIso){
+    schBkOffers = schBkOffers.filter(function(s){ return s.start_time !== startIso; });
+    schBkRenderOffers();
+    schBkRenderCal();
+  }
+  function schBkRenderOffers(){
+    var box = el('sch-bk-offers'); if (!box) return;
+    if (!schBkOffers.length){
+      box.innerHTML = '<div class="note">No times yet &mdash; click open times on the calendar above to add them to the offer.</div>';
+    } else {
+      box.innerHTML = schBkOffers.map(function(s, i){
+        var when = schEdFmt(s.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        return '<div class="schstop" data-st="' + esc(s.start_time) + '">' +
+          '<span class="schstop-n">' + (i + 1) + '</span>' +
+          '<div class="schstop-body"><div class="schstop-time">' + esc(when) + '</div></div>' +
+          '<button type="button" class="schstop-x" data-st="' + esc(s.start_time) + '" title="Remove">&times;</button>' +
+          '</div>';
+      }).join('');
+    }
+    var sum = el('sch-bk-offer-summary');
+    if (sum){
+      var n = schBkOffers.length;
+      if (!n) sum.innerHTML = '';
+      else {
+        var who = schedBook.applicant ? (' to <b>' + esc(schedBook.applicant.name || 'prospect') + '</b>') : ' &mdash; <b>open link</b> (no prospect)';
+        sum.innerHTML = 'Offer <b>' + n + '</b> time' + (n === 1 ? '' : 's') + ' with <b>' + esc(schedBook.agentName) + '</b>' + who + '.';
+      }
+    }
+    var btn = el('sch-bk-offer-go'); if (btn) btn.disabled = !schBkOffers.length;
+  }
+  function schBkOfferLocSearch(inputEl){
+    var res = el('sch-bk-offer-loc-results'); if (!res) return;
+    var q = (inputEl.value || '').trim();
+    if (q.length < 3){ res.innerHTML = ''; return; }
+    authFetch('/tour-unit-search?q=' + encodeURIComponent(q)).then(function(j){
+      var rows = j.results || []; if (!rows.length){ res.innerHTML = ''; return; }
+      res.innerHTML = rows.map(function(u){ return '<button type="button" class="schres" data-addr="' + esc(u.address) + '"><b>' + esc(u.address || (u.property_name + ' ' + (u.unit_number || ''))) + '</b><span>' + esc([u.property_name, u.unit_number ? 'Unit ' + u.unit_number : ''].filter(Boolean).join(' · ')) + '</span></button>'; }).join('');
+    }).catch(function(){ /* ignore */ });
+  }
+  function schBkOfferGo(){
+    if (!schedBook.agentId || !schedBook.eventType || !schBkOffers.length) return;   // prospect NOT required
+    var actor = getActor(), rb = el('sch-bk-offer-result');
+    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Pick your name on the sign-in screen first (so the link is logged to you).</div>'; } return; }
+    var p = schedBook.applicant;   // may be null → bare shareable link
+    var loc = ((el('sch-bk-offer-loc') && el('sch-bk-offer-loc').value) || '').trim();
+    var btn = el('sch-bk-offer-go'), orig = btn.textContent; btn.textContent = 'Creating…'; btn.disabled = true;
+    postJSON('/tour-offer', {
+      actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,
+      prospect_name: (p && p.name) || null, prospect_email: (p && p.email) || null, prospect_phone: (p && p.phone) || null,
+      application_id: (p && p.application_id) || null, aptly_card_id: (p && p.aptly_card_id) || null,
+      location: loc,
+      slots: schBkOffers.map(function(s){ return { start_time: s.start_time }; })
+    }).then(function(j){
+      btn.textContent = orig; btn.disabled = false;
+      schBkOfferLast = { link: j.booking_url || '', msg: j.message_text || '' };
+      if (rb){
+        rb.style.display = 'block';
+        var canText = !!(p && p.phone), canMail = !!j.mailto_url;
+        rb.innerHTML =
+          '<div class="schlink"><input type="text" readonly value="' + esc(j.booking_url || '') + '"><button type="button" class="rfreshbtn schoffer-copy" data-copy="link">&#10697; Copy link</button></div>' +
+          '<div class="schsend">' +
+            '<button type="button" class="ccbtn schoffer-copymsg" data-copy="msg">&#10697; Copy message</button>' +
+            (canText ? '<a class="ccbtn" target="_blank" rel="noopener" href="' + esc(rcText(String(p.phone).replace(/[^0-9+]/g, ''), j.message_text || '')) + '">&#128172; Text</a>' : '') +
+            (canMail ? '<a class="ccbtn" target="_blank" rel="noopener" href="' + esc(j.mailto_url) + '">&#9993;&#65039; Email</a>' : '') +
+          '</div>' +
+          '<div class="note">' + ((j.offered_dates && j.offered_dates.length) ? ('Offered on: ' + esc(j.offered_dates.join(', ')) + '. The link is single-use and expires once booked or after those dates.') : '') + (p ? '' : ' No prospect &mdash; this is a bare shareable link.') + '</div>';
+      }
+      schBkOffers = []; schBkRenderOffers(); schBkRenderCal();
+      loadTourOffers();
+    }).catch(function(e){
+      btn.textContent = orig; btn.disabled = false;
+      if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Could not create the offer link: ' + esc((e && e.message) ? e.message : 'error') + '</div>'; }
+    });
   }
   function schBkRenderSummary(){
     var sum = el('sch-bk-summary'); if (!sum) return;
@@ -9633,6 +9781,14 @@ window.addEventListener('error', function(e){
     });
     var off = el('sch-offers');
     if (off) off.addEventListener('click', function(e){
+      var cm = e.target.closest('.schoffer-copymsg');
+      if (cm){
+        var mv = schOfferMsgs[cm.getAttribute('data-id')] || '', mo = cm.textContent;
+        var mdone = function(){ cm.textContent = '✓'; setTimeout(function(){ cm.textContent = mo; }, 1200); };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(mv).then(mdone).catch(function(){ window.prompt('Copy message:', mv); });
+        else window.prompt('Copy message:', mv);
+        return;
+      }
       var b = e.target.closest('.schoffer-copy'); if (!b) return;
       var v = b.getAttribute('data-url') || '', o = b.textContent;
       var done = function(){ b.textContent = '✓'; setTimeout(function(){ b.textContent = o; }, 1200); };
@@ -9640,8 +9796,8 @@ window.addEventListener('error', function(e){
       else window.prompt('Copy link:', v);
     });
     // Landing + view switching
-    var gOffer = el('sch-go-offer'); if (gOffer) gOffer.addEventListener('click', function(){ schShowView('offer'); if (schedProspect) schPickApplicant(schedProspect); });
-    var toOff = el('sch-to-offer'); if (toOff) toOff.addEventListener('click', function(){ schShowView('offer'); if (schedProspect) schPickApplicant(schedProspect); });
+    var gOffer = el('sch-go-offer'); if (gOffer) gOffer.addEventListener('click', function(){ schShowView('book'); renderBkAgents(); if (schedProspect) schBkPickProspect(schedProspect); if (schBkModeGuard('offer')) schBkSetMode('offer'); });
+    var toOff = el('sch-to-offer'); if (toOff) toOff.addEventListener('click', function(){ schShowView('book'); if (schBkModeGuard('offer')) schBkSetMode('offer'); });
     var gBook = el('sch-go-book'); if (gBook) gBook.addEventListener('click', function(){ schShowView('book'); renderBkAgents(); if (schedProspect) schBkPickProspect(schedProspect); });
     var bOff = el('sch-back-offer'); if (bOff) bOff.addEventListener('click', function(){ schShowView('book'); });   // book view IS the home now
     var bBk = el('sch-back-book'); if (bBk) bBk.addEventListener('click', function(){ schShowView('landing'); });
@@ -9676,7 +9832,20 @@ window.addEventListener('error', function(e){
     var blr = el('sch-bk-loc-results'); if (blr) blr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-bk-loc')) el('sch-bk-loc').value = b.getAttribute('data-addr') || ''; blr.innerHTML = ''; });
     var bgo = el('sch-bk-go'); if (bgo) bgo.addEventListener('click', schBkGo);
     // Back-to-back run
-    var bmul = el('sch-bk-multi'); if (bmul) bmul.addEventListener('change', function(){ if (this.checked && !tdBookArmed()){ this.checked = false; var nt = el('sch-bk-cal-note'); if (nt) nt.textContent = 'Pick a prospect, agent and event type first.'; return; } schBkSetMulti(this.checked); });
+    var bmode = el('sch-bk-mode'); if (bmode) bmode.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (!b) return; var m = b.getAttribute('data-mode'); if (schBkModeGuard(m)) schBkSetMode(m); });
+    var boff = el('sch-bk-offers'); if (boff) boff.addEventListener('click', function(e){ var x = e.target.closest('.schstop-x'); if (x) schBkRemoveOffer(x.getAttribute('data-st')); });
+    var boloc = el('sch-bk-offer-loc'); if (boloc) boloc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(function(){ schBkOfferLocSearch(boloc); }, 280); });
+    var bolr = el('sch-bk-offer-loc-results'); if (bolr) bolr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-bk-offer-loc')) el('sch-bk-offer-loc').value = b.getAttribute('data-addr') || ''; bolr.innerHTML = ''; });
+    var bogo = el('sch-bk-offer-go'); if (bogo) bogo.addEventListener('click', schBkOfferGo);
+    var bores = el('sch-bk-offer-result');
+    if (bores) bores.addEventListener('click', function(e){
+      var b = e.target.closest('[data-copy]'); if (!b) return;
+      var v = schBkOfferLast ? (b.getAttribute('data-copy') === 'msg' ? schBkOfferLast.msg : schBkOfferLast.link) : '';
+      var self = b, orig = self.textContent;
+      var done = function(){ self.textContent = 'Copied ✓'; setTimeout(function(){ self.textContent = orig; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done).catch(function(){ window.prompt('Copy:', v); });
+      else window.prompt('Copy:', v);
+    });
     var bba = el('sch-bk-book-all'); if (bba) bba.addEventListener('click', schBkBookAll);
     var bstops = el('sch-bk-stops');
     if (bstops){

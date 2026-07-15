@@ -3497,6 +3497,13 @@ window.addEventListener('error', function(e){
      WS-U binds real accounts; queues read EXISTING endpoints only. ── */
   var TD_ROLE_KEY = 'ledger_role_v1';
   var todayLoaded = null;
+  // Generation counter, bumped by every tdRender() — including every role flip. The async role
+  // loaders capture it and bail if it has moved, so an in-flight request from the PREVIOUS role
+  // can never paint over the new one. Without this the Manager view rendered its brief under the
+  // heading "Agent — working as …": tdLoadAgent's /agent-scorecard resolved AFTER the switch and
+  // called tdSub, and #td-sub exists in every role so nothing null-guarded it. Same idea as
+  // loadSchedFunnel's schFunnelReq, but keyed to the render rather than to one endpoint.
+  var tdReq = 0;
   function tdRole(){
     var r = '';
     try { r = localStorage.getItem(TD_ROLE_KEY) || ''; } catch (e) {}
@@ -3529,6 +3536,7 @@ window.addEventListener('error', function(e){
   function tdSub(txt){ var s = el('td-sub'); if (s) s.textContent = txt; }
   function tdRender(){
     var g = el('td-grid'); if (!g) return;
+    tdReq++;   // anything still in flight from the previous render/role is now stale
     var role = tdRole();
     // coordinator = the scheduling workspace (moved Schedule page + team calendar);
     // agent/manager = the dynamic queue grid. Toggle, never rebuild, the workspace —
@@ -3614,8 +3622,12 @@ window.addEventListener('error', function(e){
   }
   var tdMyRows = [], tdMyMe = '';
   function tdLoadMyTours(me){
+    // captured for BOTH callers: tdLoadAgent (a fresh render) and the F5 no-show refresh
+    // (same generation, so it still paints — as it should)
+    var q = tdReq;
     tdMyMe = me;
     authFetch('/tours?' + toursQuery().toString()).then(function(j){
+      if (q !== tdReq) return;
       var todayKey = tdDayKeyEd(new Date());
       var rows = (j.tours || []).filter(function(r){
         return r.status === 'active' && tdFt(r.agent) === tdFt(me) && tdDayKeyEd(new Date(Date.parse(r.start_time))) === todayKey;
@@ -3683,7 +3695,7 @@ window.addEventListener('error', function(e){
       });
       tdFill('td-mytours', h, 0, 'No tours today.');
       var n = el('td-mytours-n'); if (n) n.textContent = rows.length ? rows.length + ' today' : '';
-    }).catch(function(e){ if (String(e.message) !== 'AUTH') tdFail('td-mytours', 'your tours'); });
+    }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH') tdFail('td-mytours', 'your tours'); });
   }
   // open the local BOOK flow, optionally preselecting the agent (workspace is on this page now)
   function tdGotoBook(aid){
@@ -3897,8 +3909,9 @@ window.addEventListener('error', function(e){
     }).join('') || '<div class="note">No upcoming tours.</div>';
   }
   function tdLoadAgent(){
-    var w = tdWin();
+    var w = tdWin(), q = tdReq;   // the render generation this load belongs to
     authFetch('/agent-scorecard?from=' + w.from + '&to=' + w.to).then(function(j){
+      if (q !== tdReq) return;   // role flipped (or Today re-rendered) mid-flight — do not paint
       var agents = (j.scorecard || []).map(function(r){ return r.agent; }).filter(Boolean).sort();
       var me = hubMatchAgent(getActor(), agents);
       tdSub(me ? ('Agent — working as ' + me + '. Confirm tours, close the loop on applications.') : 'Agent — no showing activity matched to your name yet.');
@@ -3907,6 +3920,7 @@ window.addEventListener('error', function(e){
       if (!me){ tdFill('td-fu', '', 0, 'No follow-ups yet.'); }
       else {
         authFetch('/agent-followups?agent=' + encodeURIComponent(me)).then(function(fj){
+          if (q !== tdReq) return;
           var rows = fj.followups || [];
           var BL = { unconfirmed_tour:'Confirm tour', toured_no_app:'No app yet', applied_pending:'App pending', approved_unsigned:'Approved &middot; unsigned' };
           var h = '';
@@ -3927,9 +3941,10 @@ window.addEventListener('error', function(e){
               '<div class="schoffer-sub">' + (BL[r.bucket] || esc(r.bucket || '')) + (r.days_since_contact != null ? ' &middot; last contact ' + (r.days_since_contact === 0 ? 'today' : r.days_since_contact + 'd ago') : '') + '</div></div>' + act + '</div>';
           });
           tdFill('td-fu', h, rows.length, 'No follow-ups waiting.');
-        }).catch(function(e){ if (String(e.message) !== 'AUTH') tdFail('td-fu', 'follow-ups'); });
+        }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH') tdFail('td-fu', 'follow-ups'); });
       }
       authFetch('/signed-leases?from=' + w.from + '&to=' + w.to + '&status=suggested').then(function(sj){
+        if (q !== tdReq) return;
         var rows = sj.signed || [];
         var h = '';
         rows.slice(0, 8).forEach(function(r){
@@ -3937,8 +3952,8 @@ window.addEventListener('error', function(e){
             '<div class="schoffer-sub">signed ' + esc((r.signed_date || '').slice(0, 10)) + (r.rent != null ? ' &middot; ' + fmtMoney(r.rent) : '') + (r.suggested_agent ? ' &middot; suggested: ' + esc(r.suggested_agent) : '') + '</div></div></div>';
         });
         tdFill('td-sign', h, rows.length, 'Nothing waiting to be claimed.');
-      }).catch(function(e){ if (String(e.message) !== 'AUTH') tdFail('td-sign', 'signed leases'); });
-    }).catch(function(e){ if (String(e.message) !== 'AUTH'){ tdFail('td-fu', 'the scorecard'); tdFail('td-sign', 'signed leases'); } });
+      }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH') tdFail('td-sign', 'signed leases'); });
+    }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH'){ tdFail('td-fu', 'the scorecard'); tdFail('td-sign', 'signed leases'); } });
   }
   /* ── Manager Today (Option B) ──────────────────────────────────────────────
      ONE assembly seam: tdMgrAssemble() gathers stats/tasks/renewals/units with
@@ -3960,8 +3975,10 @@ window.addEventListener('error', function(e){
     return t ? Math.ceil((t - Date.now()) / 86400000) : null;
   }
   function tdMgrAssemble(){
-    var m = { stats: null, tasks: null, renewals: null, units: null }, done = 0;
-    var step = function(){ if (++done === 4) tdRenderMgr(m); };
+    var m = { stats: null, tasks: null, renewals: null, units: null }, done = 0, q = tdReq;
+    // mirror of the agent guard: a manager assembly that finishes after a flip to Agent must not
+    // paint (its targets are null-guarded today, but that is luck, not a contract)
+    var step = function(){ if (++done === 4 && q === tdReq) tdRenderMgr(m); };
     authFetch('/stats?' + buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(){}).then(step);
     authFetch('/tasks').then(function(j){ m.tasks = (j.tasks || []).filter(tdMgrScopePass).filter(tdMgrOpenTask); }).catch(function(){}).then(step);
     var p = new URLSearchParams(); appendScope(p);

@@ -1890,6 +1890,9 @@ window.addEventListener('error', function(e){
     #page-hub .fubtn:hover{background:var(--clay-soft)}
     #page-hub .hubact{font-size:.78rem;padding:3px 11px;border:1px solid var(--clay);border-radius:8px;background:transparent;color:var(--ink);cursor:pointer}
     #page-hub .hubact:hover{background:var(--clay);color:#1a130b}
+    /* F4: inline reassign roster picker (replaces the free-text prompt) */
+    #page-hub select.hubreassign{font-family:var(--sans);max-width:170px;background:var(--glass-2);color:var(--ink)}
+    #page-hub select.hubreassign:hover{background:var(--glass-2);color:var(--ink)}
     /* My-view vs admin Team-overview: one class flip on #page-hub toggles which set shows */
     #page-hub.teamview .hubmine{display:none}
     #page-hub:not(.teamview) #hub-team{display:none}
@@ -3057,6 +3060,8 @@ window.addEventListener('error', function(e){
   function rcText(num, body){ return RC_SCHEME + 'r/sms?type=new&number=' + num + (body ? '&content=' + encodeURIComponent(body) : ''); }
   function dstr(d){ return d.toISOString().slice(0,10); }
   function msIds(key){ return Object.keys(MS[key].sel); }
+  // is a sidebar entity scope active? (drives the "this number is company-wide" labels — A-14/A-15)
+  function scopeActive(){ return !!(msIds('managers').length || msIds('owners').length || msIds('properties').length); }
   function appendScope(p){
     Object.keys(MS).forEach(function(key){
       if (!MS[key].scope) return;   // local table facets (amenity/parking) never hit the server
@@ -3144,14 +3149,21 @@ window.addEventListener('error', function(e){
       + '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
       + '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="1.9" fill="' + color + '"/></svg>';
   }
+  // A-14: the tile's NUMBER is scoped (get_stats.vacancy), but this delta comes from
+  // get_kpis() — which takes no arguments and is portfolio-wide BY DESIGN, because the weekly
+  // snapshots behind it have no scope dimension. So under an active scope the chip compares a
+  // different population than the number directly above it (the audit saw identical ▼0.7 pts /
+  // ▼8 before and after scoping). Until the snapshots gain a scope dimension (T4), say so.
   function deltaChip(o, isPct){
-    if (!o || o.delta == null) return '<span class="kdelta kflat">vs last wk: tracking</span>';
+    var sc = scopeActive();
+    var tip = sc ? ' title="Company-wide — the weekly trend snapshots have no scope dimension, so this delta ignores the sidebar scope"' : '';
+    if (!o || o.delta == null) return '<span class="kdelta kflat"' + tip + '>vs last wk: tracking</span>';
     var improving = (o.good === 'down') ? (o.delta < 0) : (o.delta > 0);
     var cls = (o.delta === 0) ? 'kflat' : (improving ? 'kgood' : 'kbad');
     var arrow = (o.delta === 0) ? '' : (o.delta > 0 ? '&#9650; ' : '&#9660; ');
     var mag = Math.abs(o.delta);
     var txt = isPct ? (mag.toFixed(1) + ' pts') : fmtNum(mag);
-    return '<span class="kdelta ' + cls + '">' + arrow + txt + ' vs last wk</span>';
+    return '<span class="kdelta ' + cls + '"' + tip + '>' + arrow + txt + ' vs last wk' + (sc ? ' · company' : '') + '</span>';
   }
   function setKpiExtra(host, html){
     if (!host) return;
@@ -3434,7 +3446,31 @@ window.addEventListener('error', function(e){
   // entity scope (manager/owner/property) is global — re-scope every tab.
   // Ledger reloads (debounced); Apps/Tools fetch with the scope params; Units/
   // Owners filter client-side. Reload whichever non-Ledger tab is open now.
+  // A-13: the sidebar scope was never persisted, so a manager re-picked their portfolio
+  // (3 taps) on EVERY visit. MS[key].sel maps id -> display name, so saving it restores the
+  // button labels too — before /stats has even returned filter_options.
+  var SCOPE_KEY = 'ledger_scope_v1';
+  var SCOPE_KEYS = ['managers', 'owners', 'properties'];
+  function scopeSave(){
+    try {
+      var out = {};
+      SCOPE_KEYS.forEach(function(k){ if (Object.keys(MS[k].sel).length) out[k] = MS[k].sel; });
+      if (Object.keys(out).length) localStorage.setItem(SCOPE_KEY, JSON.stringify(out));
+      else localStorage.removeItem(SCOPE_KEY);   // cleared scope must not resurrect next visit
+    } catch (e) {}
+  }
+  function scopeRestore(){
+    try {
+      var s = JSON.parse(localStorage.getItem(SCOPE_KEY) || '{}');
+      SCOPE_KEYS.forEach(function(k){
+        var v = s[k];
+        if (v && typeof v === 'object' && !Array.isArray(v)) MS[k].sel = v;
+        msButton(k);
+      });
+    } catch (e) {}
+  }
   function onScopeChange(){
+    scopeSave();
     scheduleLoad();
     if (unitsAll !== null) drawUnits();
     if (ownersAll !== null) drawOwners();
@@ -3951,15 +3987,27 @@ window.addEventListener('error', function(e){
   function tdMgrRenderPulse(m){
     var box = el('td-mgr-pulse'); if (!box) return;
     if (!m.stats){ box.innerHTML = ''; return; }
-    var v = m.stats.vacancy || {}, p = m.stats.pipeline || {}, k = m.stats.kpis || {};
-    function chip(label, val, go){ return '<button type="button" class="tdpulsec" data-goto="' + go + '"><span class="tdp-v">' + val + '</span><span class="tdp-l">' + label + '</span></button>'; }
+    // A-15: 'op rate' and 'rent at risk' read v.op_rate_pct / v.rent_at_risk — keys get_stats
+    // has NEVER returned. They rendered '–' always, scoped or not; the audit saw that as
+    // "dropped under scope". The real keys are vacancy.op_vacancy_rate and money.rent_at_risk,
+    // and both scope correctly (verified live: 11.5%→8.3%, $212,271→$52,777 under one manager).
+    var v = m.stats.vacancy || {}, p = m.stats.pipeline || {}, k = m.stats.kpis || {}, mo = m.stats.money || {};
+    var scoped = scopeActive();
+    function chip(label, val, go, tip){
+      return '<button type="button" class="tdpulsec" data-goto="' + go + '"' + (tip ? ' title="' + esc(tip) + '"' : '') +
+        '><span class="tdp-v">' + val + '</span><span class="tdp-l">' + esc(label) + '</span></button>';
+    }
     box.innerHTML =
       chip('op vacant', v.op_vacant != null ? fmtNum(v.op_vacant) : '–', 'units') +
-      chip('op rate', v.op_rate_pct != null ? v.op_rate_pct + '%' : '–', 'ledger') +
-      chip('rent at risk', v.rent_at_risk != null ? fmtMoney(v.rent_at_risk) : '–', 'units') +
+      chip('op rate', v.op_vacancy_rate != null ? v.op_vacancy_rate + '%' : '–', 'ledger') +
+      chip('rent at risk', mo.rent_at_risk != null ? fmtMoney(mo.rent_at_risk) : '–', 'units') +
       chip('expiring 90d', p.expiring_90d != null ? fmtNum(p.expiring_90d) : '–', 'renewals') +
       chip('undecided', p.undecided != null ? fmtNum(p.undecided) : '–', 'renewals') +
-      chip('signed MTD', (k.signed_month && k.signed_month.cur != null) ? fmtNum(k.signed_month.cur) : '–', 'ledger') +
+      // signed MTD comes from get_kpis(), which takes NO arguments and is portfolio-wide by
+      // design (see the /stats route comment). Under scope it's the only company-wide number in
+      // the row, so label it — otherwise it reads as this manager's own (A-15's mixed row).
+      chip(scoped ? 'signed MTD · all' : 'signed MTD', (k.signed_month && k.signed_month.cur != null) ? fmtNum(k.signed_month.cur) : '–', 'ledger',
+        scoped ? 'Company-wide — signed-lease KPIs are portfolio-level and do not follow the sidebar scope' : '') +
       chip('move-ins 30d', v.upcoming_move_ins != null ? fmtNum(v.upcoming_move_ins) : '–', 'units');
   }
   function tdMgrRenderTasks(m){
@@ -4841,6 +4889,14 @@ window.addEventListener('error', function(e){
     });
     el('h-chips').innerHTML = html;
   }
+  // A-06: History rendered created_at.slice(0,16) — i.e. raw UTC — so a 2:32pm action read
+  // "20:32". House rule is America/Edmonton; schEdFmt is the existing formatter. Display only:
+  // the column still SORTS on the raw ISO string (cmpRows raw=true), which stays chronological.
+  function khWhen(iso){
+    if (!iso) return '–';
+    if (isNaN(Date.parse(iso))) return esc(String(iso).slice(0,16).replace('T',' '));
+    return esc(schEdFmt(iso, { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }));
+  }
   function drawHistory(){
     if (historyAll === null) return;
     var q = (el('h-search').value || '').toLowerCase();
@@ -4855,9 +4911,13 @@ window.addEventListener('error', function(e){
     rows.sort(cmpRows(hSort.k, hSort.d, hSort.k === 'created_at'));
     var html = '';
     rows.forEach(function(e){
+      // A-05: without the set name a burst of same-minute bulk work on one unit renders as a
+      // column of identical lines (the set only lived in the row's title attribute). v207 gave
+      // sets a real name via keys.group_label; v_key_events now exposes it.
       var nm = e.property_name ? (esc(e.property_name) + (e.unit_number ? ' · ' + esc(e.unit_number) : '')) : esc(e.label);
+      if (e.group_label) nm += ' · <span class="count-note">' + esc(e.group_label) + '</span>';
       html += '<tr class="rowlink" data-kid="' + e.key_id + '">' +
-        '<td>' + esc((e.created_at || '').slice(0,16).replace('T',' ')) + '</td>' +
+        '<td>' + khWhen(e.created_at) + '</td>' +
         '<td>' + evChipK(e.event_type) + '</td>' +
         '<td title="' + esc(e.label || '') + '">' + nm + '</td>' +
         '<td>' + esc(e.actor || '–') + '</td>' +
@@ -5809,7 +5869,11 @@ window.addEventListener('error', function(e){
   function loadSchedFunnel(){
     var box = el('sch-funnel'); if (!box) return;
     var w = windowDates(); var q = ++schFunnelReq;
-    authFetch('/schedule-funnel?from=' + w.from + '&to=' + w.to).then(function(r){ return r.json(); }).then(function(d){
+    // A-16: authFetch ALREADY resolves to parsed JSON. This used to chain an extra
+    // .then(function(r){ return r.json(); }), which called .json() on a plain object →
+    // "r.json is not a function" → straight into the empty catch below → the strip rendered
+    // nothing, silently, while the endpoint was perfectly healthy. Never re-add a .json() step.
+    authFetch('/schedule-funnel?from=' + w.from + '&to=' + w.to).then(function(d){
       if (q !== schFunnelReq || !d || d.error) return;
       var segs = [['Offers sent', d.offers], ['Booked direct', d.booked], ['Showings', d.toured], ['Applications', d.applied], ['Leases signed', d.signed]];
       box.innerHTML = segs.map(function(s, i){
@@ -5817,7 +5881,11 @@ window.addEventListener('error', function(e){
           '<div class="sf-seg"><div class="sfv">' + fmtNum(s[1] || 0) + '</div><div class="sfl">' + s[0] + '</div></div>';
       }).join('');
       box.style.display = 'flex';
-    }).catch(function(){});
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      // and never swallow it silently again — that is what let this ship invisibly (A-16)
+      console.error('schedule-funnel strip failed:', e);
+    });
   }
   function chipFor(days, unknown){
     if (unknown) return '<span class="chip c-cold">unknown</span>';
@@ -8373,9 +8441,15 @@ window.addEventListener('error', function(e){
   }
   function startApp(){
     el('login').style.display = 'none';
+    scopeRestore();   // A-13: restore BEFORE load() so the very first /stats is already scoped
     load();
     // deep link: if the URL points at a specific tab (e.g. #keys), open it
-    var t = tabFromHash(); if (t) showTab(t);
+    // A-03: a legacy #schedule bookmark resolves to Today, but used to keep whatever role was
+    // remembered (default agent) — dropping the coordinator on the agent queues. ?lead= already
+    // forces coordinator via tdCoordinatorHome(); mirror that here so both deep links agree.
+    var t = tabFromHash();
+    if ((location.hash || '').replace(/^#/, '').toLowerCase() === 'schedule') tdCoordinatorHome();
+    else if (t) showTab(t);
     // ?lead=<cardId> or ?lead_email=<email> → Schedule tab pre-filled
     if (pendingLeadCard) openLeadDeepLink('card_id=' + encodeURIComponent(pendingLeadCard));
     else if (pendingLeadEmail) openLeadDeepLink('email=' + encodeURIComponent(pendingLeadEmail));
@@ -8853,16 +8927,49 @@ window.addEventListener('error', function(e){
     function chip(k, label, n){ return '<button type="button" class="qchip' + (hubTeamLeasesFilter === k ? ' on' : '') + '" data-f="' + k + '">' + label + ' <span class="qn">' + n + '</span></button>'; }
     c.innerHTML = chip('all', 'All', all.length) + chip('pending', 'Unconfirmed', all.length - conf) + chip('confirmed', 'Confirmed', conf);
   }
-  function hubTeamAct(id, act){
+  // F4: reassign roster. The authoritative population for lease ATTRIBUTION is the agents the
+  // scorecard already knows (what hubMatchAgent and the Hub agent picker use) — not STAFF_BASE,
+  // which is the key-log actor list and includes admins/managers. Fall back to the actor roster
+  // only if the scorecard hasn't loaded, so the control is never empty.
+  function hubReassignRoster(){
+    var names = (hubScore || []).map(function(r){ return r.agent; }).filter(Boolean);
+    if (!names.length) names = actorList();
+    var seen = {}, out = [];
+    names.forEach(function(n){ n = String(n || '').trim(); if (n && !seen[n.toLowerCase()]){ seen[n.toLowerCase()] = 1; out.push(n); } });
+    return out.sort();
+  }
+  // F4: this was prompt("type the exact name") — a typo silently credited a non-existent agent.
+  // Swap the button for an inline roster picker; nothing is written until a name is chosen AND
+  // confirmed (claim/confirm still write without a dialog — that's a separate audit observation).
+  function hubOpenReassign(id, btn){
+    var r = hubMiFind(id); if (!r || !btn || btn.getAttribute('data-open') === '1') return;
+    var cur = r.credited_agent || r.suggested_agent || '';
+    var sel = document.createElement('select');
+    sel.className = 'hubact hubreassign';
+    sel.innerHTML = '<option value="">— reassign to —</option>' +
+      hubReassignRoster().map(function(n){ return '<option' + (sameAgent(n, cur) ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('');
+    btn.setAttribute('data-open', '1'); btn.style.display = 'none';
+    btn.parentNode.insertBefore(sel, btn);
+    var close = function(){ if (sel.parentNode) sel.parentNode.removeChild(sel); btn.removeAttribute('data-open'); btn.style.display = ''; };
+    sel.addEventListener('click', function(ev){ ev.stopPropagation(); });
+    sel.addEventListener('change', function(){
+      var ag = sel.value;
+      if (!ag || sameAgent(ag, cur)){ close(); return; }
+      if (!confirm('Credit this signed lease to ' + ag + '?' + (cur ? ' It is currently ' + cur + '.' : ''))) { close(); return; }
+      var actor = getActor();
+      postJSON('/lease/reassign', { lease_id: Number(id), agent: ag, actor: actor })
+        .then(function(){ close(); loadHubTeam(); loadHubScore(false); })
+        .catch(function(e){ close(); if (!e || e.message !== 'AUTH') alert('Could not reassign: ' + (e && e.message ? e.message : 'error')); });
+    });
+    try { sel.focus(); } catch (e) {}
+  }
+  function hubTeamAct(id, act, btn){
     if (act === 'editmi'){ hubMiOpenEdit(id); return; }   // move-in edit (team overview is admin-only anyway)
     if (!IS_ADMIN) return;
     var actor = getActor();
     if (!actor){ alert('Pick your name first (on the sign-in screen).'); return; }
     if (act === 'reassign'){
-      var ag = prompt('Reassign this lease to which agent? (type the exact name)'); if (!ag) return; ag = ag.trim(); if (!ag) return;
-      postJSON('/lease/reassign', { lease_id: Number(id), agent: ag, actor: actor })
-        .then(function(){ loadHubTeam(); loadHubScore(false); })
-        .catch(function(e){ alert('Could not reassign: ' + (e && e.message ? e.message : 'error')); });
+      hubOpenReassign(id, btn);
     } else if (act === 'exclude'){
       if (!confirm('Exclude this lease from attribution? It will no longer count toward any agent.')) return;
       postJSON('/lease/exclude', { lease_id: Number(id), actor: actor })
@@ -8934,7 +9041,8 @@ window.addEventListener('error', function(e){
     var b = e.target.closest('.qchip'); if (!b) return; hubTeamLeasesFilter = b.getAttribute('data-f'); hubRenderTeamLeases();
   });
   if (el('hub-team-leases')) el('hub-team-leases').addEventListener('click', function(e){
-    var b = e.target.closest('.hubact'); if (!b) return; hubTeamAct(b.getAttribute('data-id'), b.getAttribute('data-act'));
+    var b = e.target.closest('.hubact'); if (!b || b.tagName === 'SELECT') return;   // the inline reassign picker handles its own change
+    hubTeamAct(b.getAttribute('data-id'), b.getAttribute('data-act'), b);
   });
   if (el('hub-team-leases')) el('hub-team-leases').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;

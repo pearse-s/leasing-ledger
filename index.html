@@ -3879,9 +3879,18 @@ window.addEventListener('error', function(e){
     lst.innerHTML = up.map(function(r){
       var when = schEdFmt(r.start_time, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
       var addr = (r.matched_property_name || r.location_text || '') + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
-      var act = r.invitee_phone
-        ? '<div class="tdrowact"><a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(r.invitee_phone), tdOutreachMsg(r.invitee_name, addr, when, r.agent)) + '" class="tdact">&#128172; Text</a></div>'
-        : '';
+      // A-08 sibling: this list had the same invitee_phone gate as the Today rows, so on a
+      // CDN-blocked device the 77%-of-tours that carry only an email rendered no outreach at
+      // all — despite the comment above promising "personal-outreach actions intact".
+      var tel = r.invitee_phone ? String(r.invitee_phone).replace(/[^0-9+]/g, '') : '';
+      var mail = String(r.invitee_email || '').trim();
+      var msg = tdOutreachMsg(r.invitee_name, addr, when, r.agent);
+      var act = '';
+      if (tel){
+        act = '<div class="tdrowact"><a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(tel), msg) + '" class="tdact">&#128172; Text</a></div>';
+      } else if (mail){
+        act = '<div class="tdrowact"><a href="' + esc(tdMailto(mail, 'Your tour' + (addr ? ' at ' + addr : ''), msg)) + '" class="tdact" title="No phone on file — email instead">&#9993; Email</a></div>';
+      }
       return '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.invitee_name || 'Prospect') + '</b>' + (r.agent ? ' &middot; ' + esc(r.agent) : '') +
         '<div class="schoffer-sub">' + esc(when) + '</div>' + (addr ? '<div class="schoffer-sub">' + esc(addr) + '</div>' : '') +
         '</div>' + reconChip(r) + act + '</div>';
@@ -9410,12 +9419,15 @@ window.addEventListener('error', function(e){
     var box = el('sch-bk-mode'); if (!box) return;
     box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode') === schBkMode); });
   }
-  // A-17: the coach line has to describe what a click actually DOES. In offer mode a click
+  // A-17: THE one answer to "what does clicking a slot do right now". In offer mode a click
   // adds a time to the offer — it books nothing — so "to book it" was simply wrong there.
+  // Both coach lines read from this: the hint beside the mode chips (#sch-bk-hint, which was
+  // STATIC markup and so could never switch — the line the audit actually saw) and the status
+  // line under the booking bar (#sch-bk-status). One source, so they can't disagree.
   function schBkClickHint(){
     if (schBkMode === 'offer') return 'Click each open time you want to offer, then create the offer.';
     if (schBkMode === 'multi') return 'Click each open time to add a back-to-back stop.';
-    return 'Click an open time on the calendar to book it.';
+    return 'Click any empty time to book — you can fine-tune it before confirming.';
   }
   // Guard a non-single mode: needs an armed agent + event type. Returns false + coaches when not ready.
   function schBkModeGuard(mode){
@@ -9443,7 +9455,10 @@ window.addEventListener('error', function(e){
     schBkRenderStops();
     schBkRenderOffers();
     schBkRenderCal();
-    // the hint has to follow the mode switch, not just the availability load (A-17)
+    // Both coach lines have to follow the mode switch, not just the availability load (A-17).
+    // The hint is unconditional: it sits next to the mode chips and is visible before any
+    // availability has loaded, which is exactly when it used to lie about what a click does.
+    var hint = el('sch-bk-hint'); if (hint) hint.textContent = schBkClickHint();
     if (bkData.slots.length && !tdBkFresh()) tdBkStatus(schBkClickHint());
   }
   function schBkAddStop(startIso){

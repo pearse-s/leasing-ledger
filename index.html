@@ -387,7 +387,16 @@ window.addEventListener('error', function(e){
     .ribbon .gctr .num{font-size:1.45rem}
   }
   @media(max-width:1440px){ .ribbon{grid-template-columns:repeat(4,minmax(0,1fr))} }
-  @media(max-width:700px){ .ribbon{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  @media(max-width:700px){
+    .ribbon{grid-template-columns:repeat(2,minmax(0,1fr))}
+    /* A-07: at 2 columns each tile is ~170px, so nowrap+ellipsis truncated the label
+       ("SIGNED THIS MO…") and the subline ("73 neve…") — hiding the very number the tile
+       exists to show. These are short phrases, so let them wrap to a second line rather than
+       clip; min-height is a floor (not a cap), so a taller tile just grows. Tighter tracking
+       buys back a few characters too. */
+    .ribbon .kpi .lbl{white-space:normal;overflow:visible;text-overflow:clip;letter-spacing:.08em}
+    .ribbon .kpi .sub{white-space:normal;overflow:visible;text-overflow:clip}
+  }
   summary.panel-head{cursor:pointer;list-style:none;-webkit-user-select:none;user-select:none}
   summary.panel-head::-webkit-details-marker{display:none}
   .ph-chev{flex:none;margin-left:8px;color:var(--ink-soft);font-size:.72rem;transition:transform .18s ease;transform:rotate(90deg)}

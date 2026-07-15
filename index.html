@@ -1743,7 +1743,9 @@ window.addEventListener('error', function(e){
     /* clickable tour address → opens the unit's listing (My tours today) */
     #page-today .tdlisting{display:inline-block;background:none;border:none;padding:0;margin-top:2px;font-family:var(--sans);font-size:.74rem;color:var(--clay);cursor:pointer;text-align:left;line-height:1.35}
     #page-today .tdlisting:hover{text-decoration:underline}
-    #page-today .tdrowact{flex:1 0 100%;display:flex;gap:6px;margin-top:6px}
+    /* rows can now carry up to 3 chips (Call + Thanks + No-show) and .tdact is nowrap +
+       non-shrinking, so this MUST wrap or it overflows at 375 (A-08/F5 added the third) */
+    #page-today .tdrowact{flex:1 0 100%;display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
     #page-today .tdcal-h{margin:0 0 10px;font-size:1rem;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
     #page-today .tdcalbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
     #page-today #td-cal-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
@@ -2888,7 +2890,7 @@ window.addEventListener('error', function(e){
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aSel = {};
   var renewalsAll = null, rnSort = { k:'lease_from_date', d:1 }, renewalsLoading = false, rnByUnit = {};
   var aWin = { mode:'global', from:null, to:null };
-  var toursAll = null, rSort = { k:'start_time', d:-1 };
+  var toursAll = null, rSort = { k:'start_time', d:-1 }, rSortUser = false;
   var rView = 'cal', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [], curTour = null, tourPickMode = 'listing';
   var rAgents = {}, rStatus = {}, agentColorMap = {}, rNeedsConf = false;
   var AGENT_PALETTE = ['#E8B43E','#6CA0DC','#7FA76B','#C77DAE','#E0875F','#5BC0BE','#B59CE0','#D4A24E','#8FB996','#5FA8D3','#CDA434','#79C0A6'];
@@ -2944,6 +2946,25 @@ window.addEventListener('error', function(e){
       else if (b === sels[i]) return true;
     }
     return false;
+  }
+  // A-10: Buildium ships amenities as raw enum tokens ("OvenOrRange", "WD_Hookup",
+  // "DogFriendly"). Those were going out verbatim in prospect-facing copy. Named cases win;
+  // everything else falls back to splitting underscores + CamelCase into words, with the
+  // small connector words lowercased so "OvenOrRange" doesn't read "Oven Or Range".
+  var AMEN_NICE = {
+    OvenOrRange:'Oven / range', WD_Hookup:'Washer / dryer hookup', WasherDryer:'Washer / dryer',
+    PetsAllowed:'Pets allowed', DogFriendly:'Dog friendly', CatFriendly:'Cat friendly',
+    AirConditioning:'Air conditioning', CeilingFan:'Ceiling fan', GarbageDisposal:'Garbage disposal',
+    HardwoodFloors:'Hardwood floors', WalkInCloset:'Walk-in closet', InUnitLaundry:'In-unit laundry',
+    WasherDryerHookup:'Washer / dryer hookup', HeatIncluded:'Heat included', WaterIncluded:'Water included'
+  };
+  function amenNice(a){
+    var s = String(a == null ? '' : a).trim();
+    if (!s) return '';
+    if (AMEN_NICE[s]) return AMEN_NICE[s];
+    s = s.replace(/[_-]+/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
+    s = s.replace(/\b(Or|And|In|Of|With|The)\b/g, function(w){ return w.toLowerCase(); });
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
   // OR-match: a row passes if it has ANY of the selected amenities (empty selection = pass all)
   function amenMatchMulti(arr, sels){
@@ -3539,12 +3560,22 @@ window.addEventListener('error', function(e){
     };
     if (unitsAll === null) loadUnits(go); else go();
   }
+  // Prospect-facing mailto. Every param is URL-encoded (house rule for deep links); the
+  // caller esc()s the whole href for the attribute.
+  function tdMailto(email, subject, body){
+    return 'mailto:' + String(email || '').trim() +
+      '?subject=' + encodeURIComponent(subject || '') +
+      (body ? '&body=' + encodeURIComponent(body) : '');
+  }
+  var tdMyRows = [], tdMyMe = '';
   function tdLoadMyTours(me){
+    tdMyMe = me;
     authFetch('/tours?' + toursQuery().toString()).then(function(j){
       var todayKey = tdDayKeyEd(new Date());
       var rows = (j.tours || []).filter(function(r){
         return r.status === 'active' && tdFt(r.agent) === tdFt(me) && tdDayKeyEd(new Date(Date.parse(r.start_time))) === todayKey;
       }).sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+      tdMyRows = rows;
       var now = Date.now(), h = '';
       rows.forEach(function(r){
         var addrRaw = (r.matched_property_name || r.location_text || '') + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
@@ -3556,17 +3587,46 @@ window.addEventListener('error', function(e){
         else if (r.is_no_show) stateChip = '<span class="chip c-hot">no-show</span>';
         else if (now <= endMs) stateChip = '<span class="chip c-warm">in progress</span>';
         else stateChip = '<span class="chip c-ok">toured</span>';
-        var act = '';
-        if (r.invitee_phone){
-          if (!started){
-            var whenFull = schEdFmt(r.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-            act = '<div class="tdrowact"><a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(r.invitee_phone), reconMsg(r.invitee_name, addrRaw, whenFull, me)) + '" class="tdact">&#128172; Confirm</a></div>';
-          } else if (r.is_no_show){
-            act = '<div class="tdrowact"><a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(r.invitee_phone)) + '" class="tdact">&#128172; Text</a></div>';
-          } else {
-            act = '<div class="tdrowact"><a href="' + rcCall(esc(r.invitee_phone)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(r.invitee_phone), tdThanksMsg(r.invitee_name, addrRaw, r.unit_listing_url)) + '" class="tdact">&#128172; Thanks + apply link</a></div>';
+        // A-08: this block used to be gated on invitee_phone, so every phone-less tour
+        // rendered ZERO chips silently — 52% of them, and all of those carry an email.
+        // Phone wins (RingCentral); otherwise the same copy goes out as a mailto.
+        var tel = r.invitee_phone ? String(r.invitee_phone).replace(/[^0-9+]/g, '') : '';
+        var mail = String(r.invitee_email || '').trim();
+        var mailHint = ' title="No phone on file — email instead"';
+        var acts = [];
+        if (!started){
+          var whenFull = schEdFmt(r.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+          var cmsg = reconMsg(r.invitee_name, addrRaw, whenFull, me);
+          if (tel){
+            acts.push('<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a>');
+            acts.push('<a href="' + rcText(esc(tel), cmsg) + '" class="tdact">&#128172; Confirm</a>');
+          } else if (mail){
+            acts.push('<a href="' + esc(tdMailto(mail, 'Confirming your tour' + (addrRaw ? ' at ' + addrRaw : ''), cmsg)) + '" class="tdact"' + mailHint + '>&#9993; Confirm by email</a>');
+          }
+        } else if (r.is_no_show){
+          if (tel){
+            acts.push('<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a>');
+            acts.push('<a href="' + rcText(esc(tel)) + '" class="tdact">&#128172; Text</a>');
+          } else if (mail){
+            acts.push('<a href="' + esc(tdMailto(mail, 'Your tour' + (addrRaw ? ' at ' + addrRaw : ''), '')) + '" class="tdact"' + mailHint + '>&#9993; Email</a>');
+          }
+        } else {
+          var tmsg = tdThanksMsg(r.invitee_name, addrRaw, r.unit_listing_url);
+          if (tel){
+            acts.push('<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a>');
+            acts.push('<a href="' + rcText(esc(tel), tmsg) + '" class="tdact">&#128172; Thanks + apply link</a>');
+          } else if (mail){
+            acts.push('<a href="' + esc(tdMailto(mail, 'Thanks for touring' + (addrRaw ? ' ' + addrRaw : ''), tmsg)) + '" class="tdact"' + mailHint + '>&#9993; Thanks + apply link</a>');
           }
         }
+        // F5: no-show inline. Was Tours tab + flip the Show filter + open the row + the
+        // modal button = 4 taps and a tab hop. Same writeback + confirm as the modal;
+        // only offered once the tour has started (Calendly 400s before that).
+        if (started && r.invitee_uri && r.status !== 'canceled'){
+          acts.push('<button type="button" class="tdact" data-nsuri="' + esc(r.uri) + '">' + (r.is_no_show ? '&#8617; Undo no-show' : '&#8856; No-show') + '</button>');
+        }
+        if (!tel && !mail) acts.push('<span class="count-note">No phone or email on file</span>');
+        var act = acts.length ? '<div class="tdrowact">' + acts.join(' ') + '</div>' : '';
         // the tour's unit address is clickable → opens the listing (or unit) right here in a modal
         var canList = r.matched_unit_id || r.matched_property_id;
         var addrHtml = !addrRaw ? ''
@@ -3721,7 +3781,7 @@ window.addEventListener('error', function(e){
         start: r.start_time, end: r.end_time || undefined,
         backgroundColor: col, borderColor: col, textColor: '#15110D',
         classNames: canceled ? ['fc-ev-cxl'] : [],
-        extendedProps: { canceled: canceled, noshow: !!r.is_no_show, n: r.attendee_count || 0, recon: reconState(r) }
+        extendedProps: { canceled: canceled, noshow: !!r.is_no_show, n: r.attendee_count || 0, recon: reconShow(r) }
       };
     });
     if (tdBookArmed()) events = events.concat(tdBookOverlay());
@@ -3980,6 +4040,15 @@ window.addEventListener('error', function(e){
       var lt = e.target.closest('.tdlisting');
       if (lt){
         tdOpenTourListing(lt.getAttribute('data-luid'), lt.getAttribute('data-llisted') === '1', lt.getAttribute('data-lpid'));
+        return;
+      }
+      // F5: inline no-show straight off the Today row — same write + confirm as the modal
+      var ns = e.target.closest('[data-nsuri]');
+      if (ns){
+        var nsUri = ns.getAttribute('data-nsuri');
+        var row = null;
+        (tdMyRows || []).forEach(function(x){ if (x.uri === nsUri) row = x; });
+        if (row) tourNoShowWrite(row, ns, function(){ if (tdMyMe) tdLoadMyTours(tdMyMe); });
         return;
       }
       var ur = e.target.closest('.tdurow');
@@ -5156,7 +5225,7 @@ window.addEventListener('error', function(e){
   var COLF_SORT = {
     utable: { get:function(){ return uSort; }, set:function(c,d){ uSort={k:c,d:d}; drawUnits(); } },
     atable: { get:function(){ return aSort; }, set:function(c,d){ aSort={k:c,d:d}; drawApps(); } },
-    rtable: { get:function(){ return rSort; }, set:function(c,d){ rSort={k:c,d:d}; drawTours(); } },
+    rtable: { get:function(){ return rSort; }, set:function(c,d){ rSort={k:c,d:d}; rSortUser=true; drawTours(); } },
     rntable: { get:function(){ return rnSort; }, set:function(c,d){ rnSort={k:c,d:d}; drawRenewals(); } },
     otable: { get:function(){ return oSort; }, set:function(c,d){ oSort={k:c,d:d}; drawOwners(); } },
     ktable: { get:function(){ return kSort; }, set:function(c,d){ kSort={k:c,d:d}; drawKeys(); } },
@@ -5892,7 +5961,7 @@ window.addEventListener('error', function(e){
     // collapsed details
     el('lm-desc').textContent = r.listing_description || 'No description on this listing.';
     var amen = r.listing_amenities || [];
-    el('lm-amen').innerHTML = amen.map(function(a){ return '<span>' + esc(a) + '</span>'; }).join('');
+    el('lm-amen').innerHTML = amen.map(function(a){ return '<span>' + esc(amenNice(a)) + '</span>'; }).join('');
     el('lm-detwrap').open = false;
     // photos
     el('lm-photos').innerHTML = '';
@@ -6698,7 +6767,7 @@ window.addEventListener('error', function(e){
     if (r.listing_rent != null) lines.push(fmtMoney(r.listing_rent) + '/mo');
     if (r.bedrooms) lines.push(r.bedrooms + ' bed');
     if (r.available_date) lines.push('Available ' + r.available_date);
-    if ((r.listing_amenities || []).length) lines.push('Amenities: ' + r.listing_amenities.join(', '));
+    if ((r.listing_amenities || []).length) lines.push('Amenities: ' + r.listing_amenities.map(amenNice).join(', '));
     if (r.listing_description) { lines.push(''); lines.push(r.listing_description); }
     if (r.listing_url) { lines.push(''); lines.push('Apply: ' + r.listing_url); }
     var txt = lines.join(String.fromCharCode(10)), self = this, orig = self.textContent;
@@ -7425,13 +7494,25 @@ window.addEventListener('error', function(e){
     if (r.reconfirmation_requested_at) return 'awaiting';
     return 'none';
   }
+  // A-12: DISPLAY state, which is reconState plus "has it already happened?". A tour that
+  // has come and gone can't meaningfully be "awaiting a reply", so the ⏳ drops off once it
+  // starts — post-hoc noise. A ✓ confirmed still means something afterwards, so it stays.
+  // One source for both the list chips and the calendar icons.
+  function reconShow(r){
+    if (!r) return 'none';
+    var st = reconState(r);
+    if (st === 'confirmed') return 'confirmed';
+    var upcoming = r.status === 'active' && Date.parse(r.start_time) >= Date.now();
+    if (!upcoming) return 'none';
+    return st === 'awaiting' ? 'awaiting' : 'toconfirm';
+  }
   // small chip for list rows / calendar (only confirmed / awaiting — keeps rows clean)
   function reconChip(r){
-    var st = reconState(r);
+    var st = reconShow(r);
     if (st === 'confirmed') return '<span class="chip c-ok" title="Prospect reconfirmed">&#10003; confirmed</span>';
     if (st === 'awaiting')  return '<span class="chip c-warm" title="Reconfirmation sent — awaiting reply">&#9203; unconfirmed</span>';
     // upcoming tour Calendly hasn't asked yet, but still needs confirming → neutral flag
-    if (r.status === 'active' && Date.parse(r.start_time) >= Date.now()) return '<span class="chip c-cold" title="Upcoming — not yet confirmed">to confirm</span>';
+    if (st === 'toconfirm') return '<span class="chip c-cold" title="Upcoming — not yet confirmed">to confirm</span>';
     return '';
   }
   function fmtReconWhen(ts){ var t = Date.parse(ts); return isNaN(t) ? '' : new Date(t).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
@@ -7520,7 +7601,13 @@ window.addEventListener('error', function(e){
       if (!q) return true;
       return ((r.agent||'') + ' ' + (r.location_text||'') + ' ' + (r.matched_property_name||'') + ' ' + (r.matched_unit_number||'') + ' ' + (r.event_name||'') + ' ' + (r.invitee_name||'') + ' ' + (r.invitee_email||'')).toLowerCase().indexOf(q) >= 0;
     });
-    rows.sort(cmpRows(rSort.k, rSort.d, rSort.k === 'start_time'));
+    // A-11: filtered to Upcoming, "newest first" means FARTHEST first — today's tours sink
+    // to the bottom, which is exactly backwards for the person working the list. Flip to
+    // nearest-first for that case only; completed/cancelled still read newest-first, and an
+    // explicit sort from the column popover always wins.
+    var sortD = rSort.d;
+    if (!rSortUser && rSort.k === 'start_time' && rStatus.upcoming && !rStatus.completed && !rStatus.cancelled) sortD = 1;
+    rows.sort(cmpRows(rSort.k, sortD, rSort.k === 'start_time'));
     return rows;
   }
   function drawTours(){
@@ -7579,7 +7666,7 @@ window.addEventListener('error', function(e){
         end: r.end_time || undefined,
         backgroundColor: col, borderColor: col, textColor: '#15110D',
         classNames: canceled ? ['fc-ev-cxl'] : [],
-        extendedProps: { canceled: canceled, noshow: !!r.is_no_show, n: r.attendee_count || 0, recon: reconState(r) }
+        extendedProps: { canceled: canceled, noshow: !!r.is_no_show, n: r.attendee_count || 0, recon: reconShow(r) }
       };
     });
     if (!rcal) {
@@ -7809,17 +7896,26 @@ window.addEventListener('error', function(e){
       .catch(function(err){ if (ta) ta.disabled = false; if (send) send.disabled = false; alert('Could not save note: ' + String((err && err.message) || err)); });
   }
   function toggleNoShow(){
-    var r = curTour; if (!r || !r.invitee_uri) return;
+    var r = curTour; if (!r) return;
+    var uri = r.uri;
+    tourNoShowWrite(r, el('rm-noshow'), function(){
+      if ((toursAll || []).some(function(x){ return x.uri === uri; })) openTourDetail(uri); else closeModal('rmodal');
+    });
+  }
+  // THE no-show writeback — shared by the tour modal and the Today row chip (F5), so the
+  // Calendly-write confirm and the error path can never drift between the two surfaces.
+  function tourNoShowWrite(r, btn, after){
+    if (!r || !r.invitee_uri) return;
     var actor = (getActor() || '').trim();
     if (!actor) { alert('Pick your name on the sign-in screen first (sign out, then sign back in with your name selected).'); return; }
     var undo = !!r.is_no_show;
     if (!undo && !confirm('Mark ' + (r.invitee_name || 'this prospect') + ' as a no-show? This writes the no-show back to Calendly.')) return;
-    var btn = el('rm-noshow'), lbl = btn.innerHTML, uri = r.uri;
-    btn.disabled = true; btn.innerHTML = undo ? 'Undoing…' : 'Marking…';
-    postJSON(undo ? '/tour/no-show-undo' : '/tour/no-show', { event_uri: uri, invitee_uri: r.invitee_uri, actor: actor })
+    var lbl = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = undo ? 'Undoing…' : 'Marking…'; }
+    return postJSON(undo ? '/tour/no-show-undo' : '/tour/no-show', { event_uri: r.uri, invitee_uri: r.invitee_uri, actor: actor })
       .then(function(){ return fetchTours(); })
-      .then(function(){ if ((toursAll || []).some(function(x){ return x.uri === uri; })) openTourDetail(uri); else closeModal('rmodal'); })
-      .catch(function(err){ btn.disabled = false; btn.innerHTML = lbl; alert('Could not update no-show: ' + String((err && err.message) || err)); });
+      .then(function(){ if (after) after(); })
+      .catch(function(err){ if (btn) { btn.disabled = false; btn.innerHTML = lbl; } alert('Could not update no-show: ' + String((err && err.message) || err)); });
   }
   // Cancel a showing via the Calendly API (replaces the old hosted cancel_url link).
   // Cancellation is event-level, so for a multi-person open house it cancels the whole
@@ -7853,6 +7949,12 @@ window.addEventListener('error', function(e){
     });
     el('rm-pick').innerHTML = h;
   }
+  // Bring the tour picker / its "no match" answer into view — it renders outside the
+  // collapsible details block that holds the button, so without this it reads as silent (A-09).
+  function tourPickReveal(){
+    var box = el('rm-pick'); if (!box) return;
+    try { box.scrollIntoView({ behavior:'smooth', block:'nearest' }); } catch (e) {}
+  }
   // mode 'listing' → listing modal (unit popup if unlisted); mode 'unit' → unit popup always.
   function tourGoto(mode){
     var r = curTour; if (!r) return;
@@ -7869,8 +7971,12 @@ window.addEventListener('error', function(e){
       var pool = mode === 'listing' ? atProp.filter(function(u){ return u.is_listed; }) : atProp;
       if (!pool.length) pool = atProp;   // listing mode but nothing listed → fall back to all units
       if (pool.length === 1) { openOne(pool[0].unit_id, pool[0].is_listed); return; }
-      if (pool.length > 1) { renderTourPicker(pool); return; }
+      if (pool.length > 1) { renderTourPicker(pool); tourPickReveal(); return; }
+      // A-09: the buttons already hide when nothing matched, but when a property matches and
+      // its units don't resolve, this answer renders in #rm-pick — BELOW the collapsed
+      // details the button lives in, i.e. off-screen. That reads as "the click did nothing".
       el('rm-pick').innerHTML = '<div class="rmpicklab">No matching unit found for this property.</div>';
+      tourPickReveal();
     };
     if (unitsAll === null) { el('rm-pick').innerHTML = '<div class="rmpicklab">Loading units…</div>'; loadUnits(go); }
     else go();
@@ -8583,7 +8689,7 @@ window.addEventListener('error', function(e){
       return { id: r.uri, title: tourAddr(r), start: r.start_time, end: r.end_time || undefined,
         backgroundColor: col, borderColor: col, textColor: '#15110D',
         classNames: s === 'cancelled' ? ['fc-ev-cxl'] : [],
-        extendedProps: { canceled: r.status === 'canceled', recon: reconState(r) } };
+        extendedProps: { canceled: r.status === 'canceled', recon: reconShow(r) } };
     });
   }
   function hubBuildCal(events){
@@ -9147,7 +9253,7 @@ window.addEventListener('error', function(e){
       }
       schBkRenderCal(true);   // initial availability load — jump the calendar to the first opening
       var tc = el('td-cal'); if (tc) tc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });   // slots are live — bring the calendar into view
-      if (!tdBkFresh()) tdBkStatus(bkData.slots.length ? 'Click an open time on the calendar to book it.' : 'No open times in this window — widen it or pick another agent.');
+      if (!tdBkFresh()) tdBkStatus(bkData.slots.length ? schBkClickHint() : 'No open times in this window — widen it or pick another agent.');
     }).catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });
   }
   function schBkDayKey(ms){ var d = new Date(ms); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
@@ -9187,6 +9293,13 @@ window.addEventListener('error', function(e){
     var box = el('sch-bk-mode'); if (!box) return;
     box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode') === schBkMode); });
   }
+  // A-17: the coach line has to describe what a click actually DOES. In offer mode a click
+  // adds a time to the offer — it books nothing — so "to book it" was simply wrong there.
+  function schBkClickHint(){
+    if (schBkMode === 'offer') return 'Click each open time you want to offer, then create the offer.';
+    if (schBkMode === 'multi') return 'Click each open time to add a back-to-back stop.';
+    return 'Click an open time on the calendar to book it.';
+  }
   // Guard a non-single mode: needs an armed agent + event type. Returns false + coaches when not ready.
   function schBkModeGuard(mode){
     if (mode === 'single' || tdBookArmed()) return true;
@@ -9213,6 +9326,8 @@ window.addEventListener('error', function(e){
     schBkRenderStops();
     schBkRenderOffers();
     schBkRenderCal();
+    // the hint has to follow the mode switch, not just the availability load (A-17)
+    if (bkData.slots.length && !tdBkFresh()) tdBkStatus(schBkClickHint());
   }
   function schBkAddStop(startIso){
     if (schBkStops.some(function(s){ return s.start_time === startIso; })) return;   // dedupe

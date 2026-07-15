@@ -2287,7 +2287,7 @@ window.addEventListener('error', function(e){
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">Migrated from the Monday Key Ledger &mdash; this is now the system of record. Click a key to check it out / in, change status, or add a note; every action is logged in <b>History</b>. Sidebar scope filters apply to matched keys. Set <b>Acting as</b> in the sidebar before making changes.</div>
+      <div class="note" style="margin-top:10px">Migrated from the Monday Key Ledger &mdash; this is now the system of record. Click a key to check it out / in, change status, or add a note; every action is logged in <b>History</b>. Sidebar scope filters apply to matched keys. Every action is logged under the name you picked on the sign-in screen &mdash; sign out and back in to change it.</div>
     </div>
   </div>
 
@@ -3600,6 +3600,9 @@ window.addEventListener('error', function(e){
   // Tours carry full agent names ("Adam Naboulsi") while tour_agents holds first names
   // ("Adam") — colour, filter and match by FIRST TOKEN so chips and events always agree.
   function tdFt(s){ return String(s || 'Unknown').trim().split(/\s+/)[0].toLowerCase(); }
+  // THE agent-name matcher — every surface (Today, Hub, Tours calendar) compares
+  // people through this one. Both sides must be named: a blank actor matches nobody.
+  function sameAgent(a, b){ return !!a && !!b && tdFt(a) === tdFt(b); }
   function tdCalColors(rows){
     var names = {};
     (rows || []).forEach(function(r){ names[tdFt(r.agent)] = 1; });
@@ -4033,7 +4036,7 @@ window.addEventListener('error', function(e){
   }
 
   /* staff picker — self-attested actor, persisted per browser */
-  var STAFF_BASE = ['Connor','Pearse','Sarah','Miranda','Tristan','Jashan','Noor','Adam'];
+  var STAFF_BASE = ['Connor','Pearse','Sarah','Danai','Miranda','Tristan','Jashan','Noor','Adam'];
   var ACT_KEY = 'ledger_actor_v1', ACTLIST_KEY = 'ledger_actors_v1';
   function actorExtra(){ try { return JSON.parse(localStorage.getItem(ACTLIST_KEY) || '[]') || []; } catch (e) { return []; } }
   function actorList(){
@@ -7101,7 +7104,7 @@ window.addEventListener('error', function(e){
   function amAddNote(){
     if (!amCurAid) return;
     var actor = (getActor() || '').trim();
-    if (!actor) { alert('Pick your name on the sign-in screen (or the “Acting as” picker) first.'); return; }
+    if (!actor) { alert('Pick your name on the sign-in screen first (sign out, then sign back in with your name selected).'); return; }
     var ta = el('am-noteinput'), send = el('am-noteadd');
     var txt = (ta && ta.value || '').trim(); if (!txt) { if (ta) ta.focus(); return; }
     if (ta) ta.disabled = true; if (send) send.disabled = true;
@@ -7797,7 +7800,7 @@ window.addEventListener('error', function(e){
     var r = curTour; if (!r) return;
     var actor = (getActor() || '').trim();
     var ta = el('rm-noteinput'), send = el('rm-noteadd');
-    if (!actor) { alert('Pick your name on the sign-in screen (or the “Acting as” picker) first.'); return; }
+    if (!actor) { alert('Pick your name on the sign-in screen first (sign out, then sign back in with your name selected).'); return; }
     var txt = (ta && ta.value || '').trim();
     if (!txt) { if (ta) ta.focus(); return; }
     if (ta) ta.disabled = true; if (send) send.disabled = true;
@@ -7808,7 +7811,7 @@ window.addEventListener('error', function(e){
   function toggleNoShow(){
     var r = curTour; if (!r || !r.invitee_uri) return;
     var actor = (getActor() || '').trim();
-    if (!actor) { alert('Pick your name in the sidebar “Acting as” first.'); return; }
+    if (!actor) { alert('Pick your name on the sign-in screen first (sign out, then sign back in with your name selected).'); return; }
     var undo = !!r.is_no_show;
     if (!undo && !confirm('Mark ' + (r.invitee_name || 'this prospect') + ' as a no-show? This writes the no-show back to Calendly.')) return;
     var btn = el('rm-noshow'), lbl = btn.innerHTML, uri = r.uri;
@@ -7824,7 +7827,7 @@ window.addEventListener('error', function(e){
   function cancelTour(){
     var r = curTour; if (!r) return;
     var actor = (getActor() || '').trim();
-    if (!actor) { alert('Pick your name in the sidebar “Acting as” first.'); return; }
+    if (!actor) { alert('Pick your name on the sign-in screen first (sign out, then sign back in with your name selected).'); return; }
     var heads = (r.attendee_count || r.attendee_total || 1);
     var multi = heads > 1;
     var who = multi ? ('the whole open house for all ' + heads + ' attendees')
@@ -7934,7 +7937,7 @@ window.addEventListener('error', function(e){
   function saveTourLink(pid, uid){
     var r = curTour; if (!r) return;
     var actor = (getActor() || '').trim();
-    if (!actor) { el('rm-linkres').innerHTML = '<span class="count-note">Pick your name in the sidebar “Acting as” first.</span>'; return; }
+    if (!actor) { el('rm-linkres').innerHTML = '<span class="count-note">Pick your name on the sign-in screen first.</span>'; return; }
     var uri = r.uri;
     el('rm-linkres').innerHTML = '<span class="count-note">Saving…</span>';
     postJSON('/tour/link', { event_uri: uri, property_id: Number(pid), unit_id: uid ? Number(uid) : null, actor: actor })
@@ -8055,15 +8058,13 @@ window.addEventListener('error', function(e){
     drawAgentLegend(); drawTours();
   });
   el('r-mine').addEventListener('click', function(){
-    var me = (getActor() || '').trim().toLowerCase();
-    if (!me) { calNote('Pick your name in the sidebar “Acting as” first'); return; }
+    var me = (getActor() || '').trim();
+    if (!me) { calNote('Pick your name on the sign-in screen first'); return; }
     var on = el('r-mine').classList.toggle('on');
     rAgents = {};
     if (on) {
-      var meTok = me.split(' ')[0];
       Object.keys(agentNameCounts()).forEach(function(a){
-        var al = a.toLowerCase();
-        if (al.indexOf(me) >= 0 || me.indexOf(al.split(' ')[0]) >= 0 || al.split(' ')[0] === meTok || al.indexOf(meTok) >= 0) rAgents[a] = 1;
+        if (sameAgent(a, me)) rAgents[a] = 1;
       });
       if (!Object.keys(rAgents).length) calNote('No tours found under “' + me + '”');
     }
@@ -8337,15 +8338,13 @@ window.addEventListener('error', function(e){
       hubTours = null, hubToursView = 'day', hubCal = null, hubDay = null,
       hubView = 'mine', hubTeamSigned = null, hubTeamTours = null, hubTeamLeasesFilter = 'all', hubTeamLeasesSort = { k:'signed_date', d:-1 };
   function hubWindow(){ return windowDates(); }   // unified with the global sidebar Activity window (state.from/to)
-  function hubFirstTok(s){ return (s || '').trim().toLowerCase().split(/\s+/)[0] || ''; }
-  function hubSameAgent(a, b){ if (!a || !b) return false; a = a.toLowerCase(); b = b.toLowerCase(); return a === b || hubFirstTok(a) === hubFirstTok(b); }
   function hubMatchAgent(actor, agents){
     if (!agents.length) return '';
     if (!actor) return agents[0];
     var ex = agents.filter(function(g){ return g.toLowerCase() === actor.toLowerCase(); })[0];
     if (ex) return ex;
-    var ft = hubFirstTok(actor);
-    return agents.filter(function(g){ return hubFirstTok(g) === ft; })[0] || agents[0];
+    var ft = tdFt(actor);
+    return agents.filter(function(g){ return tdFt(g) === ft; })[0] || agents[0];
   }
   function loadHub(){ hubLoaded = 1; hubWinRender(); loadHubScore(true); loadHubTours(); }
   function loadHubScore(pickDefault){
@@ -8469,7 +8468,7 @@ window.addEventListener('error', function(e){
       if (r.status === 'confirmed'){
         credit = '<span class="pill" style="background:rgba(93,202,165,.16);color:#9fe1cb">&#10003; ' + esc(r.credited_agent || '?') + '</span>';
       } else {
-        var mine = hubSameAgent(r.suggested_agent, hubAgent);
+        var mine = sameAgent(r.suggested_agent, hubAgent);
         // In the browse scopes show who the system thinks it belongs to, so an agent
         // self-selects correctly; data-sug arms the cross-agent claim guard.
         var hint = (hubSignedScope !== 'mine' && r.suggested_agent && !mine)
@@ -8575,7 +8574,7 @@ window.addEventListener('error', function(e){
       .then(function(j){ hubTours = j.tours || []; hubRenderTours(); })
       .catch(function(){ hubTours = []; hubRenderTours(); });
   }
-  function hubMineTours(){ return (hubTours || []).filter(function(r){ return hubSameAgent(r.agent, hubAgent); }); }
+  function hubMineTours(){ return (hubTours || []).filter(function(r){ return sameAgent(r.agent, hubAgent); }); }
   function hubSameDay(a, b){ return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
   function hubTourEvents(rows){
     return rows.map(function(r){
@@ -8596,15 +8595,7 @@ window.addEventListener('error', function(e){
         allDaySlot: false, slotMinTime: '09:00:00', slotMaxTime: '21:00:00', expandRows: true,
         eventDisplay: 'block',
         eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); openTourDetail(info.event.id); },
-        eventContent: function(arg){
-          var wrap = document.createElement('div'); wrap.className = 'fc-ev-wrap';
-          var x = arg.event.extendedProps.canceled ? '<span class="fcx">&#10006;</span>' : '';
-          var rcm = arg.event.extendedProps.canceled ? ''
-            : (arg.event.extendedProps.recon === 'confirmed' ? '<span class="fcbk-ok" title="confirmed">&#10003;</span>'
-            : (arg.event.extendedProps.recon === 'awaiting' ? '<span class="fcx" title="awaiting reconfirmation" style="color:#15110D">&#9203;</span>' : ''));
-          wrap.innerHTML = x + rcm + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>';
-          return { domNodes: [wrap] };
-        }
+        eventContent: fcTourEventContent
       });
       hubCal.render();
     }
@@ -8867,7 +8858,7 @@ window.addEventListener('error', function(e){
     var b = e.target.closest('.hubact'); if (!b) return;
     var act = b.getAttribute('data-act'), id = b.getAttribute('data-id'), sug = b.getAttribute('data-sug') || '';
     // double-claim guard: claiming a lease the system suggested for someone else asks first
-    if (act === 'claim' && sug && !hubSameAgent(sug, hubAgent)){
+    if (act === 'claim' && sug && !sameAgent(sug, hubAgent)){
       if (!confirm('This lease was suggested for ' + sug + '. Claim it for ' + hubAgent + ' instead?')) return;
     }
     hubAct(id, act);
@@ -8984,14 +8975,13 @@ window.addEventListener('error', function(e){
   // ── Book-for-prospect flow (auto-book via Calendly Create Event Invitee) ───────────
   var schedProspect = null;   // prospect from a lead deep link, carried to either flow
   var schedBook = { applicant:null, agentId:null, agentName:'', eventType:null, eventTypeName:'', duration:0, locDefault:'', chosen:null, isGroup:false, capacity:0, ohLocation:'', scheduled:[] };
-  var bkcal = null, schBkSearchT = null, schBkLocT = null, schBkSearchRows = [], schBkLeadRows = [], bkData = { showings:[], busy:[], slots:[] };
+  var schBkSearchT = null, schBkLocT = null, schBkSearchRows = [], schBkLeadRows = [], bkData = { showings:[], busy:[], slots:[] };
   var schBkMode = 'single', schBkStops = [], schBkStopT = null;   // 'single' | 'multi' (back-to-back) | 'offer'; stops: [{start_time, location}]
   var schBkOffers = [], schBkShowOpenPrior = null, schBkOfferLast = null;   // offer run: [{start_time}] — alternative times for ONE visit, one optional shared location
   function schShowView(v){
     var L = el('sch-landing'), B = el('sch-view-book');
     if (L) L.style.display = v === 'landing' ? 'block' : 'none';
     if (B) B.style.display = v === 'book' ? 'block' : 'none';
-    if (v === 'book' && bkcal) setTimeout(function(){ try { bkcal.updateSize(); } catch(e){} }, 30);
   }
   function renderLandingPicked(){
     var box = el('sch-landing-picked'); if (!box) return;

@@ -3504,10 +3504,16 @@ window.addEventListener('error', function(e){
   // called tdSub, and #td-sub exists in every role so nothing null-guarded it. Same idea as
   // loadSchedFunnel's schFunnelReq, but keyed to the render rather than to one endpoint.
   var tdReq = 0;
+  // First-visit role inference (Deploy 3): with no saved role, the sign-in name picks a
+  // persona-appropriate Today default — the coordinator lands on the scheduling workspace,
+  // admins/managers on the brief, everyone else on the agent queues. Deliberately NOT written
+  // back to storage: tapping a role chip persists a real choice (data-role handler) and wins.
+  var TD_ROLE_INFER = { danai: 'coordinator', pearse: 'manager', connor: 'manager', sarah: 'manager' };
   function tdRole(){
     var r = '';
     try { r = localStorage.getItem(TD_ROLE_KEY) || ''; } catch (e) {}
-    return (r === 'coordinator' || r === 'agent' || r === 'manager') ? r : 'agent';
+    if (r === 'coordinator' || r === 'agent' || r === 'manager') return r;
+    return TD_ROLE_INFER[tdFt(getActor())] || 'agent';
   }
   function tdSyncRoles(){
     var box = el('td-roles'); if (!box) return;
@@ -8478,13 +8484,16 @@ window.addEventListener('error', function(e){
     el('login').style.display = 'none';
     scopeRestore();   // A-13: restore BEFORE load() so the very first /stats is already scoped
     load();
-    // deep link: if the URL points at a specific tab (e.g. #keys), open it
+    // Deep link: if the URL names a tab (e.g. #keys), open it. Otherwise the DEFAULT LANDING
+    // is Today (WS1-D3 / Deploy 3): every persona sees their role's work queues first; the
+    // Ledger stays one tap away and #ledger bookmarks still land on it directly. showTab runs
+    // before the async render() resolves, so the Ledger reveal guard (ACTIVE_TAB) never flashes.
     // A-03: a legacy #schedule bookmark resolves to Today, but used to keep whatever role was
     // remembered (default agent) — dropping the coordinator on the agent queues. ?lead= already
     // forces coordinator via tdCoordinatorHome(); mirror that here so both deep links agree.
     var t = tabFromHash();
     if ((location.hash || '').replace(/^#/, '').toLowerCase() === 'schedule') tdCoordinatorHome();
-    else if (t) showTab(t);
+    else showTab(t || 'today');
     // ?lead=<cardId> or ?lead_email=<email> → Schedule tab pre-filled
     if (pendingLeadCard) openLeadDeepLink('card_id=' + encodeURIComponent(pendingLeadCard));
     else if (pendingLeadEmail) openLeadDeepLink('email=' + encodeURIComponent(pendingLeadEmail));

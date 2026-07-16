@@ -1468,7 +1468,7 @@ window.addEventListener('error', function(e){
         <div class="num" id="k-conv">&ndash;</div>
         <div class="sub">conversion &middot; last 30 days</div>
       </div>
-      <div class="kpi alert click" id="kpi-needs" title="Prospects you toured but haven't called or texted in 7+ days — open My hub">
+      <div class="kpi alert click" id="kpi-needs" title="Prospects toured with no call or text in 7+ days, resolved applications excluded — team-wide — open My hub">
         <div class="lbl">Needs follow-up</div>
         <div class="num" id="k-needs">&ndash;</div>
         <div class="sub">toured &middot; no contact in 7 days</div>
@@ -1629,7 +1629,7 @@ window.addEventListener('error', function(e){
         </div>
       </div>
       <div class="card tablecard" id="ledger-outreach-card">
-        <div class="tablebar"><h2>Team outreach</h2><span class="count-note">calls &amp; texts &middot; RingCentral &middot; ~last 7 days</span></div>
+        <div class="tablebar"><h2>Team outreach</h2><span class="count-note">calls &amp; texts &middot; RingCentral &middot; last 7 days</span></div>
         <div class="scrolly"><table id="ledoutreach"><thead><tr>
           <th>Agent</th><th class="rt">Calls out</th><th class="rt">Calls in</th><th class="rt">Texts out</th><th class="rt">Texts in</th>
         </tr></thead><tbody></tbody></table></div>
@@ -3127,6 +3127,7 @@ window.addEventListener('error', function(e){
 
   function countUp(id, value, formatter){
     var node = el(id);
+    if (!node) return;   // a renamed/removed tile id must not abort the whole KPI render loop
     if (value == null) { node.textContent = '–'; node.removeAttribute('data-v'); return; }
     var fromV = parseFloat(node.getAttribute('data-v'));
     if (isNaN(fromV)) fromV = 0;
@@ -3158,14 +3159,16 @@ window.addEventListener('error', function(e){
       + '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
       + '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="1.9" fill="' + color + '"/></svg>';
   }
-  // A-14: the tile's NUMBER is scoped (get_stats.vacancy), but this delta comes from
-  // get_kpis() — which takes no arguments and is portfolio-wide BY DESIGN, because the weekly
-  // snapshots behind it have no scope dimension. So under an active scope the chip compares a
-  // different population than the number directly above it (the audit saw identical ▼0.7 pts /
-  // ▼8 before and after scoping). Until the snapshots gain a scope dimension (T4), say so.
-  function deltaChip(o, isPct){
-    var sc = scopeActive();
-    var tip = sc ? ' title="Company-wide — the weekly trend snapshots have no scope dimension, so this delta ignores the sidebar scope"' : '';
+  // A-14: the tile's NUMBER is scoped (get_stats.vacancy). The delta chip's source now depends
+  // on the scope shape: under a MANAGER-ONLY sidebar scope, /stats merges payload.kpis_scoped
+  // (per-manager sums from vacancy_snapshots.by_manager) and the vacant/op-rate chips read it —
+  // chip and number finally compare the same population, so no "· company" label. Every other
+  // shape (no scope, owner/property, mixed, or kpis_scoped unavailable) keeps the portfolio-wide
+  // get_kpis() chips and says so: those snapshots have no owner/property dimension.
+  function deltaChip(o, isPct, scoped){
+    var sc = scopeActive() && !scoped;
+    var tip = sc ? ' title="Company-wide — the weekly trend snapshots have no dimension for this scope, so this delta ignores the sidebar filter"'
+                 : (scoped ? ' title="Scoped to the selected manager(s) — weekly deltas from the manager vacancy snapshots"' : '');
     if (!o || o.delta == null) return '<span class="kdelta kflat"' + tip + '>vs last wk: tracking</span>';
     var improving = (o.good === 'down') ? (o.delta < 0) : (o.delta > 0);
     var cls = (o.delta === 0) ? 'kflat' : (improving ? 'kgood' : 'kbad');
@@ -3235,11 +3238,17 @@ window.addEventListener('error', function(e){
     setKpiAsof(el('kpi-missed'), asofRow(a.missed_calls, cur(k.missed_calls), fmtNum, false, 'down',
                 '7 days to ' + fmtAsofWhen(a.missed_calls && a.missed_calls.as_of)));
   }
-  function renderKpiExtras(k){
+  function renderKpiExtras(k, ks){
     if (!k) return;
     var GOLD = '#F7D982';
-    if (k.vacant_units) setKpiExtra(el('kpi-vacant'), deltaChip(k.vacant_units, false) + sparkSVG(k.vacant_units.series, GOLD));
-    if (k.op_vacancy)   setKpiExtra(el('kpi-oprate'), deltaChip(k.op_vacancy, true));
+    // A-14: under a manager-only scope the vacant/op-rate chips AND the vacant sparkline all
+    // come from kpis_scoped together — never a scoped chip over a company sparkline (one tile,
+    // one population). ks is undefined for every other scope shape; these two tiles then fall
+    // back to the portfolio chips with the "· company" label like every other tile.
+    var vac = (ks && ks.vacant_units) || k.vacant_units;
+    var opr = (ks && ks.op_vacancy) || k.op_vacancy;
+    if (vac) setKpiExtra(el('kpi-vacant'), deltaChip(vac, false, !!(ks && ks.vacant_units)) + sparkSVG(vac.series, GOLD));
+    if (opr) setKpiExtra(el('kpi-oprate'), deltaChip(opr, true, !!(ks && ks.op_vacancy)));
     if (k.leases_signed){ var sg = el('s-signed'); setKpiExtra(sg ? sg.parentNode : null, deltaChip(k.leases_signed, false) + sparkSVG(k.leases_signed.series, GOLD)); }
     if (k.move_ins){ var mi = el('tile-mi'); setKpiExtra(mi, deltaChip(k.move_ins, false) + sparkSVG(k.move_ins.series, GOLD)); }
     // task tiles are KPI-sourced (get_stats has no task counts), so set the number here too
@@ -4020,7 +4029,9 @@ window.addEventListener('error', function(e){
     if (m.stats && m.stats.vacancy){
       var v = m.stats.vacancy, ag = m.stats.aging || {};
       var old60 = (ag.d61_90 || 0) + (ag.d90 || 0);
-      L.push({ k: 'ledger', t: 'Op vacancy ' + (v.op_vacant != null ? v.op_vacant : '–') + (v.op_rate_pct != null ? ' (' + v.op_rate_pct + '%)' : '') + (old60 ? ' — ' + old60 + ' vacant 60+ days' : '') });
+      // A-15 family: this read v.op_rate_pct — a key get_stats never returned — so the "(x%)"
+      // parenthetical silently never rendered. The real key is vacancy.op_vacancy_rate.
+      L.push({ k: 'ledger', t: 'Op vacancy ' + (v.op_vacant != null ? v.op_vacant : '–') + (v.op_vacancy_rate != null ? ' (' + v.op_vacancy_rate + '%)' : '') + (old60 ? ' — ' + old60 + ' vacant 60+ days' : '') });
     }
     if (!L.length) L.push({ k: 'ledger', t: 'All clear — nothing needs you this morning.' });
     box.innerHTML = L.map(function(x){ return '<button type="button" class="tdbrief" data-mgr="' + x.k + '">' + esc(x.t) + '</button>'; }).join('');
@@ -4034,13 +4045,22 @@ window.addEventListener('error', function(e){
     // and both scope correctly (verified live: 11.5%→8.3%, $212,271→$52,777 under one manager).
     var v = m.stats.vacancy || {}, p = m.stats.pipeline || {}, k = m.stats.kpis || {}, mo = m.stats.money || {};
     var scoped = scopeActive();
+    // A-14 sibling: under a manager-only scope /stats carries kpis_scoped; show the same
+    // manager-scoped week-over-week op-rate move here that the Ledger ribbon chip shows, so
+    // Today and the Ledger tell one story. (op-vacant gets no delta — kpis_scoped tracks
+    // vacant_total = op_vacant + never_leased, a different definition; never mix the two.)
+    var ks = m.stats.kpis_scoped, oprD = '';
+    if (ks && ks.op_vacancy && ks.op_vacancy.delta != null && ks.op_vacancy.delta !== 0){
+      var dd = ks.op_vacancy.delta;
+      oprD = ' <span style="color:var(' + (dd < 0 ? '--moss' : '--clay') + ')">' + (dd > 0 ? '&#9650;' : '&#9660;') + Math.abs(dd).toFixed(1) + '</span>';
+    }
     function chip(label, val, go, tip){
       return '<button type="button" class="tdpulsec" data-goto="' + go + '"' + (tip ? ' title="' + esc(tip) + '"' : '') +
         '><span class="tdp-v">' + val + '</span><span class="tdp-l">' + esc(label) + '</span></button>';
     }
     box.innerHTML =
       chip('op vacant', v.op_vacant != null ? fmtNum(v.op_vacant) : '–', 'units') +
-      chip('op rate', v.op_vacancy_rate != null ? v.op_vacancy_rate + '%' : '–', 'ledger') +
+      chip('op rate', v.op_vacancy_rate != null ? v.op_vacancy_rate + '%' + oprD : '–', 'ledger', oprD ? 'vs last week — manager-scoped' : '') +
       chip('rent at risk', mo.rent_at_risk != null ? fmtMoney(mo.rent_at_risk) : '–', 'units') +
       chip('expiring 90d', p.expiring_90d != null ? fmtNum(p.expiring_90d) : '–', 'renewals') +
       chip('undecided', p.undecided != null ? fmtNum(p.undecided) : '–', 'renewals') +
@@ -5617,7 +5637,7 @@ window.addEventListener('error', function(e){
     if (rt.rate_pct == null) el('k-retention').textContent = '—';
     else countUp('k-retention', rt.rate_pct, pct);
     el('k-retention-sub').innerHTML = 'trailing 12 mo &middot; ' + fmtNum(rt.renewed || 0) + ' renewed / ' + fmtNum((rt.renewed || 0) + (rt.moved_out || 0)) + ' term-ends';
-    if (d.kpis) renderKpiExtras(d.kpis);
+    if (d.kpis) renderKpiExtras(d.kpis, d.kpis_scoped);   // kpis_scoped: manager-only scope (A-14)
     renderAsOf(d);
 
     var ag = d.aging || {}; var op = ag.op_vacant || {}; var nl = ag.never_leased || {};
@@ -5838,7 +5858,7 @@ window.addEventListener('error', function(e){
 
     // vacant units + occupied-but-listed (upcoming turnover) share one table.
     // Headline vacancy KPIs/rates/aging stay vacant-only (server-side).
-    tableRows = (d.vacant_units || []).concat(d.marketed_occupied || []);  // kept for the listing modal (listingRowFor)
+    tableRows = (d.vacant_units || []).concat(d.marketed_occupied || []);  // DEAD after R5 (modal reads unitsAll + /unit now); remove once the /stats route strip bakes
 
     var ops = d.ops || {};
     lastBuildiumSync = ops.last_buildium_sync || null;
@@ -6020,15 +6040,14 @@ window.addEventListener('error', function(e){
     blobDownload({ scope: a.getAttribute('data-scope'), entity_id: a.getAttribute('data-eid'), image_id: a.getAttribute('data-iid'), name: a.getAttribute('data-name') });
   });
 
-  /* ── listing modal (Ledger vacant table) ──── */
-  // Resolve a listing-modal row for a unit. Prefer the Ledger marketed-units payload
-  // (carries the full listing description + amenities); fall back to the unit directory
-  // so the listing modal still opens for units outside the current Ledger scope (e.g.
-  // opened from the Units tab). The directory has amenities but no listing description.
+  /* ── listing modal ────────────────────────── */
+  // R5: rows resolve from the unit directory (unitsAll) ONLY. The old primary source —
+  // tableRows, i.e. get_stats' vacant_units/marketed_occupied arrays — is being stripped
+  // from /stats (its listing_description field alone was 65.9% of a payload polled every
+  // 30 s). No list payload carries the description any more; openListing fetches it
+  // per-unit from /unit on open. tableRows stays populated until the route strip bakes,
+  // but nothing reads it here.
   function listingRowFor(uid){
-    var r = null;
-    tableRows.forEach(function(x){ if (String(x.unit_id) === String(uid)) r = x; });
-    if (r) return r;
     var u = null;
     (unitsAll || []).forEach(function(x){ if (String(x.unit_id) === String(uid)) u = x; });
     if (!u) return null;
@@ -6042,12 +6061,16 @@ window.addEventListener('error', function(e){
       manager: u.property_manager_name,
       address_line1: u.address_line1,
       city: u.city,
-      listing_description: null,
+      listing_description: null,   // fetched per-unit on modal open (see openListing)
       listing_amenities: u.amenities || [],
       listing_url: u.listing_url
     };
   }
+  var lmDescReq = 0;   // generation guard for the per-unit description fetch
   function openListing(uid){
+    // ensure-guard mirroring openUnitEnsure: rows resolve from unitsAll now, and some entry
+    // points (tour modal/picker, Today's tour rows) can fire before the directory has loaded.
+    if (unitsAll === null){ loadUnits(function(){ openListing(uid); }); return; }
     var r = listingRowFor(uid);
     if (!r) return;
     el('lm-title').textContent = (r.property || '') + ' — ' + (r.unit || '');
@@ -6068,7 +6091,22 @@ window.addEventListener('error', function(e){
     el('lm-unit').setAttribute('data-uid', uid);
     el('lm-copy')._row = r;
     // collapsed details
-    el('lm-desc').textContent = r.listing_description || 'No description on this listing.';
+    // R5: the description arrives per-unit from /unit (it is no longer in any list payload).
+    // Generation-guarded so a second listing opened before this resolves is never overwritten;
+    // r is mutated when it lands so "Copy details" (_row) includes the description too.
+    var myDesc = ++lmDescReq;
+    el('lm-desc').textContent = 'Loading description…';
+    authFetch('/unit?unit_id=' + encodeURIComponent(uid))
+      .then(function(j){
+        if (myDesc !== lmDescReq) return;
+        r.listing_description = (j && j.unit && j.unit.listing_description) || null;
+        el('lm-desc').textContent = r.listing_description || 'No description on this listing.';
+      })
+      .catch(function(e){
+        if (myDesc !== lmDescReq) return;
+        if (String(e && e.message) !== 'AUTH') console.error('listing description load failed', e);
+        el('lm-desc').textContent = 'No description on this listing.';
+      });
     var amen = r.listing_amenities || [];
     el('lm-amen').innerHTML = amen.map(function(a){ return '<span>' + esc(amenNice(a)) + '</span>'; }).join('');
     el('lm-detwrap').open = false;
@@ -8591,7 +8629,10 @@ window.addEventListener('error', function(e){
     if (!hubAgent){ hubFollow = []; hubRenderFollow(); return; }
     authFetch('/agent-followups?agent=' + encodeURIComponent(hubAgent))
       .then(function(j){ hubFollow = j.followups || []; hubRenderFollow(); })
-      .catch(function(){ hubFollow = []; hubRenderFollow(); });
+      .catch(function(e){
+        if (String(e && e.message) !== 'AUTH') console.error('followups load failed', e);
+        hubFollow = []; hubRenderFollow();
+      });
   }
   // Signed-leases panel honours the scope toggle: Mine (credited to you) /
   // Available to claim (the shared status='suggested' pool, all agents) / All.
@@ -8602,7 +8643,10 @@ window.addEventListener('error', function(e){
     else { if (!hubAgent){ hubSigned = []; hubRenderSigned(); return; }
       url = '/signed-leases?from=' + w.from + '&to=' + w.to + '&agent=' + encodeURIComponent(hubAgent); }
     authFetch(url).then(function(j){ hubSigned = j.signed || []; hubRenderSigned(); })
-      .catch(function(){ hubSigned = []; hubRenderSigned(); });
+      .catch(function(e){
+        if (String(e && e.message) !== 'AUTH') console.error('signed-leases load failed', e);
+        hubSigned = []; hubRenderSigned();
+      });
   }
   function hubScoreFor(agent){
     var r = (hubScore || []).filter(function(x){ return x.agent === agent; })[0];
@@ -9176,7 +9220,9 @@ window.addEventListener('error', function(e){
   var ledOutreachLoaded = null;
   function loadLedgerOutreach(){
     ledOutreachLoaded = 1;
-    var to = dstr(new Date()), from = dstr(new Date(Date.now() - 7 * 86400000));
+    // A-19: 6 days back + today = the same 7-day window as the outreach tile above
+    // (the scorecard RPC's predicate is >= from AND < to+1; "- 7" made this an 8-day pull).
+    var to = dstr(new Date()), from = dstr(new Date(Date.now() - 6 * 86400000));
     authFetch('/agent-scorecard?from=' + from + '&to=' + to).then(function(j){
       var rows = (j.scorecard || []).filter(function(r){ return (r.calls_out||0)+(r.calls_in||0)+(r.texts_out||0)+(r.texts_in||0) > 0; })
         .sort(function(a, b){ return ((b.calls_out||0)+(b.texts_out||0)) - ((a.calls_out||0)+(a.texts_out||0)); });

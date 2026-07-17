@@ -1262,8 +1262,8 @@ window.addEventListener('error', function(e){
   .schleg-busy:before{background:#c9ccd1}
   /* WS-G M4b: agent-coloured STRIPED busy on the team calendar — the stripe keeps a busy
      block distinguishable from a solid tour block at a glance (and survives colour-blindness). */
-  #td-cal .fc-ev-teambusy{opacity:.88}
-  #td-cal .fc-ev-teambusy .fc-event-main{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.45) 0 5px,rgba(255,255,255,0) 5px 11px)}
+  #td-cal .fc-ev-teambusy{border-left-width:3px}
+  #td-cal .fc-ev-teambusy .fc-event-main{background-image:repeating-linear-gradient(135deg,rgba(21,17,13,.07) 0 5px,rgba(0,0,0,0) 5px 11px)}
   .schleg-tbusy:before{background:repeating-linear-gradient(135deg,#b9bec6 0 4px,#e6e8ec 4px 8px)}
   .schtgl{font-size:.74rem;color:var(--ink-soft);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-left:auto}
   .schhint{font-size:.74rem;color:var(--ink-soft);font-style:italic}
@@ -3885,7 +3885,7 @@ window.addEventListener('error', function(e){
       if (bz === undefined) tdCalEnsureBusy();
       var sac = colors[tdFt(tdCalAgent)] || '#7c8597';
       (bz || []).forEach(function(b){
-        events.push({ id: 'busy_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: sac, borderColor: sac, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: tdCalAgent } });
+        events.push({ id: 'busy_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: '#ffffff', borderColor: sac, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: tdCalAgent, busyColor: sac } });
       });
       if (n && bz && bz.length) n.textContent += ' · busy time shown';
     }
@@ -3902,7 +3902,7 @@ window.addEventListener('error', function(e){
         var tbc = colors[tdFt(p.name)] || '#c9ccd1';
         (p.busy || []).forEach(function(b){
           tbN++;
-          events.push({ id: 'tbusy_' + p.name + '_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: tbc, borderColor: tbc, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: p.name } });
+          events.push({ id: 'tbusy_' + p.name + '_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: '#ffffff', borderColor: tbc, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: p.name, busyColor: tbc } });
         });
       });
       if (n && tbN) n.textContent += ' · team busy shown';
@@ -7843,8 +7843,14 @@ window.addEventListener('error', function(e){
       : (arg.event.extendedProps.recon === 'confirmed' ? '<span class="fcbk-ok" title="Prospect confirmed">&#10003;</span>'
       : (arg.event.extendedProps.recon === 'awaiting' ? '<span class="fcx" title="awaiting reconfirmation" style="color:#15110D">&#9203;</span>' : ''));
     wrap.innerHTML = x + rcm + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' + nb;
-    // busy blocks carry the owning agent in a hover tooltip (the colour is the primary cue)
-    if (arg.event.extendedProps.busyAgent) wrap.title = arg.event.extendedProps.busyAgent + ' · ' + (arg.event.title || 'Busy');
+    // busy blocks carry the owning agent in a hover tooltip, and the solid agent colour
+    // sits behind the TITLE TEXT only — white block body keeps the name readable
+    // (Pearse 2026-07-16).
+    if (arg.event.extendedProps.busyAgent){
+      wrap.title = arg.event.extendedProps.busyAgent + ' · ' + (arg.event.title || 'Busy');
+      var bt = wrap.querySelector('.fc-ev-t');
+      if (bt && arg.event.extendedProps.busyColor){ bt.style.background = arg.event.extendedProps.busyColor; bt.style.padding = '0 4px'; bt.style.borderRadius = '4px'; }
+    }
     return { domNodes: [wrap] };
   }
   function drawCalendar(rows){

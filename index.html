@@ -1858,7 +1858,7 @@ window.addEventListener('error', function(e){
             <button type="button" class="rfreshbtn" id="sch-bk-reload">&#8635; Refresh</button>
             <span class="count-note" id="sch-bk-cal-note"></span>
           </div>
-          <div class="schcal-legend"><span class="schleg schleg-busy">Busy</span><span class="schleg schleg-tbusy">Agent event</span><span class="schleg schleg-oh" id="sch-bk-leg-oh" style="display:none">Open house &middot; spots left</span><span class="schleg schleg-full" id="sch-bk-leg-full" style="display:none">Full</span><span class="schhint" id="sch-bk-hint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><span class="schhint" id="sch-bk-oh-hint" style="display:none">Open houses run at set times &mdash; tap a slot to add the prospect. Numbers show spots still open.</span><div class="chipset schchips" id="sch-bk-mode" style="margin-left:auto"><button type="button" class="chip-mini on" data-mode="single">Book one</button><button type="button" class="chip-mini" data-mode="multi">Back-to-back</button><button type="button" class="chip-mini" data-mode="offer">Offer times</button></div><label class="schtgl" id="sch-bk-showopen-lbl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label><label class="schtgl" id="td-cal-busy-lbl"><input type="checkbox" id="td-cal-busy" checked> Team busy</label></div>
+          <div class="schcal-legend"><span class="schleg schleg-tbusy">Agent event</span><span class="schleg schleg-oh" id="sch-bk-leg-oh" style="display:none">Open house &middot; spots left</span><span class="schleg schleg-full" id="sch-bk-leg-full" style="display:none">Full</span><span class="schhint" id="sch-bk-hint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><span class="schhint" id="sch-bk-oh-hint" style="display:none">Open houses run at set times &mdash; tap a slot to add the prospect. Numbers show spots still open.</span><div class="chipset schchips" id="sch-bk-mode" style="margin-left:auto"><button type="button" class="chip-mini on" data-mode="single">Book one</button><button type="button" class="chip-mini" data-mode="multi">Back-to-back</button><button type="button" class="chip-mini" data-mode="offer">Offer times</button></div><label class="schtgl" id="sch-bk-showopen-lbl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label><label class="schtgl" id="td-cal-busy-lbl"><input type="checkbox" id="td-cal-busy" checked> Team busy</label></div>
         </div>
         <div id="td-cal"></div>
         <div id="td-cal-list"></div>
@@ -3773,8 +3773,15 @@ window.addEventListener('error', function(e){
   function tdBookOverlay(){
     var dur = schedBook.duration || 15, evs = [];
     var showOpen = !!(el('sch-bk-showopen') && el('sch-bk-showopen').checked);
+    // Booking-armed busy = the SAME Google-calendar blocks as everywhere else (titled,
+    // agent-coloured, striped, clickable) — the opaque grey wash is retired. A solid block
+    // also stops a mis-click from booking straight over a busy time: the click opens the
+    // event detail instead of snapping a booking onto it.
+    var bkAgent = (tdCalAgents || []).filter(function(x){ return String(x.id) === String(schedBook.agentId); })[0];
+    var bkName = bkAgent ? bkAgent.display_name : '';
+    var bkCol = (tdCalColors(tdCalRows)[tdFt(bkName)]) || '#7c8597';
     bkData.busy.forEach(function(b){
-      evs.push({ id: 'busy_' + b.start, title: 'Busy', start: b.start, end: b.end || undefined, display: 'background', backgroundColor: '#c9ccd1', classNames: ['fc-ev-busy'], extendedProps: { kind: 'busy' } });
+      evs.push({ id: 'busy_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: bkCol, borderColor: bkCol, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: bkName, busyColor: bkCol, busyLink: b.html_link || null } });
     });
     if (schedBook.isGroup){
       // Open-house mode: every configured window with room is bookable (gold, shows spots left);
@@ -9503,43 +9510,63 @@ window.addEventListener('error', function(e){
     if (sc) return Math.max(0, (Number(sc.limit) || 0) - (Number(sc.active) || 0));
     return null;
   }
+  var schBkCalReq = 0;   // generation guard — an agent/event-type switch mid-flight must never paint stale data
   function schBkLoadCalendar(){
     if (!schedBook.agentId) return;
+    var gen = ++schBkCalReq;
     var days = 28;   // fixed horizon — the calendar's own prev/next handles navigation (window dropdown retired)
     var to = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
     var note = el('sch-bk-cal-note'); if (note) note.textContent = 'Loading…';
     var aid = encodeURIComponent(schedBook.agentId);
-    Promise.all([
-      authFetch('/agent-schedule?agent_id=' + aid + '&to=' + to).catch(function(){ return { showings: [], busy: [] }; }),
-      authFetch('/agent-availability?agent_id=' + aid + (schedBook.eventType ? '&event_type=' + encodeURIComponent(schedBook.eventType) : '') + '&to=' + to).catch(function(){ return { slots: [] }; })
-    ]).then(function(parts){
-      var sched = parts[0] || {}, avail = parts[1] || {};
-      bkData.showings = sched.showings || []; bkData.busy = sched.busy || []; bkData.slots = avail.slots || [];
-      schedBook.duration = avail.duration_minutes || schedBook.duration || 15;
-      // Open-house (group) context confirmed by the server.
-      schedBook.isGroup = !!avail.is_group; schedBook.capacity = avail.capacity || 0;
-      schedBook.ohLocation = avail.oh_location || ''; schedBook.scheduled = avail.scheduled || [];
-      schBkApplyMode();
-      if (schedBook.isGroup){
-        // Open houses POOL invitees and the agent hosts them, so other showings/busy blocks must
-        // NOT remove an open-house slot — show every configured window with room as-is.
-        if (note && !tdBkFresh()) note.textContent = bkData.slots.length + ' open-house time' + (bkData.slots.length === 1 ? '' : 's') + ' with room — tap one to add the prospect';
-      } else {
-        // Defensive: drop open slots that overlap a known showing/busy block, in case Calendly
-        // availability didn't cross-block (e.g. a booking on the agent's OTHER event type).
-        var durMs = (schedBook.duration || 15) * 60000;
-        var blocks = bkData.showings.concat(bkData.busy).map(function(b){ return [Date.parse(b.start), Date.parse(b.end || b.start)]; }).filter(function(x){ return x[0] && x[1] && x[1] > x[0]; });
-        bkData.slots = bkData.slots.filter(function(sl){
-          var s = Date.parse(sl.start_time); if (!s) return true; var e = s + durMs;
-          for (var i = 0; i < blocks.length; i++){ if (s < blocks[i][1] && e > blocks[i][0]) return false; }
-          return true;
-        });
-        if (note && !tdBkFresh()) note.textContent = bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' · ' + bkData.slots.length + ' open time' + (bkData.slots.length === 1 ? '' : 's') + ' — click any empty time to book';
-      }
-      schBkRenderCal(true);   // initial availability load — jump the calendar to the first opening
-      var tc = el('td-cal'); if (tc) tc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });   // slots are live — bring the calendar into view
-      if (!tdBkFresh()) tdBkStatus(bkData.slots.length ? schBkClickHint() : 'No open times in this window — widen it or pick another agent.');
-    }).catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });
+    bkData.showings = []; bkData.busy = []; bkData.slots = []; bkData.slotsRaw = null;
+    // The two sources load INDEPENDENTLY (2026-07-16): /agent-schedule is a fast mirror read
+    // (Google-calendar busy + booked showings) and paints the moment it lands; the slow
+    // Calendly /agent-availability call fills open slots afterwards. The busy layer no
+    // longer waits on Calendly at all.
+    authFetch('/agent-schedule?agent_id=' + aid + '&to=' + to).catch(function(){ return { showings: [], busy: [] }; })
+      .then(function(sched){
+        if (gen !== schBkCalReq) return;
+        bkData.showings = (sched && sched.showings) || []; bkData.busy = (sched && sched.busy) || [];
+        schBkRecomputeSlots();
+        schBkRenderCal(false);
+        if (note && bkData.slotsRaw === null && !tdBkFresh()) note.textContent = 'Schedule loaded — open times still loading…';
+      })
+      .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('booking schedule paint failed', e); });
+    authFetch('/agent-availability?agent_id=' + aid + (schedBook.eventType ? '&event_type=' + encodeURIComponent(schedBook.eventType) : '') + '&to=' + to).catch(function(){ return { slots: [] }; })
+      .then(function(avail){
+        if (gen !== schBkCalReq) return;
+        avail = avail || {};
+        bkData.slotsRaw = avail.slots || [];
+        schedBook.duration = avail.duration_minutes || schedBook.duration || 15;
+        // Open-house (group) context confirmed by the server.
+        schedBook.isGroup = !!avail.is_group; schedBook.capacity = avail.capacity || 0;
+        schedBook.ohLocation = avail.oh_location || ''; schedBook.scheduled = avail.scheduled || [];
+        schBkApplyMode();
+        schBkRecomputeSlots();
+        if (note && !tdBkFresh()){
+          if (schedBook.isGroup) note.textContent = bkData.slots.length + ' open-house time' + (bkData.slots.length === 1 ? '' : 's') + ' with room — tap one to add the prospect';
+          else note.textContent = bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' · ' + bkData.slots.length + ' open time' + (bkData.slots.length === 1 ? '' : 's') + ' — click any empty time to book';
+        }
+        schBkRenderCal(true);   // availability landed — jump the calendar to the first opening
+        var tc = el('td-cal'); if (tc) tc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });   // slots are live — bring the calendar into view
+        if (!tdBkFresh()) tdBkStatus(bkData.slots.length ? schBkClickHint() : 'No open times in this window — widen it or pick another agent.');
+      })
+      .catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });
+  }
+  // Recompute bookable slots from RAW availability against the current showings+busy —
+  // idempotent, so it is correct whichever of the two independent loads lands first.
+  // (Defensive overlap drop: Calendly availability doesn't always cross-block, e.g. a
+  // booking on the agent's OTHER event type.) Open houses POOL invitees — never dropped.
+  function schBkRecomputeSlots(){
+    var raw = bkData.slotsRaw || [];
+    if (schedBook.isGroup){ bkData.slots = raw.slice(); return; }
+    var durMs = (schedBook.duration || 15) * 60000;
+    var blocks = bkData.showings.concat(bkData.busy).map(function(b){ return [Date.parse(b.start), Date.parse(b.end || b.start)]; }).filter(function(x){ return x[0] && x[1] && x[1] > x[0]; });
+    bkData.slots = raw.filter(function(sl){
+      var s = Date.parse(sl.start_time); if (!s) return true; var e = s + durMs;
+      for (var i = 0; i < blocks.length; i++){ if (s < blocks[i][1] && e > blocks[i][0]) return false; }
+      return true;
+    });
   }
   function schBkDayKey(ms){ var d = new Date(ms); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
   function schBkSlotsForDay(ms){ var k = schBkDayKey(ms); return (bkData.slots || []).filter(function(sl){ return schBkDayKey(Date.parse(sl.start_time)) === k; }); }

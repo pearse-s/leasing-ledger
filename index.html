@@ -2755,6 +2755,21 @@ window.addEventListener('error', function(e){
   </div>
 </div>
 
+<div class="lmodal" id="gbmodal">
+  <div class="lmback" data-close="gbmodal"></div>
+  <div class="lmcard" style="max-width:430px">
+    <button type="button" class="lmclose" data-close="gbmodal">&times;</button>
+    <div class="lmhead">
+      <h3 id="gb-title"></h3>
+      <div class="lmsub" id="gb-sub"></div>
+    </div>
+    <div class="lmbody">
+      <a id="gb-link" class="mybtn" target="_blank" rel="noopener" style="display:none">Open in Google Calendar &rarr;</a>
+      <div class="note" style="margin-top:10px">This is the agent&rsquo;s own Google Calendar event &mdash; edit or cancel it there, and the dashboard picks it up on the next hourly sync.</div>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   'use strict';
@@ -3885,7 +3900,7 @@ window.addEventListener('error', function(e){
       if (bz === undefined) tdCalEnsureBusy();
       var sac = colors[tdFt(tdCalAgent)] || '#7c8597';
       (bz || []).forEach(function(b){
-        events.push({ id: 'busy_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: sac, borderColor: sac, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: tdCalAgent, busyColor: sac } });
+        events.push({ id: 'busy_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: sac, borderColor: sac, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: tdCalAgent, busyColor: sac, busyLink: b.html_link || null } });
       });
       if (n && bz && bz.length) n.textContent += ' · busy time shown';
     }
@@ -3902,7 +3917,7 @@ window.addEventListener('error', function(e){
         var tbc = colors[tdFt(p.name)] || '#c9ccd1';
         (p.busy || []).forEach(function(b){
           tbN++;
-          events.push({ id: 'tbusy_' + p.name + '_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: tbc, borderColor: tbc, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: p.name, busyColor: tbc } });
+          events.push({ id: 'tbusy_' + p.name + '_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: tbc, borderColor: tbc, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: p.name, busyColor: tbc, busyLink: b.html_link || null } });
         });
       });
       if (n && tbN) n.textContent += ' · team busy shown';
@@ -3926,7 +3941,7 @@ window.addEventListener('error', function(e){
           if (k === 'offer'){ schBkRemoveOffer(info.event.extendedProps.start_time); return; }
           if (k === 'open'){ schBkPickTime(info.event.extendedProps.start_time); return; }
           if (k === 'full'){ var nt = el('sch-bk-cal-note'); if (nt) nt.textContent = 'That open house is full — pick another time.'; return; }
-          if (k === 'busy') return;
+          if (k === 'busy'){ openBusyDetail(info.event); return; }
           openTourDetail(info.event.id);
         },
         // booking armed (agent + event type picked) → clicking an empty time books it
@@ -7886,6 +7901,26 @@ window.addEventListener('error', function(e){
     }
     rcal.getEventSources().forEach(function(s){ s.remove(); });
     rcal.addEventSource(events);
+  }
+  // Google-calendar busy detail (WS-G M4e): clicking a busy block opens a compact modal —
+  // event name, agent, time, and a jump-out to the event in Google Calendar. Read-only;
+  // text set via textContent, the link only accepts https URLs.
+  function openBusyDetail(ev){
+    var ttl = el('gb-title'); if (!ttl) return;
+    var p = (ev && ev.extendedProps) || {};
+    ttl.textContent = (ev && ev.title) || 'Busy';
+    var t = ev && ev.start ? ev.start.getTime() : NaN;
+    var e = ev && ev.end ? ev.end.getTime() : NaN;
+    var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+    var endTxt = isNaN(e) ? '' : new Date(e).toLocaleTimeString('en-CA', { hour:'numeric', minute:'2-digit' });
+    var sub = el('gb-sub');
+    if (sub) sub.textContent = (p.busyAgent ? p.busyAgent + ' · ' : '') + when + (endTxt ? ' – ' + endTxt : '') + ' · Google Calendar';
+    var lk = el('gb-link');
+    if (lk){
+      if (p.busyLink && /^https:\/\//.test(p.busyLink)){ lk.href = p.busyLink; lk.style.display = ''; }
+      else { lk.removeAttribute('href'); lk.style.display = 'none'; }
+    }
+    openModal('gbmodal');
   }
   function openTourDetail(uri){
     // resolve from the Tours tab's set, the hub's My-tours set, or the Today team calendar (whichever loaded)

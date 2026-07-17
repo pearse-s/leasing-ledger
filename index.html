@@ -1943,10 +1943,10 @@ window.addEventListener('error', function(e){
          mobile, so dropping the inner scroll is safe) */
       #page-hub .tallscroll{max-height:none;overflow:visible}
       /* action tables → stacked label cards (no horizontal scroll for tap targets) */
-      #hubsigned thead,#hub-team-leases thead{display:none}
-      #hubsigned tr,#hub-team-leases tr{display:block;border-bottom:1px solid rgba(244,236,225,.1);padding:8px 2px}
-      #hubsigned td,#hub-team-leases td{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:3px 2px;border:none;text-align:right}
-      #hubsigned td::before,#hub-team-leases td::before{content:attr(data-label);color:var(--ink-soft);font-size:.72rem;text-align:left;flex:0 0 auto}
+      #hubsigned thead,#hub-team-leases thead,#hub-team-moves thead{display:none}
+      #hubsigned tr,#hub-team-leases tr,#hub-team-moves tr{display:block;border-bottom:1px solid rgba(244,236,225,.1);padding:8px 2px}
+      #hubsigned td,#hub-team-leases td,#hub-team-moves td{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:3px 2px;border:none;text-align:right}
+      #hubsigned td::before,#hub-team-leases td::before,#hub-team-moves td::before{content:attr(data-label);color:var(--ink-soft);font-size:.72rem;text-align:left;flex:0 0 auto}
       /* stat tables → keep scroll but pin the Agent column so the name stays visible */
       #hublead th:first-child,#hublead td:first-child,#hub-team-table th:first-child,#hub-team-table td:first-child{position:sticky;left:0;background:var(--paper)}
     }
@@ -2061,6 +2061,16 @@ window.addEventListener('error', function(e){
         <div class="scrolly tallscroll">
           <table id="hub-team-leases"><thead><tr>
             <th data-k="property_name">Property &middot; unit</th><th data-k="signed_date">Signed</th><th data-k="tenant_name">Tenant</th><th data-k="credited_agent">Credited</th><th data-k="move_in_date">Move-in</th><th>Actions</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <!-- WS-G M5: PM move appointments across every PM (the manager Today panel is the same
+           data, unscoped here). Appointment times from the GCal mirror — NOT lease dates. -->
+      <div class="card tablecard" style="margin-top:18px">
+        <div class="tablebar"><h2>Move appointments</h2><span class="count-note" id="hub-team-moves-note"></span></div>
+        <div class="scrolly">
+          <table id="hub-team-moves"><thead><tr>
+            <th>When</th><th>Move</th><th>Property &middot; unit</th><th>PM</th><th>Match</th>
           </tr></thead><tbody></tbody></table>
         </div>
       </div>
@@ -3594,6 +3604,9 @@ window.addEventListener('error', function(e){
           '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div></section>' +
         tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks') +
         tdPanel('td-mgr-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
+        '<section class="panel tdq tdwide"><h3>Move appointments <span class="qn2" id="td-mgr-moves-n"></span></h3>' +
+          '<div class="schoffers" id="td-mgr-moves"><div class="note">Loading&hellip;</div></div>' +
+          '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
         '<section class="panel tdq tdwide"><h3>Unit updates <span class="qn2" id="td-mgr-units-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-units"><div class="note">Loading&hellip;</div></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>';
@@ -4055,19 +4068,99 @@ window.addEventListener('error', function(e){
     var t = Date.parse(dateStr || '');
     return t ? Math.ceil((t - Date.now()) / 86400000) : null;
   }
+  // ── WS-G M5: PM move appointments (Google Calendar mirror) ────────────────────────────
+  // These are the PM's actual booked appointments, NOT lease dates. The "Unit updates" panel
+  // is lease-date driven (from /units), so the same unit can legitimately show here at
+  // "Thu Jul 30, 2:00 p.m." and there as "move-in on 2026-08-01" — an elevator booked a few
+  // days before the lease starts is routine, not a contradiction. Hence "Move appointments"
+  // and an always-visible time on every row.
+  var GCAL_MOVE_DAYS = 30;   // Pearse 2026-07-17: moves cluster at month-end (3 this week, 33 the next), so a "this week" queue is empty then floods
+  function gcalMoveWhen(r){
+    return r.all_day
+      ? schEdFmt(r.starts_at, { weekday: 'short', month: 'short', day: 'numeric' }) + ' · all day'
+      : schEdFmt(r.starts_at, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+  function gcalMoveWhere(r){
+    // address_line1 is the UNIT-level truth and can legitimately disagree with property_name —
+    // one Buildium rental spans several street addresses (live: property "11204 132 Street"
+    // holds a unit addressed "13206 - 112 Avenue"). Prefer it, then the property/building,
+    // then the raw calendar location for property-only and unmatched rows.
+    return r.address_line1
+      || [r.property_name || r.building_name, r.unit_number].filter(Boolean).join(' · ')
+      || r.location_text
+      || 'Address not matched';
+  }
+  function gcalMoveChips(r){
+    var isIn = r.event_kind === 'move_in';
+    return '<span class="chip ' + (isIn ? 'c-ok' : 'c-warm') + '">' + (isIn ? 'move-in' : 'move-out') + '</span>' +
+      (r.tentative ? ' <span class="chip c-cold">tentative</span>' : '');
+  }
+  // The route windows on UTC date boundaries (same as /gcal/busy), which reaches ~6 h back into
+  // the previous Edmonton evening. Re-clip to whole Edmonton days so "next 30 days" means it.
+  function gcalMovesInWindow(rows){
+    var fromKey = tdDayKeyEd(new Date()), toKey = tdDayKeyEd(new Date(Date.now() + GCAL_MOVE_DAYS * 86400000));
+    return (rows || []).filter(function(r){
+      var t = Date.parse(r.starts_at || ''); if (isNaN(t)) return false;
+      var k = tdDayKeyEd(new Date(t));
+      return k >= fromKey && k <= toKey;
+    }).sort(function(a, b){ return Date.parse(a.starts_at) - Date.parse(b.starts_at); });
+  }
+  function gcalMovesFetch(){
+    var p = new URLSearchParams();
+    p.set('from', tdDayKeyEd(new Date()));
+    p.set('to', tdDayKeyEd(new Date(Date.now() + GCAL_MOVE_DAYS * 86400000)));
+    return authFetch('/gcal/moves?' + p.toString());
+  }
+  function tdMgrMovesScopePass(r){
+    // v_pm_moves carries property_id only — there is no property_manager_id/primary_owner_id to
+    // filter on (pm_name is the Google calendar owner, not a Buildium manager id). So apply the
+    // property filter, which IS exact, and LABEL the rest "all PMs" rather than ship a count
+    // that silently ignores the sidebar — the A-14 "· company" precedent.
+    var pr = msIds('properties');
+    if (pr.length && pr.indexOf(String(r.property_id)) < 0) return false;
+    return true;
+  }
+  function tdMgrRenderMoves(m){
+    var box = el('td-mgr-moves'); if (!box) return;
+    if (m.moves === null){ box.innerHTML = '<div class="note">Could not load move appointments.</div>'; return; }
+    var rows = gcalMovesInWindow(m.moves.moves).filter(tdMgrMovesScopePass);
+    box.innerHTML = rows.slice(0, 10).map(function(r){
+      var linked = r.unit_id != null;
+      return '<div class="schoffer' + (linked ? ' tdurow' : '') + '"' +
+        (linked ? ' data-uid="' + esc(String(r.unit_id)) + '" role="button" tabindex="0"' : '') + '>' +
+        '<div class="schoffer-main"><b>' + esc(gcalMoveWhere(r)) + '</b>' +
+        '<div class="schoffer-sub">' + esc(gcalMoveWhen(r)) + (r.pm_name ? ' &middot; ' + esc(r.pm_name) : '') + '</div></div>' +
+        gcalMoveChips(r) + '</div>';
+    }).join('') || '<div class="note">' + (m.moves.stale
+      ? 'Google Calendar mirror is behind — moves may be missing.'
+      : 'No move appointments booked in the next ' + GCAL_MOVE_DAYS + ' days.') + '</div>';
+    var n = el('td-mgr-moves-n');
+    if (n){
+      // An empty queue means "nothing booked" only if the mirror is fresh — a dead token also
+      // empties it, and those two must never look alike.
+      var bits = [];
+      if (rows.length) bits.push(rows.length + ' booked');
+      if (m.moves.stale) bits.push('mirror stale');
+      else if (msIds('managers').length || msIds('owners').length) bits.push('all PMs');
+      n.textContent = bits.join(' · ');
+    }
+  }
   function tdMgrAssemble(){
-    var m = { stats: null, tasks: null, renewals: null, units: null }, done = 0, q = tdReq;
+    var m = { stats: null, tasks: null, renewals: null, units: null, moves: null }, done = 0, q = tdReq;
     // mirror of the agent guard: a manager assembly that finishes after a flip to Agent must not
     // paint (its targets are null-guarded today, but that is luck, not a contract)
-    var step = function(){ if (++done === 4 && q === tdReq) tdRenderMgr(m); };
+    var step = function(){ if (++done === 5 && q === tdReq) tdRenderMgr(m); };
     authFetch('/stats?' + buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(){}).then(step);
     authFetch('/tasks').then(function(j){ m.tasks = (j.tasks || []).filter(tdMgrScopePass).filter(tdMgrOpenTask); }).catch(function(){}).then(step);
     var p = new URLSearchParams(); appendScope(p);
     authFetch('/renewals?' + p.toString()).then(function(j){ m.renewals = (j.renewals || []).filter(function(r){ return r.renewal_state === 'Pending'; }); }).catch(function(){}).then(step);
     authFetch('/units').then(function(j){ m.units = (j.units || []).filter(tdMgrScopePass); }).catch(function(){}).then(step);
+    gcalMovesFetch().then(function(j){ m.moves = j; }).catch(function(e){
+      if (String(e && e.message) !== 'AUTH') console.error('gcal moves (manager) failed', e);
+    }).then(step);
   }
   function tdRenderMgr(m){
-    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderUnits(m);
+    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderMoves(m); tdMgrRenderUnits(m);
   }
   function tdMgrRenderBrief(m){
     var box = el('td-mgr-brief'); if (!box) return;
@@ -9025,8 +9118,53 @@ window.addEventListener('error', function(e){
     }).catch(function(){
       var tb = el('hub-team-table'); if (tb) tb.querySelector('tbody').innerHTML = emptyRow('hub-team-table', 'Could not load team overview.');
     });
+    loadHubTeamMoves();   // own request: a moves failure must not blank the leasing overview
   }
-  function hubRenderTeam(){ hubRenderTeamHealth(); hubRenderTeamTable(); hubRenderTeamLeases(); }
+  function hubRenderTeam(){ hubRenderTeamHealth(); hubRenderTeamTable(); hubRenderTeamLeases(); hubRenderTeamMoves(); }
+  // WS-G M5 admin strip — the manager Today panel's data, across every PM (no scope applied).
+  var hubTeamMoves = null, hubMovesFailed = false, hubMovesReq = 0;
+  function loadHubTeamMoves(){
+    var q = ++hubMovesReq;   // the hub window switcher re-fires this; a slow earlier load must not paint over a newer one
+    gcalMovesFetch().then(function(j){
+      if (q !== hubMovesReq) return;
+      hubTeamMoves = j; hubMovesFailed = false; hubRenderTeamMoves();
+    }).catch(function(e){
+      if (q !== hubMovesReq) return;
+      if (String(e && e.message) !== 'AUTH') console.error('gcal moves (admin) failed', e);
+      hubTeamMoves = null; hubMovesFailed = true; hubRenderTeamMoves();
+    });
+  }
+  function hubRenderTeamMoves(){
+    var t = el('hub-team-moves'); if (!t) return;
+    var tb = t.querySelector('tbody'); if (!tb) return;
+    var note = el('hub-team-moves-note');
+    if (hubMovesFailed){
+      tb.innerHTML = emptyRow('hub-team-moves', 'Could not load move appointments.');
+      if (note) note.textContent = '';
+      return;
+    }
+    if (hubTeamMoves === null){ tb.innerHTML = emptyRow('hub-team-moves', 'Loading…'); return; }
+    var rows = gcalMovesInWindow(hubTeamMoves.moves);
+    tb.innerHTML = rows.map(function(r){
+      var linked = r.unit_id != null;
+      var match = r.match_confidence === 'unit' ? '<span class="chip c-ok">unit</span>'
+        : (r.match_confidence === 'property' ? '<span class="chip c-warm">building</span>'
+        : '<span class="chip c-cold">unmatched</span>');
+      return '<tr' + (linked ? ' class="tdurow" data-uid="' + esc(String(r.unit_id)) + '" style="cursor:pointer"' : '') + '>' +
+        '<td data-label="When">' + esc(gcalMoveWhen(r)) + '</td>' +
+        '<td data-label="Move">' + gcalMoveChips(r) + '</td>' +
+        '<td data-label="Property &middot; unit">' + esc(gcalMoveWhere(r)) + '</td>' +
+        '<td data-label="PM">' + esc(r.pm_name || '–') + '</td>' +
+        '<td data-label="Match">' + match + '</td></tr>';
+    }).join('') || emptyRow('hub-team-moves', hubTeamMoves.stale
+      ? 'Google Calendar mirror is behind — moves may be missing.'
+      : 'No move appointments booked in the next ' + GCAL_MOVE_DAYS + ' days.');
+    if (note){
+      var bits = [rows.length + ' in the next ' + GCAL_MOVE_DAYS + ' days'];
+      if (hubTeamMoves.stale) bits.push('mirror stale');
+      note.textContent = bits.join(' · ');
+    }
+  }
   function hubRenderTeamHealth(){
     var box = el('hub-team-health'); if (!box) return;
     var all = hubTeamSigned || [];
@@ -9229,6 +9367,11 @@ window.addEventListener('error', function(e){
   if (el('hub-team-leases')) el('hub-team-leases').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;
     openCol('hub-team-leases', k, th);
+  });
+  // The .tdurow delegate lives on #td-grid (Today), so the hub's matched move rows need their own.
+  if (el('hub-team-moves')) el('hub-team-moves').addEventListener('click', function(e){
+    var tr = e.target.closest('tr[data-uid]'); if (!tr) return;
+    openUnitEnsure(tr.getAttribute('data-uid'));
   });
   if (el('hub-team-table')) el('hub-team-table').addEventListener('click', function(e){
     var tr = e.target.closest('tr[data-agent]'); if (!tr) return;

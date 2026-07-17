@@ -2145,8 +2145,8 @@ window.addEventListener('error', function(e){
             <th data-k="unit_bedrooms">Bd/Ba</th>
             <th data-k="occupancy_status">Status</th>
             <th data-k="unit_event">Event</th>
+            <th data-k="move_in_disp">Move-in</th>
             <th data-k="lease_to_date">Lease end</th>
-            <th data-k="next_move_in_appt">Move-in appt</th>
             <th data-k="monthly_rent" class="rt">Rent</th>
             <th data-k="total_balance" class="rt">Balance</th>
             <th data-k="tenant_names">Tenant</th>
@@ -5466,8 +5466,8 @@ window.addEventListener('error', function(e){
         vals:function(r){ var out = []; if (r.unit_event) out.push(r.unit_event);
           var rn = rnByUnit[r.unit_id]; if (rn && rn.renewal_state) out.push('renewal:' + rn.renewal_state); return out; },
         disp:function(v){ return v.indexOf('renewal:') === 0 ? 'Renewal: ' + v.slice(8).toLowerCase() : v; } },
+      move_in_disp:{ t:'date', label:'Move-in' },
       lease_to_date:{ t:'date', label:'Lease end' },
-      next_move_in_appt:{ t:'date', label:'Move-in appt' },
       monthly_rent:{ t:'num', label:'Rent', get:rentBasis },
       total_balance:{ t:'num', label:'Balance' },
       is_listed:{ t:'enum', label:'Listed', disp:cf_yesno }
@@ -6630,6 +6630,14 @@ window.addEventListener('error', function(e){
     authFetch('/units')
       .then(function(j){
         unitsAll = j.units || [];
+        // Move-in display value: the CALENDAR appointment when one exists, else the lease
+        // start for leases whose move-in already happened (Active/Historic — no future
+        // appointment will ever come). A FUTURE lease without an appointment stays blank
+        // on purpose: that gap IS the "no move-in booked yet" signal for pre-leased units.
+        unitsAll.forEach(function(u){
+          u.move_in_disp = u.next_move_in_appt || ((u.lease_source === 'Active' || u.lease_source === 'Historic') ? u.lease_from_date : null) || null;
+          u.move_in_src = u.next_move_in_appt ? 'appt' : (u.move_in_disp ? 'lease' : null);
+        });
         fillParkMS();
         fillAmenMS('u_amen', unitsAll, function(r){ return r.amenities; });
         drawChips(); drawUnits();
@@ -6638,7 +6646,7 @@ window.addEventListener('error', function(e){
       })
       .catch(function(){
         el('veil').classList.add('hide');
-        el('utable').querySelector('tbody').innerHTML = '<tr><td colspan="10" style="padding:24px;text-align:center">Could not load units.</td></tr>';
+        el('utable').querySelector('tbody').innerHTML = '<tr><td colspan="11" style="padding:24px;text-align:center">Could not load units.</td></tr>';
       });
   }
   function evChip(ev2){
@@ -6683,6 +6691,17 @@ window.addEventListener('error', function(e){
       if (!pr.some(function(id){ return pids.indexOf(id) >= 0; })) return false;
     }
     return true;
+  }
+  // Security-deposit chip for PRE-LEASED rows (Pearse 2026-07-17). sd_paid/sd_charged come
+  // from buildium.lease_deposits — the future lease's LEDGER, refreshed by the daily sync —
+  // because the outstanding-balances mirror has NO row for future leases whether paid or
+  // never charged. NULL sd_paid therefore means UNKNOWN: render no chip, never guess "due".
+  function sdChip(r){
+    if (r.occupancy_status !== 'pre_leased' || r.sd_paid == null) return '';
+    var req = (r.security_deposit != null && r.security_deposit > 0) ? r.security_deposit : (r.sd_charged || 0);
+    if (!(req > 0)) return '';
+    var paid = r.sd_paid >= req - 0.005;
+    return ' <span class="chip ' + (paid ? 'c-ok' : 'c-warm') + '" title="SD ' + esc(fmtMoney(r.sd_paid)) + ' of ' + esc(fmtMoney(req)) + ' received">' + (paid ? 'Paid SD' : 'SD due') + '</span>';
   }
   function drawUnits(){
     if (unitsAll === null) return;
@@ -6740,10 +6759,10 @@ window.addEventListener('error', function(e){
         '<td>' + esc(r.property_name) + '</td>' +
         '<td>' + esc(r.unit_number) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
-        '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + '</td>' +
+        '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + sdChip(r) + '</td>' +
         '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + '</td>' +
+        '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + ' <span class="qn">' + (r.move_in_src === 'appt' ? 'appt' : 'lease') + '</span>' : '–') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
-        '<td>' + (r.next_move_in_appt ? esc(r.next_move_in_appt) : '–') + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
         '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>' : '–') + '</td>' +
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
@@ -6901,6 +6920,7 @@ window.addEventListener('error', function(e){
     var stat = STATUS_CHIP[r.occupancy_status] || '';
     if (r.is_not_ready) stat = '<span class="chip c-otb">not ready</span> ' + stat;
     if (r.is_owner_takeback) stat += ' <span class="chip c-otb">take-back</span>';
+    stat += sdChip(r);
     if (stat) sub.push(stat);
     if (r.address_line1) sub.push(esc(r.address_line1) + (r.city ? ', ' + esc(r.city) : ''));
     sub.push((r.unit_bedrooms || '–') + ' bd / ' + (r.unit_bathrooms || '–') + ' ba');
@@ -6936,6 +6956,7 @@ window.addEventListener('error', function(e){
     f += fitem('Move-in appt', esc(r.next_move_in_appt));
     f += fitem('Lease rent', r.monthly_rent != null ? fmtMoney(r.monthly_rent) : null);
     f += fitem('Deposit', r.security_deposit != null ? fmtMoney(r.security_deposit) : null);
+    f += fitem('SD received', r.sd_paid != null ? fmtMoney(r.sd_paid) + (r.security_deposit ? ' of ' + fmtMoney(r.security_deposit) : '') : null);
     f += fitem('Balance', (r.total_balance || 0) > 0 ? fmtMoney(r.total_balance) : '$0', (r.total_balance || 0) > 0);
     f += fitem('Listed rent', r.is_listed && r.listing_rent != null ? fmtMoney(r.listing_rent) : null);
     f += fitem('Days vacant', r.days_vacant != null ? r.days_vacant + 'd' : null);

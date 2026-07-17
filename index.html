@@ -1260,6 +1260,11 @@ window.addEventListener('error', function(e){
   .schleg-open:before{background:#5E8E4B}
   .schleg-show:before{background:#8a8f98}
   .schleg-busy:before{background:#c9ccd1}
+  /* WS-G M4b: agent-coloured STRIPED busy on the team calendar — the stripe keeps a busy
+     block distinguishable from a solid tour block at a glance (and survives colour-blindness). */
+  #td-cal .fc-ev-teambusy{opacity:.88}
+  #td-cal .fc-ev-teambusy .fc-event-main{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.45) 0 5px,rgba(255,255,255,0) 5px 11px)}
+  .schleg-tbusy:before{background:repeating-linear-gradient(135deg,#b9bec6 0 4px,#e6e8ec 4px 8px)}
   .schtgl{font-size:.74rem;color:var(--ink-soft);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-left:auto}
   .schhint{font-size:.74rem;color:var(--ink-soft);font-style:italic}
   #sch-bk-cal .fc-timegrid-slot{cursor:pointer}
@@ -1853,7 +1858,7 @@ window.addEventListener('error', function(e){
             <button type="button" class="rfreshbtn" id="sch-bk-reload">&#8635; Refresh</button>
             <span class="count-note" id="sch-bk-cal-note"></span>
           </div>
-          <div class="schcal-legend"><span class="schleg schleg-busy">Busy</span><span class="schleg schleg-oh" id="sch-bk-leg-oh" style="display:none">Open house &middot; spots left</span><span class="schleg schleg-full" id="sch-bk-leg-full" style="display:none">Full</span><span class="schhint" id="sch-bk-hint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><span class="schhint" id="sch-bk-oh-hint" style="display:none">Open houses run at set times &mdash; tap a slot to add the prospect. Numbers show spots still open.</span><div class="chipset schchips" id="sch-bk-mode" style="margin-left:auto"><button type="button" class="chip-mini on" data-mode="single">Book one</button><button type="button" class="chip-mini" data-mode="multi">Back-to-back</button><button type="button" class="chip-mini" data-mode="offer">Offer times</button></div><label class="schtgl" id="sch-bk-showopen-lbl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label><label class="schtgl" id="td-cal-busy-lbl"><input type="checkbox" id="td-cal-busy" checked> Team busy</label></div>
+          <div class="schcal-legend"><span class="schleg schleg-busy">Busy</span><span class="schleg schleg-tbusy">Agent event</span><span class="schleg schleg-oh" id="sch-bk-leg-oh" style="display:none">Open house &middot; spots left</span><span class="schleg schleg-full" id="sch-bk-leg-full" style="display:none">Full</span><span class="schhint" id="sch-bk-hint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><span class="schhint" id="sch-bk-oh-hint" style="display:none">Open houses run at set times &mdash; tap a slot to add the prospect. Numbers show spots still open.</span><div class="chipset schchips" id="sch-bk-mode" style="margin-left:auto"><button type="button" class="chip-mini on" data-mode="single">Book one</button><button type="button" class="chip-mini" data-mode="multi">Back-to-back</button><button type="button" class="chip-mini" data-mode="offer">Offer times</button></div><label class="schtgl" id="sch-bk-showopen-lbl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label><label class="schtgl" id="td-cal-busy-lbl"><input type="checkbox" id="td-cal-busy" checked> Team busy</label></div>
         </div>
         <div id="td-cal"></div>
         <div id="td-cal-list"></div>
@@ -3878,8 +3883,9 @@ window.addEventListener('error', function(e){
     if (busyRow && !tdBookArmed()){
       var bz = tdCalBusyCache[String(busyRow.id)];
       if (bz === undefined) tdCalEnsureBusy();
+      var sac = colors[tdFt(tdCalAgent)] || '#7c8597';
       (bz || []).forEach(function(b){
-        events.push({ id: 'busy_' + b.start, title: 'Busy', start: b.start, end: b.end || undefined, display: 'background', backgroundColor: '#c9ccd1', classNames: ['fc-ev-busy'], extendedProps: { kind: 'busy' } });
+        events.push({ id: 'busy_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: sac, borderColor: sac, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: tdCalAgent } });
       });
       if (n && bz && bz.length) n.textContent += ' · busy time shown';
     }
@@ -3896,7 +3902,7 @@ window.addEventListener('error', function(e){
         var tbc = colors[tdFt(p.name)] || '#c9ccd1';
         (p.busy || []).forEach(function(b){
           tbN++;
-          events.push({ id: 'tbusy_' + p.name + '_' + b.start, title: p.name + ' · busy', start: b.start, end: b.end || undefined, backgroundColor: '#eceef1', borderColor: tbc, textColor: '#5a6270', classNames: ['fc-ev-busy', 'fc-ev-teambusy'], extendedProps: { kind: 'busy' } });
+          events.push({ id: 'tbusy_' + p.name + '_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: tbc, borderColor: tbc, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: p.name } });
         });
       });
       if (n && tbN) n.textContent += ' · team busy shown';
@@ -3908,6 +3914,11 @@ window.addEventListener('error', function(e){
         headerToolbar: { left:'prev,next today', center:'title', right: mob ? 'timeGridDay,listWeek' : 'timeGridWeek,timeGridDay,listWeek' },
         height: 620, nowIndicator: true, firstDay: 0, expandRows: true, dayMaxEvents: true, snapDuration: '00:15:00',
         slotMinTime: '09:00:00', slotMaxTime: '20:00:00', allDaySlot: false, eventDisplay: 'block',
+        // readability (2026-07-16 pass, mirroring Google/Outlook conventions): overlapping
+        // events render side-by-side instead of translucent stacking; at most 4 columns
+        // before a "+n" link; compact time labels so titles get the space.
+        slotEventOverlap: false, eventMaxStack: 4,
+        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
         eventClick: function(info){
           if (info.jsEvent) info.jsEvent.preventDefault();
           var k = (info.event.extendedProps || {}).kind;
@@ -7832,6 +7843,8 @@ window.addEventListener('error', function(e){
       : (arg.event.extendedProps.recon === 'confirmed' ? '<span class="fcbk-ok" title="Prospect confirmed">&#10003;</span>'
       : (arg.event.extendedProps.recon === 'awaiting' ? '<span class="fcx" title="awaiting reconfirmation" style="color:#15110D">&#9203;</span>' : ''));
     wrap.innerHTML = x + rcm + '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' + nb;
+    // busy blocks carry the owning agent in a hover tooltip (the colour is the primary cue)
+    if (arg.event.extendedProps.busyAgent) wrap.title = arg.event.extendedProps.busyAgent + ' · ' + (arg.event.title || 'Busy');
     return { domNodes: [wrap] };
   }
   function drawCalendar(rows){

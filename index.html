@@ -2146,6 +2146,7 @@ window.addEventListener('error', function(e){
             <th data-k="occupancy_status">Status</th>
             <th data-k="unit_event">Event</th>
             <th data-k="lease_to_date">Lease end</th>
+            <th data-k="next_move_in_appt">Move-in appt</th>
             <th data-k="monthly_rent" class="rt">Rent</th>
             <th data-k="total_balance" class="rt">Balance</th>
             <th data-k="tenant_names">Tenant</th>
@@ -3606,7 +3607,7 @@ window.addEventListener('error', function(e){
         tdPanel('td-mgr-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
         '<section class="panel tdq tdwide"><h3>Move appointments <span class="qn2" id="td-mgr-moves-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-moves"><div class="note">Loading&hellip;</div></div>' +
-          '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
+          '<div class="tdmore"><button type="button" class="tdact" id="td-mgr-moves-more" hidden>Show all</button><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
         '<section class="panel tdq tdwide"><h3>Unit updates <span class="qn2" id="td-mgr-units-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-units"><div class="note">Loading&hellip;</div></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>';
@@ -4075,6 +4076,9 @@ window.addEventListener('error', function(e){
   // days before the lease starts is routine, not a contradiction. Hence "Move appointments"
   // and an always-visible time on every row.
   var GCAL_MOVE_DAYS = 30;   // Pearse 2026-07-17: moves cluster at month-end (3 this week, 33 the next), so a "this week" queue is empty then floods
+  // "Show all" expander for the manager panel (the 33-move month-end wave must be reachable
+  // without leaving Today); last assembly kept so the toggle can re-render without a refetch.
+  var tdMgrMovesAll = false, tdMgrMovesLast = null;
   function gcalMoveWhen(r){
     return r.all_day
       ? schEdFmt(r.starts_at, { weekday: 'short', month: 'short', day: 'numeric' }) + ' · all day'
@@ -4112,19 +4116,28 @@ window.addEventListener('error', function(e){
     return authFetch('/gcal/moves?' + p.toString());
   }
   function tdMgrMovesScopePass(r){
-    // v_pm_moves carries property_id only — there is no property_manager_id/primary_owner_id to
-    // filter on (pm_name is the Google calendar owner, not a Buildium manager id). So apply the
-    // property filter, which IS exact, and LABEL the rest "all PMs" rather than ship a count
-    // that silently ignores the sidebar — the A-14 "· company" precedent.
-    var pr = msIds('properties');
+    // v_pm_moves carries property_manager_id + primary_owner_id since migration 20260717210416
+    // (COALESCEd through the unit/property match), so every sidebar scope applies exactly —
+    // same shape as tdMgrScopePass. UNMATCHED rows have NULL ids and drop under an active
+    // manager/owner scope: a scoped count includes only rows the mirror can attribute.
+    var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
+    if (mg.length && mg.indexOf(String(r.property_manager_id)) < 0) return false;
+    if (ow.length && ow.indexOf(String(r.primary_owner_id)) < 0) return false;
     if (pr.length && pr.indexOf(String(r.property_id)) < 0) return false;
     return true;
   }
   function tdMgrRenderMoves(m){
     var box = el('td-mgr-moves'); if (!box) return;
-    if (m.moves === null){ box.innerHTML = '<div class="note">Could not load move appointments.</div>'; return; }
+    tdMgrMovesLast = m;
+    var mb = el('td-mgr-moves-more');
+    if (m.moves === null){
+      box.innerHTML = '<div class="note">Could not load move appointments.</div>';
+      if (mb) mb.hidden = true;
+      return;
+    }
     var rows = gcalMovesInWindow(m.moves.moves).filter(tdMgrMovesScopePass);
-    box.innerHTML = rows.slice(0, 10).map(function(r){
+    var vis = tdMgrMovesAll ? rows : rows.slice(0, 10);
+    box.innerHTML = vis.map(function(r){
       var linked = r.unit_id != null;
       return '<div class="schoffer' + (linked ? ' tdurow' : '') + '"' +
         (linked ? ' data-uid="' + esc(String(r.unit_id)) + '" role="button" tabindex="0"' : '') + '>' +
@@ -4134,14 +4147,19 @@ window.addEventListener('error', function(e){
     }).join('') || '<div class="note">' + (m.moves.stale
       ? 'Google Calendar mirror is behind — moves may be missing.'
       : 'No move appointments booked in the next ' + GCAL_MOVE_DAYS + ' days.') + '</div>';
+    if (mb){
+      mb.hidden = rows.length <= 10;
+      mb.textContent = tdMgrMovesAll ? 'Show fewer' : 'Show all ' + rows.length;
+      mb.onclick = function(){ tdMgrMovesAll = !tdMgrMovesAll; if (tdMgrMovesLast) tdMgrRenderMoves(tdMgrMovesLast); };
+    }
     var n = el('td-mgr-moves-n');
     if (n){
       // An empty queue means "nothing booked" only if the mirror is fresh — a dead token also
-      // empties it, and those two must never look alike.
+      // empties it, and those two must never look alike. (Scopes now filter exactly, so the
+      // old "all PMs" caveat label is gone.)
       var bits = [];
       if (rows.length) bits.push(rows.length + ' booked');
       if (m.moves.stale) bits.push('mirror stale');
-      else if (msIds('managers').length || msIds('owners').length) bits.push('all PMs');
       n.textContent = bits.join(' · ');
     }
   }
@@ -5449,6 +5467,7 @@ window.addEventListener('error', function(e){
           var rn = rnByUnit[r.unit_id]; if (rn && rn.renewal_state) out.push('renewal:' + rn.renewal_state); return out; },
         disp:function(v){ return v.indexOf('renewal:') === 0 ? 'Renewal: ' + v.slice(8).toLowerCase() : v; } },
       lease_to_date:{ t:'date', label:'Lease end' },
+      next_move_in_appt:{ t:'date', label:'Move-in appt' },
       monthly_rent:{ t:'num', label:'Rent', get:rentBasis },
       total_balance:{ t:'num', label:'Balance' },
       is_listed:{ t:'enum', label:'Listed', disp:cf_yesno }
@@ -6724,6 +6743,7 @@ window.addEventListener('error', function(e){
         '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + '</td>' +
         '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
+        '<td>' + (r.next_move_in_appt ? esc(r.next_move_in_appt) : '–') + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
         '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>' : '–') + '</td>' +
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
@@ -6887,6 +6907,7 @@ window.addEventListener('error', function(e){
     var rentTxt = r.is_listed && r.listing_rent != null ? fmtMoney(r.listing_rent) + '/mo listed' : (r.monthly_rent != null ? fmtMoney(r.monthly_rent) + '/mo' : '');
     if (rentTxt) sub.push(rentTxt);
     if (r.property_manager_name) sub.push('managed by ' + esc(r.property_manager_name));
+    if (r.primary_owner_name) sub.push('owned by ' + esc(r.primary_owner_name));
     el('um-sub').innerHTML = sub.join(' &middot; ');
     // action row — Maps (primary) · View listing · Buildium · Apply
     var a = '';
@@ -6900,6 +6921,7 @@ window.addEventListener('error', function(e){
     // collapsed details — fields
     var f = '';
     f += fitem('Unit event', (evChip(r.unit_event) + rnUnitChip(r.unit_id)) || '–');
+    f += fitem('Owner', esc(r.primary_owner_name));
     if (r.is_nookbook) {
       f += fitem('Building type', esc(r.nb_building_type));
       f += fitem('Parking', esc(r.nb_parking));
@@ -6909,6 +6931,9 @@ window.addEventListener('error', function(e){
     f += fitem('Lease start', esc(r.lease_from_date));
     f += fitem('Lease end', r.lease_to_date ? esc(r.lease_to_date) + (r.days_remaining != null ? ' (' + r.days_remaining + 'd)' : '') : null);
     f += fitem('Next move-out', esc(r.next_move_out));
+    // calendar appointment (Google mirror), deliberately distinct from the lease-date fields —
+    // an elevator booked days before/after lease start is routine, not a contradiction
+    f += fitem('Move-in appt', esc(r.next_move_in_appt));
     f += fitem('Lease rent', r.monthly_rent != null ? fmtMoney(r.monthly_rent) : null);
     f += fitem('Deposit', r.security_deposit != null ? fmtMoney(r.security_deposit) : null);
     f += fitem('Balance', (r.total_balance || 0) > 0 ? fmtMoney(r.total_balance) : '$0', (r.total_balance || 0) > 0);

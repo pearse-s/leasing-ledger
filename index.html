@@ -2155,7 +2155,7 @@ window.addEventListener('error', function(e){
         </table>
       </div>
       <div class="pager" id="u-pager"></div>
-      <div class="note" style="margin-top:10px">Owner take-backs and Nookbook &ldquo;not ready&rdquo; (construction) units appear dimmed here and are excluded from all Ledger stats. The Nookbook chip reveals building-type / parking / appliance filters from the client&rsquo;s sheet. Click any row for full detail, Buildium links, tenant contacts and photos.</div>
+      <div class="note" style="margin-top:10px">Owner take-backs and Nookbook &ldquo;not ready&rdquo; (construction) units are hidden by default and excluded from all Ledger stats &mdash; turn on the <b>Take-backs</b> flag or the <b>not ready only</b> toggle to reveal them (dimmed). The Nookbook chip reveals building-type / parking / appliance filters from the client&rsquo;s sheet. Click any row for full detail, Buildium links, tenant contacts and photos.</div>
     </div>
   </div>
 
@@ -6564,7 +6564,7 @@ window.addEventListener('error', function(e){
     QFILTERS.forEach(function(f){
       var n = (unitsAll || []).filter(function(r){
         if (f.k === 'otb') return !!r.is_owner_takeback;
-        if (r.is_owner_takeback) return false;               // hidden by default → don't count elsewhere
+        if (r.is_owner_takeback || r.is_not_ready) return false;  // hidden by default → don't count elsewhere
         return qfTest(r, f.k);
       }).length;
       var on = f.k === 'all' ? empty : !!uSel[f.k];
@@ -6580,7 +6580,7 @@ window.addEventListener('error', function(e){
     function grp(arr, sel, container, matchFn){
       var h = '';
       arr.forEach(function(f){
-        var n = oc.filter(function(r){ if (r.is_owner_takeback) return false; return matchFn(f.k, r); }).length;
+        var n = oc.filter(function(r){ if (r.is_owner_takeback || r.is_not_ready) return false; return matchFn(f.k, r); }).length;
         h += '<button type="button" class="qchip' + (sel === f.k ? ' on' : '') + '" data-q="' + f.k + '">' + esc(f.label) + ' <span class="qn">' + n + '</span></button>';
       });
       el(container).innerHTML = h;
@@ -6675,6 +6675,7 @@ window.addEventListener('error', function(e){
     var rmin = parseFloat(el('u-rmin').value);
     var rows = unitsAll.filter(function(r){
       if (r.is_owner_takeback && !uSel['otb']) return false;   // take-backs hidden unless the chip is on
+      if (r.is_not_ready && !nbf.notready) return false;       // not-ready hidden unless "not ready only" is on
       if (!colfPass('utable', r)) return false;
       if (!scopeTestUnit(r, mg, ow, pr)) return false;
       if (!uChipPass(r)) return false;

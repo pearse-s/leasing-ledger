@@ -1853,7 +1853,7 @@ window.addEventListener('error', function(e){
             <button type="button" class="rfreshbtn" id="sch-bk-reload">&#8635; Refresh</button>
             <span class="count-note" id="sch-bk-cal-note"></span>
           </div>
-          <div class="schcal-legend"><span class="schleg schleg-busy">Busy</span><span class="schleg schleg-oh" id="sch-bk-leg-oh" style="display:none">Open house &middot; spots left</span><span class="schleg schleg-full" id="sch-bk-leg-full" style="display:none">Full</span><span class="schhint" id="sch-bk-hint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><span class="schhint" id="sch-bk-oh-hint" style="display:none">Open houses run at set times &mdash; tap a slot to add the prospect. Numbers show spots still open.</span><div class="chipset schchips" id="sch-bk-mode" style="margin-left:auto"><button type="button" class="chip-mini on" data-mode="single">Book one</button><button type="button" class="chip-mini" data-mode="multi">Back-to-back</button><button type="button" class="chip-mini" data-mode="offer">Offer times</button></div><label class="schtgl" id="sch-bk-showopen-lbl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label></div>
+          <div class="schcal-legend"><span class="schleg schleg-busy">Busy</span><span class="schleg schleg-oh" id="sch-bk-leg-oh" style="display:none">Open house &middot; spots left</span><span class="schleg schleg-full" id="sch-bk-leg-full" style="display:none">Full</span><span class="schhint" id="sch-bk-hint">Click any empty time to book &mdash; you can fine-tune it before confirming.</span><span class="schhint" id="sch-bk-oh-hint" style="display:none">Open houses run at set times &mdash; tap a slot to add the prospect. Numbers show spots still open.</span><div class="chipset schchips" id="sch-bk-mode" style="margin-left:auto"><button type="button" class="chip-mini on" data-mode="single">Book one</button><button type="button" class="chip-mini" data-mode="multi">Back-to-back</button><button type="button" class="chip-mini" data-mode="offer">Offer times</button></div><label class="schtgl" id="sch-bk-showopen-lbl"><input type="checkbox" id="sch-bk-showopen"> Show all open slots</label><label class="schtgl" id="td-cal-busy-lbl"><input type="checkbox" id="td-cal-busy" checked> Team busy</label></div>
         </div>
         <div id="td-cal"></div>
         <div id="td-cal-list"></div>
@@ -3837,6 +3837,21 @@ window.addEventListener('error', function(e){
       .then(function(j){ tdCalBusyCache[key] = j.busy || []; tdDrawCal(); })
       .catch(function(){ /* busy layer is best-effort — tours still render */ });
   }
+  // Whole-team mirror busy for the ALL-AGENTS view (WS-G M4) — one /gcal/busy read,
+  // 10-min session cache (the hourly gcal-sync keeps the mirror itself fresh).
+  // Generation-guarded: a slow response can never paint over a newer fetch.
+  var tdTeamBusy = null, tdTeamBusyAt = 0, tdTeamBusyReq = 0;
+  function tdTeamBusyEnsure(){
+    if (tdTeamBusy !== null && (Date.now() - tdTeamBusyAt) < 600000) return;
+    var gen = ++tdTeamBusyReq;
+    tdTeamBusy = tdTeamBusy || [];
+    tdTeamBusyAt = Date.now();
+    var from = new Date().toISOString().slice(0, 10);
+    var to = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
+    authFetch('/gcal/busy?from=' + from + '&to=' + to)
+      .then(function(j){ if (gen !== tdTeamBusyReq) return; tdTeamBusy = (j && j.people) || []; tdDrawCal(); })
+      .catch(function(e){ if (String(e && e.message) === 'AUTH') return; console.error('team busy layer failed', e); });
+  }
   function tdDrawCal(){
     var box = el('td-cal'); if (!box || tdCalRows === null) return;
     tdCalChips();
@@ -3867,6 +3882,24 @@ window.addEventListener('error', function(e){
         events.push({ id: 'busy_' + b.start, title: 'Busy', start: b.start, end: b.end || undefined, display: 'background', backgroundColor: '#c9ccd1', classNames: ['fc-ev-busy'], extendedProps: { kind: 'busy' } });
       });
       if (n && bz && bz.length) n.textContent += ' · busy time shown';
+    }
+    // ALL-AGENTS view: the whole team's mirror busy as slim name-tagged blocks (WS-G M4),
+    // colour-keyed to the agent chips. Hidden while booking is armed (the picked agent's
+    // busy already overlays via tdBookOverlay); toggleable from the calendar header.
+    var tbTog = el('td-cal-busy');
+    if (!tdCalAgent && !tdBookArmed() && (!tbTog || tbTog.checked)){
+      tdTeamBusyEnsure();
+      var tbN = 0;
+      (tdTeamBusy || []).forEach(function(p){
+        var onCal = (tdCalAgents || []).some(function(a){ return tdFt(a.display_name) === tdFt(p.name); });
+        if (!onCal) return;
+        var tbc = colors[tdFt(p.name)] || '#c9ccd1';
+        (p.busy || []).forEach(function(b){
+          tbN++;
+          events.push({ id: 'tbusy_' + p.name + '_' + b.start, title: p.name + ' · busy', start: b.start, end: b.end || undefined, backgroundColor: '#eceef1', borderColor: tbc, textColor: '#5a6270', classNames: ['fc-ev-busy', 'fc-ev-teambusy'], extendedProps: { kind: 'busy' } });
+        });
+      });
+      if (n && tbN) n.textContent += ' · team busy shown';
     }
     if (!tdcal){
       var mob = isMobile();
@@ -9837,6 +9870,14 @@ window.addEventListener('error', function(e){
     var bet = el('sch-bk-ettype'); if (bet) bet.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickEventType(b.getAttribute('data-uri'), b.getAttribute('data-name'), b.getAttribute('data-dur'), b.getAttribute('data-kind')); });
     var brl = el('sch-bk-reload'); if (brl) brl.addEventListener('click', schBkLoadCalendar);
     var bso = el('sch-bk-showopen'); if (bso) bso.addEventListener('change', function(){ if (schedBook.agentId && schedBook.eventType) schBkRenderCal(); });
+    var tcb = el('td-cal-busy');
+    if (tcb){
+      try { tcb.checked = localStorage.getItem('ledger_tdcal_busy_v1') !== '0'; } catch (_) {}
+      tcb.addEventListener('change', function(){
+        try { localStorage.setItem('ledger_tdcal_busy_v1', tcb.checked ? '1' : '0'); } catch (_) {}
+        tdDrawCal();
+      });
+    }
     var btm = el('sch-bk-time'); if (btm) btm.addEventListener('change', function(){ schedBook.chosen = this.value; schBkRenderSummary(); });
     var blc = el('sch-bk-loc'); if (blc) blc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(schBkUnitSearch, 280); });
     var blr = el('sch-bk-loc-results'); if (blr) blr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-bk-loc')) el('sch-bk-loc').value = b.getAttribute('data-addr') || ''; blr.innerHTML = ''; });

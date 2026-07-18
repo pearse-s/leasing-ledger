@@ -1910,6 +1910,12 @@ window.addEventListener('error', function(e){
         <div class="tablebar"><h2 style="font-size:1rem">Reconfirmation sweep &middot; today &amp; tomorrow</h2><span class="count-note" id="td-recon-note"></span></div>
         <div id="td-recon-sweep" class="schoffers"><div class="note">Loading&hellip;</div></div>
       </div>
+      <!-- C3 conflict strip: same-agent tour overlaps (deterministic) + tour-vs-GCal-busy
+           "possible clash" (heuristic — busy excludes tours by design, WS-G M4), next 7 days -->
+      <div class="card tablecard" style="margin-top:16px">
+        <div class="tablebar"><h2 style="font-size:1rem">Schedule conflicts &middot; next 7 days</h2><span class="count-note" id="td-conflicts-note"></span></div>
+        <div id="td-conflicts" class="schoffers"><div class="note">Loading&hellip;</div></div>
+      </div>
     </div>
     <div class="tdgrid" id="td-grid"></div>
 
@@ -2000,6 +2006,8 @@ window.addEventListener('error', function(e){
         </div>
       </div>
       <div class="hubfunnel hubmine" id="hub-funnel"></div>
+      <!-- A3 pace line: attributed signings MTD vs the same day last month (counts only) -->
+      <div class="count-note hubmine" id="hub-pace" style="margin-top:8px" title="Confirmed + suggested attributions — month-to-date vs the same day last month"></div>
     </div>
 
     <!-- A1 "Do next" — ONE priority-ordered triage queue over data this view already loads
@@ -2068,6 +2076,10 @@ window.addEventListener('error', function(e){
         <div id="hub-team-health"></div>
         <!-- D1 hygiene chips: per-agent unclaimed counts + a copyable nudge message -->
         <div class="qchips" id="hub-team-hygiene" style="margin-top:10px"></div>
+        <!-- D2 team funnel strip (same /schedule-funnel + segments as the coordinator strip) -->
+        <div class="schfunnel" id="hub-team-funnel" style="display:none;margin-top:12px"></div>
+        <!-- D3 phones pulse: 7-day answer rate + missed; chips drill to the Ledger phones panel -->
+        <div class="qchips" id="hub-team-phones" style="margin-top:10px"></div>
       </div>
       <div class="card tablecard" style="margin-top:18px">
         <div class="tablebar"><h2>By agent</h2><span class="count-note">signed &middot; pending &middot; conversion &middot; tour confirmations &middot; window applies</span></div>
@@ -3872,6 +3884,7 @@ window.addEventListener('error', function(e){
     var box = el('td-cal'); if (!box || tdCalRows === null) return;
     tdCalChips();
     tdRenderReconSweep();   // C1 rides the same /tours load — re-render whenever the data moves
+    tdRenderConflicts();    // C3 too (also nudges the team-busy layer to load)
     var rows = tdCalFiltered();
     var n = el('td-cal-n'); if (n) n.textContent = rows.length + (rows.length === 1 ? ' tour' : ' tours') + ' · ' + (tdCalAgent || 'all agents');
     if (!window.FullCalendar){ tdCalFallback(rows); return; }
@@ -3994,6 +4007,60 @@ window.addEventListener('error', function(e){
   // sweep rows open the tour modal (chip links excluded) — mirrors hubTourListClick's shape
   if (el('td-recon-sweep')) el('td-recon-sweep').addEventListener('click', function(e){
     if (e.target.closest('a.tdact')) return;
+    var row = e.target.closest('[data-uri]'); if (!row) return; openTourDetail(row.getAttribute('data-uri'));
+  });
+  // C3 — schedule conflicts, next 7 days: same-agent tour overlaps are DETERMINISTIC
+  // (double-booked, hot); tour-vs-GCal-busy is a heuristic "possible clash" (warm) — the
+  // busy mirror excludes tours by design (WS-G M4), but titles are shown so a coordinator
+  // can dismiss a benign one at a glance. Data = tdCalRows + the cached team-busy layer.
+  function tdRenderConflicts(){
+    var box = el('td-conflicts'); if (!box) return;
+    if (tdCalRows === null){ box.innerHTML = '<div class="note">Loading&hellip;</div>'; return; }
+    tdTeamBusyEnsure();   // 10-min session cache; re-calls tdDrawCal (→ here) when it lands
+    var now = Date.now(), horizon = now + 7 * 86400000;
+    function tEnd(r){ return Date.parse(r.end_time || '') || (Date.parse(r.start_time) + 30 * 60000); }
+    function ovl(aS, aE, bS, bE){ return aS < bE && bS < aE; }
+    var byAgent = {};
+    (tdCalRows || []).forEach(function(r){
+      if (r.status !== 'active') return;
+      var t = Date.parse(r.start_time); if (isNaN(t) || t < now || t > horizon) return;
+      var k = tdFt(r.agent); (byAgent[k] = byAgent[k] || []).push(r);
+    });
+    var out = [];
+    Object.keys(byAgent).forEach(function(k){
+      var list = byAgent[k].sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+      for (var i = 1; i < list.length; i++){
+        if (ovl(Date.parse(list[i].start_time), tEnd(list[i]), Date.parse(list[i - 1].start_time), tEnd(list[i - 1])))
+          out.push({ kind: 'double', a: list[i - 1], b: list[i], at: Date.parse(list[i].start_time) });
+      }
+    });
+    (tdTeamBusy || []).forEach(function(p){
+      var list = byAgent[tdFt(p.name)] || [];
+      (p.busy || []).forEach(function(bz){
+        var bS = Date.parse(bz.start), bE = Date.parse(bz.end || '') || (bS + 3600000);
+        if (isNaN(bS) || bE < now || bS > horizon) return;
+        list.forEach(function(r){
+          if (ovl(Date.parse(r.start_time), tEnd(r), bS, bE))
+            out.push({ kind: 'busy', a: r, title: bz.title || 'calendar event', at: Date.parse(r.start_time) });
+        });
+      });
+    });
+    out.sort(function(a, b){ return a.at - b.at; });
+    box.innerHTML = out.slice(0, 12).map(function(c){
+      var when = schEdFmt(c.a.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+      if (c.kind === 'double'){
+        return '<div class="schoffer" data-uri="' + esc(c.b.uri) + '"><div class="schoffer-main"><b>' + esc(c.a.agent || '?') + ' &middot; two tours overlap</b>' +
+          '<div class="schoffer-sub">' + esc(when) + ' &middot; ' + esc(c.a.invitee_name || 'Prospect') + ' + ' + esc(c.b.invitee_name || 'Prospect') + '</div></div>' +
+          '<span class="chip c-hot">double-booked</span></div>';
+      }
+      return '<div class="schoffer" data-uri="' + esc(c.a.uri) + '"><div class="schoffer-main"><b>' + esc(c.a.agent || '?') + ' &middot; tour overlaps &ldquo;' + esc(c.title) + '&rdquo;</b>' +
+        '<div class="schoffer-sub">' + esc(when) + ' &middot; ' + esc(c.a.invitee_name || 'Prospect') + '</div></div>' +
+        '<span class="chip c-warm">possible clash</span></div>';
+    }).join('') || '<div class="note">No conflicts in the next 7 days.</div>';
+    var n = el('td-conflicts-note');
+    if (n) n.textContent = out.length ? out.length + ' found' + (out.length > 12 ? ' · showing 12' : '') : '';
+  }
+  if (el('td-conflicts')) el('td-conflicts').addEventListener('click', function(e){
     var row = e.target.closest('[data-uri]'); if (!row) return; openTourDetail(row.getAttribute('data-uri'));
   });
   // no FullCalendar (CDN blocked): compact upcoming list, personal-outreach actions intact
@@ -6097,6 +6164,14 @@ window.addEventListener('error', function(e){
   }
   // ── Schedule-tab funnel strip (offers → booked → toured → applied → signed) ──
   var schFunnelReq = 0;
+  // ONE segment builder for BOTH funnel strips (coordinator #sch-funnel + admin #hub-team-funnel)
+  function schFunnelHtml(d){
+    var segs = [['Offers sent', d.offers], ['Booked direct', d.booked], ['Showings', d.toured], ['Applications', d.applied], ['Leases signed', d.signed]];
+    return segs.map(function(s, i){
+      return (i ? '<span class="sf-arrow">&rarr;</span>' : '') +
+        '<div class="sf-seg"><div class="sfv">' + fmtNum(s[1] || 0) + '</div><div class="sfl">' + s[0] + '</div></div>';
+    }).join('');
+  }
   function loadSchedFunnel(){
     var box = el('sch-funnel'); if (!box) return;
     var w = windowDates(); var q = ++schFunnelReq;
@@ -6106,11 +6181,7 @@ window.addEventListener('error', function(e){
     // nothing, silently, while the endpoint was perfectly healthy. Never re-add a .json() step.
     authFetch('/schedule-funnel?from=' + w.from + '&to=' + w.to).then(function(d){
       if (q !== schFunnelReq || !d || d.error) return;
-      var segs = [['Offers sent', d.offers], ['Booked direct', d.booked], ['Showings', d.toured], ['Applications', d.applied], ['Leases signed', d.signed]];
-      box.innerHTML = segs.map(function(s, i){
-        return (i ? '<span class="sf-arrow">&rarr;</span>' : '') +
-          '<div class="sf-seg"><div class="sfv">' + fmtNum(s[1] || 0) + '</div><div class="sfl">' + s[0] + '</div></div>';
-      }).join('');
+      box.innerHTML = schFunnelHtml(d);
       box.style.display = 'flex';
     }).catch(function(e){
       if (String(e && e.message) === 'AUTH') return;
@@ -8867,8 +8938,40 @@ window.addEventListener('error', function(e){
       hubRenderLeaderboard(); hubRenderFunnel(); loadHubAgent();
     }).catch(function(){ if (el('hub-funnel')) el('hub-funnel').innerHTML = '<div class="note">Could not load hub stats.</div>'; });
   }
+  // A3 — my pace: attributed signings (confirmed + suggested) month-to-date vs the same
+  // day last month. Counts only (the no-commission-$ rule stands); two small scorecard
+  // pulls, generation-guarded against agent switches.
+  var hubPaceReq = 0;
+  function loadHubPace(){
+    var box = el('hub-pace'); if (!box) return;
+    if (!hubAgent){ box.textContent = ''; return; }
+    var q = ++hubPaceReq, nowD = new Date();
+    var mFrom = new Date(nowD.getFullYear(), nowD.getMonth(), 1);
+    var lmFrom = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
+    var lmDays = new Date(nowD.getFullYear(), nowD.getMonth(), 0).getDate();   // days in last month (clamp Jul 31 → Jun 30)
+    var lmTo = new Date(nowD.getFullYear(), nowD.getMonth() - 1, Math.min(nowD.getDate(), lmDays));
+    function signedFor(j){
+      var r = ((j && j.scorecard) || []).filter(function(x){ return x.agent === hubAgent; })[0];
+      return r ? (r.signed || 0) + (r.signed_suggested || 0) : 0;
+    }
+    Promise.all([
+      authFetch('/agent-scorecard?from=' + dstr(mFrom) + '&to=' + dstr(nowD)),
+      authFetch('/agent-scorecard?from=' + dstr(lmFrom) + '&to=' + dstr(lmTo))
+    ]).then(function(res){
+      if (q !== hubPaceReq) return;
+      var cur = signedFor(res[0]), prev = signedFor(res[1]);
+      var d = cur - prev;
+      var arrow = d === 0 ? '' : ' <span style="color:var(' + (d > 0 ? '--moss' : '--clay') + ')">' + (d > 0 ? '&#9650;' : '&#9660;') + Math.abs(d) + '</span>';
+      box.innerHTML = 'My pace: <b>' + fmtNum(cur) + '</b> signed this month &middot; ' + fmtNum(prev) + ' by this day last month' + arrow;
+    }).catch(function(e){
+      if (q !== hubPaceReq || String(e && e.message) === 'AUTH') return;
+      box.textContent = '';
+      console.error('pace load failed', e);
+    });
+  }
   function loadHubAgent(){
     hubLoadSigned();   // scope-aware: 'mine' needs hubAgent; 'pool'/'all' don't
+    loadHubPace();     // A3 rides every agent pick / hub refresh
     if (!hubAgent){ hubFollow = []; hubRenderFollow(); return; }
     authFetch('/agent-followups?agent=' + encodeURIComponent(hubAgent))
       .then(function(j){ hubFollow = j.followups || []; hubRenderFollow(); })
@@ -9189,18 +9292,26 @@ window.addEventListener('error', function(e){
     if (hubTours === null && hubFollow === null) return;   // nothing loaded yet — keep "Loading…"
     var now = Date.now(), items = [];
     var todayRows = hubTours === null ? [] : hubTodayTours(hubMineTours());
-    var todayKeys = {};
+    var todayKeys = {}, fuByKey = {};
+    (hubFollow || []).forEach(function(r){ var fk = hubContactKey(r.phone, r.email); if (fk && !fuByKey[fk]) fuByKey[fk] = r; });
     todayRows.forEach(function(r){
       var k = hubContactKey(r.invitee_phone, r.invitee_email); if (k) todayKeys[k] = 1;
       var t = hubTourRow(r, now);
-      var w, label;
+      var w, label, extra = '';
       if (!t.started && reconState(r) !== 'confirmed'){ w = 0; label = 'Confirm today&rsquo;s tour'; }
       else if (!t.started && (Date.parse(r.start_time) - now) <= HUB_NEXT_SOON_MS){ w = 1; label = 'Tour soon'; }
-      else if (t.ended && !r.is_no_show){ w = 3; label = 'Send thanks + apply link'; }
+      else if (t.ended && !r.is_no_show){
+        // A4: an OUTBOUND text logged today counts as the thanks (comms data is
+        // day-granular) — drop the row; otherwise flag that nothing has gone out.
+        var fu = k ? fuByKey[k] : null;
+        if (fu && fu.days_since_contact === 0 && fu.last_text_dir === 'Outbound') return;
+        w = 3; label = 'Send thanks + apply link';
+        if (fu) extra = ' &middot; no text since tour';
+      }
       else return;   // confirmed-but-later, in-progress and no-shows stay in the Today list
       items.push({ w: w, s: Date.parse(r.start_time), html:
         '<div class="schoffer" data-uri="' + esc(r.uri) + '"><div class="schoffer-main"><b>' + label + '</b> &middot; ' + esc(r.invitee_name || 'Prospect') +
-        '<div class="schoffer-sub">' + esc(t.when) + (t.addr ? ' &middot; ' + esc(t.addr) : '') + '</div></div>' + t.state + t.act + '</div>' });
+        '<div class="schoffer-sub">' + esc(t.when) + (t.addr ? ' &middot; ' + esc(t.addr) : '') + extra + '</div></div>' + t.state + t.act + '</div>' });
     });
     (hubFollow || []).forEach(function(r){
       var d = r.days_since_contact, w, label, sub;
@@ -9313,7 +9424,51 @@ window.addEventListener('error', function(e){
       var tb = el('hub-team-table'); if (tb) tb.querySelector('tbody').innerHTML = emptyRow('hub-team-table', 'Could not load team overview.');
     });
     loadHubTeamMoves();   // own request: a moves failure must not blank the leasing overview
+    loadHubTeamFunnel();  // D2 — own request, same isolation rule
+    loadHubTeamPhones();  // D3 — own request, same isolation rule
   }
+  // D2 — the coordinator funnel on the admin overview: same /schedule-funnel route + the
+  // shared schFunnelHtml segments; the sidebar window applies (refreshed via loadHubTeam).
+  var hubTeamFunnelReq = 0;
+  function loadHubTeamFunnel(){
+    var box = el('hub-team-funnel'); if (!box) return;
+    var w = windowDates(), q = ++hubTeamFunnelReq;
+    authFetch('/schedule-funnel?from=' + w.from + '&to=' + w.to).then(function(d){
+      if (q !== hubTeamFunnelReq || !d || d.error) return;
+      box.innerHTML = schFunnelHtml(d);
+      box.style.display = 'flex';
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('team funnel strip failed:', e);
+    });
+  }
+  // D3 — phones pulse: FIXED 7-day window (A-19: 6 days back + today = 7 days, matching the
+  // Ledger tile), reading get_phone_stats' totals keys exactly as the phones panel does.
+  var hubTeamPhonesReq = 0;
+  function loadHubTeamPhones(){
+    var box = el('hub-team-phones'); if (!box) return;
+    var q = ++hubTeamPhonesReq;
+    var to = dstr(new Date()), from = dstr(new Date(Date.now() - 6 * 86400000));
+    authFetch('/phone-stats?from=' + from + '&to=' + to).then(function(j){
+      if (q !== hubTeamPhonesReq) return;
+      var t = (j && j.totals) || {};
+      box.innerHTML =
+        '<button type="button" class="qchip" data-ph="1" title="Open the Ledger phones panel">Answer rate <span class="qn">' + (t.answer_rate == null ? '–' : t.answer_rate + '%') + '</span> &middot; 7d</button>' +
+        '<button type="button" class="qchip" data-ph="1" title="Open the Ledger phones panel">Missed <span class="qn">' + fmtNum(t.missed || 0) + '</span> &middot; 7d</button>';
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('phones pulse failed', e);
+    });
+  }
+  // D3 drill — same flip the legacy #phones hash does: Ledger tab + open the fold-out
+  if (el('hub-team-phones')) el('hub-team-phones').addEventListener('click', function(e){
+    if (!e.target.closest('[data-ph]')) return;
+    showTab('ledger');
+    setTimeout(function(){
+      var p = el('pnl-phones');
+      if (p){ p.open = true; if (phonesData === null) loadPhones(); try { p.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) {} }
+    }, 450);
+  });
   function hubRenderTeam(){ hubRenderTeamHealth(); hubRenderTeamTable(); hubRenderTeamLeases(); hubRenderTeamMoves(); }
   // WS-G M5 admin strip — the manager Today panel's data, across every PM (no scope applied).
   var hubTeamMoves = null, hubMovesFailed = false, hubMovesReq = 0;
@@ -9754,7 +9909,13 @@ window.addEventListener('error', function(e){
         var chip;
         if (r.is_booked) chip = '<span class="schchip-booked">Booked ✓' + (r.booked_start_time ? ' ' + esc(schEdFmt(r.booked_start_time, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true })) : '') + '</span>';
         else if (r.booked_canceled) chip = '<span class="schchip-cxl">Booked · canceled</span>';
-        else chip = '<span class="schchip-sent">Sent</span>';
+        else {
+          chip = '<span class="schchip-sent">Sent</span>';
+          // C2: unanswered-offer aging — nudge the coordinator before the lead goes cold
+          var ageH = (Date.now() - Date.parse(r.created_at || '')) / 3600000;
+          if (ageH >= 48) chip += ' <span class="chip c-hot">' + Math.floor(ageH / 24) + 'd old</span>';
+          else if (ageH >= 24) chip += ' <span class="chip c-warm">1d old</span>';
+        }
         var when = schEdFmt(r.created_at, { month:'short', day:'numeric' });
         var sub = [r.actor, when, r.delivered_via].filter(Boolean).map(esc).join(' · ');
         var noPer = !(r.prospect_name || r.prospect_email);   // no-prospect offers never auto-flip to Booked (view matches by email) — label the permanent "Sent"

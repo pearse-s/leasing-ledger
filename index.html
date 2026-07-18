@@ -4162,13 +4162,17 @@ window.addEventListener('error', function(e){
   function tdMgrRenderAging(m){
     var box = el('td-mgr-aging'); if (!box) return;
     if (m.units === null){ box.innerHTML = '<div class="note">Could not load units.</div>'; return; }
-    var rows = m.units.filter(function(u){ return u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60; })
-      .sort(function(a, b){ return (b.days_vacant || 0) - (a.days_vacant || 0); });
+    // house stats convention (CLAUDE.md): owner take-backs + not-ready construction units are
+    // excluded everywhere — without this the list leads with decade-old zombie rows
+    // (live: "316- INACTIVE · vacant 4826d") and buries the actionable 60–120d units
+    var rows = m.units.filter(function(u){
+      return u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60 && !u.is_owner_takeback && !u.is_not_ready;
+    }).sort(function(a, b){ return (b.days_vacant || 0) - (a.days_vacant || 0); });
     var h = '';
     rows.slice(0, 10).forEach(function(u){
       var label = (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '');
       var rent = rentBasis(u);
-      var sub = 'vacant ' + (u.days_vacant || 0) + 'd' + (rent != null ? ' · ' + (u.is_listed ? 'listed ' : 'last rent ') + fmtMoney(rent) : '');
+      var sub = 'vacant ' + (u.days_vacant || 0) + 'd' + ((rent != null && rent > 0) ? ' · ' + (u.is_listed ? 'listed ' : 'last rent ') + fmtMoney(rent) : '');
       var flag = u.is_listed ? '<span class="chip c-warm">listed</span>' : '<span class="chip c-hot">NOT listed</span>';
       h += '<div class="schoffer tdurow" data-uid="' + esc(String(u.unit_id)) + '" role="button" tabindex="0"><div class="schoffer-main"><b>' + esc(label) + '</b><div class="schoffer-sub">' + esc(sub) + '</div></div>' + flag + '</div>';
     });

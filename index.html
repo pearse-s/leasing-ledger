@@ -1925,8 +1925,6 @@ window.addEventListener('error', function(e){
     /* My-view vs admin Team-overview: one class flip on #page-hub toggles which set shows */
     #page-hub.teamview .hubmine{display:none}
     #page-hub:not(.teamview) #hub-team{display:none}
-    #page-hub .r-calbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
-    #page-hub #hub-tours-cal{min-height:380px;margin-top:6px}
     #page-hub #hub-team-health{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px}
     /* funnel/KPI tiles (also the team-health tiles) — class-based so they compact on mobile */
     #page-hub .hubtile{background:var(--glass);border-radius:14px;padding:14px 12px;text-align:center}
@@ -1952,7 +1950,6 @@ window.addEventListener('error', function(e){
     @media(max-width:768px){
       #page-hub .hubact{padding:9px 14px;min-height:40px;font-size:.85rem}
       #page-hub .fubtn{padding:8px 12px;min-height:40px}
-      #page-hub #hub-tours-cal{min-height:340px}
       /* let the hub's long lists flow with the PAGE so a finger over a table scrolls the page
          down, not a trapped nested scroll region (.tallscroll has no horizontal overflow on
          mobile, so dropping the inner scroll is safe) */
@@ -1968,11 +1965,8 @@ window.addEventListener('error', function(e){
     </style>
     <div class="card" style="margin-top:18px">
       <div class="hubhead">
-        <h2 style="margin:0">My hub</h2>
-        <div class="presets adminonly" id="hub-view" title="Admins: switch between your own hub and the whole-team leasing overview">
-          <button type="button" data-view="mine" class="on">My view</button>
-          <button type="button" data-view="team">Team overview</button>
-        </div>
+        <!-- No h2 and no My-view/Team toggle since Phase 2 (Pearse 2026-07-18): the Today ROLE
+             chips are the only switch — Agent = my-view, Admin = team overview. -->
         <div class="hubctl">
           <select id="hub-agent" class="hubsel hubmine" aria-label="Agent"></select>
           <div class="hubwin">
@@ -2005,20 +1999,13 @@ window.addEventListener('error', function(e){
       <div class="tablebar">
         <h2>My tours</h2>
         <div class="presets" id="hub-tours-view">
-          <button type="button" data-v="day" class="on">Day</button>
+          <button type="button" data-v="today" class="on">Today</button>
           <button type="button" data-v="upcoming">Upcoming</button>
           <button type="button" data-v="past">Past</button>
         </div>
         <span class="count-note" id="hub-tours-count"></span>
       </div>
-      <div class="r-calbar" id="hub-tours-daybar">
-        <button type="button" id="hub-tours-prev" class="rfreshbtn">&lsaquo; Prev</button>
-        <button type="button" id="hub-tours-today" class="rfreshbtn">Today</button>
-        <button type="button" id="hub-tours-next" class="rfreshbtn">Next &rsaquo;</button>
-        <span class="count-note" id="hub-tours-daynote"></span>
-      </div>
-      <div id="hub-tours-cal"></div>
-      <div class="scrolly tallscroll" id="hub-tours-list" style="display:none"></div>
+      <div class="scrolly tallscroll" id="hub-tours-list"></div>
     </div>
 
     <div class="hubgrid hubmine">
@@ -2057,7 +2044,8 @@ window.addEventListener('error', function(e){
     <div class="card hubmine" id="hub-rc" style="margin-top:18px"></div>
 
     <!-- Admin-only Team overview — the Today ADMIN role (tdRender → tdHubView('team') → #page-hub.teamview;
-         the #hub-view toggle doubles as a role shortcut). Aggregated client-side from /agent-scorecard + /signed-leases + /tours. -->
+         the old My-view/Team toggle is GONE since Phase 2 — role chips are the only switch).
+         Aggregated client-side from /agent-scorecard + /signed-leases + /tours. -->
     <div id="hub-team">
       <div class="card" style="margin-top:18px">
         <div class="tablebar"><h2>Leasing overview</h2><span class="count-note" id="hub-team-note"></span></div>
@@ -3583,10 +3571,6 @@ window.addEventListener('error', function(e){
     box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-role') === cur); });
   }
   function loadToday(){ todayLoaded = 1; tdSyncRoles(); tdRender(); }
-  function tdWin(){
-    var now = new Date();
-    return { from: dstr(new Date(now.getTime() - 30 * 86400000)), to: dstr(now) };
-  }
   function tdPanel(id, title, gotoTab, gotoLabel, wide){
     return '<section class="panel tdq' + (wide ? ' tdwide' : '') + '">' +
       '<h3>' + title + ' <span class="qn2" id="' + id + '-n"></span></h3>' +
@@ -3616,7 +3600,7 @@ window.addEventListener('error', function(e){
     // agent role = my-view, admin role = team overview, hidden otherwise.
     var ph = el('page-hub');
     if (ph) ph.style.display = (role === 'agent' || role === 'admin') ? 'block' : 'none';
-    g.style.display = (isCo || role === 'admin') ? 'none' : '';
+    g.style.display = role === 'manager' ? '' : 'none';   // the grid is the manager's; agent/admin live in #page-hub
     if (isCo){
       g.innerHTML = '';
       tdSub("Coordinator — pick a prospect, agent and event type, then book right on the team calendar.");
@@ -3646,12 +3630,11 @@ window.addEventListener('error', function(e){
       if (hubLoaded === null) loadHub();
       loadHubTeam();
     } else {
-      tdSub("Agent — today's tours first, then your follow-ups, signed leases and the team board.");
-      g.innerHTML = tdPanel('td-mytours', 'My tours today', 'tours', 'Open Tours', true);
-      tdLoadAgent();
+      tdSub("Agent — today's tours first (in My tours), then follow-ups, signed leases and the team board.");
+      g.innerHTML = '';
       tdHubView('mine');
       if (hubLoaded === null) loadHub();
-      else hubRenderTours();   // resize nudge — the FullCalendar may have been built while display:none
+      else hubRenderTours();
     }
   }
   // personal outreach text (coordinator voice) — NOT the confirm-chase; confirms stay the agent's job
@@ -3680,14 +3663,12 @@ window.addEventListener('error', function(e){
     showTab('today');
     if (loaded){ tdSyncRoles(); tdRender(); }
   }
-  // flip the merged Hub block between my-view and team overview. The ROLE drives this
-  // (tdRender); the #hub-view toggle is a role shortcut that lands here via tdRender too —
-  // one seam so the chips, the .teamview class and the loaders can never disagree.
+  // flip the merged Hub block between my-view and team overview. The ROLE is the only
+  // driver (tdRender) — the old #hub-view toggle was removed in Phase 2. hubView survives
+  // as state because onWindowChange branches on it for the team-overview refresh.
   function tdHubView(v){
     hubView = v;
     var ph = el('page-hub'); if (ph) ph.classList.toggle('teamview', v === 'team');
-    var hv = el('hub-view');
-    if (hv) hv.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x.getAttribute('data-view') === v); });
   }
   function tdDayKeyEd(d){ return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Edmonton', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
   // post-tour thank-you + the unit's own Buildium application link (Pearse copy, friendlier pass 2026-07-03)
@@ -3697,9 +3678,7 @@ window.addEventListener('error', function(e){
     return 'Hi ' + first + "! It's " + (me ? me + ' ' : '') + 'with Live Furnished — thanks so much for coming to tour' + (addr ? ' ' + addr : ' the unit') + ' today, it was great meeting you. If any questions come up, just text me here anytime.'
       + (applyUrl ? " And when you're ready, here's the application link for this exact unit: " + applyUrl : '');
   }
-  // My tours today (agent role): the agent's own same-day tours — confirm chase while
-  // upcoming; once started/finished, a thank-you text with the unit-specific apply link.
-  // Open a tour's listing (or the unit modal if unlisted) in place — used by the My-tours-today rows.
+  // Open a tour's listing (or the unit modal if unlisted) in place — used by the hub "Today" tour rows.
   // Matched unit → straight to it; property-only match → resolve a unit at that property from the loaded set.
   function tdOpenTourListing(uid, listed, pid){
     var openOne = function(u, isL){ if (isL) openListing(u); else openUnit(u); };   // both read unitsAll
@@ -3721,83 +3700,8 @@ window.addEventListener('error', function(e){
       '?subject=' + encodeURIComponent(subject || '') +
       (body ? '&body=' + encodeURIComponent(body) : '');
   }
-  var tdMyRows = [], tdMyMe = '';
-  function tdLoadMyTours(me){
-    // captured for BOTH callers: tdLoadAgent (a fresh render) and the F5 no-show refresh
-    // (same generation, so it still paints — as it should)
-    var q = tdReq;
-    tdMyMe = me;
-    authFetch('/tours?' + toursQuery().toString()).then(function(j){
-      if (q !== tdReq) return;
-      var todayKey = tdDayKeyEd(new Date());
-      var rows = (j.tours || []).filter(function(r){
-        return r.status === 'active' && tdFt(r.agent) === tdFt(me) && tdDayKeyEd(new Date(Date.parse(r.start_time))) === todayKey;
-      }).sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
-      tdMyRows = rows;
-      var now = Date.now(), h = '';
-      rows.forEach(function(r){
-        var addrRaw = (r.matched_property_name || r.location_text || '') + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
-        var when = schEdFmt(r.start_time, { hour: 'numeric', minute: '2-digit', hour12: true });
-        var started = Date.parse(r.start_time) <= now;
-        var endMs = Date.parse(r.end_time || '') || (Date.parse(r.start_time) + 30 * 60000);
-        var stateChip;
-        if (!started) stateChip = reconChip(r);
-        else if (r.is_no_show) stateChip = '<span class="chip c-hot">no-show</span>';
-        else if (now <= endMs) stateChip = '<span class="chip c-warm">in progress</span>';
-        else stateChip = '<span class="chip c-ok">toured</span>';
-        // A-08: this block used to be gated on invitee_phone, so every phone-less tour
-        // rendered ZERO chips silently — 52% of them, and all of those carry an email.
-        // Phone wins (RingCentral); otherwise the same copy goes out as a mailto.
-        var tel = r.invitee_phone ? String(r.invitee_phone).replace(/[^0-9+]/g, '') : '';
-        var mail = String(r.invitee_email || '').trim();
-        var mailHint = ' title="No phone on file — email instead"';
-        var acts = [];
-        if (!started){
-          var whenFull = schEdFmt(r.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-          var cmsg = reconMsg(r.invitee_name, addrRaw, whenFull, me);
-          if (tel){
-            acts.push('<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a>');
-            acts.push('<a href="' + rcText(esc(tel), cmsg) + '" class="tdact">&#128172; Confirm</a>');
-          } else if (mail){
-            acts.push('<a href="' + esc(tdMailto(mail, 'Confirming your tour' + (addrRaw ? ' at ' + addrRaw : ''), cmsg)) + '" class="tdact"' + mailHint + '>&#9993; Confirm by email</a>');
-          }
-        } else if (r.is_no_show){
-          if (tel){
-            acts.push('<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a>');
-            acts.push('<a href="' + rcText(esc(tel)) + '" class="tdact">&#128172; Text</a>');
-          } else if (mail){
-            acts.push('<a href="' + esc(tdMailto(mail, 'Your tour' + (addrRaw ? ' at ' + addrRaw : ''), '')) + '" class="tdact"' + mailHint + '>&#9993; Email</a>');
-          }
-        } else {
-          var tmsg = tdThanksMsg(r.invitee_name, addrRaw, r.unit_listing_url);
-          if (tel){
-            acts.push('<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a>');
-            acts.push('<a href="' + rcText(esc(tel), tmsg) + '" class="tdact">&#128172; Thanks + apply link</a>');
-          } else if (mail){
-            acts.push('<a href="' + esc(tdMailto(mail, 'Thanks for touring' + (addrRaw ? ' ' + addrRaw : ''), tmsg)) + '" class="tdact"' + mailHint + '>&#9993; Thanks + apply link</a>');
-          }
-        }
-        // F5: no-show inline. Was Tours tab + flip the Show filter + open the row + the
-        // modal button = 4 taps and a tab hop. Same writeback + confirm as the modal;
-        // only offered once the tour has started (Calendly 400s before that).
-        if (started && r.invitee_uri && r.status !== 'canceled'){
-          acts.push('<button type="button" class="tdact" data-nsuri="' + esc(r.uri) + '">' + (r.is_no_show ? '&#8617; Undo no-show' : '&#8856; No-show') + '</button>');
-        }
-        if (!tel && !mail) acts.push('<span class="count-note">No phone or email on file</span>');
-        var act = acts.length ? '<div class="tdrowact">' + acts.join(' ') + '</div>' : '';
-        // the tour's unit address is clickable → opens the listing (or unit) right here in a modal
-        var canList = r.matched_unit_id || r.matched_property_id;
-        var addrHtml = !addrRaw ? ''
-          : (canList
-              ? '<button type="button" class="tdlisting" data-luid="' + esc(r.matched_unit_id || '') + '" data-llisted="' + (r.unit_is_listed ? '1' : '') + '" data-lpid="' + esc(r.matched_property_id || '') + '" title="View the listing">' + esc(addrRaw) + ' &rarr;</button>'
-              : '<div class="schoffer-sub">' + esc(addrRaw) + '</div>');
-        h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(when) + '</b> &middot; ' + esc(r.invitee_name || 'Prospect') +
-          addrHtml + '</div>' + stateChip + act + '</div>';
-      });
-      tdFill('td-mytours', h, 0, 'No tours today.');
-      var n = el('td-mytours-n'); if (n) n.textContent = rows.length ? rows.length + ' today' : '';
-    }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH') tdFail('td-mytours', 'your tours'); });
-  }
+  // (tdLoadMyTours / the td-mytours grid panel are gone — Phase 2 moved the same-day
+  // actionable rows into the hub tours card's "Today" view: hubRenderTodayList.)
   // open the local BOOK flow, optionally preselecting the agent (workspace is on this page now)
   function tdGotoBook(aid){
     var ws = el('page-schedule'); if (ws) ws.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -4055,19 +3959,8 @@ window.addEventListener('error', function(e){
         '</div>' + reconChip(r) + act + '</div>';
     }).join('') || '<div class="note">No upcoming tours.</div>';
   }
-  function tdLoadAgent(){
-    var w = tdWin(), q = tdReq;   // the render generation this load belongs to
-    authFetch('/agent-scorecard?from=' + w.from + '&to=' + w.to).then(function(j){
-      if (q !== tdReq) return;   // role flipped (or Today re-rendered) mid-flight — do not paint
-      var agents = (j.scorecard || []).map(function(r){ return r.agent; }).filter(Boolean).sort();
-      var me = hubMatchAgent(getActor(), agents);
-      tdSub(me ? ('Agent — working as ' + me + '. Confirm tours, close the loop on applications.') : 'Agent — no showing activity matched to your name yet.');
-      if (me) tdLoadMyTours(me);
-      else tdFill('td-mytours', '', 0, 'No tours matched to your name yet.');
-      // follow-ups + the signed pool render in the merged hub cards below (loadHub) —
-      // the old top-8 previews that deep-linked to the Hub tab are gone.
-    }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH') tdFail('td-mytours', 'your tours'); });
-  }
+  // (tdLoadAgent is gone — Phase 2: its only remaining job was deriving "me" via a second
+  // /agent-scorecard fetch; loadHubScore already does that and drives the hub agent picker.)
   /* ── Manager Today (Option B) ──────────────────────────────────────────────
      ONE assembly seam: tdMgrAssemble() gathers stats/tasks/renewals/units with
      the EXISTING endpoints and hands one object to pure renderers. Option C
@@ -4341,20 +4234,6 @@ window.addEventListener('error', function(e){
       }
       var bk = e.target.closest('[data-book]');
       if (bk){ tdGotoBook(bk.getAttribute('data-book')); return; }
-      var lt = e.target.closest('.tdlisting');
-      if (lt){
-        tdOpenTourListing(lt.getAttribute('data-luid'), lt.getAttribute('data-llisted') === '1', lt.getAttribute('data-lpid'));
-        return;
-      }
-      // F5: inline no-show straight off the Today row — same write + confirm as the modal
-      var ns = e.target.closest('[data-nsuri]');
-      if (ns){
-        var nsUri = ns.getAttribute('data-nsuri');
-        var row = null;
-        (tdMyRows || []).forEach(function(x){ if (x.uri === nsUri) row = x; });
-        if (row) tourNoShowWrite(row, ns, function(){ if (tdMyMe) tdLoadMyTours(tdMyMe); });
-        return;
-      }
       var ur = e.target.closest('.tdurow');
       if (ur){ openUnitEnsure(ur.getAttribute('data-uid')); return; }
       var br = e.target.closest('.tdbrief');
@@ -8866,7 +8745,7 @@ window.addEventListener('error', function(e){
   var hubLoaded = null, hubScore = null, hubAgent = '',
       hubSigned = null, hubFollow = null, hubSignedFilter = 'all', hubFuFilter = 'all',
       hubSignedScope = 'mine',
-      hubTours = null, hubToursView = 'day', hubCal = null, hubDay = null,
+      hubTours = null, hubToursView = 'today',
       hubView = 'mine', hubTeamSigned = null, hubTeamTours = null, hubTeamLeasesFilter = 'all', hubTeamLeasesSort = { k:'signed_date', d:-1 };
   function hubWindow(){ return windowDates(); }   // unified with the global sidebar Activity window (state.from/to)
   function hubMatchAgent(actor, agents){
@@ -8957,6 +8836,9 @@ window.addEventListener('error', function(e){
     var ph = (r.phone || '').replace(/\D/g, ''), canThread = (c || t) && ph.length >= 10;
     var teaser = '';
     if (r.last_text_body){
+      // WRAP-NEVER-CLIP EXCEPTION (documented per the v231/v232 policy): a chat-app style
+      // one-line SMS teaser — the full message is one tap away in the thread viewer
+      // (.thrbtn), so a single clipped preview line is the intended design, like iMessage.
       teaser = '<div style="font-size:.73rem;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">' +
         esc((r.last_text_dir === 'Outbound' ? 'You: ' : '') + r.last_text_body) + '</div>';
     }
@@ -9100,10 +8982,9 @@ window.addEventListener('error', function(e){
     document.body.appendChild(a); a.click();
     setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
   }
-  /* ── My tours (Day view default) — the acting/selected agent's tours ───────
-     Fetches all tours once over a broad window (independent of the activity
-     window, since the day view navigates by day) and filters client-side to
-     hubAgent. Reuses the Tours-tab modal (openTourDetail). ── */
+  /* ── My tours ("Today" list default, Upcoming/Past) — the selected agent's tours ──
+     Fetches all tours once over a broad window (independent of the activity window)
+     and filters client-side to hubAgent. Reuses the Tours-tab modal (openTourDetail). ── */
   function loadHubTours(){
     if (hubTours !== null){ hubRenderTours(); return; }
     var from = dstr(new Date(Date.now() - 90 * 86400000)), to = dstr(new Date(Date.now() + 60 * 86400000));
@@ -9112,39 +8993,76 @@ window.addEventListener('error', function(e){
       .catch(function(){ hubTours = []; hubRenderTours(); });
   }
   function hubMineTours(){ return (hubTours || []).filter(function(r){ return sameAgent(r.agent, hubAgent); }); }
-  function hubSameDay(a, b){ return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
-  function hubTourEvents(rows){
-    return rows.map(function(r){
-      var s = tourStatusOf(r);
-      var col = s === 'cancelled' ? '#d9735f' : (s === 'upcoming' ? '#E8B43E' : '#5dcaa5');
-      return { id: r.uri, title: tourAddr(r), start: r.start_time, end: r.end_time || undefined,
-        backgroundColor: col, borderColor: col, textColor: '#15110D',
-        classNames: s === 'cancelled' ? ['fc-ev-cxl'] : [],
-        extendedProps: { canceled: r.status === 'canceled', recon: reconShow(r) } };
+  // "Today" view — the selected agent's SAME-DAY tours as actionable rows: confirm-chase
+  // while upcoming; thanks + the unit's own apply link once started; inline no-show.
+  // Absorbed the old Today-tab "My tours today" panel (Phase 2): ONE tour surface, driven
+  // by the hub agent picker off the cached hubTours load (a no-show write refetches it).
+  function hubRenderTodayList(mine){
+    var box = el('hub-tours-list'); if (!box) return;
+    var todayKey = tdDayKeyEd(new Date());
+    var rows = mine.filter(function(r){
+      return r.status === 'active' && tdDayKeyEd(new Date(Date.parse(r.start_time))) === todayKey;
+    }).sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+    var now = Date.now(), h = '';
+    rows.forEach(function(r){
+      var addrRaw = (r.matched_property_name || r.location_text || '') + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
+      var when = schEdFmt(r.start_time, { hour: 'numeric', minute: '2-digit', hour12: true });
+      var started = Date.parse(r.start_time) <= now;
+      var endMs = Date.parse(r.end_time || '') || (Date.parse(r.start_time) + 30 * 60000);
+      var stateChip;
+      if (!started) stateChip = reconChip(r);
+      else if (r.is_no_show) stateChip = '<span class="chip c-hot">no-show</span>';
+      else if (now <= endMs) stateChip = '<span class="chip c-warm">in progress</span>';
+      else stateChip = '<span class="chip c-ok">toured</span>';
+      // A-08: never gate the whole block on invitee_phone — phone-less tours (52%, all
+      // carrying an email) fall back to the same copy as a mailto.
+      var tel = r.invitee_phone ? String(r.invitee_phone).replace(/[^0-9+]/g, '') : '';
+      var mail = String(r.invitee_email || '').trim();
+      var mailHint = ' title="No phone on file — email instead"';
+      var acts = [];
+      if (!started){
+        var whenFull = schEdFmt(r.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        var cmsg = reconMsg(r.invitee_name, addrRaw, whenFull, hubAgent);
+        if (tel){
+          acts.push('<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a>');
+          acts.push('<a href="' + rcText(esc(tel), cmsg) + '" class="tdact">&#128172; Confirm</a>');
+        } else if (mail){
+          acts.push('<a href="' + esc(tdMailto(mail, 'Confirming your tour' + (addrRaw ? ' at ' + addrRaw : ''), cmsg)) + '" class="tdact"' + mailHint + '>&#9993; Confirm by email</a>');
+        }
+      } else if (r.is_no_show){
+        if (tel){
+          acts.push('<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a>');
+          acts.push('<a href="' + rcText(esc(tel)) + '" class="tdact">&#128172; Text</a>');
+        } else if (mail){
+          acts.push('<a href="' + esc(tdMailto(mail, 'Your tour' + (addrRaw ? ' at ' + addrRaw : ''), '')) + '" class="tdact"' + mailHint + '>&#9993; Email</a>');
+        }
+      } else {
+        var tmsg = tdThanksMsg(r.invitee_name, addrRaw, r.unit_listing_url);
+        if (tel){
+          acts.push('<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a>');
+          acts.push('<a href="' + rcText(esc(tel), tmsg) + '" class="tdact">&#128172; Thanks + apply link</a>');
+        } else if (mail){
+          acts.push('<a href="' + esc(tdMailto(mail, 'Thanks for touring' + (addrRaw ? ' ' + addrRaw : ''), tmsg)) + '" class="tdact"' + mailHint + '>&#9993; Thanks + apply link</a>');
+        }
+      }
+      // F5: inline no-show — same writeback + confirm as the tour modal; only offered once
+      // the tour has started (Calendly 400s before that).
+      if (started && r.invitee_uri && r.status !== 'canceled'){
+        acts.push('<button type="button" class="tdact" data-nsuri="' + esc(r.uri) + '">' + (r.is_no_show ? '&#8617; Undo no-show' : '&#8856; No-show') + '</button>');
+      }
+      if (!tel && !mail) acts.push('<span class="count-note">No phone or email on file</span>');
+      var act = acts.length ? '<div class="tdrowact">' + acts.join(' ') + '</div>' : '';
+      // the tour's unit address is clickable → opens the listing (or unit) right here in a modal
+      var canList = r.matched_unit_id || r.matched_property_id;
+      var addrHtml = !addrRaw ? ''
+        : (canList
+            ? '<button type="button" class="tdlisting" data-luid="' + esc(r.matched_unit_id || '') + '" data-llisted="' + (r.unit_is_listed ? '1' : '') + '" data-lpid="' + esc(r.matched_property_id || '') + '" title="View the listing">' + esc(addrRaw) + ' &rarr;</button>'
+            : '<div class="schoffer-sub">' + esc(addrRaw) + '</div>');
+      h += '<div class="schoffer" data-uri="' + esc(r.uri) + '"><div class="schoffer-main"><b>' + esc(when) + '</b> &middot; ' + esc(r.invitee_name || 'Prospect') +
+        addrHtml + '</div>' + stateChip + act + '</div>';
     });
-  }
-  function hubBuildCal(events){
-    var box = el('hub-tours-cal'); if (!box || !window.FullCalendar) return;
-    if (!hubCal){
-      hubCal = new FullCalendar.Calendar(box, {
-        initialView: 'timeGridDay', initialDate: hubDay || new Date(),
-        headerToolbar: false, height: 460, nowIndicator: true, firstDay: 0,
-        allDaySlot: false, slotMinTime: '09:00:00', slotMaxTime: '21:00:00', expandRows: true,
-        eventDisplay: 'block',
-        eventClick: function(info){ if (info.jsEvent) info.jsEvent.preventDefault(); openTourDetail(info.event.id); },
-        eventContent: fcTourEventContent
-      });
-      hubCal.render();
-    }
-    hubCal.getEventSources().forEach(function(s){ s.remove(); });
-    hubCal.addEventSource(events);
-    hubCal.updateSize();
-  }
-  function hubUpdateDayNote(mine){
-    var note = el('hub-tours-daynote'); if (!note) return;
-    var d = hubDay || new Date();
-    var n = mine.filter(function(r){ var t = Date.parse(r.start_time); return !isNaN(t) && hubSameDay(new Date(t), d); }).length;
-    note.textContent = d.toLocaleDateString('en-CA', { weekday:'short', month:'short', day:'numeric' }) + ' · ' + n + ' tour' + (n === 1 ? '' : 's');
+    box.innerHTML = h ? '<div class="schoffers">' + h + '</div>' : '<div class="note" style="padding:14px">No tours today.</div>';
+    var cnt = el('hub-tours-count'); if (cnt) cnt.textContent = rows.length + ' today';
   }
   function hubRenderTourList(mine, view){
     var box = el('hub-tours-list'); if (!box) return;
@@ -9167,26 +9085,13 @@ window.addEventListener('error', function(e){
   function hubRenderTours(){
     if (!el('hub-tours-card') || hubTours === null) return;
     var mine = hubMineTours();
-    var cal = el('hub-tours-cal'), daybar = el('hub-tours-daybar'), list = el('hub-tours-list');
-    if (hubToursView === 'day' && window.FullCalendar){
-      if (cal) cal.style.display = ''; if (daybar) daybar.style.display = ''; if (list) list.style.display = 'none';
-      if (!hubDay) hubDay = new Date();
-      hubBuildCal(hubTourEvents(mine));
-      if (hubCal) hubCal.gotoDate(hubDay);
-      hubUpdateDayNote(mine);
-      var cnt = el('hub-tours-count'); if (cnt) cnt.textContent = mine.length + ' tour' + (mine.length === 1 ? '' : 's');
-    } else {
-      if (cal) cal.style.display = 'none'; if (daybar) daybar.style.display = 'none'; if (list) list.style.display = '';
-      hubRenderTourList(mine, hubToursView === 'past' ? 'past' : 'upcoming');   // day view w/o FullCalendar → upcoming list
-    }
-  }
-  function hubDayShift(days){
-    var d = hubDay || new Date(); hubDay = new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
-    if (hubCal) hubCal.gotoDate(hubDay); hubUpdateDayNote(hubMineTours());
+    if (hubToursView === 'today') hubRenderTodayList(mine);
+    else hubRenderTourList(mine, hubToursView === 'past' ? 'past' : 'upcoming');
   }
 
-  /* ── Admin Team overview (admin-only, toggled by #hub-view) — aggregated
-     client-side from /agent-scorecard (hubScore) + /signed-leases + /tours. ── */
+  /* ── Admin Team overview (admin-only — the Today ADMIN role renders it via
+     tdHubView('team')) — aggregated client-side from /agent-scorecard (hubScore)
+     + /signed-leases + /tours. ── */
   function loadHubTeam(){
     var w = hubWindow();
     var pSigned = authFetch('/signed-leases?from=' + w.from + '&to=' + w.to);
@@ -9418,28 +9323,35 @@ window.addEventListener('error', function(e){
     var v = this.value; if (v && v > state.from && v <= winToday()) { state.to = v; hubWinApply(); } else hubWinRender();
   });
   document.addEventListener('click', hubWinClose);
-  // My-tours view toggle (Day / Upcoming / Past), day navigation, and row tap
+  // My-tours view toggle (Today / Upcoming / Past) and row interactions
   if (el('hub-tours-view')) el('hub-tours-view').addEventListener('click', function(e){
     var b = e.target.closest('button[data-v]'); if (!b) return;
     hubToursView = b.getAttribute('data-v');
     el('hub-tours-view').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
     hubRenderTours();
   });
-  if (el('hub-tours-prev')) el('hub-tours-prev').addEventListener('click', function(){ hubDayShift(-1); });
-  if (el('hub-tours-next')) el('hub-tours-next').addEventListener('click', function(){ hubDayShift(1); });
-  if (el('hub-tours-today')) el('hub-tours-today').addEventListener('click', function(){ hubDay = new Date(); if (hubCal) hubCal.gotoDate(hubDay); hubUpdateDayNote(hubMineTours()); });
+  // Today rows carry action chips ON TOP of the open-detail row tap — check the specific
+  // targets first, and let the tel/sms/mailto links do their own thing.
   if (el('hub-tours-list')) el('hub-tours-list').addEventListener('click', function(e){
-    var row = e.target.closest('[data-uri]'); if (!row) return; openTourDetail(row.getAttribute('data-uri'));
+    if (e.target.closest('a.tdact')) return;
+    var lt = e.target.closest('.tdlisting');
+    if (lt){
+      tdOpenTourListing(lt.getAttribute('data-luid'), lt.getAttribute('data-llisted') === '1', lt.getAttribute('data-lpid'));
+      return;
+    }
+    var ns = e.target.closest('[data-nsuri]');
+    if (ns){
+      var nsUri = ns.getAttribute('data-nsuri');
+      var row = (hubTours || []).filter(function(x){ return x.uri === nsUri; })[0];
+      // refetch (not patch) after the write so the row's recon/no-show state is server-true
+      if (row) tourNoShowWrite(row, ns, function(){ hubTours = null; loadHubTours(); });
+      return;
+    }
+    var r2 = e.target.closest('[data-uri]'); if (!r2) return; openTourDetail(r2.getAttribute('data-uri'));
   });
   // Admin Team-overview switch + actions
-  // The toggle is a ROLE shortcut now (Team overview = the Admin role chip, My view = Agent):
-  // it funnels through tdRender/tdHubView so the Today chips, the .teamview class and the
-  // loaders can never disagree about what is on screen.
-  if (el('hub-view')) el('hub-view').addEventListener('click', function(e){
-    var b = e.target.closest('button[data-view]'); if (!b || !IS_ADMIN) return;
-    try { localStorage.setItem(TD_ROLE_KEY, b.getAttribute('data-view') === 'team' ? 'admin' : 'agent'); } catch (err) {}
-    tdSyncRoles(); tdRender();
-  });
+  // (The #hub-view My-view/Team toggle is GONE — Phase 2, Pearse 2026-07-18. The Today role
+  // chips are the only switch; the by-agent drill below still flips Admin → Agent.)
   if (el('hub-team-leases-chips')) el('hub-team-leases-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return; hubTeamLeasesFilter = b.getAttribute('data-f'); hubRenderTeamLeases();
   });
@@ -9460,7 +9372,7 @@ window.addEventListener('error', function(e){
     var tr = e.target.closest('tr[data-agent]'); if (!tr) return;
     hubAgent = tr.getAttribute('data-agent'); if (el('hub-agent')) el('hub-agent').value = hubAgent;
     // drilling into an agent's hub IS the Agent role — flip the chip so Today's state and
-    // the screen never disagree (tdRender applies the view + the calendar resize nudge)
+    // the screen never disagree (tdRender applies the my-view flip)
     try { localStorage.setItem(TD_ROLE_KEY, 'agent'); } catch (err) {}
     tdSyncRoles(); tdRender();
     hubRenderFunnel(); hubRenderLeaderboard(); loadHubAgent();

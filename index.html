@@ -1903,6 +1903,13 @@ window.addEventListener('error', function(e){
         <div class="tablebar"><h2 style="font-size:1rem">Tour offers &middot; awaiting booking</h2><span class="count-note" id="sch-offers-note"></span></div>
         <div id="sch-offers" class="schoffers"></div>
       </div>
+      <!-- C1 reconfirmation sweep: today's + tomorrow's not-yet-confirmed tours across EVERY
+           agent — the coordinator's safety net over agents' confirm-chasing. Data = the team
+           calendar's own /tours load (tdCalRows); rendered by tdRenderReconSweep from tdDrawCal. -->
+      <div class="card tablecard" style="margin-top:16px">
+        <div class="tablebar"><h2 style="font-size:1rem">Reconfirmation sweep &middot; today &amp; tomorrow</h2><span class="count-note" id="td-recon-note"></span></div>
+        <div id="td-recon-sweep" class="schoffers"><div class="note">Loading&hellip;</div></div>
+      </div>
     </div>
     <div class="tdgrid" id="td-grid"></div>
 
@@ -3861,6 +3868,7 @@ window.addEventListener('error', function(e){
   function tdDrawCal(){
     var box = el('td-cal'); if (!box || tdCalRows === null) return;
     tdCalChips();
+    tdRenderReconSweep();   // C1 rides the same /tours load — re-render whenever the data moves
     var rows = tdCalFiltered();
     var n = el('td-cal-n'); if (n) n.textContent = rows.length + (rows.length === 1 ? ' tour' : ' tours') + ' · ' + (tdCalAgent || 'all agents');
     if (!window.FullCalendar){ tdCalFallback(rows); return; }
@@ -3941,6 +3949,50 @@ window.addEventListener('error', function(e){
     tdcal.addEventSource(events);
     var lst = el('td-cal-list'); if (lst) lst.innerHTML = '';
   }
+  // C1 — reconfirmation sweep (coordinator): every agent's not-yet-confirmed tours for
+  // today + tomorrow, off the team calendar's own /tours load (toursQuery reaches 90 d
+  // forward, so tomorrow is always in tdCalRows). One-tap confirm text in the COORDINATOR'S
+  // voice (reconMsg signed by the acting user, not the tour's agent); A-08 email fallback;
+  // no phone AND no email coaches instead of rendering dead chips.
+  function tdRenderReconSweep(){
+    var box = el('td-recon-sweep'); if (!box) return;
+    if (tdCalRows === null){ box.innerHTML = '<div class="note">Loading&hellip;</div>'; return; }
+    var now = Date.now();
+    var tKey = tdDayKeyEd(new Date()), tmKey = tdDayKeyEd(new Date(now + 86400000));
+    var rows = (tdCalRows || []).filter(function(r){
+      if (r.status !== 'active' || reconState(r) === 'confirmed') return false;
+      var t = Date.parse(r.start_time); if (isNaN(t) || t <= now) return false;   // started/past chases are moot
+      var k = tdDayKeyEd(new Date(t));
+      return k === tKey || k === tmKey;
+    }).sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+    var me = (String(getActor() || '').trim().split(/\s+/)[0]) || '';
+    box.innerHTML = rows.map(function(r){
+      var isToday = tdDayKeyEd(new Date(Date.parse(r.start_time))) === tKey;
+      var when = (isToday ? 'Today ' : 'Tomorrow ') + schEdFmt(r.start_time, { hour: 'numeric', minute: '2-digit', hour12: true });
+      var addr = (r.matched_property_name || r.location_text || '') + (r.matched_unit_number ? ' · ' + r.matched_unit_number : '');
+      var whenFull = schEdFmt(r.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+      var msg = reconMsg(r.invitee_name, addr, whenFull, me);
+      var tel = r.invitee_phone ? String(r.invitee_phone).replace(/[^0-9+]/g, '') : '';
+      var mail = String(r.invitee_email || '').trim();
+      var act;
+      if (tel){
+        act = '<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(tel), msg) + '" class="tdact">&#128172; Confirm</a>';
+      } else if (mail){
+        act = '<a href="' + esc(tdMailto(mail, 'Confirming your tour' + (addr ? ' at ' + addr : ''), msg)) + '" class="tdact" title="No phone on file — email instead">&#9993; Confirm by email</a>';
+      } else {
+        act = '<span class="count-note">No phone or email on file</span>';
+      }
+      return '<div class="schoffer" data-uri="' + esc(r.uri) + '"><div class="schoffer-main"><b>' + esc(when) + '</b> &middot; ' + esc(r.invitee_name || 'Prospect') +
+        '<div class="schoffer-sub">' + esc(r.agent || '?') + (addr ? ' &middot; ' + esc(addr) : '') + '</div></div>' +
+        reconChip(r) + '<div class="tdrowact">' + act + '</div></div>';
+    }).join('') || '<div class="note">Everything for today and tomorrow is confirmed &mdash; nice.</div>';
+    var n = el('td-recon-note'); if (n) n.textContent = rows.length ? rows.length + ' to chase' : '';
+  }
+  // sweep rows open the tour modal (chip links excluded) — mirrors hubTourListClick's shape
+  if (el('td-recon-sweep')) el('td-recon-sweep').addEventListener('click', function(e){
+    if (e.target.closest('a.tdact')) return;
+    var row = e.target.closest('[data-uri]'); if (!row) return; openTourDetail(row.getAttribute('data-uri'));
+  });
   // no FullCalendar (CDN blocked): compact upcoming list, personal-outreach actions intact
   function tdCalFallback(rows){
     var box = el('td-cal'); if (box) box.innerHTML = '';
@@ -9157,7 +9209,17 @@ window.addEventListener('error', function(e){
       ? '<div class="schoffers">' + items.slice(0, HUB_NEXT_CAP).map(function(x){ return x.html; }).join('') + '</div>'
       : '<div class="note" style="padding:14px">' + (loadedBoth ? 'Nothing urgent — you&rsquo;re clear.' : 'Loading&hellip;') + '</div>';
     var cnt = el('hub-next-count');
-    if (cnt) cnt.textContent = items.length ? (items.length + ' to act on' + (items.length > HUB_NEXT_CAP ? ' · showing ' + HUB_NEXT_CAP : '')) : '';
+    if (cnt){
+      // headline = the urgent tiers; the stale no-app long tail (202 rows live on day one)
+      // gets named separately so it can't drown the number that matters
+      var chase = 0;
+      items.forEach(function(x){ if (x.w === 6) chase++; });
+      var bits = [];
+      if (items.length - chase) bits.push((items.length - chase) + ' to act on');
+      if (chase) bits.push(chase + ' older chase' + (chase === 1 ? '' : 's'));
+      if (items.length > HUB_NEXT_CAP) bits.push('showing ' + HUB_NEXT_CAP);
+      cnt.textContent = bits.join(' · ');
+    }
     hubRenderNextChips(todayRows);
   }
   // A2 — count shortcuts. Tours today jumps to the tours card; the rest pre-filter the

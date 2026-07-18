@@ -359,16 +359,21 @@ window.addEventListener('error', function(e){
      cards in a row the same height even when one carries a sparkline. */
   .panel-kpis{display:grid;gap:14px;margin-bottom:16px;align-items:stretch}
   /* Ribbon: explicit tracks per width band — auto-fit orphans a 7th tile, so never use it here.
-     Wide = 8 tracks (gauge spans 2 → one balanced row); mid = 4 (gauge+2 / 4); narrow = 2.
-     Calm stat tiles: one-line label, number, ONE context sub, delta chip pinned to the bottom.
+     4 tracks at every desktop width (gauge spans 2 → gauge+2 / 4, two even rows); narrow = 2.
+     The old ≥1441 8-track "one balanced row" can never fit: .wrap caps the column at 1340px,
+     so 7 tiles shared ~1030px and every label ellipsis-clipped (needed ~184px, had ~103px).
+     Calm stat tiles: label, number, ONE context sub, delta chip pinned to the bottom.
      Sparklines hidden in the ribbon per Pearse 2026-07-03 — sparkSVG machinery stays intact. */
-  .ribbon{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;margin-top:4px}
+  .ribbon{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:4px}
   .ribbon .kspark{display:none}
   .ribbon .kpi{padding:14px 16px;min-width:0;overflow:hidden}
   .ribbon .kpi:not(.gauge){display:flex;flex-direction:column;align-items:flex-start;min-height:132px}
-  .ribbon .kpi .lbl{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.12em;margin-bottom:8px;font-size:.72rem}
+  /* Overflow policy (Pearse 2026-07-17): ribbon text WRAPS, never clips — a long label/sub
+     takes a second line and the tile grows (min-height is a floor, align-items:stretch
+     keeps rows even). No nowrap/ellipsis here or the labels vanish mid-word again. */
+  .ribbon .kpi .lbl{max-width:100%;white-space:normal;letter-spacing:.12em;margin-bottom:8px;font-size:.72rem}
   .ribbon .kpi .num{font-size:clamp(1.5rem,2vw,2.6rem)}
-  .ribbon .kpi .sub{max-width:100%;font-size:clamp(.66rem,.72vw,.85rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ribbon .kpi .sub{max-width:100%;font-size:clamp(.66rem,.72vw,.85rem);white-space:normal}
   .ribbon .kpi .sub ~ .sub{display:none}
   .ribbon .kpi:not(.gauge) .kx{margin-top:auto;width:100%;padding-top:8px}
   .ribbon .kdelta{font-size:.68rem;padding:3px 10px}
@@ -386,16 +391,11 @@ window.addEventListener('error', function(e){
     .ribbon .gaugewrap{width:92px;height:92px}
     .ribbon .gctr .num{font-size:1.45rem}
   }
-  @media(max-width:1440px){ .ribbon{grid-template-columns:repeat(4,minmax(0,1fr))} }
   @media(max-width:700px){
     .ribbon{grid-template-columns:repeat(2,minmax(0,1fr))}
-    /* A-07: at 2 columns each tile is ~170px, so nowrap+ellipsis truncated the label
-       ("SIGNED THIS MO…") and the subline ("73 neve…") — hiding the very number the tile
-       exists to show. These are short phrases, so let them wrap to a second line rather than
-       clip; min-height is a floor (not a cap), so a taller tile just grows. Tighter tracking
-       buys back a few characters too. */
-    .ribbon .kpi .lbl{white-space:normal;overflow:visible;text-overflow:clip;letter-spacing:.08em}
-    .ribbon .kpi .sub{white-space:normal;overflow:visible;text-overflow:clip}
+    /* A-07 heritage: wrap-not-clip is now the base rule; at 2 narrow columns the
+       tighter tracking still buys back a few characters per line. */
+    .ribbon .kpi .lbl{letter-spacing:.08em}
   }
   summary.panel-head{cursor:pointer;list-style:none;-webkit-user-select:none;user-select:none}
   summary.panel-head::-webkit-details-marker{display:none}
@@ -403,7 +403,15 @@ window.addEventListener('error', function(e){
   details.pnl:not([open]) > summary .ph-chev{transform:rotate(0deg)}
   .ph-count{margin-left:10px;font-size:.7rem;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .ph-count b{font-size:.82rem}
-  @media(max-width:700px){ .panel-head .ph-sub{display:none} }
+  @media(max-width:700px){
+    .panel-head{flex-wrap:wrap;row-gap:2px}
+    .panel-head .ph-sub{display:none}
+    /* Stat mirror drops to its own full line under the title (Pearse 2026-07-17) —
+       "$175,492 rent at risk/mo" was ellipsis-clipping mid-number on phones. order:6
+       puts it after the chevron; 40px indent aligns it with the title (30px icon + 10px gap). */
+    .ph-count{order:6;flex-basis:100%;margin-left:40px;white-space:normal;overflow:visible}
+    .panel-head .ph-chev{margin-left:auto}
+  }
   .schfunnel{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:0 0 14px}
   .schfunnel .sf-seg{flex:1;min-width:92px;background:var(--glass);border:1px solid var(--hairline);border-radius:12px;padding:8px 10px;text-align:center}
   .schfunnel .sfv{font-size:1.12rem;font-weight:700}
@@ -5807,7 +5815,7 @@ window.addEventListener('error', function(e){
     var upc = (v.upcoming_move_ins != null) ? v.upcoming_move_ins : v.pre_leased;
     countUp('k-pre', upc, fmtNum);
     var flips = Math.max(0, (upc || 0) - (v.pre_leased || 0));
-    el('k-pre-sub').innerHTML = fmtNum(v.pre_leased || 0) + ' pre-leased vacant' +
+    el('k-pre-sub').innerHTML = fmtNum(v.pre_leased || 0) + ' vacant' +
       (flips ? ' &middot; ' + fmtNum(flips) + ' flip' + (flips === 1 ? '' : 's') : '') + '<br>click for move-ins';
     countUp('k-risk', d.money && d.money.rent_at_risk, fmtMoney);
     countUp('k-unlisted', d.vacant_not_listed, fmtNum);

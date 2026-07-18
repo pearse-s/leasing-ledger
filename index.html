@@ -2148,7 +2148,7 @@ window.addEventListener('error', function(e){
             <th data-k="move_in_disp">Move-in</th>
             <th data-k="lease_to_date">Lease end</th>
             <th data-k="monthly_rent" class="rt">Rent</th>
-            <th data-k="total_balance" class="rt">Balance</th>
+            <th data-k="balance_disp" class="rt">Balance</th>
             <th data-k="tenant_names">Tenant</th>
             <th data-k="property_manager_name">Manager</th>
           </tr></thead>
@@ -5469,7 +5469,7 @@ window.addEventListener('error', function(e){
       move_in_disp:{ t:'date', label:'Move-in' },
       lease_to_date:{ t:'date', label:'Lease end' },
       monthly_rent:{ t:'num', label:'Rent', get:rentBasis },
-      total_balance:{ t:'num', label:'Balance' },
+      balance_disp:{ t:'num', label:'Balance' },
       is_listed:{ t:'enum', label:'Listed', disp:cf_yesno }
     }},
     atable: { rows:function(){ return appsAll || []; }, redraw:function(){ drawApps(); }, cols:{
@@ -6637,6 +6637,12 @@ window.addEventListener('error', function(e){
         unitsAll.forEach(function(u){
           u.move_in_disp = u.next_move_in_appt || ((u.lease_source === 'Active' || u.lease_source === 'Historic') ? u.lease_from_date : null) || null;
           u.move_in_src = u.next_move_in_appt ? 'appt' : (u.move_in_disp ? 'lease' : null);
+          // Balance blend: Active-lease total_balance (outstanding-balances mirror) wins;
+          // else a FUTURE lease's ledger_balance (amount due before move-in — the balances
+          // mirror has no future-lease rows). Row-flagging (r-bal) stays Active-only.
+          u.balance_disp = (u.total_balance || 0) > 0 ? u.total_balance
+            : (u.lease_source === 'Future' && (u.ledger_balance || 0) > 0.005 ? u.ledger_balance : null);
+          u.balance_src = (u.total_balance || 0) > 0 ? 'active' : (u.balance_disp != null ? 'pre' : null);
         });
         fillParkMS();
         fillAmenMS('u_amen', unitsAll, function(r){ return r.amenities; });
@@ -6764,7 +6770,8 @@ window.addEventListener('error', function(e){
         '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + ' <span class="qn">' + (r.move_in_src === 'appt' ? 'appt' : 'lease') + '</span>' : '–') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
-        '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>' : '–') + '</td>' +
+        '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>'
+          : (r.balance_src === 'pre' ? fmtMoney(r.balance_disp) + ' <span class="qn">pre</span>' : '–')) + '</td>' +
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
         '<td>' + esc(r.property_manager_name || '–') + '</td></tr>';
     });
@@ -6957,7 +6964,9 @@ window.addEventListener('error', function(e){
     f += fitem('Lease rent', r.monthly_rent != null ? fmtMoney(r.monthly_rent) : null);
     f += fitem('Deposit', r.security_deposit != null ? fmtMoney(r.security_deposit) : null);
     f += fitem('SD received', r.sd_paid != null ? fmtMoney(r.sd_paid) + (r.security_deposit ? ' of ' + fmtMoney(r.security_deposit) : '') : null);
-    f += fitem('Balance', (r.total_balance || 0) > 0 ? fmtMoney(r.total_balance) : '$0', (r.total_balance || 0) > 0);
+    f += fitem('Balance', (r.total_balance || 0) > 0 ? fmtMoney(r.total_balance)
+      : (r.balance_src === 'pre' ? fmtMoney(r.balance_disp) + ' <span class="qn">pre-lease</span>' : '$0'),
+      (r.total_balance || 0) > 0 || r.balance_src === 'pre');
     f += fitem('Listed rent', r.is_listed && r.listing_rent != null ? fmtMoney(r.listing_rent) : null);
     f += fitem('Days vacant', r.days_vacant != null ? r.days_vacant + 'd' : null);
     f += fitem('Available', esc(r.listing_available_date));

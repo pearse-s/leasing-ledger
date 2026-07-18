@@ -3632,6 +3632,7 @@ window.addEventListener('error', function(e){
           '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div></section>' +
         tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks') +
         tdPanel('td-mgr-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
+        tdPanel('td-mgr-aging', 'Aging vacancies &middot; 60d+', 'units', 'Open Units', true) +
         '<section class="panel tdq tdwide"><h3>Move appointments <span class="qn2" id="td-mgr-moves-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-moves"><div class="note">Loading&hellip;</div></div>' +
           '<div class="tdmore"><button type="button" class="tdact" id="td-mgr-moves-more" hidden>Show all</button><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
@@ -4150,7 +4151,28 @@ window.addEventListener('error', function(e){
     }).then(step);
   }
   function tdRenderMgr(m){
-    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderMoves(m); tdMgrRenderUnits(m);
+    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderAging(m); tdMgrRenderMoves(m); tdMgrRenderUnits(m);
+  }
+  // M1 — aging-vacancy watchlist: op-vacant 60d+ in scope, oldest first, with price context
+  // from rentBasis (listed rent, else the last lease rent — /units rows carry NO market_rent;
+  // that key exists only on tour rows, so no market comparison here). NOT-listed = the hot
+  // flag: aging AND unmarketed is the actionable combination.
+  function tdMgrRenderAging(m){
+    var box = el('td-mgr-aging'); if (!box) return;
+    if (m.units === null){ box.innerHTML = '<div class="note">Could not load units.</div>'; return; }
+    var rows = m.units.filter(function(u){ return u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60; })
+      .sort(function(a, b){ return (b.days_vacant || 0) - (a.days_vacant || 0); });
+    var h = '';
+    rows.slice(0, 10).forEach(function(u){
+      var label = (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '');
+      var rent = rentBasis(u);
+      var sub = 'vacant ' + (u.days_vacant || 0) + 'd' + (rent != null ? ' · ' + (u.is_listed ? 'listed ' : 'last rent ') + fmtMoney(rent) : '');
+      var flag = u.is_listed ? '<span class="chip c-warm">listed</span>' : '<span class="chip c-hot">NOT listed</span>';
+      h += '<div class="schoffer tdurow" data-uid="' + esc(String(u.unit_id)) + '" role="button" tabindex="0"><div class="schoffer-main"><b>' + esc(label) + '</b><div class="schoffer-sub">' + esc(sub) + '</div></div>' + flag + '</div>';
+    });
+    tdFill('td-mgr-aging', h, 0, 'No units vacant 60+ days in scope.');
+    var n = el('td-mgr-aging-n');
+    if (n) n.textContent = rows.length ? rows.length + ' aging' + (rows.length > 10 ? ' · showing 10' : '') : '';
   }
   function tdMgrRenderBrief(m){
     var box = el('td-mgr-brief'); if (!box) return;
@@ -4174,6 +4196,11 @@ window.addEventListener('error', function(e){
       if (nt) L.push({ k: 'units', t: nt + ' notice' + (nt === 1 ? '' : 's') + ' to vacate in play' });
       var mi = m.units.filter(function(u){ var d = tdMgrDays(u.future_move_in_date); return u.has_upcoming_move_in && d != null && d >= 0 && d <= 14; }).length;
       if (mi) L.push({ k: 'units', t: mi + ' move-in' + (mi === 1 ? '' : 's') + ' landing in the next two weeks' });
+      // M2 — balance watch: in-scope tenants with money owing, one line, drills to Units
+      // sorted by balance (the existing 'balance' flag + sort pathway)
+      var owed = 0, oweN = 0;
+      m.units.forEach(function(u){ var b = Number(u.total_balance) || 0; if (b > 0){ owed += b; oweN++; } });
+      if (oweN) L.push({ k: 'balance', t: oweN + (oweN === 1 ? ' tenant owes ' : ' tenants owe ') + fmtMoney(owed) });
     }
     if (m.stats && m.stats.vacancy){
       var v = m.stats.vacancy, ag = m.stats.aging || {};
@@ -4271,6 +4298,7 @@ window.addEventListener('error', function(e){
   }
   function tdMgrBriefGo(k){
     if (k === 'ledger'){ showTab('ledger'); return; }
+    if (k === 'balance'){ gotoUnitsFiltered('balance'); return; }   // M2: Units sorted by balance
     var id = k === 'tasks' ? 'td-mgr-tasks' : (k === 'renewals' ? 'td-mgr-ren' : 'td-mgr-units');
     var box = el(id); if (!box) return;
     var p = box.closest('section.panel') || box;

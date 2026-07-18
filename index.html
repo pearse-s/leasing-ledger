@@ -2066,6 +2066,8 @@ window.addEventListener('error', function(e){
       <div class="card" style="margin-top:18px">
         <div class="tablebar"><h2>Leasing overview</h2><span class="count-note" id="hub-team-note"></span></div>
         <div id="hub-team-health"></div>
+        <!-- D1 hygiene chips: per-agent unclaimed counts + a copyable nudge message -->
+        <div class="qchips" id="hub-team-hygiene" style="margin-top:10px"></div>
       </div>
       <div class="card tablecard" style="margin-top:18px">
         <div class="tablebar"><h2>By agent</h2><span class="count-note">signed &middot; pending &middot; conversion &middot; tour confirmations &middot; window applies</span></div>
@@ -9358,11 +9360,42 @@ window.addEventListener('error', function(e){
     var all = hubTeamSigned || [];
     var conf = all.filter(function(r){ return r.status === 'confirmed'; }).length;
     var orphan = all.filter(function(r){ return r.status !== 'confirmed' && (r.suggestion_basis === 'none' || !r.suggested_agent); }).length;
+    // D1 attribution hygiene: how stale is the suggest-then-confirm backlog?
+    // (counts and ages only — the no-commission-$ locked decision stands)
+    var now = Date.now(), over14 = 0, oldest = 0;
+    all.forEach(function(r){
+      if (r.status === 'confirmed') return;
+      var t = Date.parse(r.signed_date || ''); if (isNaN(t)) return;
+      var age = Math.floor((now - t) / 86400000);
+      if (age > 14) over14++;
+      if (age > oldest) oldest = age;
+    });
     box.innerHTML = hubTileHtml('Total signed', fmtNum(all.length)) +
       hubTileHtml('Confirmed', fmtNum(conf), 'agent-claimed') +
       hubTileHtml('Unconfirmed', fmtNum(all.length - conf), 'still suggested') +
+      hubTileHtml('Overdue', fmtNum(over14), 'suggested &gt; 14 days') +
+      hubTileHtml('Oldest', (all.length - conf) ? oldest + 'd' : '&ndash;', 'longest unclaimed') +
       hubTileHtml('No guess', fmtNum(orphan), 'needs a claim');
     var note = el('hub-team-note'); if (note) note.textContent = winFmt(state.from) + ' – ' + winFmt(state.to);
+    hubRenderHygiene(all);
+  }
+  // D1 — per-agent unclaimed chips with a one-tap COPYABLE nudge. Agent phone numbers are
+  // not in any payload this page loads (rc_agent_map is server-side), so the nudge copies
+  // to the clipboard for RingCentral/Slack instead of deep-linking a text.
+  function hubRenderHygiene(all){
+    var c = el('hub-team-hygiene'); if (!c) return;
+    var by = {};
+    (all || []).forEach(function(r){
+      if (r.status === 'confirmed' || !r.suggested_agent) return;
+      by[r.suggested_agent] = (by[r.suggested_agent] || 0) + 1;
+    });
+    var names = Object.keys(by).sort(function(a, b){ return by[b] - by[a]; });
+    c.innerHTML = names.map(function(nm){
+      var n = by[nm];
+      var first = nm.split(/\s+/)[0];
+      var msg = 'Hey ' + first + ' — ' + n + ' signed lease' + (n === 1 ? ' is' : 's are') + ' waiting for your confirm in the Ledger (Today → Signed leases → Mine). Quick tap when you get a sec!';
+      return '<button type="button" class="qchip" data-nudge="' + esc(msg) + '" title="Copy a nudge message for ' + esc(nm) + '">' + esc(nm) + ' <span class="qn">' + n + '</span> &middot; copy nudge</button>';
+    }).join('') || '';
   }
   function hubRenderTeamTable(){
     var t = el('hub-team-table'); if (!t) return; var tb = t.querySelector('tbody');
@@ -9581,6 +9614,14 @@ window.addEventListener('error', function(e){
   if (el('hub-team-leases')) el('hub-team-leases').querySelector('thead').addEventListener('click', function(e){
     var th = e.target.closest('th'); if (!th) return; var k = th.getAttribute('data-k'); if (!k) return;
     openCol('hub-team-leases', k, th);
+  });
+  // D1 nudge chips: copy the message (same UX as the schoffer-copy links)
+  if (el('hub-team-hygiene')) el('hub-team-hygiene').addEventListener('click', function(e){
+    var b = e.target.closest('[data-nudge]'); if (!b) return;
+    var v = b.getAttribute('data-nudge') || '', o = b.innerHTML;
+    var done = function(){ b.innerHTML = '&#10003; copied'; setTimeout(function(){ b.innerHTML = o; }, 1200); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done).catch(function(){ window.prompt('Copy nudge:', v); });
+    else window.prompt('Copy nudge:', v);
   });
   // The .tdurow delegate lives on #td-grid (Today), so the hub's matched move rows need their own.
   if (el('hub-team-moves')) el('hub-team-moves').addEventListener('click', function(e){

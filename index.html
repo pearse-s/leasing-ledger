@@ -1807,6 +1807,13 @@ window.addEventListener('error', function(e){
     #page-today .tdpulsec:hover{border-color:var(--clay)}
     #page-today .tdp-v{font-size:1.05rem;font-weight:800;color:var(--ink)}
     #page-today .tdp-l{font-size:.68rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em}
+    /* Option C trends block (under the pulse chips) */
+    #page-today .tdtrend-row{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:.85rem;color:var(--ink-soft);flex-wrap:wrap}
+    #page-today .tdtrend-row b{color:var(--ink)}
+    #page-today .tdtrend-h{margin-top:10px;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+    #page-today .tdtrend-li{font-size:.82rem;padding:3px 0;color:var(--ink)}
+    #page-today .tdtrend-li.tdurow{cursor:pointer}
+    #page-today .tdtrend-li.tdurow:hover{color:var(--clay)}
     </style>
     <div class="tdhead">
       <div>
@@ -3643,7 +3650,7 @@ window.addEventListener('error', function(e){
     if (role === 'manager'){
       tdSub('Manager — the brief first, then tasks, renewals and unit movement across your scope.');
       g.innerHTML = '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
-          '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div></section>' +
+          '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div><div id="td-mgr-trends"></div></section>' +
         tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks') +
         tdPanel('td-mgr-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
         tdPanel('td-mgr-aging', 'Aging vacancies &middot; 60d+', 'units', 'Open Units', true) +
@@ -4206,21 +4213,85 @@ window.addEventListener('error', function(e){
     }
   }
   function tdMgrAssemble(){
-    var m = { stats: null, tasks: null, renewals: null, units: null, moves: null }, done = 0, q = tdReq;
+    var m = { stats: null, tasks: null, renewals: null, units: null, moves: null, trends: null }, done = 0, q = tdReq;
     // mirror of the agent guard: a manager assembly that finishes after a flip to Agent must not
-    // paint (its targets are null-guarded today, but that is luck, not a contract)
-    var step = function(){ if (++done === 5 && q === tdReq) tdRenderMgr(m); };
+    // paint (its targets are null-guarded today, but that is luck, not a contract).
+    // Option C: ONE /manager-brief read replaces the three list fetches (server-scoped by the
+    // same ids appendScope sends); /stats stays separate so brief/pulse numbers can never
+    // diverge from the Ledger, and the GCal moves stay their own request (not in the RPC).
+    var step = function(){ if (++done === 3 && q === tdReq) tdRenderMgr(m); };
     authFetch('/stats?' + buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(){}).then(step);
-    authFetch('/tasks').then(function(j){ m.tasks = (j.tasks || []).filter(tdMgrScopePass).filter(tdMgrOpenTask); }).catch(function(){}).then(step);
-    var p = new URLSearchParams(); appendScope(p);
-    authFetch('/renewals?' + p.toString()).then(function(j){ m.renewals = (j.renewals || []).filter(function(r){ return r.renewal_state === 'Pending'; }); }).catch(function(){}).then(step);
-    authFetch('/units').then(function(j){ m.units = (j.units || []).filter(tdMgrScopePass); }).catch(function(){}).then(step);
     gcalMovesFetch().then(function(j){ m.moves = j; }).catch(function(e){
       if (String(e && e.message) !== 'AUTH') console.error('gcal moves (manager) failed', e);
     }).then(step);
+    var p = new URLSearchParams(); appendScope(p);
+    authFetch('/manager-brief?' + p.toString()).then(function(j){
+      m.tasks = (j.tasks || []).filter(tdMgrOpenTask);   // server pre-filters open; belt for parity
+      m.renewals = (j.renewals || []).filter(function(r){ return r.renewal_state === 'Pending'; });
+      m.units = j.units || [];
+      m.trends = j.trends || null;
+    }).catch(function(e){
+      // deploy-ordering / outage fallback: Option B's client assembly (delete a release later)
+      if (String(e && e.message) !== 'AUTH') console.error('manager-brief failed — legacy assembly', e);
+      return tdMgrAssembleLegacy(m);
+    }).then(step);
+  }
+  function tdMgrAssembleLegacy(m){
+    var p = new URLSearchParams(); appendScope(p);
+    return Promise.all([
+      authFetch('/tasks').then(function(j){ m.tasks = (j.tasks || []).filter(tdMgrScopePass).filter(tdMgrOpenTask); }).catch(function(){}),
+      authFetch('/renewals?' + p.toString()).then(function(j){ m.renewals = (j.renewals || []).filter(function(r){ return r.renewal_state === 'Pending'; }); }).catch(function(){}),
+      authFetch('/units').then(function(j){ m.units = (j.units || []).filter(tdMgrScopePass); }).catch(function(){})
+    ]);
   }
   function tdRenderMgr(m){
-    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderAging(m); tdMgrRenderMoves(m); tdMgrRenderUnits(m);
+    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderAging(m); tdMgrRenderMoves(m); tdMgrRenderUnits(m);
+  }
+  // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
+  // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff,
+  // days-on-market by property, rent-gap drill rows (tdurow → unit modal). Notices/evictions
+  // deltas are deliberately absent: no history table, current-only is stated, never faked.
+  function tdMgrRenderTrends(m){
+    var box = el('td-mgr-trends'); if (!box) return;
+    var t = m.trends;
+    if (!t){ box.innerHTML = ''; return; }   // legacy-fallback path = Option B behavior, no trends
+    var h = '';
+    var vs = t.vacancy_series || {}, pts = vs.points || [];
+    if (pts.length > 1){
+      var rates = pts.map(function(p2){ return Number(p2.op_rate_pct) || 0; });
+      var last = pts[pts.length - 1];
+      h += '<div class="tdtrend-row">' + sparkSVG(rates, '#E8B43E') +
+        '<span>Op rate <b>' + (last.op_rate_pct != null ? last.op_rate_pct + '%' : '–') + '</b> &middot; ' +
+        fmtNum(last.op_vacant) + ' vacant &middot; ' + pts.length + ' daily snapshots' +
+        (vs.scope === 'company' ? ' &middot; company-wide' : '') + '</span></div>';
+    }
+    var rt = t.retention;
+    if (rt && rt.scope_pct != null){
+      h += '<div class="tdtrend-row"><span>Retention 12 mo: <b>' + rt.scope_pct + '%</b> in scope' +
+        (rt.company_pct != null ? ' &middot; ' + rt.company_pct + '% company' : '') + '</span></div>';
+    }
+    var wd = t.week_diff;
+    if (wd){
+      h += '<div class="tdtrend-row"><span>Tasks this week: <b>' + fmtNum(wd.tasks_opened || 0) + '</b> opened &middot; <b>' +
+        fmtNum(wd.tasks_closed || 0) + '</b> closed</span></div>';
+    }
+    var dom = t.dom_by_property || [];
+    if (dom.length){
+      h += '<div class="tdtrend-h">Days on market &middot; listed vacants</div>';
+      dom.slice(0, 5).forEach(function(d2){
+        h += '<div class="tdtrend-li">' + esc(d2.property_name || '?') + ' &mdash; ' + fmtNum(d2.listed) + ' listed &middot; avg ' + fmtNum(d2.avg_days) + 'd &middot; max ' + fmtNum(d2.max_days) + 'd</div>';
+      });
+    }
+    var rg = t.rent_gap || [];
+    if (rg.length){
+      h += '<div class="tdtrend-h">Listed vs market rent &middot; gaps &ge;5%</div>';
+      rg.slice(0, 5).forEach(function(g2){
+        h += '<div class="tdtrend-li tdurow" data-uid="' + esc(String(g2.unit_id)) + '" role="button" tabindex="0">' +
+          esc((g2.property_name || '') + (g2.unit_number ? ' · ' + g2.unit_number : '')) + ' &mdash; listed ' + fmtMoney(g2.listing_rent) +
+          ' vs market ' + fmtMoney(g2.market_rent) + ' (' + (g2.gap_pct > 0 ? '+' : '') + g2.gap_pct + '%)</div>';
+      });
+    }
+    box.innerHTML = h;
   }
   // M1 — aging-vacancy watchlist: op-vacant 60d+ in scope, oldest first, with price context
   // from rentBasis (listed rent, else the last lease rent — /units rows carry NO market_rent;

@@ -1192,8 +1192,8 @@ window.addEventListener('error', function(e){
     .navitem.on::before{display:none}
     .navitem.on{box-shadow:inset 0 -2px 0 var(--clay)}
     /* the five tabs that live in the bottom bar are hidden inside the sheet's nav list
-       (Today/Hub/Units/Tours/Keys are in #mobnav; Apps now lives in the More sheet) */
-    .navitem[data-tab="today"],.navitem[data-tab="hub"],.navitem[data-tab="units"],.navitem[data-tab="tours"],.navitem[data-tab="keys"]{display:none}
+       (Today/Apps/Units/Tours/Keys are in #mobnav — Hub merged into Today 2026-07-17) */
+    .navitem[data-tab="today"],.navitem[data-tab="applications"],.navitem[data-tab="units"],.navitem[data-tab="tours"],.navitem[data-tab="keys"]{display:none}
     .sidefilters{padding-top:0}
     .sidefilters .fgroup{flex:none;width:100%}
     .g2,.g3{grid-template-columns:1fr}
@@ -1376,7 +1376,7 @@ window.addEventListener('error', function(e){
       <span class="navpill" aria-hidden="true"></span>
       <button type="button" class="navitem" data-tab="today"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><span>Today</span></button>
       <button type="button" class="navitem on" data-tab="ledger"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M9 9v11"/></svg><span>Ledger</span></button>
-      <button type="button" class="navitem" data-tab="hub"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8V3h-8zM3 21h8v-6H3z"/></svg><span>My hub</span></button>      <button type="button" class="navitem" data-tab="units"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg><span>Units</span></button>
+      <button type="button" class="navitem" data-tab="units"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg><span>Units</span></button>
       <button type="button" class="navitem" data-tab="applications"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg><span>Applications</span></button>
       <button type="button" class="navitem" data-tab="tours"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Tours</span></button>      <button type="button" class="navitem" data-tab="renewals"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg><span>Renewals</span></button>
       <button type="button" class="navitem" data-tab="owners"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Owners</span></button>
@@ -1817,6 +1817,7 @@ window.addEventListener('error', function(e){
         <button type="button" class="chip-mini" data-role="coordinator">Coordinator</button>
         <button type="button" class="chip-mini" data-role="agent">Agent</button>
         <button type="button" class="chip-mini" data-role="manager">Manager</button>
+        <button type="button" class="chip-mini adminonly" data-role="admin">Admin</button>
       </div>
     </div>
     <div id="td-coord" style="display:none">
@@ -1904,7 +1905,6 @@ window.addEventListener('error', function(e){
       </div>
     </div>
     <div class="tdgrid" id="td-grid"></div>
-  </div>
 
   <div id="page-hub" style="display:none">
     <style>
@@ -2056,7 +2056,8 @@ window.addEventListener('error', function(e){
 
     <div class="card hubmine" id="hub-rc" style="margin-top:18px"></div>
 
-    <!-- Admin-only Team overview (toggled by #hub-view → #page-hub.teamview). Aggregated client-side from /agent-scorecard + /signed-leases + /tours. -->
+    <!-- Admin-only Team overview — the Today ADMIN role (tdRender → tdHubView('team') → #page-hub.teamview;
+         the #hub-view toggle doubles as a role shortcut). Aggregated client-side from /agent-scorecard + /signed-leases + /tours. -->
     <div id="hub-team">
       <div class="card" style="margin-top:18px">
         <div class="tablebar"><h2>Leasing overview</h2><span class="count-note" id="hub-team-note"></span></div>
@@ -2090,6 +2091,7 @@ window.addEventListener('error', function(e){
         </div>
       </div>
     </div>
+  </div>
   </div>
 
   <div id="page-units" style="display:none">
@@ -2388,7 +2390,7 @@ window.addEventListener('error', function(e){
   </main>
   <nav class="mobnav" id="mobnav" aria-label="Primary navigation">
     <button type="button" class="mobnav-btn" data-tab="today"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><span>Today</span></button>
-    <button type="button" class="mobnav-btn" data-tab="hub"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8V3h-8zM3 21h8v-6H3z"/></svg><span>Hub</span></button>
+    <button type="button" class="mobnav-btn" data-tab="applications"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg><span>Apps</span></button>
     <button type="button" class="mobnav-btn" data-tab="units"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg><span>Units</span></button>
     <button type="button" class="mobnav-btn" data-tab="tours"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Tours</span></button>
     <button type="button" class="mobnav-btn" data-tab="keys"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 19 4m-3 0 3 3-2.5 2.5L14 7"/></svg><span>Keys</span></button>
@@ -3314,7 +3316,7 @@ window.addEventListener('error', function(e){
       setKpiExtra(el('kpi-outreach'), deltaChip(k.outreach, false) + sparkSVG(k.outreach.series, GOLD)); }
   }
   (function(){
-    var goHub = function(){ showTab('hub'); };
+    var goHub = function(){ tdHubHome(); };
     if (el('kpi-signed-mtd')) el('kpi-signed-mtd').addEventListener('click', goHub);
     if (el('kpi-outreach'))   el('kpi-outreach').addEventListener('click', goHub);
     if (el('kpi-needs'))      el('kpi-needs').addEventListener('click', goHub);
@@ -3323,7 +3325,7 @@ window.addEventListener('error', function(e){
   })();
 
   /* ── tabs ─────────────────────────────────── */
-  var PAGES = { today:'page-today', ledger:'app', hub:'page-hub', units:'page-units', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
+  var PAGES = { today:'page-today', ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
   var ACTIVE_TAB = 'ledger';   // which tab is showing; render() only reveals the Ledger (#app) when this is 'ledger'
   var statsLoaded = false;     // a /stats load has succeeded at least once (Ledger DOM is populated)
   var statsLoading = false;    // a /stats load is currently in flight
@@ -3346,7 +3348,6 @@ window.addEventListener('error', function(e){
     if (key === 'tours') { if (toursAll === null) loadTours(); else applyRView(); }
     if (key === 'renewals' && renewalsAll === null) loadRenewals();
     if (key === 'keys' && keysAll === null) loadKeys();
-    if (key === 'hub' && hubLoaded === null) loadHub();
     if (key === 'today' && todayLoaded === null) loadToday();
     if (key === 'tasks' && tasksAll === null) loadTasks();
     if (key === 'history' && historyAll === null) loadHistory();
@@ -3362,6 +3363,7 @@ window.addEventListener('error', function(e){
   function tabFromHash(){
     var h = (location.hash || '').replace(/^#/, '').toLowerCase();
     if (h === 'schedule') return 'today';   // legacy: the Schedule page now lives in Today (coordinator)
+    if (h === 'hub') return 'today';        // legacy: My hub merged into Today (agent/admin roles) 2026-07-17
     if (h === 'phones'){
       // legacy: the Phones tab is now a Ledger fold-out panel — open it once the Ledger shows
       setTimeout(function(){
@@ -3561,14 +3563,19 @@ window.addEventListener('error', function(e){
   var tdReq = 0;
   // First-visit role inference (Deploy 3): with no saved role, the sign-in name picks a
   // persona-appropriate Today default — the coordinator lands on the scheduling workspace,
-  // admins/managers on the brief, everyone else on the agent queues. Deliberately NOT written
-  // back to storage: tapping a role chip persists a real choice (data-role handler) and wins.
-  var TD_ROLE_INFER = { danai: 'coordinator', pearse: 'manager', connor: 'manager', sarah: 'manager' };
+  // attribution admins on the team overview, managers on the brief, everyone else on the
+  // agent queues. Deliberately NOT written back to storage: tapping a role chip persists a
+  // real choice (data-role handler) and wins. (Admin names per Pearse 2026-07-17.)
+  var TD_ROLE_INFER = { danai: 'coordinator', pearse: 'admin', levi: 'admin', connor: 'admin', jamey: 'admin', sarah: 'manager' };
   function tdRole(){
     var r = '';
     try { r = localStorage.getItem(TD_ROLE_KEY) || ''; } catch (e) {}
-    if (r === 'coordinator' || r === 'agent' || r === 'manager') return r;
-    return TD_ROLE_INFER[tdFt(getActor())] || 'agent';
+    if (!(r === 'coordinator' || r === 'agent' || r === 'manager' || r === 'admin'))
+      r = TD_ROLE_INFER[tdFt(getActor())] || 'agent';
+    // the admin view needs the admin token — CSS hides the chip, this gates the render;
+    // an admin-inferred person on the team password lands on the nearest persona (manager)
+    if (r === 'admin' && !IS_ADMIN) return 'manager';
+    return r;
   }
   function tdSyncRoles(){
     var box = el('td-roles'); if (!box) return;
@@ -3604,7 +3611,12 @@ window.addEventListener('error', function(e){
     // its listeners and mid-flow state must survive role flips.
     var co = el('td-coord'), isCo = role === 'coordinator';
     if (co) co.style.display = isCo ? 'block' : 'none';
-    g.style.display = isCo ? 'none' : '';
+    // the merged Hub block (#page-hub lives INSIDE Today since 2026-07-17, same
+    // toggle-never-rebuild contract as #td-coord — its listeners bind once at boot):
+    // agent role = my-view, admin role = team overview, hidden otherwise.
+    var ph = el('page-hub');
+    if (ph) ph.style.display = (role === 'agent' || role === 'admin') ? 'block' : 'none';
+    g.style.display = (isCo || role === 'admin') ? 'none' : '';
     if (isCo){
       g.innerHTML = '';
       tdSub("Coordinator — pick a prospect, agent and event type, then book right on the team calendar.");
@@ -3627,12 +3639,19 @@ window.addEventListener('error', function(e){
           '<div class="schoffers" id="td-mgr-units"><div class="note">Loading&hellip;</div></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>';
       tdMgrAssemble();
+    } else if (role === 'admin'){
+      g.innerHTML = '';
+      tdSub('Admin — team overview: credit signed leases, watch per-agent production and PM move calendars.');
+      tdHubView('team');
+      if (hubLoaded === null) loadHub();
+      loadHubTeam();
     } else {
-      tdSub("Agent — today's tours first, then follow-ups and the unclaimed signed pool.");
-      g.innerHTML = tdPanel('td-mytours', 'My tours today', 'tours', 'Open Tours', true) +
-                    tdPanel('td-fu', 'My follow-ups', 'hub', 'Open My hub') +
-                    tdPanel('td-sign', 'Signed pool &middot; needs claiming', 'hub', 'Review in My hub');
+      tdSub("Agent — today's tours first, then your follow-ups, signed leases and the team board.");
+      g.innerHTML = tdPanel('td-mytours', 'My tours today', 'tours', 'Open Tours', true);
       tdLoadAgent();
+      tdHubView('mine');
+      if (hubLoaded === null) loadHub();
+      else hubRenderTours();   // resize nudge — the FullCalendar may have been built while display:none
     }
   }
   // personal outreach text (coordinator voice) — NOT the confirm-chase; confirms stay the agent's job
@@ -3651,6 +3670,24 @@ window.addEventListener('error', function(e){
     var loaded = todayLoaded !== null;
     showTab('today');
     if (loaded){ tdSyncRoles(); tdRender(); }
+  }
+  // land on the merged Hub home (legacy #hub deep links + the Ledger KPI drill tiles):
+  // coordinator/manager roles flip to agent (hub intent); admins keep their team view.
+  function tdHubHome(){
+    var r = tdRole();
+    if (r === 'coordinator' || r === 'manager'){ try { localStorage.setItem(TD_ROLE_KEY, 'agent'); } catch (e) {} }
+    var loaded = todayLoaded !== null;
+    showTab('today');
+    if (loaded){ tdSyncRoles(); tdRender(); }
+  }
+  // flip the merged Hub block between my-view and team overview. The ROLE drives this
+  // (tdRender); the #hub-view toggle is a role shortcut that lands here via tdRender too —
+  // one seam so the chips, the .teamview class and the loaders can never disagree.
+  function tdHubView(v){
+    hubView = v;
+    var ph = el('page-hub'); if (ph) ph.classList.toggle('teamview', v === 'team');
+    var hv = el('hub-view');
+    if (hv) hv.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x.getAttribute('data-view') === v); });
   }
   function tdDayKeyEd(d){ return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Edmonton', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
   // post-tour thank-you + the unit's own Buildium application link (Pearse copy, friendlier pass 2026-07-03)
@@ -4027,43 +4064,9 @@ window.addEventListener('error', function(e){
       tdSub(me ? ('Agent — working as ' + me + '. Confirm tours, close the loop on applications.') : 'Agent — no showing activity matched to your name yet.');
       if (me) tdLoadMyTours(me);
       else tdFill('td-mytours', '', 0, 'No tours matched to your name yet.');
-      if (!me){ tdFill('td-fu', '', 0, 'No follow-ups yet.'); }
-      else {
-        authFetch('/agent-followups?agent=' + encodeURIComponent(me)).then(function(fj){
-          if (q !== tdReq) return;
-          var rows = fj.followups || [];
-          var BL = { unconfirmed_tour:'Confirm tour', toured_no_app:'No app yet', applied_pending:'App pending', approved_unsigned:'Approved &middot; unsigned' };
-          var h = '';
-          rows.slice(0, 8).forEach(function(r){
-            var addrRaw = (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : '');
-            var act = '';
-            if (r.phone){
-              if (r.bucket === 'unconfirmed_tour'){
-                var whenC = r.last_at ? new Date(Date.parse(r.last_at)).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
-                act = ' <a href="' + rcCall(esc(r.phone)) + '" class="tdact">&#128222;</a> <a href="' + rcText(esc(r.phone), reconMsg(r.tenant_name, addrRaw, whenC, me)) + '" class="tdact">&#128172; Confirm</a>';
-              } else {
-                act = ' <a href="' + rcCall(esc(r.phone)) + '" class="tdact">&#128222;</a> <a href="' + rcText(esc(r.phone)) + '" class="tdact">&#128172;</a>';
-              }
-            } else if (r.email){
-              act = ' <a href="mailto:' + esc(r.email) + '" class="tdact">&#9993;</a>';
-            }
-            h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.tenant_name || '?') + '</b>' + (addrRaw ? ' &middot; ' + esc(addrRaw) : '') +
-              '<div class="schoffer-sub">' + (BL[r.bucket] || esc(r.bucket || '')) + (r.days_since_contact != null ? ' &middot; last contact ' + (r.days_since_contact === 0 ? 'today' : r.days_since_contact + 'd ago') : '') + '</div></div>' + act + '</div>';
-          });
-          tdFill('td-fu', h, rows.length, 'No follow-ups waiting.');
-        }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH') tdFail('td-fu', 'follow-ups'); });
-      }
-      authFetch('/signed-leases?from=' + w.from + '&to=' + w.to + '&status=suggested').then(function(sj){
-        if (q !== tdReq) return;
-        var rows = sj.signed || [];
-        var h = '';
-        rows.slice(0, 8).forEach(function(r){
-          h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.tenant_name || '–') + '</b> &middot; ' + esc(r.property_name || '') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') +
-            '<div class="schoffer-sub">signed ' + esc((r.signed_date || '').slice(0, 10)) + (r.rent != null ? ' &middot; ' + fmtMoney(r.rent) : '') + (r.suggested_agent ? ' &middot; suggested: ' + esc(r.suggested_agent) : '') + '</div></div></div>';
-        });
-        tdFill('td-sign', h, rows.length, 'Nothing waiting to be claimed.');
-      }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH') tdFail('td-sign', 'signed leases'); });
-    }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH'){ tdFail('td-fu', 'the scorecard'); tdFail('td-sign', 'signed leases'); } });
+      // follow-ups + the signed pool render in the merged hub cards below (loadHub) —
+      // the old top-8 previews that deep-linked to the Hub tab are gone.
+    }).catch(function(e){ if (q === tdReq && String(e.message) !== 'AUTH') tdFail('td-mytours', 'your tours'); });
   }
   /* ── Manager Today (Option B) ──────────────────────────────────────────────
      ONE assembly seam: tdMgrAssemble() gathers stats/tasks/renewals/units with
@@ -8794,7 +8797,9 @@ window.addEventListener('error', function(e){
     // remembered (default agent) — dropping the coordinator on the agent queues. ?lead= already
     // forces coordinator via tdCoordinatorHome(); mirror that here so both deep links agree.
     var t = tabFromHash();
-    if ((location.hash || '').replace(/^#/, '').toLowerCase() === 'schedule') tdCoordinatorHome();
+    var h0 = (location.hash || '').replace(/^#/, '').toLowerCase();
+    if (h0 === 'schedule') tdCoordinatorHome();
+    else if (h0 === 'hub') tdHubHome();   // legacy My-hub bookmarks land on the merged Today view
     else showTab(t || 'today');
     // ?lead=<cardId> or ?lead_email=<email> → Schedule tab pre-filled
     if (pendingLeadCard) openLeadDeepLink('card_id=' + encodeURIComponent(pendingLeadCard));
@@ -9427,12 +9432,13 @@ window.addEventListener('error', function(e){
     var row = e.target.closest('[data-uri]'); if (!row) return; openTourDetail(row.getAttribute('data-uri'));
   });
   // Admin Team-overview switch + actions
+  // The toggle is a ROLE shortcut now (Team overview = the Admin role chip, My view = Agent):
+  // it funnels through tdRender/tdHubView so the Today chips, the .teamview class and the
+  // loaders can never disagree about what is on screen.
   if (el('hub-view')) el('hub-view').addEventListener('click', function(e){
     var b = e.target.closest('button[data-view]'); if (!b || !IS_ADMIN) return;
-    hubView = b.getAttribute('data-view');
-    el('hub-view').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
-    el('page-hub').classList.toggle('teamview', hubView === 'team');
-    if (hubView === 'team') loadHubTeam();
+    try { localStorage.setItem(TD_ROLE_KEY, b.getAttribute('data-view') === 'team' ? 'admin' : 'agent'); } catch (err) {}
+    tdSyncRoles(); tdRender();
   });
   if (el('hub-team-leases-chips')) el('hub-team-leases-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return; hubTeamLeasesFilter = b.getAttribute('data-f'); hubRenderTeamLeases();
@@ -9453,10 +9459,11 @@ window.addEventListener('error', function(e){
   if (el('hub-team-table')) el('hub-team-table').addEventListener('click', function(e){
     var tr = e.target.closest('tr[data-agent]'); if (!tr) return;
     hubAgent = tr.getAttribute('data-agent'); if (el('hub-agent')) el('hub-agent').value = hubAgent;
-    hubView = 'mine';
-    if (el('hub-view')) el('hub-view').querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x.getAttribute('data-view') === 'mine'); });
-    el('page-hub').classList.remove('teamview');
-    hubRenderFunnel(); hubRenderLeaderboard(); hubRenderTours(); loadHubAgent();
+    // drilling into an agent's hub IS the Agent role — flip the chip so Today's state and
+    // the screen never disagree (tdRender applies the view + the calendar resize nudge)
+    try { localStorage.setItem(TD_ROLE_KEY, 'agent'); } catch (err) {}
+    tdSyncRoles(); tdRender();
+    hubRenderFunnel(); hubRenderLeaderboard(); loadHubAgent();
   });
   if (el('hub-signed-chips')) el('hub-signed-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return; hubSignedFilter = b.getAttribute('data-f'); hubRenderSigned();

@@ -223,7 +223,9 @@ window.addEventListener('error', function(e){
   .msbtn{
     width:100%;text-align:left;font-family:var(--sans);font-size:.84rem;color:var(--ink);cursor:pointer;
     background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:7px 28px 7px 10px;position:relative;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    /* wrap-not-clip: a single-selection label (one long owner/property name) takes a
+       second line; the ::after chevron is 50%-centered so it stays put. */
+    white-space:normal;overflow-wrap:break-word;
     transition:border-color .15s ease,box-shadow .15s ease,background .2s ease;
   }
   .msbtn:hover{border-color:var(--clay);background:rgba(232,180,62,.06)}
@@ -484,7 +486,7 @@ window.addEventListener('error', function(e){
   .tile .ts{font-size:.64rem;color:var(--ink-soft);line-height:1.4;margin-top:2px}
 
   .funnel-row{display:grid;grid-template-columns:118px 1fr 34px;gap:10px;align-items:center;margin-bottom:9px}
-  .funnel-row .fl{font-size:.76rem;color:var(--ink-soft);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .funnel-row .fl{font-size:.76rem;color:var(--ink-soft);text-align:right;white-space:normal}
   .funnel-row .bar{height:15px;background:var(--paper-deep);border-radius:2px;overflow:hidden}
   .funnel-row .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--moss),var(--amber));border-radius:2px;min-width:2px;transition:width .6s ease,background .2s ease;box-shadow:0 0 10px rgba(157,190,134,.25)}
   .funnel-row.neg .bar i{background:linear-gradient(90deg,rgba(244,236,225,.24),rgba(244,236,225,.08));box-shadow:none}
@@ -502,7 +504,7 @@ window.addEventListener('error', function(e){
   .agents{margin-top:10px}
   .agrow{display:grid;grid-template-columns:minmax(0,1fr) 38px 38px 38px;gap:6px;align-items:center;padding:5px 2px;border-bottom:1px dotted var(--hairline);font-size:.78rem}
   .agrow:last-child{border-bottom:none}
-  .agrow .an{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .agrow .an{white-space:normal;overflow-wrap:break-word}
   .agrow .av{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
   .agrow .av.dim{color:var(--ink-soft);font-weight:400}
   .aghead{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--hairline-dark)}
@@ -902,7 +904,8 @@ window.addEventListener('error', function(e){
   .ndfile-dl{color:var(--clay);text-decoration:none;font-size:.86rem;font-weight:600}
   .ndfile-dl:hover{text-decoration:underline}
   .ndfile-l{min-width:0;display:flex;gap:8px;align-items:baseline}
-  .ndfile-prev{color:var(--clay);text-decoration:none;font-size:.86rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* filenames are one unbroken token — overflow-wrap so they break instead of overflowing */
+  .ndfile-prev{color:var(--clay);text-decoration:none;font-size:.86rem;font-weight:600;white-space:normal;overflow-wrap:anywhere}
   .ndfile-prev:hover{text-decoration:underline}
   .ndfile-dlmini{font-weight:700;opacity:.65;flex:none}
   .ndfile-m{font-size:.7rem;color:var(--ink-soft);white-space:nowrap}
@@ -998,6 +1001,10 @@ window.addEventListener('error', function(e){
   .fc-daygrid-event,.fc-daygrid-event .fc-event-main{overflow:hidden;min-width:0}
   /* flex wrapper so the ✕ stays put and the address ellipsis-clips inside the coloured block */
   .fc-ev-wrap{display:flex;align-items:baseline;gap:1px;width:100%;max-width:100%;overflow:hidden;line-height:1.18}
+  /* DELIBERATE ellipsis exception to the wrap-not-clip policy: calendar event blocks are
+     time-boxed by FullCalendar, so wrapped titles would spill over adjacent slots. The full
+     title is on the block's hover tooltip instead (fcTourEventContent sets wrap.title).
+     .fcloc has no current builder (legacy) — left as-is. */
   .fc-ev-t{flex:1 1 auto;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fcloc{font-size:.66rem;opacity:.92;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fc-list-event td{cursor:pointer}
@@ -1079,7 +1086,7 @@ window.addEventListener('error', function(e){
   .rmpro{display:flex;align-items:center;gap:11px;padding:11px 0;border-top:1px solid var(--hairline-dark);border-bottom:1px solid var(--hairline-dark);margin-bottom:6px}
   .rmav{width:40px;height:40px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.86rem;background:var(--clay-soft);color:var(--clay)}
   .rmpro-main{flex:1;min-width:0}
-  .rmpro-name{font-size:.95rem;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rmpro-name{font-size:.95rem;font-weight:700;color:var(--ink);white-space:normal;overflow-wrap:break-word}
   .rmpro-stat{font-size:.73rem;color:var(--ink-soft);margin-top:1px}
   .rmpro-stat .warn{color:#ff8a85;font-weight:700}
   .rmpro-stat .ok{color:#62c79a;font-weight:700}
@@ -7630,6 +7637,9 @@ window.addEventListener('error', function(e){
     rows.forEach(function(r){ if (r.renewal_state === 'Pending') pend++; else if (r.renewal_state === 'Signed') sign++; });
     el('k-renewals').textContent = pend;
     el('k-renewals-sub').innerHTML = fmtNum(sign) + ' signed &middot; ' + fmtNum(rows.length) + ' in cycle &middot; click to view';
+    // /renewals resolves on its own clock — often after the stats-render syncs at
+    // 80/1500ms — so the #phc-renew header mirror held "–" until the next poll.
+    syncPanelCounts();
   }
   function drawRnChips(){
     if (renewalsAll === null) return;
@@ -8029,6 +8039,9 @@ window.addEventListener('error', function(e){
       wrap.title = arg.event.extendedProps.busyAgent + ' · ' + (arg.event.title || 'Busy');
       var bt = wrap.querySelector('.fc-ev-t');
       if (bt && arg.event.extendedProps.busyColor){ bt.style.background = arg.event.extendedProps.busyColor; bt.style.padding = '0 4px'; bt.style.borderRadius = '4px'; }
+    } else if (arg.event.title){
+      // .fc-ev-t keeps ellipsis (time-boxed block) — the full title lives on hover
+      wrap.title = arg.event.title;
     }
     return { domNodes: [wrap] };
   }

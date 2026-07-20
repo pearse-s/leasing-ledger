@@ -5605,8 +5605,14 @@ window.addEventListener('error', function(e){
   // ── Facebook Marketplace panel (unit popup) ──────────────────────────────
   // Assign a leasing agent + save the Marketplace URL (/unit/fb-link), or email the agent
   // asking them to post/refresh the ad (/unit/fb-request → returns a mailto: we open).
-  // Roster = active tour_agents (they carry emails, resolved server-side); the currently
-  // assigned name is always kept as an option even if it isn't an active tour agent.
+  // Roster for the FB picker = active tour_agents (emails resolve server-side) + a fixed set of
+  // other posters (mostly PMs/staff, not tour agents) + any name already assigned on a unit (so
+  // shared custom names show for everyone once /units loads) + this browser's added customs
+  // (localStorage, the actorExtra() pattern) + the current value. Deduped case-insensitively.
+  // NOTE: only names present in tour_agents resolve to an email in /unit/fb-request (Sarah does);
+  // the rest degrade to a recipient-less mailto (Phase 1 — the coordinator fills the recipient in).
+  var FB_EXTRA = ['Ben', 'Cheryl', 'Jeannine', 'Kevin', 'Sarah'];
+  var FB_CUSTOM_KEY = 'ledger_fb_agents_v1';
   var fbAgents = null;   // cached active tour-agent display names
   var fbReq = 0;         // monotonic generation for the FB panel loader (A→B→A safe, not keyed on unit_id)
   function fbLoadAgents(cb){
@@ -5616,9 +5622,25 @@ window.addEventListener('error', function(e){
       cb();
     }).catch(function(e){ if (String(e && e.message) === 'AUTH') return; fbAgents = []; cb(); });
   }
+  function fbCustomNames(){ try { return JSON.parse(localStorage.getItem(FB_CUSTOM_KEY) || '[]') || []; } catch (e) { return []; } }
+  function fbAddCustom(nm){
+    nm = String(nm || '').trim(); if (!nm) return;
+    var list = fbCustomNames();
+    if (!list.some(function(n){ return String(n).toLowerCase() === nm.toLowerCase(); })){
+      list.push(nm); try { localStorage.setItem(FB_CUSTOM_KEY, JSON.stringify(list)); } catch (e) {}
+    }
+  }
+  function fbAssignedNames(){
+    var out = []; (unitsAll || []).forEach(function(u){ if (u.fb_agent) out.push(u.fb_agent); }); return out;
+  }
   function fbAgentRoster(cur){
-    var out = (fbAgents || []).slice();
-    if (cur && !out.some(function(n){ return String(n).toLowerCase() === String(cur).toLowerCase(); })) out.unshift(cur);
+    var seen = {}, out = [];
+    (fbAgents || []).concat(FB_EXTRA).concat(fbAssignedNames()).concat(fbCustomNames()).forEach(function(n){
+      n = String(n || '').trim(); var k = n.toLowerCase();
+      if (n && !seen[k]){ seen[k] = 1; out.push(n); }
+    });
+    out.sort(function(a, b){ return a.localeCompare(b); });
+    if (cur){ var ck = String(cur).toLowerCase(); if (!seen[ck]) out.unshift(cur); }
     return out;
   }
   function fbApply(r, fb){
@@ -5656,10 +5678,14 @@ window.addEventListener('error', function(e){
       status = '<span class="lmphnote">Not on Facebook Marketplace yet.</span>';
     }
     if (r.fb_requested_at) status += ' <span class="lmphnote">· asked ' + esc(fbAgo(r.fb_requested_at)) + '</span>';
-    var opts = '<option value="">— agent —</option>' +
-      fbAgentRoster(cur).map(function(n){
-        return '<option' + (String(n).toLowerCase() === String(cur).toLowerCase() ? ' selected' : '') + '>' + esc(n) + '</option>';
-      }).join('');
+    function fbOpts(sel){
+      return '<option value="">— agent —</option>' +
+        fbAgentRoster(sel).map(function(n){
+          return '<option' + (String(n).toLowerCase() === String(sel || '').toLowerCase() ? ' selected' : '') + '>' + esc(n) + '</option>';
+        }).join('') +
+        '<option value="__add__">+ add name…</option>';
+    }
+    var opts = fbOpts(cur);
     box.innerHTML =
       '<div style="margin-bottom:8px">' + status + '</div>' +
       '<div class="fb-controls">' +
@@ -5673,9 +5699,15 @@ window.addEventListener('error', function(e){
     var urlEl = box.querySelector('#fb-url-in');
     var hintEl = box.querySelector('#fb-hint');
     var emailBtn = box.querySelector('#fb-email');
-    function relabel(){ emailBtn.textContent = selEl.value ? ('Email ' + selEl.value + ' to post') : 'Email to post'; }
+    function relabel(){ var v = selEl.value; emailBtn.textContent = (v && v !== '__add__') ? ('Email ' + v + ' to post') : 'Email to post'; }
     relabel();
-    selEl.addEventListener('change', relabel);
+    selEl.addEventListener('change', function(){
+      if (selEl.value === '__add__'){
+        var nm = (prompt('Facebook agent name') || '').trim();
+        selEl.innerHTML = nm ? (fbAddCustom(nm), fbOpts(nm)) : fbOpts(cur);
+      }
+      relabel();
+    });
     box.querySelector('#fb-save').addEventListener('click', function(){
       var actor = getActor();
       if (!actor){ hintEl.textContent = 'Pick your name first (on the sign-in screen).'; return; }

@@ -1460,6 +1460,7 @@ window.addEventListener('error', function(e){
     </div>
     <div class="sidefoot">
       <div id="authblk"></div>
+      <button type="button" class="syncbtn adminonly" id="teambtn">&#128101; Team</button>
       <div class="sync" id="syncbadge"><span class="dot"></span><span id="synctext">Connecting&hellip;</span></div>
       <button type="button" class="syncbtn" id="syncbtn">&#8635; Sync now</button>
       <button type="button" class="signout" id="signout">sign out</button>
@@ -2735,6 +2736,31 @@ window.addEventListener('error', function(e){
     <div class="lmbody">
       <div class="lm-feedchips" id="mi-chips"></div>
       <div id="mi-list"><span class="count-note">Loading&hellip;</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="lmodal" id="team-modal">
+  <div class="lmback" data-close="team-modal"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="team-modal">&times;</button>
+    <div class="lmhead">
+      <h3>Team</h3>
+      <div class="lmsub">Who can sign in, and their role. Adding a person here creates their account &mdash; they sign in with a magic link to their work email.</div>
+    </div>
+    <div class="lmbody">
+      <div id="tm-add" style="margin-bottom:14px">
+        <b style="font-size:13px">Add a person</b>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+          <input type="text" id="tm-name" placeholder="Full name" autocomplete="off" style="flex:1 1 150px;min-height:40px">
+          <input type="email" id="tm-email" placeholder="work email" autocomplete="off" style="flex:1 1 190px;min-height:40px">
+          <select id="tm-role" style="min-height:40px"><option value="agent">agent</option><option value="manager">manager</option><option value="coordinator">coordinator</option><option value="admin">admin</option></select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px"><input type="checkbox" id="tm-invite" checked> email them an invite</label>
+          <button type="button" class="syncbtn" id="tm-create" style="width:auto;min-height:40px">Add</button>
+        </div>
+        <div id="tm-add-note" class="count-note"></div>
+      </div>
+      <div id="tm-list"><span class="count-note">Loading&hellip;</span></div>
     </div>
   </div>
 </div>
@@ -4755,21 +4781,134 @@ window.addEventListener('error', function(e){
       if (st) st.textContent = 'Verifying…';
       SB.auth.verifyOtp({ email: em, token: code, type: 'email' }).then(function(r){
         if (r && r.error){ if (st) st.textContent = 'Code didn’t verify: ' + r.error.message; return; }
-        if (st) st.textContent = '';
+        if (st) st.textContent = 'Signed in ✓ — loading your name…';   // immediate feedback; the chip replaces this when hello returns
         authHello();
       });
     });
   }
   // Session events: magic-link landing fires SIGNED_IN (pre- or post-password);
   // hello only runs once the password gate has been passed (TOKEN set).
+  // ⚠ supabase-js holds its auth lock while dispatching this callback — calling
+  // getSession() (inside authHello → sbJwt) synchronously here can DEADLOCK, and the
+  // chip never flips to "Signed in as …" even though the session stored fine. Defer
+  // out of the lock (setTimeout 0), per the supabase-js docs.
   if (SB) {
     try {
       SB.auth.onAuthStateChange(function(ev){
-        if (ev === 'SIGNED_IN' && TOKEN) authHello();
-        if (ev === 'SIGNED_OUT'){ authIdent = null; renderAuthBlk(); }
+        setTimeout(function(){
+          if (ev === 'SIGNED_IN' && TOKEN) authHello();
+          if (ev === 'SIGNED_OUT'){ authIdent = null; renderAuthBlk(); }
+        }, 0);
       });
     } catch (e) {}
   }
+
+  /* ── Admin Team panel (WS-U M3) ─────────────────────────────────────── */
+  // Renders /users into the team-modal; role edits + deactivate + create go through
+  // the ADMIN_ROUTES (/user/*) — server enforces admin token + last-active-admin guard.
+  var tmGen = 0;
+  function tmFmtSeen(iso){
+    if (!iso) return 'never';
+    var d = new Date(iso); if (isNaN(d.getTime())) return 'never';
+    var mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    if (mins < 1440) return Math.round(mins / 60) + 'h ago';
+    if (mins < 43200) return Math.round(mins / 1440) + 'd ago';
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' });
+  }
+  function tmActor(){
+    var a = getActor();
+    return a || 'Admin (unnamed)';
+  }
+  function tmLoad(){
+    var gen = ++tmGen;
+    var box = el('tm-list');
+    if (box) box.innerHTML = '<span class="count-note">Loading&hellip;</span>';
+    authFetch('/users').then(function(j){
+      if (gen !== tmGen) return;
+      tmRender((j && j.users) || []);
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('team list failed', e);
+      if (gen === tmGen && box) box.innerHTML = '<span class="count-note">Could not load the team list &mdash; ' + esc(String(e && e.message || 'error')) + '</span>';
+    });
+  }
+  function tmRender(users){
+    var box = el('tm-list');
+    if (!box) return;
+    if (!users.length){ box.innerHTML = '<span class="count-note">No team members yet.</span>'; return; }
+    var h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>' +
+      '<th style="text-align:left;padding:6px 8px">Person</th>' +
+      '<th style="text-align:left;padding:6px 8px">Role</th>' +
+      '<th style="text-align:left;padding:6px 8px">Last seen</th>' +
+      '<th style="text-align:left;padding:6px 8px"></th></tr></thead><tbody>';
+    users.forEach(function(u){
+      var em = String(u.email || '');
+      h += '<tr data-tm-email="' + esc(em) + '"' + (u.active ? '' : ' style="opacity:.45"') + '>' +
+        '<td style="padding:6px 8px;vertical-align:top"><b>' + esc(u.display_name || '') + '</b><br>' +
+          '<span style="color:var(--ink-soft);word-break:break-all">' + esc(em) + '</span>' +
+          (u.agent_name ? '<br><span style="color:var(--ink-soft)">agent name: ' + esc(u.agent_name) + '</span>' : '') + '</td>' +
+        '<td style="padding:6px 8px;vertical-align:top"><select data-tm-role style="min-height:40px"' + (u.active ? '' : ' disabled') + '>' +
+          ['agent','manager','coordinator','admin'].map(function(r){
+            return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + r + '</option>';
+          }).join('') + '</select></td>' +
+        '<td style="padding:6px 8px;vertical-align:top;white-space:normal">' + esc(tmFmtSeen(u.last_seen)) + '</td>' +
+        '<td style="padding:6px 8px;vertical-align:top;text-align:right">' +
+          '<button type="button" class="syncbtn" data-tm-active="' + (u.active ? '0' : '1') + '" style="width:auto;min-height:40px">' + (u.active ? 'Deactivate' : 'Reactivate') + '</button></td>' +
+        '</tr>';
+    });
+    h += '</tbody></table>';
+    box.innerHTML = h;
+  }
+  function tmUpdate(email, patch, rowNoteEl){
+    patch.email = email; patch.actor = tmActor();
+    postJSON('/user/update', patch).then(function(){ tmLoad(); }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('team update failed', e);
+      var note = el('tm-add-note');
+      if (note) note.textContent = 'Update failed: ' + String(e && e.message || 'error');
+    });
+  }
+  (function(){
+    var btn = el('teambtn');
+    if (btn) btn.addEventListener('click', function(){ openModal('team-modal'); tmLoad(); });
+    var list = el('tm-list');
+    if (list) {
+      list.addEventListener('change', function(ev){
+        var sel = ev.target.closest('[data-tm-role]'); if (!sel) return;
+        var row = ev.target.closest('[data-tm-email]'); if (!row) return;
+        tmUpdate(row.getAttribute('data-tm-email'), { role: sel.value });
+      });
+      list.addEventListener('click', function(ev){
+        var b = ev.target.closest('[data-tm-active]'); if (!b) return;
+        var row = ev.target.closest('[data-tm-email]'); if (!row) return;
+        tmUpdate(row.getAttribute('data-tm-email'), { active: b.getAttribute('data-tm-active') === '1' });
+      });
+    }
+    var create = el('tm-create');
+    if (create) create.addEventListener('click', function(){
+      var name = (el('tm-name') && el('tm-name').value || '').trim();
+      var email = (el('tm-email') && el('tm-email').value || '').trim().toLowerCase();
+      var role = (el('tm-role') && el('tm-role').value) || 'agent';
+      var invite = !!(el('tm-invite') && el('tm-invite').checked);
+      var note = el('tm-add-note');
+      if (!name || email.indexOf('@') < 1){ if (note) note.textContent = 'Name and a work email are both needed.'; return; }
+      if (note) note.textContent = 'Adding…';
+      postJSON('/user/create', { display_name: name, email: email, role: role, send_invite: invite, actor: tmActor() })
+        .then(function(j){
+          if (note) note.textContent = j && j.invite_error ? ('Added — but the invite email failed: ' + j.invite_error) : ('Added' + (invite ? ' — invite emailed.' : '.'));
+          if (el('tm-name')) el('tm-name').value = '';
+          if (el('tm-email')) el('tm-email').value = '';
+          tmLoad();
+        })
+        .catch(function(e){
+          if (String(e && e.message) === 'AUTH') return;
+          console.error('team create failed', e);
+          if (note) note.textContent = 'Could not add: ' + String(e && e.message || 'error');
+        });
+    });
+  })();
 
   /* keys directory */
   var K_CHIPS = [['all','All'],['out','Out'],['overdue','Overdue'],['missing','Missing'],['available','Available'],['in_office','In office']];

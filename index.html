@@ -1460,7 +1460,6 @@ window.addEventListener('error', function(e){
     </div>
     <div class="sidefoot">
       <div id="authblk"></div>
-      <button type="button" class="syncbtn adminonly" id="teambtn">&#128101; Team</button>
       <div class="sync" id="syncbadge"><span class="dot"></span><span id="synctext">Connecting&hellip;</span></div>
       <button type="button" class="syncbtn" id="syncbtn">&#8635; Sync now</button>
       <button type="button" class="signout" id="signout">sign out</button>
@@ -2131,6 +2130,24 @@ window.addEventListener('error', function(e){
           </tr></thead><tbody></tbody></table>
         </div>
       </div>
+      <!-- WS-U M3 (moved here from the sidebar modal per Pearse 2026-07-20): team roster +
+           sign-in management lives ON the admin Today view. Ids tm-* kept — the module's
+           listeners bind to these exact ids. .adminonly hides it from password-tier users. -->
+      <div class="card adminonly" style="margin-top:18px" id="hub-team-roster">
+        <div class="tablebar"><h2>Team &amp; sign-ins</h2><span class="count-note">who can sign in &middot; adding a person creates their account (magic-link email) &middot; livefurnished.ca and liogroup.ca are the same inbox</span></div>
+        <div id="tm-add" style="margin:10px 0 14px">
+          <b style="font-size:13px">Add a person</b>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+            <input type="text" id="tm-name" placeholder="Full name" autocomplete="off" style="flex:1 1 150px;min-height:40px">
+            <input type="email" id="tm-email" placeholder="work email" autocomplete="off" style="flex:1 1 190px;min-height:40px">
+            <select id="tm-role" style="min-height:40px"><option value="agent">agent</option><option value="manager">manager</option><option value="coordinator">coordinator</option><option value="admin">admin</option></select>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px"><input type="checkbox" id="tm-invite" checked> email them an invite</label>
+            <button type="button" class="syncbtn" id="tm-create" style="width:auto;min-height:40px">Add</button>
+          </div>
+          <div id="tm-add-note" class="count-note"></div>
+        </div>
+        <div id="tm-list"><span class="count-note">Loading&hellip;</span></div>
+      </div>
     </div>
   </div>
   </div>
@@ -2736,31 +2753,6 @@ window.addEventListener('error', function(e){
     <div class="lmbody">
       <div class="lm-feedchips" id="mi-chips"></div>
       <div id="mi-list"><span class="count-note">Loading&hellip;</span></div>
-    </div>
-  </div>
-</div>
-
-<div class="lmodal" id="team-modal">
-  <div class="lmback" data-close="team-modal"></div>
-  <div class="lmcard">
-    <button type="button" class="lmclose" data-close="team-modal">&times;</button>
-    <div class="lmhead">
-      <h3>Team</h3>
-      <div class="lmsub">Who can sign in, and their role. Adding a person here creates their account &mdash; they sign in with a magic link to their work email.</div>
-    </div>
-    <div class="lmbody">
-      <div id="tm-add" style="margin-bottom:14px">
-        <b style="font-size:13px">Add a person</b>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
-          <input type="text" id="tm-name" placeholder="Full name" autocomplete="off" style="flex:1 1 150px;min-height:40px">
-          <input type="email" id="tm-email" placeholder="work email" autocomplete="off" style="flex:1 1 190px;min-height:40px">
-          <select id="tm-role" style="min-height:40px"><option value="agent">agent</option><option value="manager">manager</option><option value="coordinator">coordinator</option><option value="admin">admin</option></select>
-          <label style="display:flex;align-items:center;gap:5px;font-size:12px"><input type="checkbox" id="tm-invite" checked> email them an invite</label>
-          <button type="button" class="syncbtn" id="tm-create" style="width:auto;min-height:40px">Add</button>
-        </div>
-        <div id="tm-add-note" class="count-note"></div>
-      </div>
-      <div id="tm-list"><span class="count-note">Loading&hellip;</span></div>
     </div>
   </div>
 </div>
@@ -3783,6 +3775,7 @@ window.addEventListener('error', function(e){
       tdHubView('team');
       if (hubLoaded === null) loadHub();
       loadHubTeam();
+      tmLoad();   // WS-U M3: the Team & sign-ins roster card lives on this view
     } else {
       tdSub("Agent — today's tours first (in My tours), then follow-ups, signed leases and the team board.");
       g.innerHTML = '';
@@ -4714,8 +4707,17 @@ window.addEventListener('error', function(e){
           authIdent = null;
           if (j && j.code === 'NOT_ON_TEAM'){
             try { SB.auth.signOut(); } catch (e) {}
+            // LOUD on purpose — Cheryl hit this silently on 2026-07-20 (signed in with an
+            // address that wasn't her roster row) and it read as "sign-in broken".
             var blk = el('authblk');
-            if (blk) blk.innerHTML = '<div style="font-size:11.5px;color:var(--ink-soft);padding:4px 0">That email isn&rsquo;t on the team list &mdash; ask an admin to add you.</div>';
+            if (blk) blk.innerHTML =
+              '<div style="font-size:12px;line-height:1.5;padding:8px;border:1px solid #c0392b;border-radius:8px;margin:4px 0;color:#c0392b;background:rgba(192,57,43,.06)">' +
+              '<b>' + esc(j.email || 'That email') + ' isn&rsquo;t on the team list.</b><br>' +
+              'An admin needs to add you first (Today &rarr; Team &amp; sign-ins), then sign in again. ' +
+              'livefurnished.ca and liogroup.ca addresses both work once you&rsquo;re added.' +
+              '<div style="margin-top:6px"><a href="#" id="auth-retry" style="text-decoration:underline;color:inherit">Try a different email</a></div></div>';
+            var rt = el('auth-retry');
+            if (rt) rt.addEventListener('click', function(ev){ ev.preventDefault(); renderAuthBlk(); });
             return;
           }
         }
@@ -4804,7 +4806,8 @@ window.addEventListener('error', function(e){
   }
 
   /* ── Admin Team panel (WS-U M3) ─────────────────────────────────────── */
-  // Renders /users into the team-modal; role edits + deactivate + create go through
+  // Renders /users into the Team &amp; sign-ins card on the admin Today view (tm-* ids
+  // moved there from the retired sidebar modal, 2026-07-20); edits + create go through
   // the ADMIN_ROUTES (/user/*) — server enforces admin token + last-active-admin guard.
   var tmGen = 0;
   function tmFmtSeen(iso){
@@ -4871,8 +4874,6 @@ window.addEventListener('error', function(e){
     });
   }
   (function(){
-    var btn = el('teambtn');
-    if (btn) btn.addEventListener('click', function(){ openModal('team-modal'); tmLoad(); });
     var list = el('tm-list');
     if (list) {
       list.addEventListener('change', function(ev){

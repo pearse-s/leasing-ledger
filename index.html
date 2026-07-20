@@ -42,6 +42,7 @@ window.addEventListener('error', function(e){
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vanilla-tilt@1.8.1/dist/vanilla-tilt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
   :root{
     /* dark warm-glass surfaces */
@@ -1458,6 +1459,7 @@ window.addEventListener('error', function(e){
       </div>
     </div>
     <div class="sidefoot">
+      <div id="authblk"></div>
       <div class="sync" id="syncbadge"><span class="dot"></span><span id="synctext">Connecting&hellip;</span></div>
       <button type="button" class="syncbtn" id="syncbtn">&#8635; Sync now</button>
       <button type="button" class="signout" id="signout">sign out</button>
@@ -3255,19 +3257,26 @@ window.addEventListener('error', function(e){
       return (x < y ? -1 : x > y ? 1 : 0) * dir;
     };
   }
+  // Both wrappers attach X-User-JWT when an email session exists (WS-U identity).
+  // sbJwt is declared later in this IIFE (function hoisting makes it callable here);
+  // it resolves '' instantly when the auth module is off, so the password-only path
+  // costs nothing extra.
   function authFetch(path){
-    return fetch(API + path, { headers: { 'Authorization': 'Bearer ' + TOKEN } })
-      .then(function(r){
+    return sbJwt().then(function(jwt){
+      var h = { 'Authorization': 'Bearer ' + TOKEN };
+      if (jwt) h['X-User-JWT'] = jwt;
+      return fetch(API + path, { headers: h });
+    }).then(function(r){
         if (r.status === 401) { onAuthFail(); throw new Error('AUTH'); }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
       });
   }
   function postJSON(path, body){
-    return fetch(API + path, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+    return sbJwt().then(function(jwt){
+      var h = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
+      if (jwt) h['X-User-JWT'] = jwt;
+      return fetch(API + path, { method: 'POST', headers: h, body: JSON.stringify(body) });
     }).then(function(r){
       if (r.status === 401) { onAuthFail(); throw new Error('AUTH'); }
       return r.json().then(function(j){
@@ -4612,6 +4621,10 @@ window.addEventListener('error', function(e){
     return out;
   }
   function getActor(){
+    // WS-U: a verified email sign-in beats the self-asserted picker. authIdent is a
+    // var in this shared IIFE scope (declared below, hoisted) — undefined until the
+    // auth module initializes, so the picker path is the natural fallback.
+    if (authIdent && authIdent.display_name) return authIdent.display_name;
     var v = el('actorsel');
     if (v && v.value && v.value !== '__add__') return v.value;
     try { return localStorage.getItem(ACT_KEY) || ''; } catch (e) { return ''; }
@@ -4635,6 +4648,127 @@ window.addEventListener('error', function(e){
       }
       try { localStorage.setItem(ACT_KEY, this.value); } catch (e) {}
     });
+  }
+
+  /* ── WS-U identity (Phase A: optional email sign-in) ─────────────────── */
+  // supabase-js UMD ships a global named "supabase" (loaded in <head> like the
+  // other vendors). EVERYTHING here is null-guarded: CDN failure or AUTH_ON=false means
+  // the page behaves exactly as before (picker-only) — no boot-path dependency.
+  // Session lives in localStorage ledger_sbauth_v1; sign-in is once per device.
+  var AUTH_ON = true;   // kill switch: false + redeploy = module inert, picker-only
+  var SB = null;
+  if (AUTH_ON && typeof supabase !== 'undefined' && supabase.createClient) {
+    try {
+      SB = supabase.createClient('https://yplsskzukmnvdnkzlygt.supabase.co',
+        'sb_publishable_hZwchKfWmHkmwQnEcRbSMQ_iroWbwxr',   // publishable key — public by design
+        { auth: { storageKey: 'ledger_sbauth_v1', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+    } catch (e) { SB = null; }
+  }
+  var authIdent = null, authGen = 0;
+  // Current access token, '' when signed out. getSession() transparently refreshes
+  // an expired token (the plan's "proactive refresh before writes").
+  function sbJwt(){
+    if (!SB) return Promise.resolve('');
+    return SB.auth.getSession().then(function(r){
+      return (r && r.data && r.data.session) ? (r.data.session.access_token || '') : '';
+    }).catch(function(){ return ''; });
+  }
+  // Ask the server who this session is (also logs the login). Generation-guarded:
+  // a sign-out or newer hello superseding this one must win the render.
+  function authHello(){
+    if (!SB || !TOKEN) return;
+    var gen = ++authGen;
+    sbJwt().then(function(jwt){
+      if (!jwt){ if (gen === authGen){ authIdent = null; renderAuthBlk(); } return; }
+      return postJSON('/user/hello', {}).then(function(j){
+        if (gen !== authGen) return;
+        if (j && j.ok){
+          authIdent = { email: j.email, display_name: j.display_name, role: j.role, agent_name: j.agent_name || null };
+        } else {
+          authIdent = null;
+          if (j && j.code === 'NOT_ON_TEAM'){
+            try { SB.auth.signOut(); } catch (e) {}
+            var blk = el('authblk');
+            if (blk) blk.innerHTML = '<div style="font-size:11.5px;color:var(--ink-soft);padding:4px 0">That email isn&rsquo;t on the team list &mdash; ask an admin to add you.</div>';
+            return;
+          }
+        }
+        renderAuthBlk();
+      });
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('authHello failed', e);
+    });
+  }
+  function renderAuthBlk(){
+    var blk = el('authblk');
+    if (!blk) return;
+    if (!SB){ blk.innerHTML = ''; return; }
+    if (authIdent){
+      blk.innerHTML =
+        '<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0 6px">' +
+        '<span style="color:var(--ink-soft)">&#10003; Signed in as</span> <b>' + esc(authIdent.display_name) + '</b>' +
+        '<a href="#" id="auth-switch" style="margin-left:auto;font-size:11px;color:var(--ink-soft);text-decoration:underline">switch</a></div>';
+      var sw = el('auth-switch');
+      if (sw) sw.addEventListener('click', function(ev){
+        ev.preventDefault();
+        authGen++; authIdent = null;
+        try { SB.auth.signOut(); } catch (e) {}
+        renderAuthBlk();
+      });
+      return;
+    }
+    blk.innerHTML =
+      '<div style="padding:2px 0 6px"><a href="#" id="auth-open" style="font-size:12px;text-decoration:underline">Sign in as you &rarr;</a>' +
+      '<div id="auth-card" style="display:none;padding-top:6px">' +
+      '<input type="email" id="auth-email" placeholder="you@livefurnished.ca" autocomplete="email" style="width:100%;font-size:12px;padding:6px 8px;margin-bottom:4px">' +
+      '<button type="button" id="auth-send" class="syncbtn" style="width:100%">Email me a sign-in link</button>' +
+      '<div id="auth-code-row" style="display:none;padding-top:4px">' +
+      '<input type="text" id="auth-code" inputmode="numeric" placeholder="6-digit code from the email" style="width:100%;font-size:12px;padding:6px 8px;margin-bottom:4px">' +
+      '<button type="button" id="auth-verify" class="syncbtn" style="width:100%">Verify code</button></div>' +
+      '<div id="auth-status" style="font-size:11.5px;color:var(--ink-soft);padding-top:4px"></div>' +
+      '</div></div>';
+    var open = el('auth-open');
+    if (open) open.addEventListener('click', function(ev){
+      ev.preventDefault();
+      var c = el('auth-card');
+      if (c) c.style.display = (c.style.display === 'none' ? 'block' : 'none');
+    });
+    var send = el('auth-send');
+    if (send) send.addEventListener('click', function(){
+      var em = (el('auth-email') && el('auth-email').value || '').trim().toLowerCase();
+      var st = el('auth-status');
+      if (!em || em.indexOf('@') < 1){ if (st) st.textContent = 'Enter your work email first.'; return; }
+      if (st) st.textContent = 'Sending…';
+      SB.auth.signInWithOtp({ email: em, options: { emailRedirectTo: 'https://pearse-s.github.io/leasing-ledger/' } })
+        .then(function(r){
+          if (st) st.textContent = r && r.error ? ('Could not send: ' + r.error.message) : 'Sent — tap the link in the email, or enter the 6-digit code here.';
+          if (!(r && r.error)){ var cr = el('auth-code-row'); if (cr) cr.style.display = 'block'; }
+        });
+    });
+    var ver = el('auth-verify');
+    if (ver) ver.addEventListener('click', function(){
+      var em = (el('auth-email') && el('auth-email').value || '').trim().toLowerCase();
+      var code = (el('auth-code') && el('auth-code').value || '').trim();
+      var st = el('auth-status');
+      if (!em || !code){ if (st) st.textContent = 'Email and code both needed.'; return; }
+      if (st) st.textContent = 'Verifying…';
+      SB.auth.verifyOtp({ email: em, token: code, type: 'email' }).then(function(r){
+        if (r && r.error){ if (st) st.textContent = 'Code didn’t verify: ' + r.error.message; return; }
+        if (st) st.textContent = '';
+        authHello();
+      });
+    });
+  }
+  // Session events: magic-link landing fires SIGNED_IN (pre- or post-password);
+  // hello only runs once the password gate has been passed (TOKEN set).
+  if (SB) {
+    try {
+      SB.auth.onAuthStateChange(function(ev){
+        if (ev === 'SIGNED_IN' && TOKEN) authHello();
+        if (ev === 'SIGNED_OUT'){ authIdent = null; renderAuthBlk(); }
+      });
+    } catch (e) {}
   }
 
   /* keys directory */
@@ -9446,6 +9580,7 @@ window.addEventListener('error', function(e){
     el('login').style.display = 'none';
     scopeRestore();   // A-13: restore BEFORE load() so the very first /stats is already scoped
     load();
+    try { authHello(); renderAuthBlk(); } catch (e) {}   // WS-U identity chip / sign-in card (never boot-fatal)
     // Deep link: if the URL names a tab (e.g. #keys), open it. Otherwise the DEFAULT LANDING
     // is Today (WS1-D3 / Deploy 3): every persona sees their role's work queues first; the
     // Ledger stays one tap away and #ledger bookmarks still land on it directly. showTab runs

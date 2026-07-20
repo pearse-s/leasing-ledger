@@ -1389,6 +1389,7 @@ window.addEventListener('error', function(e){
       <button type="button" class="navitem" data-tab="today"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><span>Today</span></button>
       <button type="button" class="navitem on" data-tab="ledger"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M9 9v11"/></svg><span>Ledger</span></button>
       <button type="button" class="navitem" data-tab="units"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l8-2v18M19 21V10l-6-2.5M8.5 8h.01M8.5 12h.01M8.5 16h.01"/></svg><span>Units</span></button>
+      <button type="button" class="navitem" data-tab="leases"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h9a1.5 1.5 0 0 1 1.5 1.5V19M9 3v18l-4.5-2V5z"/><path d="M9 21h9a1.5 1.5 0 0 0 1.5-1.5"/><path d="M13 8h4M13 12h4M13 16h2.5"/></svg><span>Leases</span></button>
       <button type="button" class="navitem" data-tab="applications"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg><span>Applications</span></button>
       <button type="button" class="navitem" data-tab="tours"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Tours</span></button>      <button type="button" class="navitem" data-tab="renewals"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg><span>Renewals</span></button>
       <button type="button" class="navitem" data-tab="owners"><svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Owners</span></button>
@@ -2348,6 +2349,34 @@ window.addEventListener('error', function(e){
     </div>
   </div>
 
+  <div id="page-leases" style="display:none">
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar">
+        <h2>Leases</h2>
+        <input type="text" id="ls-search" placeholder="Search property, unit, tenant, owner, agent&hellip;">
+        <span class="count-note" id="ls-count"></span>
+      </div>
+      <div class="qchips" id="ls-chips"></div>
+      <div class="scrolly tallscroll">
+        <table id="ltable">
+          <thead><tr>
+            <th data-k="property_name">Property &middot; Unit</th>
+            <th data-k="tenant_disp">Tenants</th>
+            <th data-k="lease_status">Status</th>
+            <th data-k="lease_type">Type</th>
+            <th data-k="lease_from_date">From</th>
+            <th data-k="lease_to_date">End</th>
+            <th data-k="lease_rent" class="rt">Rent</th>
+            <th data-k="balance_disp" class="rt">Balance</th>
+            <th data-k="credited_agent">Agent</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="note" style="margin-top:10px">Every current lease (plus the most recent lease on vacant units), mirrored daily from Buildium with balances, deposit state, attribution, and renewal status. Click a lease for tenant contacts, recurring transactions, and the <b>live ledger</b> &mdash; itemized charges &amp; payments pulled straight from Buildium the moment you open it (never stored). Balance = the outstanding-balances mirror for active leases, or money received to date on future leases (&ldquo;pre&rdquo;). Sidebar scope filters apply.</div>
+    </div>
+  </div>
+
   <div id="page-keys" style="display:none">
     <div class="card tablecard" style="margin-top:18px">
       <div class="tablebar">
@@ -2556,15 +2585,41 @@ window.addEventListener('error', function(e){
     <div class="lmbody">
       <div class="rm-actrow" id="om-actrow">
         <button type="button" class="btn primary rmact" id="om-viewunits">View this owner&rsquo;s units &rarr;</button>
+        <button type="button" class="btn rmact" id="om-viewledgers">Ledgers &amp; balances &rarr;</button>
         <button type="button" class="btn rmact" id="om-report">Download owner report &darr;</button>
       </div>
       <div id="om-contact"></div>
       <details id="om-detwrap"><summary>Owner details</summary>
         <div class="fgrid" id="om-fields"></div>
       </details>
+      <div class="sect">Money</div>
+      <div id="om-money" class="lmphnote">&nbsp;</div>
       <div class="rm-feedwrap"><div class="rm-feedlab" id="om-portlab"></div><div class="propchips" id="om-props"></div></div>
       <div class="sect">Notes &amp; documents</div>
       <div id="om-notesdocs" class="lmphnote">&nbsp;</div>
+    </div>
+  </div>
+</div>
+
+<div class="lmodal" id="lsmodal">
+  <div class="lmback" data-close="lsmodal"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="lsmodal">&times;</button>
+    <div class="lmhead">
+      <h3 id="ls-title"></h3>
+      <div class="lmsub" id="ls-sub"></div>
+    </div>
+    <div class="lmbody">
+      <div class="rm-actrow" id="ls-actrow"></div>
+      <div id="ls-contact"></div>
+      <details id="ls-detwrap" open><summary>Lease details</summary>
+        <div class="fgrid" id="ls-fields"></div>
+      </details>
+      <div class="sect">Recurring transactions</div>
+      <div id="ls-recur" class="lmphnote">&nbsp;</div>
+      <div class="sect">Ledger &middot; live from Buildium</div>
+      <div class="lm-feedchips" id="ls-ledchips"></div>
+      <div id="ls-ledger" class="lmphnote">&nbsp;</div>
     </div>
   </div>
 </div>
@@ -2981,6 +3036,11 @@ window.addEventListener('error', function(e){
   var loadTimer = null;
   var unitsAll = null, ownersAll = null;
   var uSort = { k:'property_name', d:1 }, oSort = { k:'display_name', d:1 };
+  var leasesAll = null, lsSort = { k:'property_name', d:1 };
+  var lsStatus = 'all', lsBal = false;        // Leases quick chips: status single-select + has-balance toggle
+  var curLease = null, lsReq = 0;             // lease modal state + generation guard (the tdReq pattern)
+  var lsLedRows = null, lsLedFilter = 'all';  // live-ledger rows for the open lease modal + type chip filter
+  var umLsReq = 0;                            // guard for the unit modal's aged-buckets append
   var uPage = 0, uSig = '', U_PER = 200;
   var uSel = {};   // Units flag chips multi-select (on-notice / move-out / eviction / balance / take-backs)
   var uOcc = 'all', uMkt = 'all', uDV = '';   // Occupancy axis · Marketing axis · Days-vacant band
@@ -3141,6 +3201,11 @@ window.addEventListener('error', function(e){
     return new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD',maximumFractionDigits:0}).format(n);
   }
   function fmtNum(n){ return n == null ? '–' : new Intl.NumberFormat('en-CA').format(n); }
+  // Cents-accurate money — ledgers/deposits need exact figures; fmtMoney rounds to $.
+  function fmtMoney2(n){
+    if (n == null) return '–';
+    return new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD',minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+  }
   function pct(n){ return n == null ? '–' : n + '%'; }
   function el(id){ return document.getElementById(id); }
   function esc(s){
@@ -3364,7 +3429,7 @@ window.addEventListener('error', function(e){
   })();
 
   /* ── tabs ─────────────────────────────────── */
-  var PAGES = { today:'page-today', ledger:'app', units:'page-units', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
+  var PAGES = { today:'page-today', ledger:'app', units:'page-units', leases:'page-leases', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
   var ACTIVE_TAB = 'ledger';   // which tab is showing; render() only reveals the Ledger (#app) when this is 'ledger'
   var statsLoaded = false;     // a /stats load has succeeded at least once (Ledger DOM is populated)
   var statsLoading = false;    // a /stats load is currently in flight
@@ -3382,6 +3447,7 @@ window.addEventListener('error', function(e){
     fxNavPill();
     fxTabReveal(el(PAGES[key]));
     if (key === 'units' && unitsAll === null) loadUnits();
+    if (key === 'leases' && leasesAll === null) loadLeases();
     if (key === 'owners' && ownersAll === null) loadOwners();
     if (key === 'applications' && appsAll === null) loadApps();
     if (key === 'tours') { if (toursAll === null) loadTours(); else applyRView(); }
@@ -3578,6 +3644,7 @@ window.addEventListener('error', function(e){
     scopeSave();
     scheduleLoad();
     if (unitsAll !== null) drawUnits();
+    if (leasesAll !== null) drawLeases();
     if (ownersAll !== null) drawOwners();
     if (el('page-applications').style.display === 'block') { appsAll = null; loadApps(); }
     if (el('page-tours').style.display === 'block') { toursAll = null; loadTours(); }
@@ -5771,6 +5838,16 @@ window.addEventListener('error', function(e){
       management_agreement_start_date:{ t:'date', label:'Mgmt start' },
       management_agreement_end_date:{ t:'date', label:'Mgmt end' }
     }},
+    ltable: { rows:function(){ return leasesAll || []; }, redraw:function(){ drawLeases(); }, cols:{
+      lease_status:{ t:'enum', label:'Status' },
+      lease_type:{ t:'enum', label:'Type' },
+      lease_from_date:{ t:'date', label:'From' },
+      lease_to_date:{ t:'date', label:'End' },
+      lease_rent:{ t:'num', label:'Rent' },
+      balance_disp:{ t:'num', label:'Balance' },
+      credited_agent:{ t:'enum', label:'Agent' },
+      renewal_state:{ t:'enum', label:'Renewal' }
+    }},
     ktable: { rows:function(){ return scopedKeys(); }, redraw:function(){ drawKeys(); }, cols:{
       status:{ t:'enum', label:'Status', get:function(r){ return r.status_label || r.status; } },
       date_out:{ t:'date', label:'Out' },
@@ -5803,6 +5880,7 @@ window.addEventListener('error', function(e){
     rtable: { get:function(){ return rSort; }, set:function(c,d){ rSort={k:c,d:d}; rSortUser=true; drawTours(); } },
     rntable: { get:function(){ return rnSort; }, set:function(c,d){ rnSort={k:c,d:d}; drawRenewals(); } },
     otable: { get:function(){ return oSort; }, set:function(c,d){ oSort={k:c,d:d}; drawOwners(); } },
+    ltable: { get:function(){ return lsSort; }, set:function(c,d){ lsSort={k:c,d:d}; drawLeases(); } },
     ktable: { get:function(){ return kSort; }, set:function(c,d){ kSort={k:c,d:d}; drawKeys(); } },
     ttable: { get:function(){ return tSort; }, set:function(c,d){ tSort={k:c,d:d}; drawTasks(); } },
     htable: { get:function(){ return hSort; }, set:function(c,d){ hSort={k:c,d:d}; drawHistory(); } },
@@ -7232,6 +7310,7 @@ window.addEventListener('error', function(e){
     if (umaddr) a += '<a class="btn primary rmact" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(umaddr) + '">&#129517; Maps</a>';
     if (r.is_listed) a += '<button type="button" class="btn rmact" data-listing-uid="' + r.unit_id + '">View listing &rarr;</button>';
     a += '<a class="btn rmact" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Buildium &rarr;</a>';
+    if (r.lease_id) a += '<button type="button" class="btn rmact" data-ls-open="' + r.lease_id + '">Ledger &rarr;</button>';
     if (r.listing_url) a += '<a class="btn rmact" target="_blank" rel="noopener" href="' + esc(r.listing_url) + '">Apply &rarr;</a>';
     el('um-actrow').innerHTML = a;
     el('um-contact').innerHTML = '';
@@ -7261,6 +7340,19 @@ window.addEventListener('error', function(e){
     f += fitem('Days vacant', r.days_vacant != null ? r.days_vacant + 'd' : null);
     f += fitem('Available', esc(r.listing_available_date));
     el('um-fields').innerHTML = f;
+    // Aged AR buckets live only in the lease directory (v_lease_directory) — fetched on
+    // demand, and only when something is owing, so the /units payload stays flat (R5 spirit).
+    if (r.lease_id && ((r.total_balance || 0) > 0 || r.balance_src === 'pre')) {
+      var uq = ++umLsReq;
+      authFetch('/lease-detail?lease_id=' + encodeURIComponent(r.lease_id))
+        .then(function(j){
+          if (uq !== umLsReq) return;   // a newer unit modal owns um-fields now
+          var L = j && j.lease; if (!L) return;
+          var aged2 = lsAgedLine(L);
+          if (aged2) el('um-fields').insertAdjacentHTML('beforeend', fitem('Balance aging', aged2, true));
+        })
+        .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('lease aging fetch failed', e); });
+    }
     el('um-detwrap').open = false;
     el('um-tenants').textContent = r.lease_id ? 'Loading tenant contacts…' : 'No current lease.';
     // photos reset
@@ -7522,10 +7614,22 @@ window.addEventListener('error', function(e){
     if (el('om-report')) el('om-report').textContent = 'Download report · ' + winFmt(state.from) + '–' + winFmt(state.to);
     openModal('omodal');
     mountNotesDocs(el('om-notesdocs'), 'owner', r.buildium_id);
+    // Money rollup — needs the lease directory; the modal paints instantly and this fills in
+    if (el('om-money')) {
+      el('om-money').textContent = 'Loading…';
+      (function(oo){
+        var go = function(){ if (curOwner === oo) omRenderMoney(oo); };
+        if (leasesAll === null) loadLeases(go); else go();
+      })(r);
+    }
   });
   el('om-viewunits').addEventListener('click', function(){
     closeModal('omodal');
     if (curOwner) gotoUnitsWithSearch(curOwner.display_name || '');
+  });
+  if (el('om-viewledgers')) el('om-viewledgers').addEventListener('click', function(){
+    closeModal('omodal');
+    if (curOwner) gotoLeasesWithSearch(curOwner.display_name || '');
   });
   // Owner PDF report — clicking opens a per-report customize panel (sections +
   // table columns, remembered in localStorage); Download then streams the PDF via a
@@ -7620,6 +7724,285 @@ window.addEventListener('error', function(e){
       .catch(function(e){ if (e && e.message !== 'AUTH') alert('Could not build report: ' + (e && e.message ? e.message : 'error')); })
       .finally(function(){ btn.disabled = false; btn.textContent = prev; });
   });
+
+  /* ── Leases directory ─────────────────────── */
+  var LS_CHIPS = [
+    { k:'all', label:'All' }, { k:'Active', label:'Active' }, { k:'Future', label:'Future' },
+    { k:'Past', label:'Past' }, { k:'balance', label:'Has balance' }
+  ];
+  function drawLsChips(){
+    var box = el('ls-chips'); if (!box) return;
+    var html = '';
+    LS_CHIPS.forEach(function(c){
+      var on = c.k === 'balance' ? lsBal : (lsStatus === c.k);
+      html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + c.k + '">' + c.label + '</button>';
+    });
+    box.innerHTML = html;
+  }
+  if (el('ls-chips')) el('ls-chips').addEventListener('click', function(e){
+    var b = e.target.closest('.qchip'); if (!b) return;
+    var k = b.getAttribute('data-q');
+    if (k === 'balance') { lsBal = !lsBal; if (lsBal) lsSort = { k:'balance_disp', d:-1 }; }
+    else lsStatus = k;
+    drawLsChips(); drawLeases();
+  });
+  function loadLeases(after){
+    el('veil').classList.remove('hide');
+    authFetch('/leases')
+      .then(function(j){
+        leasesAll = j.leases || [];
+        leasesAll.forEach(function(r){
+          r.tenant_disp = (r.tenant_names || []).join(', ');
+          // Balance blend — SAME semantics as the Units board (loadUnits): the Active-lease
+          // outstanding-balances mirror wins; else a Future lease's ledger_balance ("pre").
+          r.balance_disp = (r.total_balance || 0) > 0 ? r.total_balance
+            : (r.lease_status === 'Future' && (r.ledger_balance || 0) > 0.005 ? r.ledger_balance : null);
+          r.balance_src = (r.total_balance || 0) > 0 ? 'active' : (r.balance_disp != null ? 'pre' : null);
+        });
+        drawLsChips(); drawLeases();
+        el('veil').classList.add('hide');
+        if (after) after();
+      })
+      .catch(function(e){
+        el('veil').classList.add('hide');
+        if (String(e && e.message) === 'AUTH') return;
+        console.error('leases load failed', e);
+        var tb = el('ltable'); if (tb) tb.querySelector('tbody').innerHTML = emptyRow('ltable', 'Could not load leases.');
+      });
+  }
+  function lsStatusChip(r){
+    var c = r.lease_status === 'Active' ? 'c-ok' : r.lease_status === 'Future' ? 'c-warm' : 'c-cold';
+    var out = '<span class="chip ' + c + '">' + esc(String(r.lease_status || '–').toLowerCase()) + '</span>';
+    if (r.is_eviction_pending) out += ' <span class="chip c-hot">eviction</span>';
+    if (r.renewal_state) {
+      var rc = r.renewal_state === 'Signed' ? 'c-ok' : r.renewal_state === 'Pending' ? 'c-warm' : (r.renewal_state === 'Cancelled' || r.renewal_state === 'Failed') ? 'c-bad' : 'c-cold';
+      out += ' <span class="chip ' + rc + '" title="Lease renewal">renewal: ' + esc(String(r.renewal_state).toLowerCase()) + '</span>';
+    }
+    return out;
+  }
+  function drawLeases(){
+    if (leasesAll === null) return;
+    var q = (el('ls-search').value || '').toLowerCase();
+    var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
+    var rows = leasesAll.filter(function(r){
+      if (lsStatus !== 'all' && r.lease_status !== lsStatus) return false;
+      if (lsBal && !(r.balance_disp > 0)) return false;
+      if (!colfPass('ltable', r)) return false;
+      if (!scopeTestUnit(r, mg, ow, pr)) return false;   // v_lease_directory carries the same three scope-id columns as the unit directory
+      if (!q) return true;
+      return ((r.property_name || '') + ' ' + (r.unit_number || '') + ' ' + r.tenant_disp + ' ' +
+        (r.primary_owner_name || '') + ' ' + (r.property_manager_name || '') + ' ' + (r.credited_agent || ''))
+        .toLowerCase().indexOf(q) >= 0;
+    });
+    rows.sort(cmpRows(lsSort.k, lsSort.d));
+    var html = '';
+    rows.forEach(function(r){
+      var bal = r.balance_disp != null ? fmtMoney(r.balance_disp) + (r.balance_src === 'pre' ? ' <span class="qn">pre</span>' : '') : '–';
+      html += '<tr class="rowlink" data-lsid="' + r.lease_id + '">' +
+        '<td><b>' + esc(r.property_name || '–') + '</b>' + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') + '</td>' +
+        '<td>' + esc(r.tenant_disp || '–') + '</td>' +
+        '<td>' + lsStatusChip(r) + '</td>' +
+        '<td>' + esc(r.lease_type || '–') + '</td>' +
+        '<td>' + esc(r.lease_from_date || '–') + '</td>' +
+        '<td>' + esc(r.lease_to_date || '–') + '</td>' +
+        '<td class="rt">' + (r.lease_rent != null ? fmtMoney(r.lease_rent) : '–') + '</td>' +
+        '<td class="rt">' + bal + '</td>' +
+        '<td>' + esc(r.credited_agent || '–') + '</td></tr>';
+    });
+    el('ltable').querySelector('tbody').innerHTML = html || emptyRow('ltable', 'Nothing matches');
+    el('ls-count').textContent = rows.length + ' of ' + leasesAll.length + ' leases';
+  }
+  if (el('ls-search')) el('ls-search').addEventListener('input', deb(drawLeases));
+  if (el('ltable')) el('ltable').querySelector('thead').addEventListener('click', function(e){
+    var th = e.target.closest('th'); if (!th) return;
+    var k = th.getAttribute('data-k'); if (!k) return;
+    openCol('ltable', k, th);
+  });
+  if (el('ltable')) el('ltable').addEventListener('click', function(e){
+    var tr2 = e.target.closest('tr[data-lsid]');
+    if (tr2) openLease(tr2.getAttribute('data-lsid'));
+  });
+  function gotoLeasesWithSearch(q2){
+    showTab('leases');
+    var go = function(){ el('ls-search').value = q2 || ''; lsStatus = 'all'; lsBal = false; drawLsChips(); drawLeases(); };
+    if (leasesAll === null) loadLeases(go); else go();
+  }
+
+  /* ── lease detail popup ───────────────────── */
+  function openLeaseEnsure(id){
+    if (leasesAll === null) loadLeases(function(){ openLease(id); });
+    else openLease(id);
+  }
+  function lsAgedLine(r){
+    var parts = [];
+    [['0–30', r.balance_0_30_days], ['31–60', r.balance_31_60_days], ['61–90', r.balance_61_90_days], ['90+', r.balance_over_90_days]]
+      .forEach(function(p){ if ((p[1] || 0) > 0.005) parts.push(p[0] + 'd ' + fmtMoney2(p[1])); });
+    return parts.join(' · ');
+  }
+  function openLease(id){
+    var r = null;
+    (leasesAll || []).forEach(function(x){ if (String(x.lease_id) === String(id)) r = x; });
+    if (!r) return;
+    curLease = r;
+    var q = ++lsReq;   // generation guard: a reopen on another lease abandons in-flight paints
+    el('ls-title').textContent = (r.property_name || '') + (r.unit_number ? ' — ' + r.unit_number : '');
+    var sub = [lsStatusChip(r)];
+    if (r.tenant_disp) sub.push(esc(r.tenant_disp));
+    if (r.property_manager_name) sub.push('managed by ' + esc(r.property_manager_name));
+    if (r.primary_owner_name) sub.push('owned by ' + esc(r.primary_owner_name));
+    el('ls-sub').innerHTML = sub.join(' &middot; ');
+    var a = '<a class="btn rmact" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Buildium &rarr;</a>';
+    if (r.unit_id) a += '<button type="button" class="btn rmact" data-ls-unit="' + r.unit_id + '">View unit &rarr;</button>';
+    el('ls-actrow').innerHTML = a;
+    el('ls-contact').innerHTML = '';
+    var f = '';
+    f += fitem('Term', esc([r.lease_type, r.term_type].filter(Boolean).join(' · ')) || null);
+    f += fitem('From → to', esc(r.lease_from_date || '–') + ' &rarr; ' + esc(r.lease_to_date || '–'));
+    f += fitem('Rent', r.lease_rent != null ? fmtMoney(r.lease_rent) + '/mo' : null);
+    f += fitem('Rent due day', r.payment_due_day != null ? esc(String(r.payment_due_day)) : null);
+    f += fitem('Deposit', r.security_deposit != null ? fmtMoney(r.security_deposit) : null);
+    f += fitem('SD received', r.sd_paid != null ? fmtMoney2(r.sd_paid) + (r.sd_charged ? ' of ' + fmtMoney2(r.sd_charged) + ' charged' : '') : null);
+    f += fitem('Balance', (r.total_balance || 0) > 0 ? fmtMoney2(r.total_balance)
+      : (r.balance_src === 'pre' ? fmtMoney2(r.balance_disp) + ' <span class="qn">pre-lease</span>' : '$0'),
+      (r.total_balance || 0) > 0 || r.balance_src === 'pre');
+    var aged = lsAgedLine(r);
+    if (aged) f += fitem('Balance aging', aged, true);
+    f += fitem('Credited agent', r.credited_agent ? esc(r.credited_agent) + (r.signed_date ? ' · signed ' + esc(r.signed_date) : '') : null);
+    if (r.renewal_state) f += fitem('Renewal', esc(r.renewal_state) + (r.renewal_from ? ' · ' + esc(r.renewal_from) + ' &rarr; ' + esc(r.renewal_to || '–') : '') + (r.renewal_rent != null ? ' · ' + fmtMoney(r.renewal_rent) : ''));
+    f += fitem('Synced', r.last_synced_at ? esc(String(r.last_synced_at).slice(0, 16).replace('T', ' ')) + ' UTC' : null);
+    el('ls-fields').innerHTML = f;
+    el('ls-detwrap').open = true;
+    el('ls-recur').textContent = 'Loading…';
+    el('ls-ledchips').innerHTML = '';
+    el('ls-ledger').textContent = 'Loading ledger from Buildium…';
+    lsLedRows = null; lsLedFilter = 'all';
+    openModal('lsmodal');
+    authFetch('/lease-detail?lease_id=' + encodeURIComponent(r.lease_id))
+      .then(function(j){
+        if (q !== lsReq) return;
+        var ts = j.tenants || [];
+        if (ts.length) {
+          var t0 = ts[0], nm = (t0.name || 'Tenant').trim();
+          var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+          var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div><div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div><div class="rmpro-stat">' + (ts.length > 1 ? esc(ts.length + ' tenants') : esc(t0.email || t0.phone || 'Tenant')) + '</div></div><div class="rmpro-acts">';
+          if (t0.phone) { var tel = String(t0.phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>'; }
+          if (t0.email) pc += '<a href="mailto:' + esc(t0.email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
+          pc += '</div></div>';
+          el('ls-contact').innerHTML = pc;
+        }
+        lsRenderRecurring(j.recurring || []);
+      })
+      .catch(function(e){
+        if (q !== lsReq || String(e && e.message) === 'AUTH') return;
+        el('ls-recur').textContent = 'Detail unavailable right now.';
+      });
+    lsLoadLedger(r.lease_id, q);
+  }
+  function lsRenderRecurring(rows){
+    if (!rows.length) { el('ls-recur').textContent = 'No recurring transactions on file for this lease.'; return; }
+    var h = '';
+    rows.forEach(function(t){
+      h += '<div style="display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--hairline)' + (t.is_expired ? ';opacity:.55' : '') + '">' +
+        '<span style="flex:1 1 auto;min-width:0">' + esc(t.memo || t.transaction_type || 'Recurring') + (t.is_expired ? ' <span class="qn">ended</span>' : '') + '</span>' +
+        '<span class="count-note" style="flex:0 1 auto;text-align:right">' + esc([t.frequency, t.next_occurrence_date ? 'next ' + t.next_occurrence_date : null].filter(Boolean).join(' · ')) + '</span>' +
+        '<span style="flex:0 0 auto;font-weight:700">' + (t.amount != null ? fmtMoney2(t.amount) : '–') + '</span></div>';
+    });
+    el('ls-recur').innerHTML = h;
+  }
+  var LS_LED_CHIPS = [{ k:'all', label:'All' }, { k:'Charge', label:'Charges' }, { k:'Payment', label:'Payments' }, { k:'other', label:'Other' }];
+  function lsLedType(t){
+    var v = t.type || '';
+    if (v === 'Charge') return 'Charge';
+    if (v === 'Payment' || v === 'ElectronicFundsTransfer' || v === 'CreditCardPayment') return 'Payment';
+    return 'other';
+  }
+  function lsLoadLedger(leaseId, q){
+    authFetch('/lease-ledger?lease_id=' + encodeURIComponent(leaseId))
+      .then(function(j){
+        if (q !== lsReq) return;
+        lsLedRows = (j && j.transactions) || [];
+        lsRenderLedger();
+      })
+      .catch(function(e){
+        if (q !== lsReq || String(e && e.message) === 'AUTH') return;
+        el('ls-ledchips').innerHTML = '';
+        el('ls-ledger').innerHTML = 'Buildium didn&rsquo;t answer (' + esc(e && e.message ? e.message : 'error') + '). The balance figures above are from the daily mirror. ' +
+          '<button type="button" class="lm-ghostlink" data-ls-retry="' + esc(String(leaseId)) + '">Retry</button>';
+      });
+  }
+  function lsRenderLedger(){
+    if (!lsLedRows) return;
+    if (!lsLedRows.length) { el('ls-ledchips').innerHTML = ''; el('ls-ledger').textContent = 'No transactions on this lease yet.'; return; }
+    var ch = '';
+    LS_LED_CHIPS.forEach(function(c){
+      ch += '<button type="button" class="qchip' + (lsLedFilter === c.k ? ' on' : '') + '" data-lsled="' + c.k + '">' + c.label + '</button>';
+    });
+    el('ls-ledchips').innerHTML = ch;
+    var rows = lsLedRows.filter(function(t){ return lsLedFilter === 'all' || lsLedType(t) === lsLedFilter; });
+    var h = '';
+    rows.forEach(function(t){
+      var amt = Number(t.amount) || 0;
+      h += '<div style="padding:6px 0;border-bottom:1px solid var(--hairline)">' +
+        '<div style="display:flex;gap:8px;align-items:baseline">' +
+          '<span class="count-note" style="flex:0 0 auto">' + esc(t.date || '–') + '</span>' +
+          '<span style="flex:1 1 auto;min-width:0">' + esc(t.type || '–') + (t.payment_method ? ' <span class="qn">' + esc(t.payment_method) + '</span>' : '') + '</span>' +
+          '<span style="flex:0 0 auto;font-weight:700">' + (amt < 0 ? '&minus;' + fmtMoney2(-amt) : fmtMoney2(amt)) + '</span></div>' +
+        '<div style="display:flex;gap:8px;align-items:baseline">' +
+          '<span class="count-note" style="flex:1 1 auto;min-width:0">' + esc(t.memo || '') + '</span>' +
+          '<span class="count-note" style="flex:0 0 auto">bal ' + fmtMoney2(t.running_balance) + '</span></div></div>';
+    });
+    var last = lsLedRows[lsLedRows.length - 1];
+    h += '<div style="display:flex;gap:8px;padding:8px 0 2px;align-items:baseline;flex-wrap:wrap">' +
+      '<span class="count-note" style="flex:1 1 auto">' + rows.length + (lsLedFilter === 'all' ? '' : ' of ' + lsLedRows.length) + ' transactions &middot; charges +, payments &minus; &middot; live from Buildium</span>' +
+      '<span style="flex:0 0 auto;font-weight:800">Ledger balance ' + fmtMoney2(last.running_balance) + '</span></div>';
+    el('ls-ledger').innerHTML = h;
+  }
+  // Delegated lease-modal controls: ledger type chips, ledger retry, open-lease drills
+  // ([data-ls-open] works from the unit modal, owner modal, or anywhere else), and the
+  // lease modal's own "View unit" drill.
+  document.addEventListener('click', function(e){
+    var lc = e.target.closest('[data-lsled]');
+    if (lc){ lsLedFilter = lc.getAttribute('data-lsled'); lsRenderLedger(); return; }
+    var rt = e.target.closest('[data-ls-retry]');
+    if (rt){ el('ls-ledger').textContent = 'Loading ledger from Buildium…'; lsLoadLedger(rt.getAttribute('data-ls-retry'), lsReq); return; }
+    var lo = e.target.closest('[data-ls-open]');
+    if (lo){
+      if (el('umodal').classList.contains('open')) closeModal('umodal');
+      if (el('omodal').classList.contains('open')) closeModal('omodal');
+      openLeaseEnsure(lo.getAttribute('data-ls-open'));
+      return;
+    }
+    var lu = e.target.closest('[data-ls-unit]');
+    if (lu){ closeModal('lsmodal'); openUnitEnsure(lu.getAttribute('data-ls-unit')); return; }
+  });
+  // Owner modal — Money rollup. TWO numbers on purpose (mirroring balance_src semantics):
+  // "Outstanding · active" is the exact population get_stats money.outstanding_balances
+  // sums when owner-scoped, so the figures reconcile; Future pre-lease money is a
+  // different population and must never be blended into it.
+  function omRenderMoney(o){
+    var box = el('om-money'); if (!box) return;
+    var mine = (leasesAll || []).filter(function(r){ return String(r.primary_owner_id) === String(o.buildium_id); });
+    var act = 0, pre = 0, owing = [];
+    mine.forEach(function(r){
+      if (r.lease_status === 'Active' && (r.total_balance || 0) > 0) act += r.total_balance;
+      if (r.lease_status === 'Future' && (r.ledger_balance || 0) > 0.005) pre += r.ledger_balance;
+      if (r.balance_disp != null && r.balance_disp > 0.005) owing.push(r);
+    });
+    var h = '<div class="fgrid">' +
+      fitem('Outstanding · active leases', act > 0 ? fmtMoney2(act) : '$0', act > 0) +
+      fitem('Pre-lease due · future leases', pre > 0 ? fmtMoney2(pre) : '$0', pre > 0) + '</div>';
+    if (owing.length) {
+      owing.sort(function(a, b){ return b.balance_disp - a.balance_disp; });
+      h += owing.map(function(r){
+        return '<button type="button" class="lm-ghostlink" data-ls-open="' + r.lease_id + '" style="display:block;width:100%;text-align:left;padding:6px 0;border-bottom:1px solid var(--hairline)">' +
+          esc((r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : '')) + ' — ' + fmtMoney2(r.balance_disp) +
+          (r.balance_src === 'pre' ? ' <span class="qn">pre</span>' : '') + ' &rarr;</button>';
+      }).join('');
+    } else {
+      h += '<div class="count-note" style="margin-top:6px">Nothing owing across this owner&rsquo;s leases.</div>';
+    }
+    box.innerHTML = h;
+  }
 
   /* ── Applications directory ───────────────── */
   var A_STATUSES = ['all','Undecided','Deferred','Approved','AddedToDraftLease','AddedToLease','Rejected','Cancelled'];
@@ -8011,6 +8394,7 @@ window.addEventListener('error', function(e){
     var id = hubMiEditId;
     postJSON('/lease/move-in', { lease_id: Number(id), move_in_date: dateStr, actor: actor })
       .then(function(res){
+        leasesAll = null;
         var lease = res && res.lease;
         hubTeamSigned = (hubTeamSigned || []).map(function(x){
           if (String(x.lease_id) !== String(id)) return x;
@@ -9391,7 +9775,7 @@ window.addEventListener('error', function(e){
     if (!actor){ alert('Pick your name first (on the sign-in screen) so the lease is credited correctly.'); return; }
     var body = { lease_id: Number(id), actor: actor }, path = '/lease/confirm';
     if (act === 'claim'){ path = '/lease/claim'; body.agent = hubAgent; }
-    postJSON(path, body).then(function(){ loadHubAgent(); loadHubScore(false); })
+    postJSON(path, body).then(function(){ leasesAll = null; loadHubAgent(); loadHubScore(false); })
       .catch(function(e){ alert('Could not save: ' + (e && e.message ? e.message : 'error')); });
   }
   function hubExport(){
@@ -9886,7 +10270,7 @@ window.addEventListener('error', function(e){
       if (!confirm('Credit this signed lease to ' + ag + '?' + (cur ? ' It is currently ' + cur + '.' : ''))) { close(); return; }
       var actor = getActor();
       postJSON('/lease/reassign', { lease_id: Number(id), agent: ag, actor: actor })
-        .then(function(){ close(); loadHubTeam(); loadHubScore(false); })
+        .then(function(){ close(); leasesAll = null; loadHubTeam(); loadHubScore(false); })
         .catch(function(e){ close(); if (!e || e.message !== 'AUTH') alert('Could not reassign: ' + (e && e.message ? e.message : 'error')); });
     });
     try { sel.focus(); } catch (e) {}
@@ -9901,7 +10285,7 @@ window.addEventListener('error', function(e){
     } else if (act === 'exclude'){
       if (!confirm('Exclude this lease from attribution? It will no longer count toward any agent.')) return;
       postJSON('/lease/exclude', { lease_id: Number(id), actor: actor })
-        .then(function(){ loadHubTeam(); loadHubScore(false); })
+        .then(function(){ leasesAll = null; loadHubTeam(); loadHubScore(false); })
         .catch(function(e){ alert('Could not exclude: ' + (e && e.message ? e.message : 'error')); });
     }
   }

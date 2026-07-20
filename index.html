@@ -551,6 +551,18 @@ window.addEventListener('error', function(e){
     transition:background .15s ease, color .15s ease, transform .12s ease;
   }
   .listbtn:hover{background:var(--moss);color:#1B1510;transform:translateY(-1px)}
+  /* Facebook Marketplace: blue posted chip + faint assign prompt (Units Event column) + unit-modal panel controls */
+  .c-fb{background:rgba(74,120,190,.18);color:#8FB4E0;text-decoration:none;cursor:pointer}
+  .c-fb:hover{background:rgba(74,120,190,.32);color:#BFD8F2}
+  .fbassign{
+    font-family:var(--sans);font-size:.72rem;font-weight:700;cursor:pointer;color:var(--plum);
+    background:transparent;border:1px dashed var(--hairline-dark);border-radius:10px;padding:2px 9px;
+    transition:background .15s ease,color .15s ease,border-color .15s ease;
+  }
+  .fbassign:hover{background:var(--plum-soft);color:var(--plum);border-color:var(--plum)}
+  .fb-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .fb-controls .fbsel{font-family:var(--sans);max-width:160px;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:5px 7px}
+  .fb-controls .fbinput{font-family:var(--sans);flex:1 1 180px;min-width:150px;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:6px 9px;font-size:.8rem}
   .scrolly{max-height:520px;overflow:auto;border-radius:0 0 var(--r) var(--r)}
   .scrolly.tallscroll{max-height:660px}
   /* pagination */
@@ -2515,6 +2527,8 @@ window.addEventListener('error', function(e){
       </div>
       <div class="sect">Key</div>
       <div id="um-keys" class="lmphnote" data-keypanel>&nbsp;</div>
+      <div class="sect">Facebook Marketplace</div>
+      <div id="um-fb" class="lmphnote" data-fbpanel>&nbsp;</div>
       <details id="um-detwrap"><summary>Unit details</summary>
         <div class="fgrid" id="um-fields"></div>
         <div class="umd-sect">Tenants</div>
@@ -5588,6 +5602,106 @@ window.addEventListener('error', function(e){
     var b = e.target.closest('[data-taskfull]'); if (!b) return; openTask(b.getAttribute('data-taskfull'));
   });
 
+  // ── Facebook Marketplace panel (unit popup) ──────────────────────────────
+  // Assign a leasing agent + save the Marketplace URL (/unit/fb-link), or email the agent
+  // asking them to post/refresh the ad (/unit/fb-request → returns a mailto: we open).
+  // Roster = active tour_agents (they carry emails, resolved server-side); the currently
+  // assigned name is always kept as an option even if it isn't an active tour agent.
+  var fbAgents = null;   // cached active tour-agent display names
+  var fbReq = 0;         // monotonic generation for the FB panel loader (A→B→A safe, not keyed on unit_id)
+  function fbLoadAgents(cb){
+    if (fbAgents !== null){ cb(); return; }
+    authFetch('/tour-agents').then(function(j){
+      fbAgents = ((j && j.agents) || []).map(function(a){ return a.display_name; }).filter(Boolean);
+      cb();
+    }).catch(function(e){ if (String(e && e.message) === 'AUTH') return; fbAgents = []; cb(); });
+  }
+  function fbAgentRoster(cur){
+    var out = (fbAgents || []).slice();
+    if (cur && !out.some(function(n){ return String(n).toLowerCase() === String(cur).toLowerCase(); })) out.unshift(cur);
+    return out;
+  }
+  function fbApply(r, fb){
+    if (!r || !fb) return;
+    r.fb_url = fb.fb_url || null;
+    r.fb_agent = fb.assigned_agent || null;
+    r.fb_requested_at = fb.last_requested_at || r.fb_requested_at || null;
+  }
+  function fbAgo(iso){
+    var t = Date.parse(iso); if (isNaN(t)) return '';
+    var d = Math.floor((Date.now() - t) / 86400000);
+    if (d <= 0) return 'today'; if (d === 1) return 'yesterday'; if (d < 30) return d + 'd ago';
+    return new Date(t).toISOString().slice(0, 10);
+  }
+  function mountFbPanel(box, r){
+    if (!box || !r) return;
+    box.setAttribute('data-fbpanel', '1');
+    var my = ++fbReq; box._fbReq = my;
+    box.textContent = 'Loading…';
+    fbLoadAgents(function(){
+      if (box._fbReq !== my) return;   // a newer mount superseded this load
+      fbRenderPanel(box, r);
+    });
+  }
+  function fbRenderPanel(box, r){
+    var cur = r.fb_agent || '';
+    var status;
+    if (r.fb_url){
+      status = '<span class="chip c-fb" style="cursor:default">posted</span> ' +
+        (cur ? 'by <b>' + esc(cur) + '</b> ' : '') +
+        '<a target="_blank" rel="noopener" href="' + esc(r.fb_url) + '">View listing &#8599;</a>';
+    } else if (cur){
+      status = '<span class="lmphnote">Assigned to <b>' + esc(cur) + '</b> · not posted yet</span>';
+    } else {
+      status = '<span class="lmphnote">Not on Facebook Marketplace yet.</span>';
+    }
+    if (r.fb_requested_at) status += ' <span class="lmphnote">· asked ' + esc(fbAgo(r.fb_requested_at)) + '</span>';
+    var opts = '<option value="">— agent —</option>' +
+      fbAgentRoster(cur).map(function(n){
+        return '<option' + (String(n).toLowerCase() === String(cur).toLowerCase() ? ' selected' : '') + '>' + esc(n) + '</option>';
+      }).join('');
+    box.innerHTML =
+      '<div style="margin-bottom:8px">' + status + '</div>' +
+      '<div class="fb-controls">' +
+        '<select class="fbsel" id="fb-agent-sel">' + opts + '</select>' +
+        '<input type="text" class="fbinput" id="fb-url-in" placeholder="Marketplace URL (optional)" value="' + esc(r.fb_url || '') + '">' +
+        '<button type="button" class="listbtn" id="fb-save">Save</button>' +
+        '<button type="button" class="btn" id="fb-email">Email to post</button>' +
+      '</div>' +
+      '<div class="lmphnote" id="fb-hint" style="margin-top:6px"></div>';
+    var selEl = box.querySelector('#fb-agent-sel');
+    var urlEl = box.querySelector('#fb-url-in');
+    var hintEl = box.querySelector('#fb-hint');
+    var emailBtn = box.querySelector('#fb-email');
+    function relabel(){ emailBtn.textContent = selEl.value ? ('Email ' + selEl.value + ' to post') : 'Email to post'; }
+    relabel();
+    selEl.addEventListener('change', relabel);
+    box.querySelector('#fb-save').addEventListener('click', function(){
+      var actor = getActor();
+      if (!actor){ hintEl.textContent = 'Pick your name first (on the sign-in screen).'; return; }
+      hintEl.textContent = 'Saving…';
+      postJSON('/unit/fb-link', { unit_id: Number(r.unit_id), property_id: Number(r.property_id),
+          assigned_agent: selEl.value.trim() || null, fb_url: urlEl.value.trim(), actor: actor })
+        .then(function(j){ fbApply(r, j.fb); mountFbPanel(box, r); drawUnits(); })
+        .catch(function(e){ if (String(e && e.message) === 'AUTH') return; hintEl.textContent = 'Could not save: ' + (e && e.message ? e.message : 'error'); });
+    });
+    emailBtn.addEventListener('click', function(){
+      var ag = selEl.value.trim();
+      if (!ag){ hintEl.textContent = 'Pick an agent first.'; return; }
+      var actor = getActor();
+      if (!actor){ hintEl.textContent = 'Pick your name first (on the sign-in screen).'; return; }
+      hintEl.textContent = 'Preparing email…';
+      postJSON('/unit/fb-request', { unit_id: Number(r.unit_id), property_id: Number(r.property_id), assigned_agent: ag, actor: actor })
+        .then(function(j){
+          fbApply(r, j.fb);
+          hintEl.textContent = j.to ? ('Opening your email to ' + ag + '…') : ('No email on file for ' + ag + ' — opening a blank draft to add the recipient.');
+          if (j.mailto_url) window.location.href = j.mailto_url;
+          mountFbPanel(box, r); drawUnits();
+        })
+        .catch(function(e){ if (String(e && e.message) === 'AUTH') return; hintEl.textContent = 'Could not prepare email: ' + (e && e.message ? e.message : 'error'); });
+    });
+  }
+
   var COLF_DEF = {
     utable: { rows:function(){ return unitsAll || []; }, redraw:function(){ drawUnits(); }, cols:{
       unit_bedrooms:{ t:'enum', label:'Beds' },
@@ -6843,6 +6957,15 @@ window.addEventListener('error', function(e){
     var paid = r.sd_paid >= req - 0.005;
     return ' <span class="chip ' + (paid ? 'c-ok' : 'c-warm') + '" title="SD ' + esc(fmtMoney(r.sd_paid)) + ' of ' + esc(fmtMoney(req)) + ' received">' + (paid ? 'Paid SD' : 'SD due') + '</span>';
   }
+  // Facebook Marketplace chip for the Units Event column. Posted → blue agent chip that
+  // opens the Marketplace listing (external anchor; the row click-handler excludes .c-fb so
+  // it doesn't also open the unit modal). Listed-but-not-posted → a faint "assign FB" prompt
+  // that opens the unit modal (its Facebook Marketplace panel). Not listed → nothing.
+  function fbChip(r){
+    if (r.fb_url) return ' <a class="chip c-fb" target="_blank" rel="noopener" href="' + esc(r.fb_url) + '" title="Open Facebook Marketplace listing' + (r.fb_agent ? ' — ' + esc(r.fb_agent) : '') + '">' + esc(r.fb_agent || 'FB') + ' &#8599;</a>';
+    if (r.is_listed) return ' <button type="button" class="fbassign" data-fbuid="' + r.unit_id + '" title="Assign an agent to post this on Facebook Marketplace">+ assign FB</button>';
+    return '';
+  }
   function drawUnits(){
     if (unitsAll === null) return;
     var q = (el('u-search').value || '').toLowerCase();
@@ -6900,7 +7023,7 @@ window.addEventListener('error', function(e){
         '<td>' + esc(r.unit_number) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
         '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + sdChip(r) + '</td>' +
-        '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + '</td>' +
+        '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + fbChip(r) + '</td>' +
         '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + ' <span class="qn">' + (r.move_in_src === 'appt' ? 'appt' : 'lease') + '</span>' : '–') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
@@ -7038,6 +7161,7 @@ window.addEventListener('error', function(e){
   el('utable').addEventListener('click', function(e){
     var lb = e.target.closest && e.target.closest('.listbtn');
     if (lb){ openListing(lb.getAttribute('data-uid')); return; }
+    if (e.target.closest && e.target.closest('.c-fb')) return;   // blue FB chip: let the anchor open the listing, don't open the unit modal
     var tr2 = e.target.closest('tr[data-uid]');
     if (tr2) openUnit(tr2.getAttribute('data-uid'));
   });
@@ -7120,6 +7244,7 @@ window.addEventListener('error', function(e){
     mountNotesDocs(el('um-notesdocs-bldg'), 'property', r.property_id);
     mountIncomingPanel(el('um-incoming'), uid);
     mountTaskPanel(el('um-tasks'), uid);
+    mountFbPanel(el('um-fb'), r);
     // tenants → identity strip (primary) + full list in details
     if (r.lease_id) {
       authFetch('/unit?unit_id=' + encodeURIComponent(uid))

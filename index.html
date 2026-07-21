@@ -729,6 +729,42 @@ window.addEventListener('error', function(e){
   }
   /* GSAP expands the card from the click point; this is the no-JS / reduced-motion fallback */
   .lmodal.open:not(.gsanim) .lmcard{animation:modalin .42s var(--spring)}
+  /* ── WS-M M3: merged Moves card (calendar ⇄ tracker) + move drawer ── */
+  .mvbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 10px}
+  .mvtgl{display:inline-flex;border:1px solid var(--hairline-dark);border-radius:999px;overflow:hidden;flex:none}
+  .mvtgl button{background:transparent;border:none;color:var(--ink-soft);font:700 .68rem var(--sans);letter-spacing:.04em;padding:6px 12px;cursor:pointer}
+  .mvtgl button.on{background:var(--clay);color:var(--on-accent)}
+  .mvchips{display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 10px}
+  .mvchips .chip{cursor:pointer;border:1px solid var(--hairline-dark);background:var(--glass-2)}
+  .mvchips .chip.on{background:var(--clay-soft);border-color:rgba(232,180,62,.45);color:var(--clay)}
+  .mvsec-h{font-family:var(--serif);font-weight:600;font-size:1rem;margin:14px 0 4px}
+  .mvtable{width:100%;border-collapse:collapse;font-size:.78rem;min-width:720px}
+  .mvtable th{font-size:.58rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:6px 8px;border-bottom:1px solid var(--hairline-dark);white-space:nowrap}
+  .mvtable td{padding:8px;border-bottom:1px solid var(--hairline);vertical-align:top}
+  .mvtable tr[data-mvl]{cursor:pointer}
+  .mvtable tr[data-mvl]:hover td{background:rgba(244,236,225,.04)}
+  tr.mvrisk td{background:rgba(232,180,62,.06)}
+  tr.mvrisk td:first-child{box-shadow:inset 3px 0 0 var(--clay)}
+  .mvtick{font-weight:700;white-space:nowrap}
+  .mvtick.ok{color:var(--moss)}
+  .mvtick.man{color:var(--ink)}
+  .mvtick.pend{color:var(--ink-soft);font-weight:600}
+  .mvtick.warn{color:var(--clay)}
+  .srctag{display:inline-block;font-size:.58rem;font-weight:700;letter-spacing:.06em;border:1px solid var(--hairline-dark);border-radius:5px;padding:1px 6px;color:var(--ink-soft);text-decoration:none}
+  .srctag.ok{color:var(--moss);border-color:rgba(157,190,134,.4)}
+  .srctag.ghost{border-style:dashed;color:var(--clay)}
+  .mvd-row{margin:6px 0;font-size:.84rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .mvd-crow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--hairline);font-size:.84rem;flex-wrap:wrap}
+  .mvd-money{border:1px solid var(--hairline);border-radius:10px;padding:8px 12px;margin:10px 0;background:var(--glass-2)}
+  #td-mv-cal{margin-top:2px}
+  .fc-mv-k{flex:0 0 auto;font-weight:800;font-size:.66em;letter-spacing:.06em;background:rgba(0,0,0,.28);border-radius:6px;padding:0 5px;margin-right:4px;align-self:center}
+  .fc-mv-r{flex:0 0 auto;margin-left:3px}
+  .fc-mv-in{background:rgba(157,190,134,.22)!important;border-color:rgba(157,190,134,.55)!important}
+  .fc-mv-in .fc-ev-t,.fc-mv-in .fc-mv-k{color:#DDEBD2}
+  .fc-mv-out{background:rgba(224,117,95,.2)!important;border-color:rgba(224,117,95,.55)!important}
+  .fc-mv-out .fc-ev-t,.fc-mv-out .fc-mv-k{color:#F3CCC2}
+  .fc-mv-ghost{background:transparent!important;border:1px dashed var(--hairline-dark)!important}
+  .fc-mv-ghost .fc-ev-t{color:var(--ink-soft)}
   .lmcard::before{content:'';position:absolute;left:0;right:0;top:0;height:3px;z-index:4;pointer-events:none;
     background:var(--accent-grad);background-size:220% 100%;animation:shimmer 5s linear infinite;
     box-shadow:0 0 16px rgba(232,180,62,.45)}
@@ -1992,10 +2028,11 @@ window.addEventListener('error', function(e){
          mobile, so dropping the inner scroll is safe) */
       #page-hub .tallscroll{max-height:none;overflow:visible}
       /* action tables → stacked label cards (no horizontal scroll for tap targets) */
-      #hubsigned thead,#hub-team-leases thead,#hub-team-moves thead{display:none}
-      #hubsigned tr,#hub-team-leases tr,#hub-team-moves tr{display:block;border-bottom:1px solid rgba(244,236,225,.1);padding:8px 2px}
-      #hubsigned td,#hub-team-leases td,#hub-team-moves td{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:3px 2px;border:none;text-align:right}
-      #hubsigned td::before,#hub-team-leases td::before,#hub-team-moves td::before{content:attr(data-label);color:var(--ink-soft);font-size:.72rem;text-align:left;flex:0 0 auto}
+      #hubsigned thead,#hub-team-leases thead,#hub-team-moves thead,#td-mv-tin thead,#td-mv-tout thead{display:none}
+      #hubsigned tr,#hub-team-leases tr,#hub-team-moves tr,#td-mv-tin tr,#td-mv-tout tr{display:block;border-bottom:1px solid rgba(244,236,225,.1);padding:8px 2px}
+      #hubsigned td,#hub-team-leases td,#hub-team-moves td,#td-mv-tin td,#td-mv-tout td{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:3px 2px;border:none;text-align:right}
+      #hubsigned td::before,#hub-team-leases td::before,#hub-team-moves td::before,#td-mv-tin td::before,#td-mv-tout td::before{content:attr(data-label);color:var(--ink-soft);font-size:.72rem;text-align:left;flex:0 0 auto}
+      #td-mv-tin,#td-mv-tout{min-width:0}
       /* stat tables → keep scroll but pin the Agent column so the name stays visible */
       #hublead th:first-child,#hublead td:first-child,#hub-team-table th:first-child,#hub-team-table td:first-child{position:sticky;left:0;background:var(--paper)}
     }
@@ -2664,6 +2701,14 @@ window.addEventListener('error', function(e){
         <button type="button" class="btn rmact" data-close="slmodal">Cancel</button>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="lmodal" id="mvmodal">
+  <div class="lmback" data-close="mvmodal"></div>
+  <div class="lmcard" style="max-width:560px">
+    <button type="button" class="lmclose" data-close="mvmodal">&times;</button>
+    <div id="mv-d-body"><div class="note">Loading&hellip;</div></div>
   </div>
 </div>
 
@@ -3764,9 +3809,10 @@ window.addEventListener('error', function(e){
         tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks') +
         tdPanel('td-mgr-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
         tdPanel('td-mgr-aging', 'Aging vacancies &middot; 60d+', 'units', 'Open Units', true) +
-        '<section class="panel tdq tdwide"><h3>Move appointments <span class="qn2" id="td-mgr-moves-n"></span></h3>' +
-          '<div class="schoffers" id="td-mgr-moves"><div class="note">Loading&hellip;</div></div>' +
-          '<div class="tdmore"><button type="button" class="tdact" id="td-mgr-moves-more" hidden>Show all</button><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
+        '<section class="panel tdq tdwide"><h3>Move-ins &amp; move-outs <span class="qn2" id="td-mgr-moves-n"></span></h3>' +
+          '<div class="mvbar" id="td-mv-bar"><div class="note">Loading&hellip;</div></div>' +
+          '<div id="td-mv-cal" hidden></div><div id="td-mv-track" hidden></div>' +
+          '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
         '<section class="panel tdq tdwide"><h3>Unit updates <span class="qn2" id="td-mgr-units-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-units"><div class="note">Loading&hellip;</div></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>';
@@ -4236,9 +4282,18 @@ window.addEventListener('error', function(e){
   // days before the lease starts is routine, not a contradiction. Hence "Move appointments"
   // and an always-visible time on every row.
   var GCAL_MOVE_DAYS = 30;   // Pearse 2026-07-17: moves cluster at month-end (3 this week, 33 the next), so a "this week" queue is empty then floods
-  // "Show all" expander for the manager panel (the 33-move month-end wave must be reachable
-  // without leaving Today); last assembly kept so the toggle can re-render without a refetch.
-  var tdMgrMovesAll = false, tdMgrMovesLast = null;
+  // ── WS-M M3: the merged Moves card (calendar ⇄ tracker) replaces the flat list.
+  // View prefs are remembered per user; the FullCalendar instance is destroyed and
+  // rebuilt whenever the manager grid re-renders (g.innerHTML wipes its container —
+  // a stale instance on a detached node paints nothing and leaks listeners).
+  var tdMvView = 'cal', tdMvCalView = 'month', tdMvKind = 'both', tdMvDays = '90', tdMvStageF = 'all';
+  try {
+    tdMvView = localStorage.getItem('ledger_mgrmoves_view_v1') || 'cal';
+    tdMvCalView = localStorage.getItem('ledger_mgrmoves_calview_v1') || 'month';
+    tdMvKind = localStorage.getItem('ledger_mgrmoves_kind_v1') || 'both';
+    tdMvDays = localStorage.getItem('ledger_mgrmoves_days_v1') || '90';
+  } catch (e) {}
+  var mvcal = null, tdMvData = { in_: null, out_: null, movesStale: false }, tdMvDetReq = 0;
   function gcalMoveWhen(r){
     return r.all_day
       ? schEdFmt(r.starts_at, { weekday: 'short', month: 'short', day: 'numeric' }) + ' · all day'
@@ -4286,51 +4341,413 @@ window.addEventListener('error', function(e){
     if (pr.length && pr.indexOf(String(r.property_id)) < 0) return false;
     return true;
   }
-  function tdMgrRenderMoves(m){
-    var box = el('td-mgr-moves'); if (!box) return;
-    tdMgrMovesLast = m;
-    var mb = el('td-mgr-moves-more');
-    if (m.moves === null){
-      box.innerHTML = '<div class="note">Could not load move appointments.</div>';
-      if (mb) mb.hidden = true;
-      return;
-    }
-    var rows = gcalMovesInWindow(m.moves.moves).filter(tdMgrMovesScopePass);
-    var vis = tdMgrMovesAll ? rows : rows.slice(0, 10);
-    box.innerHTML = vis.map(function(r){
-      var linked = r.unit_id != null;
-      return '<div class="schoffer' + (linked ? ' tdurow' : '') + '"' +
-        (linked ? ' data-uid="' + esc(String(r.unit_id)) + '" role="button" tabindex="0"' : '') + '>' +
-        '<div class="schoffer-main"><b>' + esc(gcalMoveWhere(r)) + '</b>' +
-        '<div class="schoffer-sub">' + esc(gcalMoveWhen(r)) + (r.pm_name ? ' &middot; ' + esc(r.pm_name) : '') + '</div></div>' +
-        gcalMoveChips(r) + '</div>';
-    }).join('') || '<div class="note">' + (m.moves.stale
-      ? 'Google Calendar mirror is behind — moves may be missing.'
-      : 'No move appointments booked in the next ' + GCAL_MOVE_DAYS + ' days.') + '</div>';
-    if (mb){
-      mb.hidden = rows.length <= 10;
-      mb.textContent = tdMgrMovesAll ? 'Show fewer' : 'Show all ' + rows.length;
-      mb.onclick = function(){ tdMgrMovesAll = !tdMgrMovesAll; if (tdMgrMovesLast) tdMgrRenderMoves(tdMgrMovesLast); };
-    }
+  // ── stage state: auto evidence beats manual; a manual 'cleared' undoes a manual 'done'
+  // but never hides auto (the tracker views serve both side by side). NULL SD = UNKNOWN →
+  // no chip, never "SD due" (the v229 lease_deposits rule).
+  function tdMvManual(r, p){ return r[p + '_manual_state'] === 'done'; }
+  function tdMvSt(auto, man){ return auto ? 'auto' : (man ? 'man' : 'no'); }
+  function tdMvStagesIn(r){
+    var sd = r.sd_charged == null ? 'unk' : ((Number(r.sd_paid) || 0) >= Number(r.sd_charged) && Number(r.sd_charged) > 0 ? 'auto' : 'due');
+    return {
+      sd: sd,
+      welcome: tdMvSt(null, tdMvManual(r, 'welcome')),
+      cleaned: tdMvSt(r.cleaned_auto_at, tdMvManual(r, 'cleaned')),
+      insurance: tdMvSt(r.insurance_file_at, tdMvManual(r, 'insurance')),
+      inspection: tdMvSt(r.inspection_file_at, tdMvManual(r, 'inspection'))
+    };
+  }
+  function tdMvStagesOut(r){
+    return {
+      ntv: tdMvSt(r.ntv_file_at, tdMvManual(r, 'ntv')),
+      inspection: tdMvSt(r.inspection_file_at, tdMvManual(r, 'inspection')),
+      soda: tdMvSt(r.soda_file_at, tdMvManual(r, 'soda')),
+      turned: tdMvSt(r.turned_auto_at, tdMvManual(r, 'turned'))
+    };
+  }
+  function tdMvSodaDays(r){
+    var t = Date.parse(r.move_out_date || ''); if (!t || t > Date.now()) return 0;
+    if (tdMvStagesOut(r).soda !== 'no') return 0;
+    return Math.floor((Date.now() - t) / 86400000);
+  }
+  // At-risk (Pearse 2026-07-20): move-in inside 7 days AND (SD unpaid OR not cleaned);
+  // move-out: SODA still outstanding 7+ days after the move (red at 10 — Alberta's deadline).
+  function tdMvRiskIn(r){
+    var d = tdMgrDays(r.move_in_date);
+    if (d == null || d < 0 || d > 7) return false;
+    var s = tdMvStagesIn(r);
+    return s.sd === 'due' || s.cleaned === 'no';
+  }
+  function tdMvRiskOut(r){ return tdMvSodaDays(r) >= 7; }
+  function tdMvWhere(r){
+    return r.address_line1 || [r.property_name || r.building_name, r.unit_number].filter(Boolean).join(' · ') || 'Unit ' + r.unit_id;
+  }
+  function tdMvPrep(list, k){
+    return (list || []).filter(tdMgrScopePass).map(function(r){
+      r.__k = k; r.__risk = (k === 'in') ? tdMvRiskIn(r) : tdMvRiskOut(r);
+      return r;
+    });
+  }
+  function tdMvRowByUnit(k, unitId){
+    if (unitId == null) return null;
+    var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+    return (L || []).filter(function(r){ return String(r.unit_id) === String(unitId); })[0] || null;
+  }
+  function tdMvGhostRows(){
+    var out = [];
+    if (tdMvKind !== 'out') (tdMvData.in_ || []).forEach(function(r){ if (!r.appt_at) out.push(r); });
+    if (tdMvKind !== 'in') (tdMvData.out_ || []).forEach(function(r){ if (!r.appt_at) out.push(r); });
+    return out;
+  }
+  // Prefilled Google Calendar draft (D9: deep-link OUT for now — no write scope). All-day
+  // event on the move date; creating + inviting cleaners stays a parked later phase.
+  function tdMvGcalDraft(r){
+    var d = String((r.__k === 'in' ? r.move_in_date : r.move_out_date) || '').replace(/-/g, '');
+    if (!d) return '';
+    var t = (r.__k === 'in' ? 'Move-in' : 'Move-out') + ' — ' + tdMvWhere(r);
+    return 'https://calendar.google.com/calendar/r/eventedit?text=' + encodeURIComponent(t) +
+      '&dates=' + d + '/' + d + '&details=' + encodeURIComponent('Booked from the Leasing Ledger tracker');
+  }
+  var TD_MV_TICK = { ok: '<span class="mvtick ok" title="auto-detected">&#10003;</span>',
+    man: '<span class="mvtick man">&#10003;</span>', no: '<span class="mvtick pend">&#9675;</span>',
+    due: '<span class="mvtick warn">&#9888;</span>', unk: '<span class="mvtick pend">&ndash;</span>' };
+  function tdMvTickCell(st, manWho, manAt){
+    var h = TD_MV_TICK[st] || TD_MV_TICK.no;
+    if (st === 'man' && manWho) h = '<span class="mvtick man" title="' + esc(manWho + (manAt ? ' · ' + String(manAt).slice(0, 10) : '')) + '">&#10003;</span>';
+    return h;
+  }
+  // ── the card ─────────────────────────────────────────────────────────────
+  function tdMvRenderCard(m){
+    var bar = el('td-mv-bar'); if (!bar) return;
+    tdMvData.in_ = m.trackIn === null ? null : tdMvPrep(m.trackIn, 'in');
+    tdMvData.out_ = m.trackOut === null ? null : tdMvPrep(m.trackOut, 'out');
+    tdMvData.movesStale = !!(m.moves && m.moves.stale);
     var n = el('td-mgr-moves-n');
     if (n){
-      // An empty queue means "nothing booked" only if the mirror is fresh — a dead token also
-      // empties it, and those two must never look alike. (Scopes now filter exactly, so the
-      // old "all PMs" caveat label is gone.)
       var bits = [];
-      if (rows.length) bits.push(rows.length + ' booked');
-      if (m.moves.stale) bits.push('mirror stale');
+      if (tdMvData.in_) bits.push(tdMvData.in_.length + ' in');
+      if (tdMvData.out_) bits.push(tdMvData.out_.length + ' out');
+      var rk = (tdMvData.in_ || []).filter(function(r){ return r.__risk; }).length +
+               (tdMvData.out_ || []).filter(function(r){ return r.__risk; }).length;
+      if (rk) bits.push(rk + ' at risk');
+      if (tdMvData.movesStale) bits.push('mirror stale');
       n.textContent = bits.join(' · ');
     }
+    tdMvShow();
+  }
+  function tdMvShow(){
+    var bar = el('td-mv-bar'), cal = el('td-mv-cal'), tr = el('td-mv-track');
+    if (!bar || !cal || !tr) return;
+    function tg(grp, cur, opts, labels){
+      return '<span class="mvtgl">' + opts.map(function(o, i){
+        return '<button type="button" data-mv-' + grp + '="' + o + '"' + (o === cur ? ' class="on"' : '') + '>' + labels[i] + '</button>';
+      }).join('') + '</span>';
+    }
+    var h = tg('view', tdMvView, ['cal', 'track'], ['Calendar', 'Tracker']);
+    if (tdMvView === 'cal') h += tg('cal', tdMvCalView, ['month', 'week'], ['Month', 'Week']);
+    h += tg('kind', tdMvKind, ['both', 'in', 'out'], ['Both', 'In', 'Out']);
+    if (tdMvView === 'track') h += tg('days', tdMvDays, ['30', '60', '90', 'all'], ['30d', '60d', '90d', 'All']);
+    bar.innerHTML = h;
+    cal.hidden = tdMvView !== 'cal';
+    tr.hidden = tdMvView !== 'track';
+    if (tdMvView === 'cal') tdMvRenderCal(); else tdMvRenderTrack();
+  }
+  function tdMvCtl(b){
+    var v;
+    if ((v = b.getAttribute('data-mv-view'))){ tdMvView = v; try { localStorage.setItem('ledger_mgrmoves_view_v1', v); } catch (e) {} }
+    else if ((v = b.getAttribute('data-mv-cal'))){ tdMvCalView = v; try { localStorage.setItem('ledger_mgrmoves_calview_v1', v); } catch (e) {} if (mvcal) mvcal.changeView(v === 'week' ? 'timeGridWeek' : 'dayGridMonth'); }
+    else if ((v = b.getAttribute('data-mv-kind'))){ tdMvKind = v; try { localStorage.setItem('ledger_mgrmoves_kind_v1', v); } catch (e) {} if (mvcal) mvcal.refetchEvents(); }
+    else if ((v = b.getAttribute('data-mv-days'))){ tdMvDays = v; try { localStorage.setItem('ledger_mgrmoves_days_v1', v); } catch (e) {} }
+    else if ((v = b.getAttribute('data-mv-stage')) != null){ tdMvStageF = v; }
+    tdMvShow();
+  }
+  // ── calendar view (FullCalendar — the bundled engine; .fc-ev-t keeps the documented
+  // ellipsis exception, everything else wraps) ──────────────────────────────
+  function fcMoveEventContent(arg){
+    var p = arg.event.extendedProps || {};
+    var wrap = document.createElement('div');
+    wrap.className = 'fc-ev-wrap';
+    wrap.innerHTML = '<span class="fc-mv-k">' + (p.kind === 'move_out' ? 'OUT' : 'IN') + (p.ghost ? '?' : '') + '</span>' +
+      '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' +
+      (p.risk ? '<span class="fc-mv-r" title="at risk">&#9888;</span>' : '') +
+      (p.tentative ? '<span class="fcx" title="tentative">?</span>' : '');
+    return { domNodes: [wrap] };
+  }
+  function tdMvCalSrc(info, success, failure){
+    var p = new URLSearchParams();
+    p.set('from', info.startStr.slice(0, 10));
+    p.set('to', info.endStr.slice(0, 10));
+    authFetch('/gcal/moves?' + p.toString()).then(function(j){
+      var evs = [];
+      ((j && j.moves) || []).filter(tdMgrMovesScopePass).forEach(function(r){
+        var isIn = r.event_kind === 'move_in';
+        if (tdMvKind !== 'both' && (isIn !== (tdMvKind === 'in'))) return;
+        var row = tdMvRowByUnit(isIn ? 'in' : 'out', r.unit_id);
+        evs.push({ id: 'g' + r.id, title: gcalMoveWhere(r), start: r.starts_at, end: r.ends_at || undefined,
+          allDay: !!r.all_day, classNames: ['fc-mv', isIn ? 'fc-mv-in' : 'fc-mv-out'],
+          extendedProps: { kind: r.event_kind, unit_id: r.unit_id, lease_id: row ? row.lease_id : null,
+            tentative: !!r.tentative, risk: !!(row && row.__risk) } });
+      });
+      var from = info.startStr.slice(0, 10), to = info.endStr.slice(0, 10);
+      tdMvGhostRows().forEach(function(r){
+        var d = r.__k === 'in' ? r.move_in_date : r.move_out_date;
+        if (!d || d < from || d >= to) return;
+        evs.push({ id: 't' + r.__k + r.lease_id, title: tdMvWhere(r) + ' — no appt', start: d, allDay: true,
+          classNames: ['fc-mv', 'fc-mv-ghost', r.__k === 'in' ? 'fc-mv-in' : 'fc-mv-out'],
+          extendedProps: { kind: r.__k === 'in' ? 'move_in' : 'move_out', unit_id: r.unit_id,
+            lease_id: r.lease_id, ghost: true, risk: !!r.__risk } });
+      });
+      success(evs);
+    }).catch(function(e){
+      if (String(e && e.message) !== 'AUTH') console.error('mv cal events failed', e);
+      failure(e);
+    });
+  }
+  function tdMvRenderCal(){
+    var box = el('td-mv-cal'); if (!box) return;
+    // the manager grid re-renders via innerHTML — a surviving instance points at a detached
+    // node; destroy + rebuild is the only safe contract here
+    if (mvcal && mvcal.el !== box.firstChild){ try { mvcal.destroy(); } catch (e) {} mvcal = null; }
+    if (!mvcal){
+      box.innerHTML = '';
+      var host = document.createElement('div');
+      box.appendChild(host);
+      mvcal = new FullCalendar.Calendar(host, {
+        initialView: tdMvCalView === 'week' ? 'timeGridWeek' : 'dayGridMonth',
+        headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
+        height: 560, firstDay: 0, dayMaxEvents: true, eventDisplay: 'block',
+        allDaySlot: true, slotMinTime: '07:00:00', slotMaxTime: '20:00:00', expandRows: true,
+        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
+        eventContent: fcMoveEventContent,
+        eventClick: function(info){
+          if (info.jsEvent) info.jsEvent.preventDefault();
+          var xp = info.event.extendedProps || {};
+          if (xp.lease_id != null) tdMvOpen(xp.kind === 'move_out' ? 'out' : 'in', xp.lease_id);
+          else if (xp.unit_id != null) openUnitEnsure(String(xp.unit_id));
+        },
+        events: tdMvCalSrc
+      });
+      mvcal.render();
+    } else {
+      mvcal.updateSize();
+      mvcal.refetchEvents();
+    }
+  }
+  // ── tracker view ──────────────────────────────────────────────────────────
+  var TD_MV_FILT = {
+    in: [['all', 'All'], ['risk', '&#9888; At risk'], ['noappt', 'No appt'], ['sd', 'SD due'],
+         ['clean', 'Not cleaned'], ['ins', 'No insurance'], ['insp', 'No inspection'], ['ready', 'Ready']],
+    out: [['all', 'All'], ['risk', '&#9888; At risk'], ['ntv', 'No signed NTV'], ['insp', 'No inspection'],
+          ['soda', 'SODA due'], ['turned', 'Not turned'], ['done', 'Complete']]
+  };
+  function tdMvPass(r, k, f){
+    var s = k === 'in' ? tdMvStagesIn(r) : tdMvStagesOut(r);
+    if (f === 'all') return true;
+    if (f === 'risk') return !!r.__risk;
+    if (k === 'in'){
+      if (f === 'noappt') return !r.appt_at;
+      if (f === 'sd') return s.sd === 'due';
+      if (f === 'clean') return s.cleaned === 'no';
+      if (f === 'ins') return s.insurance === 'no';
+      if (f === 'insp') return s.inspection === 'no';
+      if (f === 'ready') return s.sd === 'auto' && s.cleaned !== 'no' && s.insurance !== 'no' && s.inspection !== 'no';
+    } else {
+      if (f === 'ntv') return s.ntv === 'no';
+      if (f === 'insp') return s.inspection === 'no';
+      if (f === 'soda') return s.soda === 'no' && tdMvSodaDays(r) > 0;
+      if (f === 'turned') return s.turned === 'no';
+      if (f === 'done') return s.ntv !== 'no' && s.inspection !== 'no' && s.soda !== 'no' && s.turned !== 'no';
+    }
+    return true;
+  }
+  function tdMvWindowPass(r, k){
+    if (tdMvDays === 'all') return true;
+    var d = k === 'in' ? r.move_in_date : r.move_out_date;
+    return !d || d <= dstr(new Date(Date.now() + Number(tdMvDays) * 86400000));
+  }
+  function tdMvDateCell(r, k){
+    var d = k === 'in' ? r.move_in_date : r.move_out_date;
+    var h = '<b>' + esc(String(d || '–')) + '</b>';
+    if (r.appt_at) h += ' <span class="srctag ok">' + esc(schEdFmt(r.appt_at, { hour: 'numeric', minute: '2-digit', hour12: true })) + (r.appt_tentative ? '?' : '') + '</span>';
+    else h += ' <a class="srctag ghost" href="' + esc(tdMvGcalDraft(r)) + '" target="_blank" rel="noopener" title="Nothing booked — draft it in Google Calendar">no appt &#8599;</a>';
+    return h;
+  }
+  function tdMvTrackTable(k){
+    var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+    var head = k === 'in' ? 'Move-ins' : 'Move-outs';
+    if (L === null) return '<div class="note">Could not load ' + head.toLowerCase() + '.</div>';
+    var rows = (L || []).filter(function(r){ return tdMvWindowPass(r, k); });
+    var chips = '<div class="mvchips">' + TD_MV_FILT[k].map(function(f){
+      var cnt = rows.filter(function(r){ return tdMvPass(r, k, f[0]); }).length;
+      return '<button type="button" class="chip' + (tdMvStageF === f[0] ? ' on' : '') + '" data-mv-stage="' + f[0] + '">' + f[1] + ' ' + cnt + '</button>';
+    }).join('') + '</div>';
+    var vis = rows.filter(function(r){ return tdMvPass(r, k, tdMvStageF); })
+      .sort(function(a, b){
+        var d = (b.__risk ? 1 : 0) - (a.__risk ? 1 : 0); if (d) return d;
+        var da = a[k === 'in' ? 'move_in_date' : 'move_out_date'] || '9999';
+        var db = b[k === 'in' ? 'move_in_date' : 'move_out_date'] || '9999';
+        return da < db ? -1 : (da > db ? 1 : 0);
+      });
+    var th = k === 'in'
+      ? '<tr><th>Unit</th><th>Incoming tenant</th><th>Move-in</th><th>SD</th><th>Clean</th><th>Insur</th><th>Inspect</th></tr>'
+      : '<tr><th>Unit</th><th>Outgoing tenant</th><th>Move-out</th><th>NTV</th><th>Inspect</th><th>SODA</th><th>Turned</th></tr>';
+    var body = vis.map(function(r){
+      var s = k === 'in' ? tdMvStagesIn(r) : tdMvStagesOut(r);
+      var cells = k === 'in'
+        ? '<td data-label="SD">' + tdMvTickCell(s.sd) + '</td>' +
+          '<td data-label="Clean">' + tdMvTickCell(s.cleaned, r.cleaned_manual_actor, r.cleaned_manual_at) + '</td>' +
+          '<td data-label="Insur">' + tdMvTickCell(s.insurance, r.insurance_manual_actor, r.insurance_manual_at) + '</td>' +
+          '<td data-label="Inspect">' + tdMvTickCell(s.inspection, r.inspection_manual_actor, r.inspection_manual_at) + '</td>'
+        : '<td data-label="NTV">' + tdMvTickCell(s.ntv, r.ntv_manual_actor, r.ntv_manual_at) + '</td>' +
+          '<td data-label="Inspect">' + tdMvTickCell(s.inspection, r.inspection_manual_actor, r.inspection_manual_at) + '</td>' +
+          '<td data-label="SODA">' + tdMvTickCell(s.soda, r.soda_manual_actor, r.soda_manual_at) + (tdMvSodaDays(r) >= 10 ? ' <span class="mvtick warn" title="10+ days past move-out">' + tdMvSodaDays(r) + 'd</span>' : '') + '</td>' +
+          '<td data-label="Turned">' + tdMvTickCell(s.turned, r.turned_manual_actor, r.turned_manual_at) + '</td>';
+      return '<tr' + (r.__risk ? ' class="mvrisk"' : '') + ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '" role="button" tabindex="0">' +
+        '<td data-label="Unit"><b>' + esc([r.property_name, r.unit_number].filter(Boolean).join(' · ')) + '</b>' +
+          (r.address_line1 ? '<div class="schoffer-sub">' + esc(r.address_line1) + '</div>' : '') + '</td>' +
+        '<td data-label="Tenant">' + esc((k === 'in' ? r.incoming_tenant_names : r.outgoing_tenant_names) || '–') + '</td>' +
+        '<td data-label="' + head.slice(0, -1) + '">' + tdMvDateCell(r, k) + '</td>' + cells + '</tr>';
+    }).join('');
+    return '<div class="mvsec-h">' + head + ' <span class="qn2">' + vis.length + (vis.length === rows.length ? '' : ' of ' + rows.length) + '</span></div>' +
+      chips + (body ? '<div class="scrollx"><table class="mvtable" id="td-mv-t' + k + '"><thead>' + th + '</thead><tbody>' + body + '</tbody></table></div>'
+        : '<div class="note">Nothing matches this filter.</div>');
+  }
+  function tdMvRenderTrack(){
+    var tr = el('td-mv-track'); if (!tr) return;
+    var h = '';
+    if (tdMvKind !== 'out') h += tdMvTrackTable('in');
+    if (tdMvKind !== 'in') h += tdMvTrackTable('out');
+    tr.innerHTML = h;
+  }
+  // ── the move drawer ───────────────────────────────────────────────────────
+  function tdMvTickBtn(r, stage, st){
+    if (st === 'auto') return '<span class="mvtick ok">&#10003; auto</span>';
+    var done = st === 'man';
+    return '<button type="button" class="tdact" data-mvtick="' + stage + '" data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + r.__k + '" data-mvst="' + (done ? 'cleared' : 'done') + '">' + (done ? 'Undo' : 'Mark done') + '</button>';
+  }
+  function tdMvDrawerBody(r, det){
+    var k = r.__k, s = k === 'in' ? tdMvStagesIn(r) : tdMvStagesOut(r);
+    var d = k === 'in' ? r.move_in_date : r.move_out_date;
+    var h = '<div class="lmhead"><h3>' + esc(tdMvWhere(r)) + ' &middot; ' + (k === 'in' ? 'move-in' : 'move-out') + ' ' + esc(String(d || '')) + '</h3>' +
+      '<div class="lmsub">' + esc((k === 'in' ? r.incoming_tenant_names : r.outgoing_tenant_names) || '') +
+      (r.property_manager_name ? ' &middot; Manager: ' + esc(r.property_manager_name) : '') + (r.__risk ? ' &middot; <span class="mvtick warn">&#9888; at risk</span>' : '') + '</div></div><div class="lmbody">';
+    // contact + quick actions (PII arrives via /move-detail on open — the v_leases pattern)
+    h += '<div class="mvd-c" id="mv-d-contact">' + (det === null ? '<span class="note">Contact unavailable.</span>' : (det ? '' : '<span class="note">Loading contact&hellip;</span>')) + '</div>';
+    if (det && det.contact && det.contact.length){
+      h += '<div class="mvd-c">' + det.contact.map(function(c){
+        var nm = [c.first_name, c.last_name].filter(Boolean).join(' ');
+        var b = '<b>' + esc(nm || 'Tenant') + '</b>';
+        if (c.phone) b += ' <a class="tdact" href="' + esc(rcCall(String(c.phone))) + '">&#128222; Call</a>' +
+          ' <a class="tdact" href="' + esc(rcText(String(c.phone), '')) + '">&#128172; Text</a>';
+        if (c.email) b += ' <a class="tdact" href="mailto:' + esc(String(c.email)) + '">&#9993; Email</a>';
+        return '<div class="mvd-row">' + b + '</div>';
+      }).join('') + '</div>';
+      // SD reminder: only when due and we have a number/email (tenant-facing copy — plain
+      // and factual; no internal URLs ever)
+      var c0 = det.contact[0] || {};
+      if (k === 'in' && s.sd === 'due' && (c0.phone || c0.email)){
+        var first = String((c0.first_name || '')).trim() || 'there';
+        var amt = (Number(r.sd_charged) || 0) - (Number(r.sd_paid) || 0);
+        var msg = 'Hi ' + first + ', a friendly reminder from Live Furnished: the security deposit' +
+          (amt > 0 ? ' balance of ' + fmtMoney(amt) : '') + ' for ' + tdMvWhere(r) +
+          ' is still outstanding and needs to be received before your move-in on ' + String(r.move_in_date || '') + '. Reply here if you have any questions.';
+        h += '<div class="mvd-row">' +
+          (c0.phone ? '<a class="tdact" href="' + esc(rcText(String(c0.phone), msg)) + '">&#128172; Send SD reminder text</a> ' : '') +
+          (c0.email ? '<a class="tdact" href="mailto:' + esc(String(c0.email)) + '?subject=' + encodeURIComponent('Security deposit — ' + tdMvWhere(r)) + '&body=' + encodeURIComponent(msg) + '">&#9993; SD reminder email</a>' : '') + '</div>';
+      }
+    }
+    h += '<div class="mvd-row"><button type="button" class="tdact" data-uid="' + esc(String(r.unit_id)) + '">Open unit</button> ' +
+      (!r.appt_at ? '<a class="tdact" href="' + esc(tdMvGcalDraft(r)) + '" target="_blank" rel="noopener">Book in Google Calendar &#8599;</a>' : '<span class="srctag ok">appt ' + esc(schEdFmt(r.appt_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })) + '</span>') + '</div>';
+    // money (daily-fresh ledger mirror; the unit modal's Ledger drill is the live view)
+    if (k === 'in'){
+      h += '<div class="mvd-money"><div class="orcfg-h">Ledger &middot; as of last sync</div>' +
+        '<div class="mvd-row">Security deposit: ' + (r.sd_charged == null ? 'unknown' : fmtMoney(r.sd_paid || 0) + ' of ' + fmtMoney(r.sd_charged)) + ' ' + tdMvTickCell(s.sd) + '</div>' +
+        (r.rent_charged != null ? '<div class="mvd-row">Rent charged: ' + fmtMoney(r.rent_paid || 0) + ' of ' + fmtMoney(r.rent_charged) + '</div>' : '') +
+        (r.other_charged ? '<div class="mvd-row">Other charges: ' + fmtMoney(r.other_paid || 0) + ' of ' + fmtMoney(r.other_charged) + '</div>' : '') +
+        (r.ledger_balance != null ? '<div class="mvd-row"><b>Balance to clear before keys: ' + fmtMoney(r.ledger_balance) + '</b></div>' : '') + '</div>';
+    }
+    // checklist
+    var steps = k === 'in'
+      ? [['welcome', 'Welcome email sent', s.welcome], ['sd', 'SD paid (gates booking)', s.sd],
+         ['cleaned', 'Unit cleaned' + (r.clean_task_open ? ' &middot; task open' : ''), s.cleaned],
+         ['insurance', 'Tenant insurance', s.insurance], ['inspection', 'Move-in inspection', s.inspection]]
+      : [['ntv', 'Signed notice to vacate', s.ntv], ['inspection', 'Move-out inspection', s.inspection],
+         ['soda', 'SODA sent &middot; SD returned' + (tdMvSodaDays(r) ? ' &middot; ' + tdMvSodaDays(r) + 'd since move-out' : ''), s.soda],
+         ['turned', 'Turned &middot; cleaned + maintenance', s.turned]];
+    h += '<div class="orcfg-h">Checklist</div>' + steps.map(function(st){
+      if (st[0] === 'sd'){
+        var sdChip = '<span class="mvtick ' + (st[2] === 'auto' ? 'ok' : (st[2] === 'due' ? 'warn' : 'pend')) + '">' +
+          (st[2] === 'auto' ? '&#10003; paid' : (st[2] === 'due' ? '&#9888; due' : 'unknown')) + '</span>';
+        return '<div class="mvd-crow"><span>' + st[1] + '</span><span>' + sdChip + '</span></div>';
+      }
+      return '<div class="mvd-crow"><span>' + st[1] + '</span><span>' +
+        tdMvTickCell(st[2], r[st[0] + '_manual_actor'], r[st[0] + '_manual_at']) + ' ' + tdMvTickBtn(r, st[0], st[2]) + '</span></div>';
+    }).join('');
+    // documents
+    h += '<div class="orcfg-h">Documents</div><div id="mv-d-docs">' +
+      (det === undefined ? '<span class="note">Loading documents&hellip;</span>'
+        : (det && det.docs && det.docs.length ? det.docs.slice(0, 12).map(function(f){
+            return '<div class="ndfile"><span class="ndfile-l"><a href="#" class="ndfile-dl" data-fileid="' + esc(String(f.buildium_id)) + '" data-fname="' + esc(f.title || ('file-' + f.buildium_id)) + '">' + esc(f.title || 'Document') + '</a></span>' +
+              '<span class="ndfile-m">' + esc(String(f.uploaded_at || '').slice(0, 10)) + '</span></div>';
+          }).join('') : '<span class="note">No documents on the lease, unit or tenants.</span>')) + '</div>';
+    return h + '</div>';
+  }
+  function tdMvOpen(k, leaseId){
+    var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+    var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
+    var mm = el('mvmodal'), body = el('mv-d-body');
+    if (!r || !mm || !body) return;
+    body.innerHTML = tdMvDrawerBody(r, undefined);
+    if (!mm.classList.contains('open')) openModal('mvmodal');   // house helper: stack + Escape + open animation
+    var g = ++tdMvDetReq;
+    authFetch('/move-detail?lease_id=' + encodeURIComponent(String(r.lease_id)) + '&kind=' + k).then(function(j){
+      if (g !== tdMvDetReq) return;
+      body.innerHTML = tdMvDrawerBody(r, j || null);
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      if (g !== tdMvDetReq) return;
+      body.innerHTML = tdMvDrawerBody(r, null);
+    });
+  }
+  function tdMvTick(btn){
+    var leaseId = Number(btn.getAttribute('data-mvl')), k = btn.getAttribute('data-mvk');
+    var stage = btn.getAttribute('data-mvtick'), state = btn.getAttribute('data-mvst') || 'done';
+    var actor = getActor();
+    if (!actor){ alert('Pick your name first (the actor selector in the sidebar).'); return; }
+    btn.disabled = true;
+    postJSON('/move/tick', { lease_id: leaseId, move_kind: k, stage: stage, state: state, actor: actor }).then(function(j){
+      var t = (j && j.tick) || {};
+      var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+      var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
+      if (r){
+        r[stage + '_manual_state'] = t.state || state;
+        r[stage + '_manual_actor'] = t.actor || actor;
+        r[stage + '_manual_at'] = t.noted_at || new Date().toISOString();
+        r.__risk = (k === 'in') ? tdMvRiskIn(r) : tdMvRiskOut(r);
+        tdMvOpen(k, leaseId);                       // re-render the drawer from local state
+        if (tdMvView === 'track') tdMvRenderTrack();
+      }
+    }).catch(function(e){
+      btn.disabled = false;
+      if (String(e && e.message) !== 'AUTH') alert('Could not save that checkmark — try again.');
+    });
   }
   function tdMgrAssemble(){
-    var m = { stats: null, tasks: null, renewals: null, units: null, moves: null, trends: null }, done = 0, q = tdReq;
+    var m = { stats: null, tasks: null, renewals: null, units: null, moves: null, trends: null, trackIn: null, trackOut: null }, done = 0, q = tdReq;
     // mirror of the agent guard: a manager assembly that finishes after a flip to Agent must not
     // paint (its targets are null-guarded today, but that is luck, not a contract).
     // Option C: ONE /manager-brief read replaces the three list fetches (server-scoped by the
     // same ids appendScope sends); /stats stays separate so brief/pulse numbers can never
     // diverge from the Ledger, and the GCal moves stay their own request (not in the RPC).
-    var step = function(){ if (++done === 3 && q === tdReq) tdRenderMgr(m); };
+    // WS-M M3: FIVE fetches — + the two tracker reads (days=all once; the window chips
+    // filter client-side, so toggles never refetch). Adding a fetch here means bumping the
+    // counter below, or the ENTIRE manager brief hangs on "Loading" (the v226 lesson).
+    var step = function(){ if (++done === 5 && q === tdReq) tdRenderMgr(m); };
+    authFetch('/move-tracker?kind=in&days=all').then(function(j){ m.trackIn = (j && j.rows) || []; }).catch(function(e){
+      if (String(e && e.message) !== 'AUTH') console.error('move-tracker in failed', e);
+    }).then(step);
+    authFetch('/move-tracker?kind=out&days=all').then(function(j){ m.trackOut = (j && j.rows) || []; }).catch(function(e){
+      if (String(e && e.message) !== 'AUTH') console.error('move-tracker out failed', e);
+    }).then(step);
     authFetch('/stats?' + buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(){}).then(step);
     gcalMovesFetch().then(function(j){ m.moves = j; }).catch(function(e){
       if (String(e && e.message) !== 'AUTH') console.error('gcal moves (manager) failed', e);
@@ -4356,7 +4773,7 @@ window.addEventListener('error', function(e){
     ]);
   }
   function tdRenderMgr(m){
-    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderAging(m); tdMgrRenderMoves(m); tdMgrRenderUnits(m);
+    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderAging(m); tdMvRenderCard(m); tdMgrRenderUnits(m);
   }
   // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
   // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff,
@@ -4457,6 +4874,16 @@ window.addEventListener('error', function(e){
       m.units.forEach(function(u){ var b = Number(u.total_balance) || 0; if (b > 0){ owed += b; oweN++; } });
       if (oweN) L.push({ k: 'balance', t: oweN + (oweN === 1 ? ' tenant owes ' : ' tenants owe ') + fmtMoney(owed) });
     }
+    // WS-M M3 (D8): tracker-driven at-risk lines — click lands on the Moves card in
+    // tracker view, pre-filtered to the At-risk chip
+    if (m.trackIn){
+      var rkIn = m.trackIn.filter(tdMgrScopePass).filter(tdMvRiskIn).length;
+      if (rkIn) L.push({ k: 'moves', t: rkIn + ' move-in' + (rkIn === 1 ? '' : 's') + ' at risk — inside 7 days missing SD or cleaning' });
+    }
+    if (m.trackOut){
+      var od10 = m.trackOut.filter(tdMgrScopePass).filter(function(r){ return tdMvSodaDays(r) >= 10; }).length;
+      if (od10) L.push({ k: 'moves', t: od10 + ' deposit return' + (od10 === 1 ? '' : 's') + ' overdue — 10+ days past move-out' });
+    }
     if (m.stats && m.stats.vacancy){
       var v = m.stats.vacancy, ag = m.stats.aging || {};
       var old60 = (ag.d61_90 || 0) + (ag.d90 || 0);
@@ -4538,11 +4965,11 @@ window.addEventListener('error', function(e){
     var feed = [];
     m.units.forEach(function(u){
       var label = (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '');
-      var dOut = tdMgrDays(u.next_move_out), dIn = tdMgrDays(u.future_move_in_date);
+      // WS-M M3 (D1): the move-in/move-out ≤14d lines are GONE — the Moves card owns move
+      // movement now (same units, richer stage state). This feed keeps only what the card
+      // does not carry: evictions, notices, and vacancy aging.
       if (u.unit_event === 'Eviction Pending') feed.push({ w: 0, chip: '<span class="chip c-bad">eviction</span>', t: label, sub: u.tenant_names || '', id: u.unit_id });
       else if (u.unit_event === 'Notice to Vacate') feed.push({ w: 1, chip: '<span class="chip c-hot">notice</span>', t: label, sub: (u.next_move_out ? 'moving out ' + u.next_move_out : '') + (u.tenant_names ? ' · ' + u.tenant_names : ''), id: u.unit_id });
-      else if (u.unit_event === 'Upcoming Move-Out' || (dOut != null && dOut >= 0 && dOut <= 14)) feed.push({ w: 2, chip: '<span class="chip c-warm">move-out</span>', t: label, sub: u.next_move_out ? 'on ' + u.next_move_out : '', id: u.unit_id });
-      if (u.has_upcoming_move_in && dIn != null && dIn <= 14) feed.push({ w: 3, chip: '<span class="chip c-ok">move-in</span>', t: label, sub: u.future_move_in_date ? 'on ' + u.future_move_in_date : '', id: u.unit_id });
       if (u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60) feed.push({ w: 4, chip: '<span class="chip c-cold">aging</span>', t: label, sub: 'vacant ' + u.days_vacant + 'd' + (u.is_listed ? ' · listed' : ' · NOT listed'), id: u.unit_id });
     });
     feed.sort(function(a, b){ return a.w - b.w; });
@@ -4554,6 +4981,15 @@ window.addEventListener('error', function(e){
   function tdMgrBriefGo(k){
     if (k === 'ledger'){ showTab('ledger'); return; }
     if (k === 'balance'){ gotoUnitsFiltered('balance'); return; }   // M2: Units sorted by balance
+    if (k === 'moves'){
+      // land on the tracker pre-filtered to At-risk (the brief line's population)
+      tdMvView = 'track'; tdMvStageF = 'risk';
+      try { localStorage.setItem('ledger_mgrmoves_view_v1', 'track'); } catch (err) {}
+      tdMvShow();
+      var mvb = el('td-mv-bar');
+      if (mvb){ var mvp = mvb.closest('section.panel') || mvb; mvp.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      return;
+    }
     var id = k === 'tasks' ? 'td-mgr-tasks' : (k === 'renewals' ? 'td-mgr-ren' : 'td-mgr-units');
     var box = el(id); if (!box) return;
     var p = box.closest('section.panel') || box;
@@ -4578,6 +5014,15 @@ window.addEventListener('error', function(e){
       }
       var bk = e.target.closest('[data-book]');
       if (bk){ tdGotoBook(bk.getAttribute('data-book')); return; }
+      // WS-M M3: Moves-card controls + tracker rows (the card lives inside this grid)
+      var mvc = e.target.closest('[data-mv-view],[data-mv-cal],[data-mv-kind],[data-mv-days],[data-mv-stage]');
+      if (mvc){ tdMvCtl(mvc); return; }
+      var mvr = e.target.closest('tr[data-mvl]');
+      if (mvr){
+        if (e.target.closest('a')) return;   // the "no appt ↗" gcal-draft link keeps its default
+        tdMvOpen(mvr.getAttribute('data-mvk'), mvr.getAttribute('data-mvl'));
+        return;
+      }
       var ur = e.target.closest('.tdurow');
       if (ur){ openUnitEnsure(ur.getAttribute('data-uid')); return; }
       var br = e.target.closest('.tdbrief');
@@ -4597,6 +5042,18 @@ window.addEventListener('error', function(e){
       var a = (tdCalAgents || []).filter(function(x){ return x.display_name === ag; })[0];
       if (a) schBkPickAgent(String(a.id));   // sets tdCalAgent + redraws + loads event types/availability
       else { tdCalAgent = ag; tdDrawCal(); }
+    });
+  })();
+  // WS-M M3: drawer interactions — mvmodal lives OUTSIDE #td-grid, so it needs its own
+  // once-at-boot delegate (data-close and the document-level ndfile-dl handlers are global
+  // already; ticks and the Open-unit jump are the only drawer-local actions).
+  (function(){
+    var mm = el('mvmodal'); if (!mm) return;
+    mm.addEventListener('click', function(e){
+      var t = e.target.closest('[data-mvtick]');
+      if (t){ tdMvTick(t); return; }
+      var u = e.target.closest('[data-uid]');
+      if (u){ closeModal('mvmodal'); openUnitEnsure(u.getAttribute('data-uid')); }   // the mimodal precedent
     });
   })();
 

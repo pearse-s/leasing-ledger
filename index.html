@@ -743,6 +743,8 @@ window.addEventListener('error', function(e){
   .mvtable td{padding:8px;border-bottom:1px solid var(--hairline);vertical-align:top}
   .mvtable tr[data-mvl]{cursor:pointer}
   .mvtable tr[data-mvl]:hover td{background:rgba(244,236,225,.04)}
+  .mvtable .tdurow{cursor:pointer;display:inline-block}   /* WS-M M5: clickable unit name in the renewals card (Moves tracker uses tr[data-mvl] instead) */
+  .mvtable .tdurow:hover{color:var(--clay)}
   tr.mvrisk td{background:rgba(232,180,62,.06)}
   tr.mvrisk td:first-child{box-shadow:inset 3px 0 0 var(--clay)}
   .mvtick{font-weight:700;white-space:nowrap}
@@ -3826,8 +3828,8 @@ window.addEventListener('error', function(e){
       if (tmRoster === null){ var wq = tdReq; idRosterLoad(function(){ if (wq === tdReq && tdRole() === 'manager') tdRender(); }); }
       g.innerHTML = tdMgrWorkasHtml() + '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
           '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div><div id="td-mgr-trends"></div></section>' +
-        tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks') +
-        tdPanel('td-mgr-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
+        tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks', true) +
+        tdPanel('td-mgr-ren', 'Renewals &middot; next 90 days', 'renewals', 'Open Renewals', true) +   /* WS-M M5: wide — the 5-stage worklist table needs a full row */
         tdPanel('td-mgr-aging', 'Aging vacancies &middot; 60d+', 'units', 'Open Units', true) +
         '<section class="panel tdq tdwide"><h3>Move-ins &amp; move-outs <span class="qn2" id="td-mgr-moves-n"></span></h3>' +
           '<div class="mvbar" id="td-mv-bar"><div class="note">Loading&hellip;</div></div>' +
@@ -4775,7 +4777,7 @@ window.addEventListener('error', function(e){
     var p = new URLSearchParams(); appendScope(p);
     authFetch('/manager-brief?' + p.toString()).then(function(j){
       m.tasks = (j.tasks || []).filter(tdMgrOpenTask);   // server pre-filters open; belt for parity
-      m.renewals = (j.renewals || []).filter(function(r){ return r.renewal_state === 'Pending'; });
+      m.renewals = j.renewals || [];   // WS-M M5: full 5-stage worklist (v_renewal_worklist) — no longer Pending-only
       m.units = j.units || [];
       m.trends = j.trends || null;
     }).catch(function(e){
@@ -4788,7 +4790,7 @@ window.addEventListener('error', function(e){
     var p = new URLSearchParams(); appendScope(p);
     return Promise.all([
       authFetch('/tasks').then(function(j){ m.tasks = (j.tasks || []).filter(tdMgrScopePass).filter(tdMgrOpenTask); }).catch(function(){}),
-      authFetch('/renewals?' + p.toString()).then(function(j){ m.renewals = (j.renewals || []).filter(function(r){ return r.renewal_state === 'Pending'; }); }).catch(function(){}),
+      authFetch('/renewals?' + p.toString()).then(function(j){ m.renewals = j.renewals || []; }).catch(function(){}),   // WS-M M5: pass-through; tdRwStage derives the stage when v_renewal_worklist fields are absent (outage-only path)
       authFetch('/units').then(function(j){ m.units = (j.units || []).filter(tdMgrScopePass); }).catch(function(){})
     ]);
   }
@@ -4877,9 +4879,13 @@ window.addEventListener('error', function(e){
       }
     }
     if (m.renewals){
-      var soon = m.renewals.filter(function(r){ var d = tdMgrDays(r.current_lease_end || r.lease_to_date); return d != null && d <= 30; });
-      if (soon.length) L.push({ k: 'renewals', t: soon.length + ' renewal' + (soon.length === 1 ? '' : 's') + ' undecided inside 30 days' });
-      else if (m.renewals.length) L.push({ k: 'renewals', t: m.renewals.length + ' renewal' + (m.renewals.length === 1 ? '' : 's') + ' pending a decision' });
+      // WS-M M5: the worklist carries every stage now — the brief surfaces the ACTIONABLE ones
+      // (undecided / offer sent / pending e-sign); signed + not-renewing are settled.
+      var tdRwAct = function(r){ var s = tdRwStage(r); return s === 'undecided' || s === 'offer_sent' || s === 'pending_esign'; };
+      var undecSoon = m.renewals.filter(function(r){ if (tdRwStage(r) !== 'undecided') return false; var d = tdMgrDays(r.term_end || r.current_lease_end || r.lease_to_date); return d != null && d <= 30; });
+      var actionable = m.renewals.filter(tdRwAct);
+      if (undecSoon.length) L.push({ k: 'renewals', t: undecSoon.length + ' renewal' + (undecSoon.length === 1 ? '' : 's') + ' undecided inside 30 days' });
+      else if (actionable.length) L.push({ k: 'renewals', t: actionable.length + ' renewal' + (actionable.length === 1 ? '' : 's') + ' need a nudge' });
     }
     if (m.units){
       var ev = m.units.filter(function(u){ return u.unit_event === 'Eviction Pending'; }).length;
@@ -4964,20 +4970,155 @@ window.addEventListener('error', function(e){
     });
     tdFill('td-mgr-tasks', h, rows.length, 'No open tasks in scope.');
   }
+  // ── WS-M M5: the renewals card (5 stage chips + worklist rows + per-stage actions) ─────────
+  // Rows + counts come from get_manager_brief.renewals = dashboard.v_renewal_worklist, which is
+  // the get_stats.pipeline term-end set (next 90d) VERBATIM. "stage" is a STRICT REFINEMENT of
+  // the get_stats bucket — offer_sent is split from undecided by renewal_offer_status, so
+  // undecided + offer_sent always folds back onto get_stats.undecided; the other three map 1:1.
+  // Reconcile before any deploy: SELECT bucket, COUNT(*) FROM dashboard.v_renewal_worklist
+  // GROUP BY 1 -- must equal get_stats.pipeline (spec section 11). NO new route: chase reads
+  // click via the existing /lease-detail (keeps phone/email out of the list — the no-PII rule).
+  var TD_RW_ORDER = ['undecided', 'offer_sent', 'pending_esign', 'signed', 'not_renewing'];
+  var TD_RW_META = {
+    undecided:     { label: 'Undecided',      chip: 'c-cold', pri: 0 },
+    offer_sent:    { label: 'Offer sent',     chip: 'c-warm', pri: 1 },
+    pending_esign: { label: 'Pending e-sign', chip: 'c-warm', pri: 2 },
+    signed:        { label: 'Signed',         chip: 'c-ok',   pri: 4 },
+    not_renewing:  { label: 'Not renewing',   chip: 'c-bad',  pri: 5 }
+  };
+  var tdRwStageF = '';      // '' = all stages; else one of TD_RW_ORDER (chip filter)
+  var tdRwLast = null;      // the last rendered worklist array (chip toggles re-render from it)
+  var tdRwRows = {};        // lease_id -> worklist row (the chase action reads addr/end/name here)
+  var tdRwLeaseCache = {};  // lease_id -> /lease-detail payload (contact fetched once per lease)
+  // stage from the row, with a derive-fallback for the legacy (v_lease_renewals) assembly path
+  function tdRwStage(r){
+    if (r.stage) return r.stage;
+    if (r.has_notice) return 'not_renewing';
+    var s = r.renewal_state;
+    if (s === 'Cancelled' || s === 'Cancelling') return 'not_renewing';
+    if (s === 'Signed') return 'signed';
+    if (s === 'Pending') return 'pending_esign';
+    if (r.renewal_offer_status === 'WaitingResponse') return 'offer_sent';
+    return 'undecided';
+  }
+  function tdRwDateShort(d){   // 'Aug 31' from an ISO date, parsed by parts (no tz shift)
+    var s = String(d || '').slice(0, 10), p = s.split('-');
+    if (p.length < 3) return s;
+    return (ASOF_MON[(+p[1]) - 1] || '') + ' ' + (+p[2]);
+  }
+  function tdRwAddr(r){
+    return r.address_line1 || [r.property_name, r.unit_number].filter(Boolean).join(' ') || 'your unit';
+  }
+  function tdRwBuildium(leaseId){
+    return 'https://livefurnished.managebuilding.com/manager/app/leasing/leases/' + encodeURIComponent(leaseId) + '/summary';
+  }
+  // current rent -> renewal rent (or -> market for undecided/offer, where no offered rent exists)
+  function tdRwRentCell(r, stage){
+    var cur = (r.current_rent != null && r.current_rent > 0) ? fmtMoney(r.current_rent) : null;
+    var nw  = (r.renewal_rent != null && r.renewal_rent > 0) ? r.renewal_rent : null;
+    var mkt = (r.market_rent  != null && r.market_rent  > 0) ? r.market_rent  : null;
+    if (nw != null) return (cur ? cur + ' &rarr; ' : '') + '<b>' + fmtMoney(nw) + '</b>';
+    if (cur && mkt != null && (stage === 'undecided' || stage === 'offer_sent') && Math.round(mkt) !== Math.round(r.current_rent))
+      return cur + ' <span class="srctag">mkt ' + fmtMoney(mkt) + '</span>';
+    return cur || (mkt != null ? '<span class="srctag">mkt ' + fmtMoney(mkt) + '</span>' : '&ndash;');
+  }
+  function tdRwActionCell(r, stage){
+    if (stage === 'undecided' || stage === 'offer_sent')
+      return '<a class="tdact" href="' + esc(tdRwBuildium(r.lease_id)) + '" target="_blank" rel="noopener">Open in Buildium &#8599;</a>';
+    if (stage === 'pending_esign')
+      return '<button type="button" class="tdact" data-rn-chase="email" data-rn-lease="' + esc(String(r.lease_id)) + '">Chase e-sign &#9993;</button> ' +
+             '<button type="button" class="tdact" data-rn-chase="sms" data-rn-lease="' + esc(String(r.lease_id)) + '" title="Text the tenant">&#128172;</button>';
+    if (stage === 'not_renewing')
+      return '<button type="button" class="tdact" data-rn-moves="1" title="This unit is in the Move-outs tracker">&rarr; Move-outs</button>';
+    return '';   // signed — settled, nothing to chase
+  }
   function tdMgrRenderRenewals(m){
+    var box = el('td-mgr-ren'); if (!box) return;
     if (m.renewals === null){ tdFail('td-mgr-ren', 'renewals'); return; }
-    var rows = m.renewals.slice().sort(function(a, b){
-      return (Date.parse(a.current_lease_end || a.lease_to_date || '') || 9e15) - (Date.parse(b.current_lease_end || b.lease_to_date || '') || 9e15);
+    var all = m.renewals.slice();
+    tdRwLast = all;
+    tdRwRows = {};
+    all.forEach(function(r){ tdRwRows[r.lease_id] = r; });
+    if (!all.length){
+      box.innerHTML = '<div class="note">No lease renewals in the next 90 days.</div>';
+      var n0 = el('td-mgr-ren-n'); if (n0) n0.textContent = '';
+      return;
+    }
+    var counts = {}; TD_RW_ORDER.forEach(function(s){ counts[s] = 0; });
+    all.forEach(function(r){ var s = tdRwStage(r); if (counts[s] != null) counts[s]++; });
+    var chips = '<div class="mvchips">' + TD_RW_ORDER.map(function(s){
+      return '<button type="button" class="chip' + (tdRwStageF === s ? ' on' : '') + '" data-rn-stage="' + s + '">' +
+        TD_RW_META[s].label + ' ' + counts[s] + '</button>';
+    }).join('') + '</div>';
+    var vis = all.filter(function(r){ return !tdRwStageF || tdRwStage(r) === tdRwStageF; })
+      .map(function(r){ var s = tdRwStage(r); var d = tdMgrDays(r.term_end); return { r: r, s: s, d: d,
+        risk: (s === 'undecided' || s === 'offer_sent' || s === 'pending_esign') && d != null && d <= 14 }; })
+      .sort(function(a, b){
+        var rd = (b.risk ? 1 : 0) - (a.risk ? 1 : 0); if (rd) return rd;
+        var pd = TD_RW_META[a.s].pri - TD_RW_META[b.s].pri; if (pd) return pd;
+        return (a.d == null ? 9e9 : a.d) - (b.d == null ? 9e9 : b.d);
+      });
+    var th = '<tr><th>Unit</th><th>Tenant</th><th>Lease ends</th><th>Rent</th><th>Status</th><th></th></tr>';
+    var body = vis.map(function(x){
+      var r = x.r, s = x.s, d = x.d, meta = TD_RW_META[s];
+      var pend = '';
+      if (s === 'pending_esign' && r.renewal_created){
+        var dd = Math.floor((Date.now() - Date.parse(r.renewal_created)) / 86400000);
+        if (dd >= 0) pend = ' &middot; ' + dd + 'd';
+      }
+      var endTxt = esc(tdRwDateShort(r.term_end)) + (d == null ? '' : ' <small>&middot; ' + (d <= 0 ? 'now' : d + 'd') + '</small>');
+      return '<tr' + (x.risk ? ' class="mvrisk"' : '') + '>' +
+        '<td data-label="Unit"><span class="tdurow" data-uid="' + esc(String(r.unit_id)) + '" role="button" tabindex="0"><b>' +
+          esc([r.property_name, r.unit_number].filter(Boolean).join(' · ')) + '</b></span>' +
+          (r.address_line1 ? '<div class="schoffer-sub">' + esc(r.address_line1) + '</div>' : '') + '</td>' +
+        '<td data-label="Tenant">' + esc(r.tenant_names || '–') + '</td>' +
+        '<td data-label="Lease ends">' + endTxt + '</td>' +
+        '<td data-label="Rent">' + tdRwRentCell(r, s) + '</td>' +
+        '<td data-label="Status"><span class="chip ' + meta.chip + '">' + meta.label + pend + '</span></td>' +
+        '<td data-label="">' + tdRwActionCell(r, s) + '</td></tr>';
+    }).join('');
+    var flow = '<div class="note">Not renewing &rarr; notice on the lease &rarr; the unit appears in <b>Move-outs</b> automatically on the next sync.</div>';
+    box.innerHTML = chips +
+      (body ? '<div class="scrollx"><table class="mvtable"><thead>' + th + '</thead><tbody>' + body + '</tbody></table></div>'
+            : '<div class="note">Nothing in this stage.</div>') + flow;
+    var n = el('td-mgr-ren-n');
+    if (n){ var act = counts.undecided + counts.offer_sent + counts.pending_esign; n.textContent = act ? act + ' to work' : ''; }
+  }
+  // Chase a pending e-signature: fetch tenant contact on click (the no-PII-in-list rule), then
+  // open a prefilled RingCentral text / mailto. Tenant-facing copy is plain and factual, no URLs.
+  function tdRwChase(leaseId, channel){
+    var r = tdRwRows[leaseId]; if (!r) return;
+    var go = function(det){
+      var t0 = (det && det.tenants && det.tenants[0]) || {};
+      var first = String((t0.name || r.tenant_names || '').trim().split(/\s+/)[0] || 'there').trim() || 'there';
+      var addr = tdRwAddr(r), end = tdRwDateShort(r.term_end);
+      var me = String(getActor() || '').trim().split(/\s+/)[0] || 'the Live Furnished team';
+      if (channel === 'sms'){
+        var phone = t0.phone;
+        if (!phone){ alert('No phone number on file for this tenant — try the email chase.'); return; }
+        window.location.href = rcText(String(phone), tdRwChaseText(first, addr, end, me));
+      } else {
+        var email = t0.email || t0.alt_email;
+        if (!email){ alert('No email on file for this tenant — try the text chase.'); return; }
+        window.location.href = tdMailto(email, tdRwChaseSubject(addr), tdRwChaseBody(first, addr, end, me));
+      }
+    };
+    if (tdRwLeaseCache[leaseId]) return go(tdRwLeaseCache[leaseId]);
+    authFetch('/lease-detail?lease_id=' + encodeURIComponent(leaseId)).then(function(j){ tdRwLeaseCache[leaseId] = j; go(j); }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('lease-detail (renewal chase) failed', e);
+      alert('Could not load the tenant contact — please try again.');
     });
-    var h = '';
-    rows.slice(0, 8).forEach(function(r){
-      var end = r.current_lease_end || r.lease_to_date;
-      var d = tdMgrDays(end);
-      var urg = d == null ? '' : (d <= 30 ? '<span class="chip c-hot">' + (d <= 0 ? 'ended' : d + 'd left') + '</span>' : '<span class="chip c-warm">' + d + 'd left</span>');
-      h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.tenant_names || '–') + '</b> &middot; ' + esc(r.property_name || '') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') +
-        '<div class="schoffer-sub">' + (r.rent != null ? fmtMoney(r.rent) + ' &middot; ' : '') + (end ? 'current lease ends ' + esc(String(end).slice(0, 10)) : '') + '</div></div>' + urg + '</div>';
-    });
-    tdFill('td-mgr-ren', h, rows.length, 'No renewals pending a decision.');
+  }
+  function tdRwChaseSubject(addr){ return 'Your lease renewal is ready to sign — ' + addr; }
+  function tdRwChaseBody(first, addr, end, me){
+    return 'Hi ' + first + ',\n\n' +
+      'Just a friendly reminder from Live Furnished — your lease renewal for ' + addr + ' is ready and waiting for your electronic signature. You should have received the signing request by email; completing it before your current lease ends on ' + end + ' will keep your renewal on track.\n\n' +
+      'If you can\'t find the request or have any questions, just reply here and I\'ll be glad to help.\n\n' +
+      'Thanks so much,\n' + me + '\nLive Furnished';
+  }
+  function tdRwChaseText(first, addr, end, me){
+    return 'Hi ' + first + ', it\'s ' + me + ' with Live Furnished — a quick reminder that your lease renewal for ' + addr + ' is ready to e-sign. Please complete the signing request in your email before ' + end + ' so your renewal is all set. Happy to help if you have any questions!';
   }
   function tdMgrRenderUnits(m){
     var box = el('td-mgr-units'); if (!box) return;
@@ -5056,6 +5197,13 @@ window.addEventListener('error', function(e){
         tdMvOpen(mvr.getAttribute('data-mvk'), mvr.getAttribute('data-mvl'));
         return;
       }
+      // WS-M M5: renewals-card controls (chip filter, chase e-sign, Move-outs jump) — checked
+      // before .tdurow so the row buttons win over the unit-open on the Unit cell.
+      var rns = e.target.closest('[data-rn-stage]');
+      if (rns){ var rv = rns.getAttribute('data-rn-stage'); tdRwStageF = (tdRwStageF === rv ? '' : rv); if (tdRwLast) tdMgrRenderRenewals({ renewals: tdRwLast }); return; }
+      var rnc = e.target.closest('[data-rn-chase]');
+      if (rnc){ tdRwChase(rnc.getAttribute('data-rn-lease'), rnc.getAttribute('data-rn-chase')); return; }
+      if (e.target.closest('[data-rn-moves]')){ tdMgrBriefGo('moves'); return; }
       var ur = e.target.closest('.tdurow');
       if (ur){ openUnitEnsure(ur.getAttribute('data-uid')); return; }
       var br = e.target.closest('.tdbrief');

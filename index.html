@@ -561,6 +561,8 @@ window.addEventListener('error', function(e){
     transition:background .15s ease,color .15s ease,border-color .15s ease;
   }
   .fbassign:hover{background:var(--plum-soft);color:var(--plum);border-color:var(--plum)}
+  .fbpend{border-style:solid;border-color:rgba(230,182,92,.5);color:var(--amber);background:var(--amber-soft)}
+  .fbpend:hover{background:rgba(230,182,92,.28);color:var(--amber);border-color:var(--amber)}
   .fb-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .fb-controls .fbsel{font-family:var(--sans);max-width:160px;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:5px 7px}
   .fb-controls .fbinput{font-family:var(--sans);flex:1 1 180px;min-width:150px;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:6px 9px;font-size:.8rem}
@@ -7150,9 +7152,9 @@ window.addEventListener('error', function(e){
     { k:'otb',      label:'Take-backs' }
   ];
   var OCC = [{ k:'all', label:'All' }, { k:'occupied', label:'Occupied' }, { k:'vacant', label:'Vacant' }, { k:'upcoming', label:'Upcoming move-in' }];
-  var MKT = [{ k:'all', label:'All' }, { k:'marketed', label:'Marketed' }, { k:'unlisted', label:'Unlisted vacant' }];
+  var MKT = [{ k:'all', label:'All' }, { k:'marketed', label:'Marketed' }, { k:'unlisted', label:'Unlisted vacant' }, { k:'onfb', label:'Posted to FB' }, { k:'pendfb', label:'Pending FB' }];
   function occMatch(k, r){ if (k === 'occupied') return r.occupancy_status === 'occupied'; if (k === 'vacant') return r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'; if (k === 'upcoming') return !!r.has_upcoming_move_in || r.occupancy_status === 'pre_leased'; return true; }
-  function mktMatch(k, r){ if (k === 'marketed') return !!r.is_listed; if (k === 'unlisted') return !r.is_listed && (r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'); return true; }
+  function mktMatch(k, r){ if (k === 'marketed') return !!r.is_listed; if (k === 'unlisted') return !r.is_listed && (r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'); if (k === 'onfb') return !!r.fb_url; if (k === 'pendfb') return !r.fb_url && !!(r.fb_agent || r.fb_requested_at); return true; }
   function occTest(r){ return occMatch(uOcc, r); }
   function mktTest(r){ return mktMatch(uMkt, r); }
   function dvTest(r){ if (!uDV) return true; var isVac = (r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'); if (!isVac) return false; var rg = BUCKET_RANGE[uDV]; if (rg === null) return r.days_vacant == null; return r.days_vacant != null && r.days_vacant >= rg[0] && r.days_vacant <= rg[1]; }
@@ -7343,10 +7345,13 @@ window.addEventListener('error', function(e){
   }
   // Facebook Marketplace chip for the Units Event column. Posted → blue agent chip that
   // opens the Marketplace listing (external anchor; the row click-handler excludes .c-fb so
-  // it doesn't also open the unit modal). Listed-but-not-posted → a faint "assign FB" prompt
-  // that opens the unit modal (its Facebook Marketplace panel). Not listed → nothing.
+  // it doesn't also open the unit modal). Pending (agent assigned and/or emailed but no URL
+  // saved yet) → an amber "{agent} · pending" chip. Listed-but-not-started → a faint "assign
+  // FB" prompt. Not listed → nothing. Both button variants open the unit modal (its Facebook
+  // Marketplace panel) via the row-click fall-through — no dedicated handler needed.
   function fbChip(r){
     if (r.fb_url) return ' <a class="chip c-fb" target="_blank" rel="noopener" href="' + esc(r.fb_url) + '" title="Open Facebook Marketplace listing' + (r.fb_agent ? ' — ' + esc(r.fb_agent) : '') + '">' + esc(r.fb_agent || 'FB') + ' &#8599;</a>';
+    if (r.fb_agent || r.fb_requested_at) return ' <button type="button" class="fbassign fbpend" data-fbuid="' + r.unit_id + '" title="' + esc((r.fb_agent || 'Agent') + ' assigned — awaiting the Marketplace URL. Click to add it.') + '">' + esc(r.fb_agent || 'FB') + ' &middot; pending</button>';
     if (r.is_listed) return ' <button type="button" class="fbassign" data-fbuid="' + r.unit_id + '" title="Assign an agent to post this on Facebook Marketplace">+ assign FB</button>';
     return '';
   }

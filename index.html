@@ -8071,6 +8071,19 @@ window.addEventListener('error', function(e){
     var paid = r.sd_paid >= req - 0.005;
     return ' <span class="chip ' + (paid ? 'c-ok' : 'c-warm') + '" title="SD ' + esc(fmtMoney(r.sd_paid)) + ' of ' + esc(fmtMoney(req)) + ' received">' + (paid ? 'Paid SD' : 'SD due') + '</span>';
   }
+  // Pending-application chip for VACANT rows (Pearse 2026-07-21). A vacant unit with a
+  // non-archived Approved / draft-lease application still classifies as vacant (no Active
+  // or Future lease) — draft leases never sync as buildium.leases rows. pending_app_stage
+  // comes from dashboard.v_unit_directory. This is a DISPLAY-ONLY transparency signal:
+  // occupancy_status (and every vacancy metric) is unchanged, so these still count as
+  // vacant. Only rendered on vacant/never-leased rows. Colours match the Applications tab
+  // (APP_CHIP_CLS): draft lease = c-warm (like pre-leased), approved = c-ok.
+  function appStageChip(r){
+    if (r.occupancy_status !== 'op_vacant' && r.occupancy_status !== 'never_leased') return '';
+    if (r.pending_app_stage === 'draft_lease') return ' <span class="chip c-warm" title="Applicant added to a draft lease — still counts as vacant until the lease activates">draft lease</span>';
+    if (r.pending_app_stage === 'approved')    return ' <span class="chip c-ok" title="Application approved — still counts as vacant until a lease is signed">approved app</span>';
+    return '';
+  }
   // Facebook Marketplace chip for the Units Event column. Posted → blue agent chip that
   // opens the Marketplace listing (external anchor; the row click-handler excludes .c-fb so
   // it doesn't also open the unit modal). Pending (agent assigned and/or emailed but no URL
@@ -8139,7 +8152,7 @@ window.addEventListener('error', function(e){
         '<td>' + esc(r.property_name) + '</td>' +
         '<td>' + esc(r.unit_number) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
-        '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + sdChip(r) + '</td>' +
+        '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + sdChip(r) + appStageChip(r) + '</td>' +
         '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + fbChip(r) + '</td>' +
         '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + ' <span class="qn">' + (r.move_in_src === 'appt' ? 'appt' : 'lease') + '</span>' : '–') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
@@ -8224,7 +8237,7 @@ window.addEventListener('error', function(e){
       g.units.slice(0, 14).forEach(function(r){
         var rent = rentBasis(r);
         ph += '<div class="maprow"><span class="mu">' + esc(r.unit_number) + '</span>' +
-          (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '')) +
+          (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '')) + appStageChip(r) +
           '<span class="mr">' + (rent != null ? fmtMoney(rent) : '–') + '</span>' +
           '<button type="button" class="mapopen" data-uid="' + r.unit_id + '">open</button></div>';
       });
@@ -8303,6 +8316,7 @@ window.addEventListener('error', function(e){
     if (r.is_not_ready) stat = '<span class="chip c-otb">not ready</span> ' + stat;
     if (r.is_owner_takeback) stat += ' <span class="chip c-otb">take-back</span>';
     stat += sdChip(r);
+    stat += appStageChip(r);
     if (stat) sub.push(stat);
     if (r.address_line1) sub.push(esc(r.address_line1) + (r.city ? ', ' + esc(r.city) : ''));
     sub.push((r.unit_bedrooms || '–') + ' bd / ' + (r.unit_bathrooms || '–') + ' ba');

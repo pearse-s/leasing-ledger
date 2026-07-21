@@ -765,6 +765,8 @@ window.addEventListener('error', function(e){
   .fc-mv-out .fc-ev-t,.fc-mv-out .fc-mv-k{color:#F3CCC2}
   .fc-mv-ghost{background:transparent!important;border:1px dashed var(--hairline-dark)!important}
   .fc-mv-ghost .fc-ev-t{color:var(--ink-soft)}
+  /* WS-M M4: the managers scope button while an identity lock owns it */
+  .msbtn:disabled{opacity:.72;cursor:default;pointer-events:none;border-style:dashed}
   .lmcard::before{content:'';position:absolute;left:0;right:0;top:0;height:3px;z-index:4;pointer-events:none;
     background:var(--accent-grad);background-size:220% 100%;animation:shimmer 5s linear infinite;
     box-shadow:0 0 16px rgba(232,180,62,.45)}
@@ -3287,7 +3289,14 @@ window.addEventListener('error', function(e){
   function rcCall(num){ return RC_SCHEME + 'r/call?number=' + num; }
   function rcText(num, body){ return RC_SCHEME + 'r/sms?type=new&number=' + num + (body ? '&content=' + encodeURIComponent(body) : ''); }
   function dstr(d){ return d.toISOString().slice(0,10); }
-  function msIds(key){ return Object.keys(MS[key].sel); }
+  function msIds(key){
+    // WS-M M4 (D11): a locked manager identity pins the manager scope at THE single seam
+    // every consumer reads (appendScope → /stats + /manager-brief server scope, the Moves
+    // card, tdMgrScopePass, kpis_scoped). Stored selections are SHADOWED, never mutated —
+    // sign-out restores them untouched.
+    if (key === 'managers' && idLock && idLock.role === 'manager' && idLock.pmId) return [String(idLock.pmId)];
+    return Object.keys(MS[key].sel);
+  }
   // is a sidebar entity scope active? (drives the "this number is company-wide" labels — A-14/A-15)
   function scopeActive(){ return !!(msIds('managers').length || msIds('owners').length || msIds('properties').length); }
   function appendScope(p){
@@ -3748,6 +3757,9 @@ window.addEventListener('error', function(e){
   // real choice (data-role handler) and wins. (Admin names per Pearse 2026-07-17.)
   var TD_ROLE_INFER = { danai: 'coordinator', pearse: 'admin', levi: 'admin', connor: 'admin', jamey: 'admin', sarah: 'manager' };
   function tdRole(){
+    // WS-M M4 (D11): an identity lock pins the persona — a signed-in (or name-picked)
+    // manager/agent/coordinator can't wander into other roles. Admins are never locked.
+    if (idLock && idLock.role) return idLock.role;
     var r = '';
     try { r = localStorage.getItem(TD_ROLE_KEY) || ''; } catch (e) {}
     if (!(r === 'coordinator' || r === 'agent' || r === 'manager' || r === 'admin'))
@@ -3760,7 +3772,12 @@ window.addEventListener('error', function(e){
   function tdSyncRoles(){
     var box = el('td-roles'); if (!box) return;
     var cur = tdRole();
-    box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-role') === cur); });
+    box.querySelectorAll('.chip-mini').forEach(function(b){
+      var r = b.getAttribute('data-role');
+      b.classList.toggle('on', r === cur);
+      // WS-M M4: a locked identity sees only its own persona chip
+      b.style.display = (idLock && idLock.role && r !== idLock.role) ? 'none' : '';
+    });
   }
   function loadToday(){ todayLoaded = 1; tdSyncRoles(); tdRender(); }
   function tdPanel(id, title, gotoTab, gotoLabel, wide){
@@ -3803,8 +3820,11 @@ window.addEventListener('error', function(e){
       return;
     }
     if (role === 'manager'){
-      tdSub('Manager — the brief first, then tasks, renewals and unit movement across your scope.');
-      g.innerHTML = '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
+      tdSub(idLock && idLock.role === 'manager'
+        ? 'Manager — scoped to you (' + idLock.name + ')' + (idLock.pmId ? '' : ' — no Buildium portfolio linked, showing company-wide') + '. The brief first, then tasks, renewals and unit movement.'
+        : 'Manager — the brief first, then tasks, renewals and unit movement across your scope.');
+      if (tmRoster === null){ var wq = tdReq; idRosterLoad(function(){ if (wq === tdReq && tdRole() === 'manager') tdRender(); }); }
+      g.innerHTML = tdMgrWorkasHtml() + '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
           '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div><div id="td-mgr-trends"></div></section>' +
         tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks') +
         tdPanel('td-mgr-ren', 'Renewals pending', 'renewals', 'Open Renewals') +
@@ -5014,6 +5034,19 @@ window.addEventListener('error', function(e){
       }
       var bk = e.target.closest('[data-book]');
       if (bk){ tdGotoBook(bk.getAttribute('data-book')); return; }
+      // WS-M M4: admin "working as" chips — client-side manager-scope presets riding the
+      // normal MS/onScopeChange path (no lock; locked managers never see this strip)
+      var wa = e.target.closest('[data-workas]');
+      if (wa){
+        var waId = wa.getAttribute('data-workas');
+        MS.managers.sel = {};
+        if (waId) MS.managers.sel[waId] = wa.getAttribute('data-workas-n') || ('Manager ' + waId);
+        msButton('managers');
+        var wbox = el('td-mgr-workas');
+        if (wbox) wbox.querySelectorAll('[data-workas]').forEach(function(b2){ b2.classList.toggle('on', b2 === wa); });
+        onScopeChange();
+        return;
+      }
       // WS-M M3: Moves-card controls + tracker rows (the card lives inside this grid)
       var mvc = e.target.closest('[data-mv-view],[data-mv-cal],[data-mv-kind],[data-mv-days],[data-mv-stage]');
       if (mvc){ tdMvCtl(mvc); return; }
@@ -5125,7 +5158,92 @@ window.addEventListener('error', function(e){
         buildActorSel(); return;
       }
       try { localStorage.setItem(ACT_KEY, this.value); } catch (e) {}
+      idRosterLoad(idRecompute);   // WS-M M4: a new name may tailor the view (D12)
     });
+  }
+
+  /* ── WS-M M4: identity-driven scoping (D11/D12) ───────────────────────
+     Effective identity, in precedence order:
+       1. verified sign-in (authIdent — /user/hello carries property_manager_id since v255)
+       2. the sidebar name picker under the shared password, matched against the no-PII
+          GET /team-roster (exact display_name, else UNIQUE first name; ambiguous → none)
+     Non-admin identity ⇒ idLock: persona pinned (tdRole), other role chips hidden
+     (tdSyncRoles), and for managers with a Buildium link the manager scope pinned at
+     msIds() — the one seam every scoped consumer reads. Admins are NEVER locked; verified
+     admins also clear the server's ADMIN_ROUTES gate via JWT (D12) — the name picker
+     never does, so picking "Pearse" under the team password tailors layout only. */
+  var idLock = null;      // { role, pmId|null, name, verified } while a non-admin identity is active
+  var tmRoster = null;    // /team-roster cache: null = not loaded, [] = failed (no tailoring)
+  var pwTierRole = 'user';   // the /check password tier — restored when a verified admin signs out
+  function idApplyAdmin(){
+    applyRole((authIdent && authIdent.role === 'admin') ? 'admin' : pwTierRole);
+  }
+  function idRosterLoad(cb){
+    if (tmRoster !== null){ if (cb) cb(); return; }
+    if (!TOKEN){ if (cb) cb(); return; }   // pre-login: nothing to fetch yet
+    authFetch('/team-roster').then(function(j){
+      tmRoster = (j && j.roster) || [];
+      if (cb) cb();
+    }).catch(function(e){
+      tmRoster = [];
+      if (String(e && e.message) !== 'AUTH') console.error('team-roster failed', e);
+      if (cb) cb();
+    });
+  }
+  function idRosterMatch(name){
+    var n = String(name || '').trim().toLowerCase();
+    if (!n || !tmRoster || !tmRoster.length) return null;
+    var exact = tmRoster.filter(function(r){ return String(r.display_name || '').toLowerCase() === n; });
+    if (exact.length === 1) return exact[0];
+    var ft = n.split(/\s+/)[0];
+    var first = tmRoster.filter(function(r){ return String(r.display_name || '').toLowerCase().split(/\s+/)[0] === ft; });
+    return first.length === 1 ? first[0] : null;
+  }
+  function idRecompute(){
+    var prev = idLock ? (idLock.role + ':' + idLock.pmId + ':' + idLock.name) : '';
+    var next = null;
+    if (authIdent){
+      if (authIdent.role !== 'admin') next = { role: authIdent.role, pmId: authIdent.property_manager_id || null, name: authIdent.display_name, verified: true };
+    } else {
+      var row = idRosterMatch(getActor());
+      if (row && row.role !== 'admin') next = { role: row.role, pmId: row.property_manager_id != null ? Number(row.property_manager_id) : null, name: row.display_name, verified: false };
+    }
+    idLock = next;
+    idApplyAdmin();
+    var now = idLock ? (idLock.role + ':' + idLock.pmId + ':' + idLock.name) : '';
+    if (now === prev) return;
+    idPaintLock();
+    // onScopeChange refetches every scoped surface AND re-renders Today when visible
+    // (todayLoaded reset + loadToday → tdSyncRoles + tdRender) — one call does it all.
+    onScopeChange();
+  }
+  function idPaintLock(){
+    var b = el('msb-managers'); if (!b) return;
+    if (idLock && idLock.role === 'manager' && idLock.pmId){
+      b.textContent = 'Scoped to you — ' + esc(String(idLock.name).split(/\s+/)[0] || idLock.name);
+      b.classList.add('has');
+      b.disabled = true;
+    } else {
+      b.disabled = false;
+      msButton('managers');   // repaint from the untouched stored selection
+    }
+  }
+  // Admin "working as" strip on the manager view: Team-wide + every roster manager with a
+  // Buildium portfolio link. Not rendered for locked managers (they ARE their scope).
+  function tdMgrWorkasHtml(){
+    if (idLock && idLock.role === 'manager') return '';
+    var pms = (tmRoster || []).filter(function(r){ return r.property_manager_id != null; });
+    if (!pms.length) return '';
+    var cur = msIds('managers');
+    var one = cur.length === 0 ? '' : (cur.length === 1 ? String(cur[0]) : null);
+    var h = '<div class="mvbar" id="td-mgr-workas"><span class="sf-label" style="align-self:center">Working as</span><span class="mvtgl">' +
+      '<button type="button" data-workas=""' + (one === '' ? ' class="on"' : '') + '>Team-wide</button>';
+    pms.forEach(function(r){
+      var id = String(r.property_manager_id);
+      h += '<button type="button" data-workas="' + esc(id) + '" data-workas-n="' + esc(r.display_name) + '"' +
+        (one === id ? ' class="on"' : '') + '>' + esc(String(r.display_name).split(/\s+/)[0]) + '</button>';
+    });
+    return h + '</span></div>';
   }
 
   /* ── WS-U identity (Phase A: optional email sign-in) ─────────────────── */
@@ -5157,11 +5275,12 @@ window.addEventListener('error', function(e){
     if (!SB || !TOKEN) return;
     var gen = ++authGen;
     sbJwt().then(function(jwt){
-      if (!jwt){ if (gen === authGen){ authIdent = null; renderAuthBlk(); } return; }
+      if (!jwt){ if (gen === authGen){ authIdent = null; renderAuthBlk(); idRosterLoad(idRecompute); } return; }
       return postJSON('/user/hello', {}).then(function(j){
         if (gen !== authGen) return;
         if (j && j.ok){
-          authIdent = { email: j.email, display_name: j.display_name, role: j.role, agent_name: j.agent_name || null };
+          authIdent = { email: j.email, display_name: j.display_name, role: j.role, agent_name: j.agent_name || null,
+            property_manager_id: j.property_manager_id != null ? Number(j.property_manager_id) : null };
         } else {
           authIdent = null;
           if (j && j.code === 'NOT_ON_TEAM'){
@@ -5177,10 +5296,12 @@ window.addEventListener('error', function(e){
               '<div style="margin-top:6px"><a href="#" id="auth-retry" style="text-decoration:underline;color:inherit">Try a different email</a></div></div>';
             var rt = el('auth-retry');
             if (rt) rt.addEventListener('click', function(ev){ ev.preventDefault(); renderAuthBlk(); });
+            idRecompute();   // WS-M M4: identity gone → drop any lock
             return;
           }
         }
         renderAuthBlk();
+        idRecompute();   // WS-M M4: verified identity (or its loss) re-tailors role + scope
       });
     }).catch(function(e){
       if (String(e && e.message) === 'AUTH') return;
@@ -5202,6 +5323,7 @@ window.addEventListener('error', function(e){
         authGen++; authIdent = null;
         try { SB.auth.signOut(); } catch (e) {}
         renderAuthBlk();
+        idRecompute();   // WS-M M4: back to the picker identity (or none)
       });
       return;
     }
@@ -5258,7 +5380,7 @@ window.addEventListener('error', function(e){
       SB.auth.onAuthStateChange(function(ev){
         setTimeout(function(){
           if (ev === 'SIGNED_IN' && TOKEN) authHello();
-          if (ev === 'SIGNED_OUT'){ authIdent = null; renderAuthBlk(); }
+          if (ev === 'SIGNED_OUT'){ authIdent = null; renderAuthBlk(); idRecompute(); }
         }, 0);
       });
     } catch (e) {}
@@ -6137,6 +6259,7 @@ window.addEventListener('error', function(e){
 
   /* ── multi-select ─────────────────────────── */
   function msButton(key){
+    if (key === 'managers' && idLock && idLock.role === 'manager' && idLock.pmId) return;   // WS-M M4: the lock text owns this button (idPaintLock)
     var m = MS[key];
     var ids = msIds(key);
     var btn = el('msb-' + key);
@@ -10175,7 +10298,7 @@ window.addEventListener('error', function(e){
   }
   function onAuthFail(){
     try { localStorage.removeItem(STORE_KEY); } catch (e) {}
-    TOKEN = ''; applyRole('user');
+    TOKEN = ''; pwTierRole = 'user'; idApplyAdmin();
     showLogin();
   }
   function startApp(){
@@ -10183,6 +10306,7 @@ window.addEventListener('error', function(e){
     scopeRestore();   // A-13: restore BEFORE load() so the very first /stats is already scoped
     load();
     try { authHello(); renderAuthBlk(); } catch (e) {}   // WS-U identity chip / sign-in card (never boot-fatal)
+    try { idRosterLoad(idRecompute); } catch (e) {}      // WS-M M4: name-pick tailoring needs the roster (never boot-fatal)
     // Deep link: if the URL names a tab (e.g. #keys), open it. Otherwise the DEFAULT LANDING
     // is Today (WS1-D3 / Deploy 3): every persona sees their role's work queues first; the
     // Ledger stays one tap away and #ledger bookmarks still land on it directly. showTab runs
@@ -10226,7 +10350,7 @@ window.addEventListener('error', function(e){
     el('loginerr').textContent = 'Checking…';
     checkToken(pw).then(function(res){
       if (res.ok) {
-        TOKEN = pw; applyRole(res.role);
+        TOKEN = pw; pwTierRole = res.role; idApplyAdmin();
         try { localStorage.setItem(STORE_KEY, pw); } catch (e) {}
         var an = el('actorsel'); if (an && an.value && an.value !== '__add__') { try { localStorage.setItem(ACT_KEY, an.value); } catch (e) {} }
         el('loginerr').textContent = '';
@@ -10239,7 +10363,7 @@ window.addEventListener('error', function(e){
   });
   el('signout').addEventListener('click', function(){
     try { localStorage.removeItem(STORE_KEY); } catch (e) {}
-    TOKEN = ''; applyRole('user');
+    TOKEN = ''; pwTierRole = 'user'; idApplyAdmin();
     showLogin();
   });
 
@@ -10250,7 +10374,7 @@ window.addEventListener('error', function(e){
   if (urlToken || pendingLeadCard || pendingLeadEmail) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {} }
   if (TOKEN) {
     checkToken(TOKEN).then(function(res){
-      if (res.ok) { applyRole(res.role); try { localStorage.setItem(STORE_KEY, TOKEN); } catch (e) {} startApp(); }
+      if (res.ok) { pwTierRole = res.role; idApplyAdmin(); try { localStorage.setItem(STORE_KEY, TOKEN); } catch (e) {} startApp(); }
       else { onAuthFail(); }
     });
   } else {

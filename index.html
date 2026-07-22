@@ -4788,10 +4788,14 @@ window.addEventListener('error', function(e){
   }
   function tdMgrAssembleLegacy(m){
     var p = new URLSearchParams(); appendScope(p);
+    var trace = function(what){ return function(e){ if (String(e && e.message) !== 'AUTH') console.error('legacy ' + what + ' failed', e); }; };
     return Promise.all([
-      authFetch('/tasks').then(function(j){ m.tasks = (j.tasks || []).filter(tdMgrScopePass).filter(tdMgrOpenTask); }).catch(function(){}),
-      authFetch('/renewals?' + p.toString()).then(function(j){ m.renewals = j.renewals || []; }).catch(function(){}),   // WS-M M5: pass-through; tdRwStage derives the stage when v_renewal_worklist fields are absent (outage-only path)
-      authFetch('/units').then(function(j){ m.units = (j.units || []).filter(tdMgrScopePass); }).catch(function(){})
+      authFetch('/tasks').then(function(j){ m.tasks = (j.tasks || []).filter(tdMgrScopePass).filter(tdMgrOpenTask); }).catch(trace('tasks')),
+      // WS-M M5: /renewals is v_lease_renewals (renewal RECORDS only) and carries NONE of the
+      // worklist columns the card renders — map it, never pass it through raw (that shipped
+      // blank dates, "–" rents and an EMPTY date inside the tenant-facing chase copy).
+      authFetch('/renewals?' + p.toString()).then(function(j){ m.renewals = (j.renewals || []).map(tdRwFromLegacy); }).catch(trace('renewals')),
+      authFetch('/units').then(function(j){ m.units = (j.units || []).filter(tdMgrScopePass); }).catch(trace('units'))
     ]);
   }
   function tdRenderMgr(m){
@@ -5000,6 +5004,26 @@ window.addEventListener('error', function(e){
     if (s === 'Pending') return 'pending_esign';
     if (r.renewal_offer_status === 'WaitingResponse') return 'offer_sent';
     return 'undecided';
+  }
+  // Outage/deploy-ordering path only: reshape a /renewals row (v_lease_renewals, RENEWAL_COLS)
+  // into the worklist shape the card renders. v_lease_renewals has current_lease_end and "rent"
+  // (which IS the renewal rent) but NO term_end / current_rent / market_rent / created_date_time
+  // / renewal_offer_status / has_notice — the absent ones stay null and simply do not render,
+  // rather than showing blanks or a fabricated number. Note this path can never produce
+  // Undecided or Offer-sent rows: those leases have no renewal record for /renewals to return.
+  function tdRwFromLegacy(r){
+    return {
+      lease_id: r.lease_id, unit_id: r.unit_id, property_id: r.property_id,
+      property_name: r.property_name, unit_number: r.unit_number, address_line1: null,
+      tenant_names: r.tenant_names,
+      term_end: r.current_lease_end || r.lease_to_date || null,
+      renewal_state: r.renewal_state, esignature_status: r.esignature_status,
+      renewal_offer_status: null, has_notice: false, has_record: true,
+      renewal_rent: (r.rent != null ? r.rent : null),
+      current_rent: null, market_rent: null,
+      renewal_created: null,   // v_lease_renewals exposes last_updated_date_time, NOT created — a "pending Nd" from it would lie, so omit the chip
+      property_manager_id: r.property_manager_id, primary_owner_id: r.primary_owner_id
+    };
   }
   function tdRwDateShort(d){   // 'Aug 31' from an ISO date, parsed by parts (no tz shift)
     var s = String(d || '').slice(0, 10), p = s.split('-');

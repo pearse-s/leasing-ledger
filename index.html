@@ -8071,17 +8071,21 @@ window.addEventListener('error', function(e){
     var paid = r.sd_paid >= req - 0.005;
     return ' <span class="chip ' + (paid ? 'c-ok' : 'c-warm') + '" title="SD ' + esc(fmtMoney(r.sd_paid)) + ' of ' + esc(fmtMoney(req)) + ' received">' + (paid ? 'Paid SD' : 'SD due') + '</span>';
   }
-  // Pending-application chip for VACANT rows (Pearse 2026-07-21). A vacant unit with a
-  // non-archived Approved / draft-lease application still classifies as vacant (no Active
-  // or Future lease) — draft leases never sync as buildium.leases rows. pending_app_stage
-  // comes from dashboard.v_unit_directory. This is a DISPLAY-ONLY transparency signal:
-  // occupancy_status (and every vacancy metric) is unchanged, so these still count as
-  // vacant. Only rendered on vacant/never-leased rows. Colours match the Applications tab
-  // (APP_CHIP_CLS): draft lease = c-warm (like pre-leased), approved = c-ok.
+  // Pending-application chip (Pearse 2026-07-21). Shows a unit's pending Approved /
+  // draft-lease application stage as a chip. pending_app_stage comes from
+  // dashboard.v_unit_directory (computed for every unit; draft leases never sync as
+  // buildium.leases rows). DISPLAY-ONLY — occupancy_status and every vacancy metric are
+  // unchanged. Rendered on two populations: (1) VACANT / never-leased rows (a vacant unit
+  // with an incoming applicant — still counts as vacant), and (2) LISTED OCCUPIED rows =
+  // flips (current tenant still in place, unit marketed, incoming applicant). The is_listed
+  // gate on occupied rows excludes renewal drafts (unlisted occupied) so only flips show.
+  // Colours match the Applications tab (APP_CHIP_CLS): draft lease = c-warm, approved = c-ok.
   function appStageChip(r){
-    if (r.occupancy_status !== 'op_vacant' && r.occupancy_status !== 'never_leased') return '';
-    if (r.pending_app_stage === 'draft_lease') return ' <span class="chip c-warm" title="Applicant added to a draft lease — still counts as vacant until the lease activates">draft lease</span>';
-    if (r.pending_app_stage === 'approved')    return ' <span class="chip c-ok" title="Application approved — still counts as vacant until a lease is signed">approved app</span>';
+    var vac  = (r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased');
+    var flip = (r.occupancy_status === 'occupied' && r.is_listed);
+    if (!vac && !flip) return '';
+    if (r.pending_app_stage === 'draft_lease') return ' <span class="chip c-warm" title="' + (vac ? 'Applicant added to a draft lease — still counts as vacant until the lease activates' : 'Listed flip — an incoming applicant is on a draft lease (current tenant still in place)') + '">draft lease</span>';
+    if (r.pending_app_stage === 'approved')    return ' <span class="chip c-ok" title="' + (vac ? 'Application approved — still counts as vacant until a lease is signed' : 'Listed flip — an application here is approved (current tenant still in place)') + '">approved app</span>';
     return '';
   }
   // Facebook Marketplace chip for the Units Event column. Posted → blue agent chip that

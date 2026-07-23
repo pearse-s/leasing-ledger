@@ -1390,6 +1390,9 @@ window.addEventListener('error', function(e){
   .schselpill b{color:var(--ink-soft);margin-left:3px}
   .schloc{margin-bottom:12px;max-width:440px}
   .schsublite{font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-soft)}
+  .schoffers-src{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 2px}
+  .schoffers-src .schsrc-n{opacity:.7;font-weight:500;margin-left:4px}
+  .schoffer-src{flex:0 0 auto;font-size:.68rem;font-weight:700;color:var(--clay);background:var(--clay-soft);border:1px solid rgba(232,180,62,.4);border-radius:999px;padding:2px 8px;white-space:nowrap}
   .schoffers{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:340px;overflow:auto}
   .schoffer{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--hairline-dark);border-radius:10px;background:var(--glass-2)}
   .schoffer-main{flex:1 1 auto;min-width:0;font-size:.88rem}
@@ -1967,6 +1970,7 @@ window.addEventListener('error', function(e){
       </section>
       <div class="card tablecard" style="margin-top:16px">
         <div class="tablebar"><h2 style="font-size:1rem">Tour offers &middot; awaiting booking</h2><span class="count-note" id="sch-offers-note"></span></div>
+        <div id="sch-offers-src" class="schoffers-src"></div>
         <div id="sch-offers" class="schoffers"></div>
       </div>
       <!-- C1 reconfirmation sweep: today's + tomorrow's not-yet-confirmed tours across EVERY
@@ -11632,14 +11636,35 @@ window.addEventListener('error', function(e){
     loadTourOffers();
   }
   var schOfferMsgs = {};   // offer id -> composed message text, for the offers-panel "Copy message" button
+  var schOfferSource = '';   // active lead-source filter for the offers panel (''=all); persisted
+  try { schOfferSource = localStorage.getItem('ledger_offer_source_v1') || ''; } catch (e) {}
+  // Lead-source filter chips: always surface Facebook, then any other sources seen, each with a
+  // booked/total conversion count. Clicking re-queries the offers list scoped to that source.
+  function schRenderOfferSrcChips(sources){
+    var box = el('sch-offers-src'); if (!box) return;
+    var list = (sources || []).slice();
+    if (!list.some(function(s){ return String(s.source).toLowerCase() === 'facebook'; })) list.push({ source: 'Facebook', total: 0, booked: 0 });
+    // Facebook first (the one we care about), the rest as the server ordered them.
+    list.sort(function(a, b){ var af = String(a.source).toLowerCase() === 'facebook', bf = String(b.source).toLowerCase() === 'facebook'; return af === bf ? 0 : (af ? -1 : 1); });
+    var cur = (schOfferSource || '').toLowerCase();
+    var html = '<button type="button" class="chip-mini' + (cur ? '' : ' on') + '" data-src="">All</button>';
+    html += list.map(function(s){
+      var on = cur && cur === String(s.source).toLowerCase();
+      return '<button type="button" class="chip-mini' + (on ? ' on' : '') + '" data-src="' + esc(s.source) + '">' + esc(s.source) + '<span class="schsrc-n">' + (s.booked || 0) + '/' + (s.total || 0) + '</span></button>';
+    }).join('');
+    box.innerHTML = html;
+  }
   function loadTourOffers(){
     var box = el('sch-offers'); if (!box) return;
-    authFetch('/tour-offers?limit=50').then(function(j){
+    var qs = '/tour-offers?limit=50' + (schOfferSource ? '&source=' + encodeURIComponent(schOfferSource) : '');
+    authFetch(qs).then(function(j){
       var rows = j.offers || [];
       var noteEl = el('sch-offers-note');
-      if (!rows.length){ box.innerHTML = '<div class="note">No tour links generated yet.</div>'; if (noteEl) noteEl.textContent = ''; return; }
+      schRenderOfferSrcChips(j.sources || []);
+      var srcLabel = schOfferSource ? esc(schOfferSource) : 'recent';
+      if (!rows.length){ box.innerHTML = '<div class="note">' + (schOfferSource ? 'No ' + esc(schOfferSource) + ' offers yet.' : 'No tour links generated yet.') + '</div>'; if (noteEl) noteEl.innerHTML = schOfferSource ? '0 ' + srcLabel : ''; return; }
       var booked = rows.filter(function(r){ return r.is_booked; }).length;
-      if (noteEl) noteEl.textContent = rows.length + ' recent · ' + booked + ' booked';
+      if (noteEl) noteEl.innerHTML = rows.length + ' ' + srcLabel + ' · ' + booked + ' booked';
       schOfferMsgs = {};
       rows.forEach(function(r){ if (r.message_text) schOfferMsgs[r.id] = r.message_text; });
       box.innerHTML = rows.map(function(r){
@@ -11657,6 +11682,7 @@ window.addEventListener('error', function(e){
         var sub = [r.actor, when, r.delivered_via].filter(Boolean).map(esc).join(' · ');
         var noPer = !(r.prospect_name || r.prospect_email || r.prospect_phone);   // truly anonymous open links only; phone-only offers now flip to Booked via phone match
         var who = noPer ? '<b>No prospect · open link</b>' : ('<b>' + esc(r.prospect_name || dispEmail(r.prospect_email) || r.prospect_phone || 'Prospect') + '</b>');
+        var srcChip = r.lead_source ? ' <span class="schoffer-src">' + esc(r.lead_source) + '</span>' : '';
         var pills = '';
         if (Array.isArray(r.slots) && r.slots.length){
           var times = r.slots.map(function(s){ return (s && s.start_time) ? s.start_time : (typeof s === 'string' ? s : ''); }).filter(Boolean);
@@ -11665,7 +11691,7 @@ window.addEventListener('error', function(e){
         }
         var copyLink = r.booking_url ? '<button type="button" class="schoffer-copy" data-url="' + esc(r.booking_url) + '" title="Copy link">⧉</button>' : '';
         var copyMsg = r.message_text ? '<button type="button" class="schoffer-copymsg" data-id="' + esc(r.id) + '" title="Copy message">✎</button>' : '';
-        return '<div class="schoffer"><div class="schoffer-main">' + who + ' · ' + esc(r.agent_name || '') + ' · ' + (r.slot_count || 0) + ' time' + (r.slot_count === 1 ? '' : 's') + '<div class="schoffer-sub">' + sub + '</div>' + pills + '</div>' + chip + copyLink + copyMsg + '</div>';
+        return '<div class="schoffer"><div class="schoffer-main">' + who + srcChip + ' · ' + esc(r.agent_name || '') + ' · ' + (r.slot_count || 0) + ' time' + (r.slot_count === 1 ? '' : 's') + '<div class="schoffer-sub">' + sub + '</div>' + pills + '</div>' + chip + copyLink + copyMsg + '</div>';
       }).join('');
     }).catch(function(e){ if (String(e.message) !== 'AUTH') box.innerHTML = '<div class="note">Could not load recent offers.</div>'; });
   }
@@ -12217,6 +12243,13 @@ window.addEventListener('error', function(e){
   }
   (function(){
     if (!el('page-schedule')) return;   // Working Rule #9: one guard over every binding
+    var offSrc = el('sch-offers-src');
+    if (offSrc) offSrc.addEventListener('click', function(e){
+      var c = e.target.closest('.chip-mini[data-src]'); if (!c) return;
+      schOfferSource = c.getAttribute('data-src') || '';
+      try { if (schOfferSource) localStorage.setItem('ledger_offer_source_v1', schOfferSource); else localStorage.removeItem('ledger_offer_source_v1'); } catch (e2) {}
+      loadTourOffers();
+    });
     var off = el('sch-offers');
     if (off) off.addEventListener('click', function(e){
       var cm = e.target.closest('.schoffer-copymsg');

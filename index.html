@@ -2274,7 +2274,7 @@ window.addEventListener('error', function(e){
         </table>
       </div>
       <div class="pager" id="u-pager"></div>
-      <div class="note" style="margin-top:10px">Owner take-backs and Nookbook &ldquo;not ready&rdquo; (construction) units are hidden by default and excluded from all Ledger stats &mdash; turn on the <b>Take-backs</b> flag or the <b>not ready only</b> toggle to reveal them (dimmed). The Nookbook chip reveals building-type / parking / appliance filters from the client&rsquo;s sheet. Click any row for full detail, Buildium links, tenant contacts and photos.</div>
+      <div class="note" style="margin-top:10px">Owner take-backs and Nookbook &ldquo;not ready&rdquo; (construction) units are hidden by default and excluded from all Ledger stats &mdash; turn on the <b>Take-backs</b> flag or the <b>not ready only</b> toggle to reveal them (dimmed). The Nookbook chip reveals building-type / parking / appliance filters; appliance state is tracked by install date &mdash; set or clear it in the unit popup&rsquo;s Appliances field (Jan&nbsp;1&nbsp;2026 = installed historically). Click any row for full detail, Buildium links, tenant contacts and photos.</div>
     </div>
   </div>
 
@@ -8325,6 +8325,70 @@ window.addEventListener('error', function(e){
   });
 
   /* ── unit detail popup ────────────────────── */
+  // ── Nookbook appliances (Pearse 2026-07-22) ──────────────────────────────
+  // The install DATE is the state: set = in, blank = not in; 2026-01-01 marks
+  // "installed historically" (pre-tracking sentinel). Server truth =
+  // nookbook_unit_info.appliances_installed_on via POST /unit/nb-appliances
+  // (the fb-link pattern); nb_appliances stays the server-derived Yes/No the
+  // Units-tab chip filter reads. This modal is the ONE editor — Units rows,
+  // Today's unit-updates queue, the moves calendar and the move drawer all
+  // open it, so both tabs edit through here. Nookbook units only.
+  function nbaChip(d){
+    return d ? '<span class="chip c-ok" title="Appliances installed ' + esc(d) + '">appliances in</span>'
+             : '<span class="chip c-cold">appliances not in</span>';
+  }
+  function nbaStatHtml(d){
+    return d ? '<span class="chip c-ok">In</span> <span class="qn">installed ' + esc(d) + '</span>'
+             : '<span class="chip c-cold">Not in</span>';
+  }
+  function nbaValueHtml(r){
+    var d = r.nb_appliances_installed_on || '';
+    return '<span id="um-nba-stat">' + nbaStatHtml(d) + '</span>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px">' +
+        '<input type="date" id="um-nba-date" value="' + esc(d) + '" style="width:150px" aria-label="Appliances install date">' +
+        '<button type="button" class="listbtn" id="um-nba-save">Save</button>' +
+        '<button type="button" class="listbtn" id="um-nba-clear"' + (d ? '' : ' style="display:none"') + '>Not in</button>' +
+      '</div>' +
+      '<div class="lmphnote" id="um-nba-hint"></div>';
+  }
+  function nbaBind(r){
+    var wrap = el('um-fields');
+    if (!wrap) return;
+    wrap.setAttribute('data-nba-uid', String(r.unit_id));
+    function go(clearing){
+      var hint = el('um-nba-hint');
+      var actor = getActor();
+      if (!actor){ if (hint) hint.textContent = 'Pick your name first (on the sign-in screen).'; return; }
+      var dv = clearing ? '' : ((el('um-nba-date') || {}).value || '');
+      if (!clearing && !dv){ if (hint) hint.textContent = 'Pick the install date first (or use "Not in").'; return; }
+      if (hint) hint.textContent = 'Saving…';
+      var uid = String(r.unit_id);
+      postJSON('/unit/nb-appliances', { unit_id: Number(r.unit_id), property_id: Number(r.property_id), installed_on: dv, actor: actor })
+        .then(function(j){
+          var d = (j && j.nb && j.nb.appliances_installed_on) || null;
+          r.nb_appliances_installed_on = d;
+          r.nb_appliances = d ? 'Yes' : 'No';   // keep the Units-tab appliances chip filter truthful
+          drawUnits();
+          // the modal may show another unit by now — these ids would be ITS nodes, not ours
+          var w2 = el('um-fields');
+          if (!w2 || w2.getAttribute('data-nba-uid') !== uid) return;
+          var st = el('um-nba-stat'); if (st) st.innerHTML = nbaStatHtml(d || '');
+          var ch = el('um-nba-chip'); if (ch) ch.innerHTML = nbaChip(d || '');
+          var di = el('um-nba-date'); if (di) di.value = d || '';
+          var cb = el('um-nba-clear'); if (cb) cb.style.display = d ? '' : 'none';
+          var h2 = el('um-nba-hint'); if (h2) h2.textContent = 'Saved.';
+        })
+        .catch(function(e){
+          if (String(e && e.message) === 'AUTH') return;
+          console.error('nb-appliances save failed', e);
+          var w2 = el('um-fields');
+          if (!w2 || w2.getAttribute('data-nba-uid') !== uid) return;
+          var h2 = el('um-nba-hint'); if (h2) h2.textContent = 'Could not save: ' + (e && e.message ? e.message : 'error');
+        });
+    }
+    var sv = el('um-nba-save'); if (sv) sv.addEventListener('click', function(){ go(false); });
+    var cl = el('um-nba-clear'); if (cl) cl.addEventListener('click', function(){ go(true); });
+  }
   function fitem(label, value, neg){
     return '<div class="fitem"><div class="fl">' + esc(label) + '</div><div class="fv' + (neg ? ' neg' : '') + '">' + (value == null || value === '' ? '–' : value) + '</div></div>';
   }
@@ -8343,6 +8407,7 @@ window.addEventListener('error', function(e){
     var stat = STATUS_CHIP[r.occupancy_status] || '';
     if (r.is_not_ready) stat = '<span class="chip c-otb">not ready</span> ' + stat;
     if (r.is_owner_takeback) stat += ' <span class="chip c-otb">take-back</span>';
+    if (r.is_nookbook) stat += ' <span id="um-nba-chip">' + nbaChip(r.nb_appliances_installed_on) + '</span>';
     stat += sdChip(r);
     stat += appStageChip(r);
     if (stat) sub.push(stat);
@@ -8370,7 +8435,7 @@ window.addEventListener('error', function(e){
     if (r.is_nookbook) {
       f += fitem('Building type', esc(r.nb_building_type));
       f += fitem('Parking', esc(r.nb_parking));
-      f += fitem('Appliances', esc(r.nb_appliances));
+      f += fitem('Appliances', nbaValueHtml(r));
     }
     f += fitem('Lease', r.lease_source ? esc(r.lease_source) + (r.lease_type ? ' · ' + esc(r.lease_type) : '') : 'None');
     f += fitem('Lease start', esc(r.lease_from_date));
@@ -8389,6 +8454,7 @@ window.addEventListener('error', function(e){
     f += fitem('Days vacant', r.days_vacant != null ? r.days_vacant + 'd' : null);
     f += fitem('Available', esc(r.listing_available_date));
     el('um-fields').innerHTML = f;
+    if (r.is_nookbook) nbaBind(r);   // listeners bind to the freshly rendered editor nodes
     // Aged AR buckets live only in the lease directory (v_lease_directory) — fetched on
     // demand, and only when something is owing, so the /units payload stays flat (R5 spirit).
     if (r.lease_id && ((r.total_balance || 0) > 0 || r.balance_src === 'pre')) {

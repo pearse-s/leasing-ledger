@@ -1911,10 +1911,12 @@ window.addEventListener('error', function(e){
               <div id="sch-bk-app-manual" style="display:none">
                 <div class="schmanual">
                   <input type="text" id="sch-bk-m-name" placeholder="Full name">
-                  <input type="email" id="sch-bk-m-email" placeholder="Email">
-                  <input type="text" id="sch-bk-m-phone" placeholder="Phone (optional)">
+                  <input type="email" id="sch-bk-m-email" placeholder="Email (leave blank if phone-only)">
+                  <input type="text" id="sch-bk-m-phone" placeholder="Phone">
+                  <input type="text" id="sch-bk-m-source" placeholder="Lead source (optional, e.g. Facebook)">
                   <button type="button" class="mybtn" id="sch-bk-m-use">Use this prospect</button>
                 </div>
+                <div class="note" style="margin-top:4px">Facebook &amp; other no-email leads: enter a phone and leave email blank &mdash; they&rsquo;re booked and confirmed by text.</div>
               </div>
               <button type="button" class="linklike" id="sch-bk-app-manual-toggle">+ enter a prospect manually</button>
             </div>
@@ -3284,6 +3286,12 @@ window.addEventListener('error', function(e){
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
     });
   }
+  // Phone-only leads book with a SYNTHETIC, non-deliverable email (server mints it from
+  // the phone — see index.ts synthEmailFor). It must never render as a real address or
+  // get a mailto; the UI shows the phone instead. Display-only — the raw value stays on
+  // the row so /prospect-history can still group the person by that key.
+  function isSynthEmail(e){ return /@leads\.livefurnished\.ca$/i.test(String(e == null ? '' : e)); }
+  function dispEmail(e){ return isSynthEmail(e) ? '' : (e == null ? '' : String(e)); }
   // RingCentral deep links — Call/Text ring through the RingCentral app, not the default phone app.
   // Desktop "RingCentral app" = rcapp://  ·  mobile RingCentral app (ex-Glip) = glip://  (rcmobile:// is retired/dead).
   // Both use the same /r/ paths; only the scheme prefix differs. No tel:/sms: fallback (numbers go to RingCentral).
@@ -4175,7 +4183,7 @@ window.addEventListener('error', function(e){
       var whenFull = schEdFmt(r.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
       var msg = reconMsg(r.invitee_name, addr, whenFull, me);
       var tel = r.invitee_phone ? String(r.invitee_phone).replace(/[^0-9+]/g, '') : '';
-      var mail = String(r.invitee_email || '').trim();
+      var mail = dispEmail(r.invitee_email).trim();
       var act;
       if (tel){
         act = '<a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(tel), msg) + '" class="tdact">&#128172; Confirm</a>';
@@ -4263,7 +4271,7 @@ window.addEventListener('error', function(e){
       // CDN-blocked device the 77%-of-tours that carry only an email rendered no outreach at
       // all — despite the comment above promising "personal-outreach actions intact".
       var tel = r.invitee_phone ? String(r.invitee_phone).replace(/[^0-9+]/g, '') : '';
-      var mail = String(r.invitee_email || '').trim();
+      var mail = dispEmail(r.invitee_email).trim();
       var msg = tdOutreachMsg(r.invitee_name, addr, when, r.agent);
       var act = '';
       if (tel){
@@ -9719,11 +9727,11 @@ window.addEventListener('error', function(e){
       var cxl = a.invitee_status === 'canceled';
       var suite = a.resolved_unit_number || (a.suite_answer || '');
       var suiteChip = suite ? '<span class="chip ' + (a.resolved_unit_id ? 'c-ok' : 'c-warm') + '">' + esc(suite) + '</span>' : '';
-      var nm = a.invitee_name || a.invitee_email || 'Prospect';
+      var nm = a.invitee_name || dispEmail(a.invitee_email) || 'Prospect';
       var acts = '';
       if (a.invitee_phone) { var tel = a.invitee_phone.replace(/[^0-9+]/g, '');
         acts += '<a href="' + rcCall(esc(tel)) + '" title="Call">&#128222;</a> <a href="' + rcText(esc(tel)) + '" title="Text">&#128172;</a> '; }
-      if (a.invitee_email) acts += '<a href="mailto:' + esc(a.invitee_email) + '" title="Email">&#9993;&#65039;</a>';
+      if (dispEmail(a.invitee_email)) acts += '<a href="mailto:' + esc(a.invitee_email) + '" title="Email">&#9993;&#65039;</a>';
       var unitBtn = a.resolved_unit_id ? ' <a href="#" class="rmatt-unit" data-uid="' + a.resolved_unit_id + '" title="Open unit">unit &rarr;</a>' : '';
       // per-attendee cancel (open this one invitee's hosted Calendly cancel page — cancels only them)
       var cancelBtn = (!cxl && a.cancel_url) ? ' <a href="' + esc(a.cancel_url) + '" target="_blank" rel="noopener" class="rmatt-cxl" title="Cancel just this attendee in Calendly" style="font-size:.74rem;color:var(--clay);white-space:nowrap">&#10005; cancel</a>' : '';
@@ -9908,11 +9916,11 @@ window.addEventListener('error', function(e){
     // the prospect history loads (showings / no-shows / notes).
     var pc = '';
     if (r.invitee_name || r.invitee_email || r.invitee_phone) {
-      var nm = (r.invitee_name || r.invitee_email || '?').trim();
+      var nm = (r.invitee_name || dispEmail(r.invitee_email) || '?').trim();
       var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
       pc += '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div>';
       pc += '<div class="rmpro-main"><div class="rmpro-name">' + esc(r.invitee_name || 'Prospect') + '</div>';
-      pc += '<div class="rmpro-stat" id="rm-prostat">' + esc(r.invitee_email || r.invitee_phone || '') + '</div></div>';
+      pc += '<div class="rmpro-stat" id="rm-prostat">' + esc(dispEmail(r.invitee_email) || r.invitee_phone || '') + (isSynthEmail(r.invitee_email) ? ' <span class="chip c-warm">texts only</span>' : '') + '</div></div>';
       pc += '<div class="rmpro-acts">';
       if (r.invitee_phone) {
         var tel = r.invitee_phone.replace(/[^0-9+]/g, '');
@@ -9921,7 +9929,7 @@ window.addEventListener('error', function(e){
         pc += '<a href="' + rcText(esc(tel), tdOutreachMsg(r.invitee_name, tourAddr(r), when, r.agent)) + '" aria-label="Personal outreach text" title="Text — personal outreach (prefilled)">&#10024;</a>';
         pc += threadIcon(tel, r.invitee_name);
       }
-      if (r.invitee_email) pc += '<a href="mailto:' + esc(r.invitee_email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
+      if (dispEmail(r.invitee_email)) pc += '<a href="mailto:' + esc(r.invitee_email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
       pc += '</div></div>';
     }
     el('rm-contact').innerHTML = pc;
@@ -11123,7 +11131,7 @@ window.addEventListener('error', function(e){
       h += '<div class="fucard rowlink" data-uri="' + esc(r.uri) + '" style="cursor:pointer">' +
         '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b>' + esc(when) + '</b>' + tourPill(r) + '</div>' +
         '<div style="font-size:.82rem;color:var(--ink-soft);margin:2px 0 4px">' + esc(tourAddr(r)) + '</div>' +
-        '<div style="font-size:.8rem">' + esc(r.invitee_name || r.invitee_email || 'Prospect') + (rc ? ' ' + rc : '') + '</div></div>';
+        '<div style="font-size:.8rem">' + esc(r.invitee_name || dispEmail(r.invitee_email) || 'Prospect') + (rc ? ' ' + rc : '') + '</div></div>';
     });
     box.innerHTML = h || '<div class="note" style="padding:14px">No ' + view + ' tours.</div>';
     var cnt = el('hub-tours-count'); if (cnt) cnt.textContent = rows.length + ' ' + view;
@@ -11647,8 +11655,8 @@ window.addEventListener('error', function(e){
         }
         var when = schEdFmt(r.created_at, { month:'short', day:'numeric' });
         var sub = [r.actor, when, r.delivered_via].filter(Boolean).map(esc).join(' · ');
-        var noPer = !(r.prospect_name || r.prospect_email);   // no-prospect offers never auto-flip to Booked (view matches by email) — label the permanent "Sent"
-        var who = noPer ? '<b>No prospect · open link</b>' : ('<b>' + esc(r.prospect_name || 'Prospect') + '</b>');
+        var noPer = !(r.prospect_name || r.prospect_email || r.prospect_phone);   // truly anonymous open links only; phone-only offers now flip to Booked via phone match
+        var who = noPer ? '<b>No prospect · open link</b>' : ('<b>' + esc(r.prospect_name || dispEmail(r.prospect_email) || r.prospect_phone || 'Prospect') + '</b>');
         var pills = '';
         if (Array.isArray(r.slots) && r.slots.length){
           var times = r.slots.map(function(s){ return (s && s.start_time) ? s.start_time : (typeof s === 'string' ? s : ''); }).filter(Boolean);
@@ -12027,7 +12035,9 @@ window.addEventListener('error', function(e){
       postJSON('/tour-book', {
         actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,
         prospect_name: p.name, prospect_email: p.email,
-        prospect_phone: first ? (p.phone || null) : null,   // text only on the first tour
+        prospect_phone: p.phone || null,                 // always sent (phone-only leads mint their email from it)
+        suppress_reminder: !first,                       // Calendly SMS reminder only on the first tour
+        contact_channel: p.channel || null, lead_source: p.lead_source || null,
         application_id: p.application_id || null, aptly_card_id: (p && p.aptly_card_id) || null,
         location: (st.location || '').trim(), start_time: st.start_time
       }).then(function(){ done[i] = { ok: true }; i++; paint(); next(); })
@@ -12092,6 +12102,7 @@ window.addEventListener('error', function(e){
     postJSON('/tour-offer', {
       actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,
       prospect_name: (p && p.name) || null, prospect_email: (p && p.email) || null, prospect_phone: (p && p.phone) || null,
+      contact_channel: (p && p.channel) || null, lead_source: (p && p.lead_source) || null,
       application_id: (p && p.application_id) || null, aptly_card_id: (p && p.aptly_card_id) || null,
       location: loc,
       slots: schBkOffers.map(function(s){ return { start_time: s.start_time }; })
@@ -12172,22 +12183,36 @@ window.addEventListener('error', function(e){
     postJSON('/tour-book', {
       actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,
       prospect_name: p.name, prospect_email: p.email, prospect_phone: p.phone || null,
+      contact_channel: p.channel || null, lead_source: p.lead_source || null,
       application_id: p.application_id || null, aptly_card_id: (p && p.aptly_card_id) || null,
       location: loc, start_time: schedBook.chosen
     }).then(function(j){
       btn.textContent = orig; btn.disabled = false;
+      // Phone-only ('sms') bookings get NO confirmation email (the address is synthetic) —
+      // offer a prefilled Text button instead, and keep the modal open so it can be tapped.
+      var sms = (j && j.contact_channel === 'sms') && !schedBook.isGroup;
       if (rb){
         var when = schEdFmt(j.start_time || schedBook.chosen, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
         rb.style.display = 'block';
-        rb.innerHTML = '<div class="schbooked">' + (schedBook.isGroup ? '✓ Added ' + esc(schedBook.applicant ? schedBook.applicant.name : 'the prospect') + ' to the open house on ' + esc(when) + ' with ' + esc(schedBook.agentName) : '✓ Booked ' + esc(when) + ' with ' + esc(schedBook.agentName)) + '. The prospect was emailed a confirmation.</div>';
+        var head = schedBook.isGroup
+          ? ('✓ Added ' + esc(schedBook.applicant ? schedBook.applicant.name : 'the prospect') + ' to the open house on ' + esc(when) + ' with ' + esc(schedBook.agentName))
+          : ('✓ Booked ' + esc(when) + ' with ' + esc(schedBook.agentName));
+        var tail = sms ? '. No email on file — text them the confirmation:' : '. The prospect was emailed a confirmation.';
+        var textBtn = '';
+        if (sms && p.phone){
+          var first = ((p.name || '').split(/\s+/)[0]) || 'there';
+          var cmsg = 'Hi ' + first + ', you’re booked for a tour ' + when + (loc ? ' at ' + loc : '') + ' with ' + schedBook.agentName + '. See you then! — ' + (getActor() || 'Live Furnished');
+          textBtn = '<div class="schsend" style="margin-top:6px"><a class="ccbtn" target="_blank" rel="noopener" href="' + esc(rcText(String(p.phone).replace(/[^0-9+]/g, ''), cmsg)) + '">&#128172; Text confirmation</a></div>';
+        }
+        rb.innerHTML = '<div class="schbooked">' + head + tail + '</div>' + textBtn;
       }
-      setTimeout(schBkCloseConfirm, 1500);   // let the ✓ land in the modal, then close it
+      if (!sms) setTimeout(schBkCloseConfirm, 1500);   // let the ✓ land, then close — but keep it open for the Text button
       tdBkDone = Date.now();
       schBkLoadCalendar();   // the new booking now shows + that slot is gone
       tdLoadCal();           // refresh the team calendar's tours layer too
       setTimeout(function(){
-        tdBkStatus('Booked ✓ — pick a prospect to book the next one.');
-        var bn = el('sch-bk-cal-note'); if (bn) bn.textContent = '✓ Booked — confirmation emailed to the prospect.';
+        tdBkStatus(sms ? 'Booked ✓ — text the confirmation, then pick the next prospect.' : 'Booked ✓ — pick a prospect to book the next one.');
+        var bn = el('sch-bk-cal-note'); if (bn) bn.textContent = sms ? '✓ Booked — text the prospect their confirmation.' : '✓ Booked — confirmation emailed to the prospect.';
       }, 350);
     }).catch(function(e){
       btn.textContent = orig; btn.disabled = false;
@@ -12237,8 +12262,12 @@ window.addEventListener('error', function(e){
     var bmu = el('sch-bk-m-use');
     if (bmu) bmu.addEventListener('click', function(){
       var nm = (el('sch-bk-m-name').value || '').trim(), em = (el('sch-bk-m-email').value || '').trim(), ph = (el('sch-bk-m-phone').value || '').trim();
-      if (!nm || !em || em.indexOf('@') < 0){ alert('Enter a name and a valid email.'); return; }
-      schBkPickProspect({ application_id: null, name: nm, email: em, phone: ph, property: '', unit_number: '', unit_address: '' });
+      var src = ((el('sch-bk-m-source') && el('sch-bk-m-source').value) || '').trim();
+      if (!nm){ alert('Enter the prospect’s name.'); return; }
+      var okEmail = em && em.indexOf('@') > 0;
+      var okPhone = ph.replace(/\D/g, '').length >= 10;
+      if (!okEmail && !okPhone){ alert('Enter a valid email, or a phone number (10+ digits) for a phone-only lead.'); return; }
+      schBkPickProspect({ application_id: null, name: nm, email: okEmail ? em : '', phone: ph, channel: okEmail ? 'email' : 'sms', lead_source: src || null, property: '', unit_number: '', unit_address: '' });
     });
     var bac = el('sch-bk-agent-chips'); if (bac) bac.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickAgent(b.getAttribute('data-aid')); });
     var bet = el('sch-bk-ettype'); if (bet) bet.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickEventType(b.getAttribute('data-uri'), b.getAttribute('data-name'), b.getAttribute('data-dur'), b.getAttribute('data-kind')); });

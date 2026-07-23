@@ -1080,6 +1080,11 @@ window.addEventListener('error', function(e){
   .agdot{width:9px;height:9px;border-radius:50%;flex:none}
   .agchip .agn{opacity:.7;font-variant-numeric:tabular-nums}
   .agchip.on .agn{opacity:.85}
+  /* "Also bookable" (secondary/adjacent) agents — a labelled group after the primary chips,
+     hidden from the all-agents aggregation, bookable on click. Dashed = "not a primary agent". */
+  .agchip-sep,.chip-sep{align-self:center;font-size:.66rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-soft);opacity:.7;margin:0 3px 0 9px;white-space:nowrap}
+  .agchip-sec{border-style:dashed}
+  .chip-mini-sec{border-style:dashed}
   .mybtn{font-family:var(--sans);font-size:.74rem;font-weight:700;cursor:pointer;color:var(--clay);background:var(--clay-soft);border:1px solid var(--clay);border-radius:999px;padding:5px 12px;transition:all .15s}
   .mybtn:hover,.mybtn.on{background:var(--clay);color:#15110D}
   .r-calbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
@@ -3962,6 +3967,9 @@ window.addEventListener('error', function(e){
     Object.keys(names).sort().forEach(function(k){ out[k] = AGENT_PALETTE[i++ % AGENT_PALETTE.length]; });
     return out;
   }
+  // Secondary ("Also bookable") agents are hidden from the all-agents view — their tours/busy
+  // only surface when their own chip is picked. Match by first token like every agent surface.
+  function tdSecondaryFtSet(){ var s = {}; (tdCalAgents || []).forEach(function(a){ if (a && a.is_secondary) s[tdFt(a.display_name)] = 1; }); return s; }
   function tdBookArmed(){ return !!(schedBook.agentId && schedBook.eventType); }
   function tdBkStatus(t){ var s = el('sch-bk-status'); if (s) s.textContent = t; }
   var tdBkDone = 0;   // last successful booking — guards the async availability reload from clobbering the "Booked ✓" feedback
@@ -4034,16 +4042,21 @@ window.addEventListener('error', function(e){
   function tdCalChips(){
     var box = el('td-cal-ag'); if (!box) return;
     var cols = tdCalColors(tdCalRows);
-    var h = '<button type="button" class="agchip' + (tdCalAgent === '' ? ' on' : '') + '" data-ag="">All agents</button>';
-    (tdCalAgents || []).forEach(function(a){
+    var chip = function(a){
       var c = cols[tdFt(a.display_name)] || '#7c8597';
-      h += '<button type="button" class="agchip' + (tdCalAgent === a.display_name ? ' on' : '') + '" data-ag="' + esc(a.display_name) + '" style="--agc:' + c + '"><span class="agdot" style="background:' + c + '"></span>' + esc(a.display_name) + '</button>';
-    });
+      return '<button type="button" class="agchip' + (a.is_secondary ? ' agchip-sec' : '') + (tdCalAgent === a.display_name ? ' on' : '') + '" data-ag="' + esc(a.display_name) + '" style="--agc:' + c + '"><span class="agdot" style="background:' + c + '"></span>' + esc(a.display_name) + '</button>';
+    };
+    var prim = (tdCalAgents || []).filter(function(a){ return !a.is_secondary; });
+    var sec = (tdCalAgents || []).filter(function(a){ return a.is_secondary; });
+    var h = '<button type="button" class="agchip' + (tdCalAgent === '' ? ' on' : '') + '" data-ag="">All agents</button>';
+    h += prim.map(chip).join('');
+    if (sec.length) h += '<span class="agchip-sep" title="Bookable when needed — hidden from the all-agents view">Also bookable</span>' + sec.map(chip).join('');
     box.innerHTML = h;
   }
   function tdCalFiltered(){
     var rows = tdCalRows || [];
-    if (!tdCalAgent) return rows;
+    // All-agents view hides secondary ("Also bookable") people; picking their chip shows them.
+    if (!tdCalAgent){ var sec = tdSecondaryFtSet(); return rows.filter(function(r){ return !sec[tdFt(r.agent)]; }); }
     return rows.filter(function(r){ return tdFt(r.agent) === tdFt(tdCalAgent); });
   }
   // Non-tour BUSY blocks (Calendly/external calendar) for the filtered agent — parity
@@ -4120,7 +4133,8 @@ window.addEventListener('error', function(e){
       tdTeamBusyEnsure();
       var tbN = 0;
       (tdTeamBusy || []).forEach(function(p){
-        var onCal = (tdCalAgents || []).some(function(a){ return tdFt(a.display_name) === tdFt(p.name); });
+        // primary agents only — secondary ("Also bookable") people stay out of the all-agents busy layer
+        var onCal = (tdCalAgents || []).some(function(a){ return !a.is_secondary && tdFt(a.display_name) === tdFt(p.name); });
         if (!onCal) return;
         var tbc = colors[tdFt(p.name)] || '#c9ccd1';
         (p.busy || []).forEach(function(b){
@@ -11721,9 +11735,13 @@ window.addEventListener('error', function(e){
   }
   function renderBkAgents(){
     var box = el('sch-bk-agent-chips'); if (!box) return;
-    box.innerHTML = (schedAgents || []).map(function(a){
-      return '<button type="button" class="chip-mini" data-aid="' + esc(a.id) + '">' + esc(a.display_name) + '</button>';
-    }).join('') || '<span class="count-note">Loading agents…</span>';
+    if (!(schedAgents && schedAgents.length)){ box.innerHTML = '<span class="count-note">Loading agents…</span>'; return; }
+    var chip = function(a){ return '<button type="button" class="chip-mini' + (a.is_secondary ? ' chip-mini-sec' : '') + '" data-aid="' + esc(a.id) + '">' + esc(a.display_name) + '</button>'; };
+    var prim = schedAgents.filter(function(a){ return !a.is_secondary; });
+    var sec = schedAgents.filter(function(a){ return a.is_secondary; });
+    var h = prim.map(chip).join('');
+    if (sec.length) h += '<span class="chip-sep" title="Bookable when needed">Also bookable</span>' + sec.map(chip).join('');
+    box.innerHTML = h;
   }
   function schBkDoSearch(){
     var q = (el('sch-bk-app-search').value || '').trim(); var res = el('sch-bk-app-results');

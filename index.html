@@ -12188,8 +12188,9 @@ window.addEventListener('error', function(e){
       location: loc, start_time: schedBook.chosen
     }).then(function(j){
       btn.textContent = orig; btn.disabled = false;
-      // Phone-only ('sms') bookings get NO confirmation email (the address is synthetic) —
-      // offer a prefilled Text button instead, and keep the modal open so it can be tapped.
+      // Phone-only ('sms') bookings have no real email, so Calendly notifies the prospect by
+      // text (via text_reminder_number) rather than email — Calendly handles all notifications,
+      // so the flow is identical to an email booking; only the confirmation wording differs.
       var sms = (j && j.contact_channel === 'sms') && !schedBook.isGroup;
       if (rb){
         var when = schEdFmt(j.start_time || schedBook.chosen, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
@@ -12197,22 +12198,16 @@ window.addEventListener('error', function(e){
         var head = schedBook.isGroup
           ? ('✓ Added ' + esc(schedBook.applicant ? schedBook.applicant.name : 'the prospect') + ' to the open house on ' + esc(when) + ' with ' + esc(schedBook.agentName))
           : ('✓ Booked ' + esc(when) + ' with ' + esc(schedBook.agentName));
-        var tail = sms ? '. No email on file — text them the confirmation:' : '. The prospect was emailed a confirmation.';
-        var textBtn = '';
-        if (sms && p.phone){
-          var first = ((p.name || '').split(/\s+/)[0]) || 'there';
-          var cmsg = 'Hi ' + first + ', you’re booked for a tour ' + when + (loc ? ' at ' + loc : '') + ' with ' + schedBook.agentName + '. See you then! — ' + (getActor() || 'Live Furnished');
-          textBtn = '<div class="schsend" style="margin-top:6px"><a class="ccbtn" target="_blank" rel="noopener" href="' + esc(rcText(String(p.phone).replace(/[^0-9+]/g, ''), cmsg)) + '">&#128172; Text confirmation</a></div>';
-        }
-        rb.innerHTML = '<div class="schbooked">' + head + tail + '</div>' + textBtn;
+        var tail = sms ? '. The prospect will be texted their confirmation.' : '. The prospect was emailed a confirmation.';
+        rb.innerHTML = '<div class="schbooked">' + head + tail + '</div>';
       }
-      if (!sms) setTimeout(schBkCloseConfirm, 1500);   // let the ✓ land, then close — but keep it open for the Text button
+      setTimeout(schBkCloseConfirm, 1500);   // let the ✓ land in the modal, then close it
       tdBkDone = Date.now();
       schBkLoadCalendar();   // the new booking now shows + that slot is gone
       tdLoadCal();           // refresh the team calendar's tours layer too
       setTimeout(function(){
-        tdBkStatus(sms ? 'Booked ✓ — text the confirmation, then pick the next prospect.' : 'Booked ✓ — pick a prospect to book the next one.');
-        var bn = el('sch-bk-cal-note'); if (bn) bn.textContent = sms ? '✓ Booked — text the prospect their confirmation.' : '✓ Booked — confirmation emailed to the prospect.';
+        tdBkStatus('Booked ✓ — pick a prospect to book the next one.');
+        var bn = el('sch-bk-cal-note'); if (bn) bn.textContent = sms ? '✓ Booked — confirmation texted to the prospect.' : '✓ Booked — confirmation emailed to the prospect.';
       }, 350);
     }).catch(function(e){
       btn.textContent = orig; btn.disabled = false;

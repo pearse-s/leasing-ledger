@@ -11650,7 +11650,9 @@ window.addEventListener('error', function(e){
     var html = '<button type="button" class="chip-mini' + (cur ? '' : ' on') + '" data-src="">All</button>';
     html += list.map(function(s){
       var on = cur && cur === String(s.source).toLowerCase();
-      return '<button type="button" class="chip-mini' + (on ? ' on' : '') + '" data-src="' + esc(s.source) + '">' + esc(s.source) + '<span class="schsrc-n">' + (s.booked || 0) + '/' + (s.total || 0) + '</span></button>';
+      var tot = s.total || 0, bk = s.booked || 0;
+      var tip = s.source + ': ' + tot + ' lead' + (tot === 1 ? '' : 's') + ' (offers + direct bookings), ' + bk + ' booked';
+      return '<button type="button" class="chip-mini' + (on ? ' on' : '') + '" data-src="' + esc(s.source) + '" title="' + esc(tip) + '">' + esc(s.source) + '<span class="schsrc-n">' + bk + '/' + tot + '</span></button>';
     }).join('');
     box.innerHTML = html;
   }
@@ -11662,7 +11664,9 @@ window.addEventListener('error', function(e){
       var noteEl = el('sch-offers-note');
       schRenderOfferSrcChips(j.sources || []);
       var srcLabel = schOfferSource ? esc(schOfferSource) : 'recent';
-      if (!rows.length){ box.innerHTML = '<div class="note">' + (schOfferSource ? 'No ' + esc(schOfferSource) + ' offers yet.' : 'No tour links generated yet.') + '</div>'; if (noteEl) noteEl.innerHTML = schOfferSource ? '0 ' + srcLabel : ''; return; }
+      // Empty note is scoped to OFFERS awaiting booking; the chip still shows this source's full
+      // lead/booked count (which includes direct bookings), so the two don't contradict.
+      if (!rows.length){ box.innerHTML = '<div class="note">' + (schOfferSource ? 'No ' + esc(schOfferSource) + ' offers awaiting booking. (The chip count includes direct bookings.)' : 'No tour links generated yet.') + '</div>'; if (noteEl) noteEl.innerHTML = schOfferSource ? '0 ' + srcLabel + ' offers' : ''; return; }
       var booked = rows.filter(function(r){ return r.is_booked; }).length;
       if (noteEl) noteEl.innerHTML = rows.length + ' ' + srcLabel + ' · ' + booked + ' booked';
       schOfferMsgs = {};

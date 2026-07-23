@@ -1320,6 +1320,7 @@ window.addEventListener('error', function(e){
   .schresults{margin-top:8px;display:flex;flex-direction:column;gap:4px;max-height:280px;overflow:auto}
   .schres{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border:1px solid var(--hairline-dark);border-radius:10px;background:rgba(255,255,255,.02);cursor:pointer;text-align:left;font-family:var(--sans);color:var(--ink)}
   .schres:hover{border-color:var(--clay)}
+  .schres.on{border-color:var(--clay);background:rgba(255,255,255,.06)}   /* keyboard highlight (↑/↓) */
   .schres b{font-size:.92rem}
   .schres span{font-size:.76rem;color:var(--ink-soft)}
   .schlanding{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
@@ -1964,8 +1965,8 @@ window.addEventListener('error', function(e){
           <div class="schsublite" style="margin-bottom:6px">Offer times &mdash; click each open time on the calendar above to add it, then create <b>one link</b> with all the times for the prospect to pick from. No prospect needed &mdash; you&rsquo;ll get a bare shareable link.</div>
           <div id="sch-bk-offers"></div>
           <div class="schloc" style="margin-top:8px">
-            <label class="schsub">Tour location <span class="schsublite">&mdash; optional; pre-fills on the booking page; type to search our units</span></label>
-            <input type="text" id="sch-bk-offer-loc" placeholder="Unit address" autocomplete="off">
+            <label class="schsub">Tour location <span class="schsublite">&mdash; optional; pre-fills on the booking page; type any part of the address or unit, in any order</span></label>
+            <input type="text" id="sch-bk-offer-loc" placeholder="Address or unit &mdash; e.g. 8051 24" autocomplete="off">
             <div id="sch-bk-offer-loc-results" class="schresults"></div>
           </div>
           <div class="schsummary" id="sch-bk-offer-summary"></div>
@@ -2832,8 +2833,8 @@ window.addEventListener('error', function(e){
         <div class="schrow"><label class="schsub" style="margin:0">Time</label> <select id="sch-bk-time" style="width:auto"></select> <span class="schsublite" id="sch-bk-daylab"></span></div>
         <div id="sch-bk-daynote"></div>
         <div class="schloc" id="sch-bk-locwrap">
-          <label class="schsub">Tour location <span class="schsublite">&mdash; sent to the prospect; type to search our units</span></label>
-          <input type="text" id="sch-bk-loc" placeholder="Unit address" autocomplete="off">
+          <label class="schsub">Tour location <span class="schsublite">&mdash; sent to the prospect; type any part of the address or unit, in any order</span></label>
+          <input type="text" id="sch-bk-loc" placeholder="Address or unit &mdash; e.g. 8051 24" autocomplete="off">
           <div id="sch-bk-loc-results" class="schresults"></div>
         </div>
         <div class="schloc" id="sch-bk-ohloc" style="display:none">
@@ -11719,6 +11720,7 @@ window.addEventListener('error', function(e){
   var schedProspect = null;   // prospect from a lead deep link, carried to either flow
   var schedBook = { applicant:null, agentId:null, agentName:'', eventType:null, eventTypeName:'', duration:0, locDefault:'', chosen:null, isGroup:false, capacity:0, ohLocation:'', scheduled:[] };
   var schBkSearchT = null, schBkLocT = null, schBkSearchRows = [], schBkLeadRows = [], bkData = { showings:[], busy:[], slots:[] };
+  var schUnitReq = 0;   // generation guard for the unit lookup (a slow early keystroke must not paint over a newer one)
   var schBkMode = 'single', schBkStops = [], schBkStopT = null;   // 'single' | 'multi' (back-to-back) | 'offer'; stops: [{start_time, location}]
   var schBkOffers = [], schBkShowOpenPrior = null, schBkOfferLast = null;   // offer run: [{start_time}] — alternative times for ONE visit, one optional shared location
   function schShowView(v){
@@ -12018,7 +12020,7 @@ window.addEventListener('error', function(e){
         return '<div class="schstop" data-st="' + esc(s.start_time) + '">' +
           '<span class="schstop-n">' + (i + 1) + '</span>' +
           '<div class="schstop-body"><div class="schstop-time">' + esc(when) + (i === 0 ? ' <span class="schstop-txt">texts prospect</span>' : '') + '</div>' +
-          '<input type="text" class="schstop-loc" data-st="' + esc(s.start_time) + '" value="' + esc(s.location || '') + '" placeholder="Unit address" autocomplete="off"></div>' +
+          '<input type="text" class="schstop-loc" data-st="' + esc(s.start_time) + '" value="' + esc(s.location || '') + '" placeholder="Address or unit &mdash; e.g. 8051 24" autocomplete="off"></div>' +
           '<button type="button" class="schstop-x" data-st="' + esc(s.start_time) + '" title="Remove">&times;</button>' +
           '</div>';
       }).join('');
@@ -12030,19 +12032,74 @@ window.addEventListener('error', function(e){
     }
     var btn = el('sch-bk-book-all'); if (btn) btn.disabled = !schBkStops.length;
   }
+  /* ── Unit lookup — ONE picker behind all three "type to search our units" fields ──
+     (Confirm & book location · offer-link location · each back-to-back stop). They are
+     the same control in three places, so the fetch, the markup and the keyboard nav live
+     here once — a change to any of them must land on all three (sibling-surfaces rule).
+     ORDER COMES FROM THE SERVER (dashboard.search_units ranks exact unit number, street
+     number, then listed/vacant): rows arrive best-first — never re-sort them here. */
+  function schUnitState(u){
+    var s = u.occupancy_status;
+    if (s === 'op_vacant' || s === 'never_leased') return 'Vacant';
+    if (s === 'pre_leased') return 'Move-in booked';
+    if (s === 'occupied') return 'Occupied';
+    return '';
+  }
+  function schUnitResHtml(rows){
+    return rows.map(function(u){
+      var title = u.address || [u.property_name, u.unit_number].filter(Boolean).join(' ');
+      var bits = [u.property_name, u.unit_number ? 'Unit ' + u.unit_number : '', schUnitState(u), u.is_listed ? 'Listed' : ''];
+      return '<button type="button" class="schres" data-addr="' + esc(u.address || title) + '">' +
+        '<b>' + esc(title) + '</b>' +
+        '<span>' + esc(bits.filter(Boolean).join(' · ')) + '</span></button>';
+    }).join('');
+  }
+  function schUnitLookup(inputEl, resEl){
+    if (!inputEl || !resEl) return;
+    var q = (inputEl.value || '').trim();
+    if (q.length < 2){ resEl.innerHTML = ''; return; }
+    var gen = ++schUnitReq;
+    authFetch('/tour-unit-search?q=' + encodeURIComponent(q)).then(function(j){
+      if (gen !== schUnitReq) return;   // a newer keystroke already answered
+      var rows = (j && j.results) || [];
+      resEl.innerHTML = rows.length ? schUnitResHtml(rows)
+        : '<div class="note">No unit matches that. Any order works &mdash; street number and unit number is usually enough, e.g. 8051 24.</div>';
+    }).catch(function(e){
+      if (gen !== schUnitReq) return;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('unit search failed', e);
+      resEl.innerHTML = '<div class="note">Could not search units just now &mdash; type again to retry.</div>';
+    });
+  }
+  // ↑/↓ to move through the matches, Enter to take one (Enter with nothing highlighted
+  // takes the top match), Esc to dismiss. Enter clicks the button so selection keeps
+  // running through each field's existing click handler — one pick path, not two.
+  function schUnitKeyNav(resEl, e){
+    if (!resEl) return;
+    var opts = [].slice.call(resEl.querySelectorAll('.schres'));
+    if (!opts.length) return;
+    var i = opts.indexOf(resEl.querySelector('.schres.on'));
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+      e.preventDefault();
+      i = (e.key === 'ArrowDown') ? ((i + 1) % opts.length) : (i <= 0 ? opts.length - 1 : i - 1);
+      opts.forEach(function(o){ o.classList.remove('on'); });
+      opts[i].classList.add('on');
+      try { opts[i].scrollIntoView({ block: 'nearest' }); } catch (e2) {}
+    } else if (e.key === 'Enter'){
+      e.preventDefault();
+      opts[i < 0 ? 0 : i].click();
+    } else if (e.key === 'Escape'){
+      resEl.innerHTML = '';
+    }
+  }
   function schBkStopLocSearch(inputEl){
     var st = inputEl.getAttribute('data-st');
     var stop = schBkStops.filter(function(s){ return s.start_time === st; })[0];
     if (stop) stop.location = inputEl.value;   // keep model in sync as they type
     var res = el('sch-bk-stop-results'); if (!res) return;
-    var q = (inputEl.value || '').trim();
     res.setAttribute('data-st', st);
     try { inputEl.parentNode.insertAdjacentElement('afterend', res); } catch (e) {}   // float results under the active row
-    if (q.length < 3){ res.innerHTML = ''; return; }
-    authFetch('/tour-unit-search?q=' + encodeURIComponent(q)).then(function(j){
-      var rows = j.results || []; if (!rows.length){ res.innerHTML = ''; return; }
-      res.innerHTML = rows.map(function(u){ return '<button type="button" class="schres" data-addr="' + esc(u.address) + '"><b>' + esc(u.address || (u.property_name + ' ' + (u.unit_number || ''))) + '</b><span>' + esc([u.property_name, u.unit_number ? 'Unit ' + u.unit_number : ''].filter(Boolean).join(' · ')) + '</span></button>'; }).join('');
-    }).catch(function(){ /* ignore */ });
+    schUnitLookup(inputEl, res);
   }
   function schBkBookAll(){
     var p = schedBook.applicant; if (!p || !schedBook.agentId || !schBkStops.length) return;
@@ -12131,15 +12188,7 @@ window.addEventListener('error', function(e){
     }
     var btn = el('sch-bk-offer-go'); if (btn) btn.disabled = !schBkOffers.length;
   }
-  function schBkOfferLocSearch(inputEl){
-    var res = el('sch-bk-offer-loc-results'); if (!res) return;
-    var q = (inputEl.value || '').trim();
-    if (q.length < 3){ res.innerHTML = ''; return; }
-    authFetch('/tour-unit-search?q=' + encodeURIComponent(q)).then(function(j){
-      var rows = j.results || []; if (!rows.length){ res.innerHTML = ''; return; }
-      res.innerHTML = rows.map(function(u){ return '<button type="button" class="schres" data-addr="' + esc(u.address) + '"><b>' + esc(u.address || (u.property_name + ' ' + (u.unit_number || ''))) + '</b><span>' + esc([u.property_name, u.unit_number ? 'Unit ' + u.unit_number : ''].filter(Boolean).join(' · ')) + '</span></button>'; }).join('');
-    }).catch(function(){ /* ignore */ });
-  }
+  function schBkOfferLocSearch(inputEl){ schUnitLookup(inputEl, el('sch-bk-offer-loc-results')); }
   function schBkOfferGo(){
     if (!schedBook.agentId || !schedBook.eventType || !schBkOffers.length) return;   // prospect NOT required
     var actor = getActor(), rb = el('sch-bk-offer-result');
@@ -12214,14 +12263,7 @@ window.addEventListener('error', function(e){
     schBkRenderSummary();
     var rb = el('sch-bk-result'); if (rb){ rb.style.display = 'none'; rb.innerHTML = ''; }
   }
-  function schBkUnitSearch(){
-    var q = (el('sch-bk-loc').value || '').trim(); var res = el('sch-bk-loc-results'); if (!res) return;
-    if (q.length < 3){ res.innerHTML = ''; return; }
-    authFetch('/tour-unit-search?q=' + encodeURIComponent(q)).then(function(j){
-      var rows = j.results || []; if (!rows.length){ res.innerHTML = ''; return; }
-      res.innerHTML = rows.map(function(u){ return '<button type="button" class="schres" data-addr="' + esc(u.address) + '"><b>' + esc(u.address || (u.property_name + ' ' + (u.unit_number || ''))) + '</b><span>' + esc([u.property_name, u.unit_number ? 'Unit ' + u.unit_number : ''].filter(Boolean).join(' · ')) + '</span></button>'; }).join('');
-    }).catch(function(){ /* ignore */ });
-  }
+  function schBkUnitSearch(){ schUnitLookup(el('sch-bk-loc'), el('sch-bk-loc-results')); }
   function schBkGo(){
     var p = schedBook.applicant; if (!p || !schedBook.agentId || !schedBook.chosen) return;
     var actor = getActor(), rb = el('sch-bk-result');
@@ -12332,13 +12374,21 @@ window.addEventListener('error', function(e){
       });
     }
     var btm = el('sch-bk-time'); if (btm) btm.addEventListener('change', function(){ schedBook.chosen = this.value; schBkRenderSummary(); });
-    var blc = el('sch-bk-loc'); if (blc) blc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(schBkUnitSearch, 280); });
+    var blc = el('sch-bk-loc');
+    if (blc){
+      blc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(schBkUnitSearch, 280); });
+      blc.addEventListener('keydown', function(e){ schUnitKeyNav(el('sch-bk-loc-results'), e); });
+    }
     var blr = el('sch-bk-loc-results'); if (blr) blr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-bk-loc')) el('sch-bk-loc').value = b.getAttribute('data-addr') || ''; blr.innerHTML = ''; });
     var bgo = el('sch-bk-go'); if (bgo) bgo.addEventListener('click', schBkGo);
     // Back-to-back run
     var bmode = el('sch-bk-mode'); if (bmode) bmode.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (!b) return; var m = b.getAttribute('data-mode'); if (schBkModeGuard(m)) schBkSetMode(m); });
     var boff = el('sch-bk-offers'); if (boff) boff.addEventListener('click', function(e){ var x = e.target.closest('.schstop-x'); if (x) schBkRemoveOffer(x.getAttribute('data-st')); });
-    var boloc = el('sch-bk-offer-loc'); if (boloc) boloc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(function(){ schBkOfferLocSearch(boloc); }, 280); });
+    var boloc = el('sch-bk-offer-loc');
+    if (boloc){
+      boloc.addEventListener('input', function(){ clearTimeout(schBkLocT); schBkLocT = setTimeout(function(){ schBkOfferLocSearch(boloc); }, 280); });
+      boloc.addEventListener('keydown', function(e){ schUnitKeyNav(el('sch-bk-offer-loc-results'), e); });
+    }
     var bolr = el('sch-bk-offer-loc-results'); if (bolr) bolr.addEventListener('click', function(e){ var b = e.target.closest('.schres'); if (!b) return; if (el('sch-bk-offer-loc')) el('sch-bk-offer-loc').value = b.getAttribute('data-addr') || ''; bolr.innerHTML = ''; });
     var bogo = el('sch-bk-offer-go'); if (bogo) bogo.addEventListener('click', schBkOfferGo);
     var bores = el('sch-bk-offer-result');
@@ -12355,6 +12405,7 @@ window.addEventListener('error', function(e){
     if (bstops){
       bstops.addEventListener('click', function(e){ var x = e.target.closest('.schstop-x'); if (x) schBkRemoveStop(x.getAttribute('data-st')); });
       bstops.addEventListener('input', function(e){ var inp = e.target.closest('.schstop-loc'); if (!inp) return; clearTimeout(schBkStopT); schBkStopT = setTimeout(function(){ schBkStopLocSearch(inp); }, 280); });
+      bstops.addEventListener('keydown', function(e){ if (e.target.closest('.schstop-loc')) schUnitKeyNav(el('sch-bk-stop-results'), e); });
     }
     var bstopres = el('sch-bk-stop-results');
     if (bstopres) bstopres.addEventListener('click', function(e){

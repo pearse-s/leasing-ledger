@@ -2238,6 +2238,7 @@ window.addEventListener('error', function(e){
           <option value="d90_plus">90+</option>
           <option value="unknown">age unknown</option>
         </select>
+        <button type="button" id="u-export" class="rfreshbtn" title="Download every unit matching the current filters (all pages, current sort) as an Excel workbook">&#8681; Export XLSX</button>
         <span class="count-note" id="u-count"></span>
       </div>
       <div class="ufilters">
@@ -3129,6 +3130,7 @@ window.addEventListener('error', function(e){
   var lsLedRows = null, lsLedFilter = 'all';  // live-ledger rows for the open lease modal + type chip filter
   var umLsReq = 0;                            // guard for the unit modal's aged-buckets append
   var uPage = 0, uSig = '', U_PER = 200;
+  var uRowsCur = [];   // the FULL filtered+sorted Units set (every page) — what the XLSX export writes
   var uSel = {};   // Units flag chips multi-select (on-notice / move-out / eviction / balance / take-backs)
   var uOcc = 'all', uMkt = 'all', uDV = '';   // Occupancy axis · Marketing axis · Days-vacant band
   var curPhotosLm = [], curPhotosUm = [];
@@ -8205,6 +8207,7 @@ window.addEventListener('error', function(e){
               (r.nb_building_type||'') + ' ' + (r.nb_parking||'')).toLowerCase().indexOf(q) >= 0;
     });
     rows.sort(cmpRows(uSort.k, uSort.d));
+    uRowsCur = rows;   // export reads this — every matching row, not just the rendered page
     // reset to page 1 whenever the filter/sort/scope changes (but not on paging)
     var sig = [q, el('u-rmin').value, el('u-rmax').value, amenSel.join(','), uOcc, uMkt, uDV, Object.keys(uSel).sort().join(','), JSON.stringify(nbf), JSON.stringify(COLF['utable']||{}), mg.join(','), ow.join(','), pr.join(','), uSort.k, uSort.d, uView].join('|');
     if (sig !== uSig) { uSig = sig; uPage = 0; }
@@ -8275,6 +8278,269 @@ window.addEventListener('error', function(e){
     h += '<button type="button" class="pgbtn pgnav" data-pg="next"' + (uPage >= pageCount - 1 ? ' disabled' : '') + '>Next &rsaquo;</button>';
     box.innerHTML = h;
   }
+
+  /* ── XLSX writer (self-contained — no library) ────────────────────────────
+     Builds a real .xlsx: an OOXML package emitted as a store-only (uncompressed)
+     ZIP with inline-string / numeric cells. Deliberately dependency-free — a
+     spreadsheet export is not worth a 7th CDN script, and SheetJS's free build
+     cannot bold a header anyway, while this gives a frozen bold header row, an
+     autofilter and per-column widths in ~90 lines.
+     GENERIC ON PURPOSE. xlsxDownload(filename, { sheet, note, cols, rows }) with
+     cols = [{ label, key | get(row), w, type:'text'|'num'|'money' }]. Row 1 is
+     the note line, row 2 the header, data from row 3. REUSE IT for the next
+     board that needs an export — never write a second copy. */
+  var XL_CRC = null;
+  function xlCrc32(buf){
+    if (!XL_CRC){
+      XL_CRC = new Int32Array(256);
+      for (var n = 0; n < 256; n++){
+        var v = n;
+        for (var k = 0; k < 8; k++) v = (v & 1) ? (0xEDB88320 ^ (v >>> 1)) : (v >>> 1);
+        XL_CRC[n] = v;
+      }
+    }
+    var c = -1;
+    for (var i = 0; i < buf.length; i++) c = XL_CRC[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ -1) >>> 0;
+  }
+  // store-only ZIP (method 0): no deflate, so no compression library is needed.
+  // files = [{ name, data (string) }]. UTF-8 flag 0x0800 is set on every entry.
+  function xlZip(files){
+    var enc = new TextEncoder(), parts = [], dir = [], offset = 0, cdSize = 0;
+    function u16(v){ return [v & 0xFF, (v >>> 8) & 0xFF]; }
+    function u32(v){ return [v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF]; }
+    files.forEach(function(f){
+      var name = enc.encode(f.name), data = enc.encode(f.data), crc = xlCrc32(data);
+      // local file header (30 B + name): sig, ver, flag, method, time, DOS date 1980-01-01
+      var lfh = new Uint8Array([0x50, 0x4B, 0x03, 0x04].concat(
+        u16(20), u16(0x0800), u16(0), u16(0), u16(0x21),
+        u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0)));
+      // central directory header (46 B + name)
+      var cdh = new Uint8Array([0x50, 0x4B, 0x01, 0x02].concat(
+        u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0x21),
+        u32(crc), u32(data.length), u32(data.length), u16(name.length),
+        u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)));
+      parts.push(lfh, name, data);
+      dir.push(cdh, name);
+      offset += lfh.length + name.length + data.length;
+    });
+    dir.forEach(function(p){ cdSize += p.length; });
+    var eocd = new Uint8Array([0x50, 0x4B, 0x05, 0x06].concat(
+      u16(0), u16(0), u16(files.length), u16(files.length), u32(cdSize), u32(offset), u16(0)));
+    return new Blob(parts.concat(dir, [eocd]),
+      { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+  function xlEsc(v){
+    return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  }
+  function xlColRef(i){
+    var s = '', n = i + 1;
+    while (n > 0){ var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+  function xlText(ref, style, v){
+    return '<c r="' + ref + '" t="inlineStr"' + (style ? ' s="' + style + '"' : '') +
+      '><is><t xml:space="preserve">' + xlEsc(v) + '</t></is></c>';
+  }
+  function xlCell(ref, v, type){
+    if (v == null || v === '') return '';
+    if (type === 'num' || type === 'money'){
+      var n = typeof v === 'number' ? v : parseFloat(v);
+      if (isNaN(n)) return '';
+      return '<c r="' + ref + '"' + (type === 'money' ? ' s="2"' : '') + '><v>' + n + '</v></c>';
+    }
+    return xlText(ref, 0, v);
+  }
+  function xlsxBlob(o){
+    var XD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    var NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    var RS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    var cols = o.cols || [], rows = o.rows || [];
+    var sheetName = xlEsc(String(o.sheet || 'Sheet1').replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31));
+    var last = xlColRef(Math.max(0, cols.length - 1));
+    var hdrRow = o.note ? 2 : 1, firstData = hdrRow + 1;
+    var lastRow = Math.max(hdrRow + rows.length, firstData);
+    var sd = '';
+    if (o.note) sd += '<row r="1">' + xlText('A1', 3, o.note) + '</row>';
+    sd += '<row r="' + hdrRow + '">';
+    cols.forEach(function(c, i){ sd += xlText(xlColRef(i) + hdrRow, 1, c.label); });
+    sd += '</row>';
+    rows.forEach(function(r, ri){
+      var rr = firstData + ri;
+      sd += '<row r="' + rr + '">';
+      cols.forEach(function(c, i){ sd += xlCell(xlColRef(i) + rr, c.get ? c.get(r) : r[c.key], c.type); });
+      sd += '</row>';
+    });
+    var cw = '<cols>';
+    cols.forEach(function(c, i){
+      cw += '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + (c.w || 14) + '" customWidth="1"/>';
+    });
+    cw += '</cols>';
+    var sheet = XD + '<worksheet xmlns="' + NS + '">' +
+      '<dimension ref="A1:' + last + lastRow + '"/>' +
+      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="' + hdrRow + '" topLeftCell="A' + firstData +
+        '" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+      '<sheetFormatPr defaultRowHeight="15"/>' + cw +
+      '<sheetData>' + sd + '</sheetData>' +
+      '<autoFilter ref="A' + hdrRow + ':' + last + Math.max(lastRow, hdrRow) + '"/></worksheet>';
+    // style ids used above: 1 = bold header on a sand fill, 2 = money, 3 = grey italic note
+    var styles = XD + '<styleSheet xmlns="' + NS + '">' +
+      '<numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/></numFmts>' +
+      '<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font>' +
+      '<font><b/><sz val="11"/><name val="Calibri"/></font>' +
+      '<font><i/><sz val="10"/><color rgb="FF6B6B6B"/><name val="Calibri"/></font></fonts>' +
+      '<fills count="3"><fill><patternFill patternType="none"/></fill>' +
+      '<fill><patternFill patternType="gray125"/></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFEFEAE0"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+      '<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+      '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' +
+      '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+      '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>' +
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+    return xlZip([
+      { name:'[Content_Types].xml', data: XD +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
+      { name:'_rels/.rels', data: XD +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="' + RS + '/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+      { name:'xl/workbook.xml', data: XD +
+        '<workbook xmlns="' + NS + '" xmlns:r="' + RS + '">' +
+        '<sheets><sheet name="' + sheetName + '" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+      { name:'xl/_rels/workbook.xml.rels', data: XD +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="' + RS + '/worksheet" Target="worksheets/sheet1.xml"/>' +
+        '<Relationship Id="rId2" Type="' + RS + '/styles" Target="styles.xml"/></Relationships>' },
+      { name:'xl/styles.xml', data: styles },
+      { name:'xl/worksheets/sheet1.xml', data: sheet }
+    ]);
+  }
+  function xlsxDownload(fname, o){
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(xlsxBlob(o));
+    a.download = fname;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
+  }
+
+  /* ── Units board export ────────────────────────────────────────────────
+     Writes uRowsCur — the SAME filtered + sorted set drawUnits() renders, every
+     page of it, in the on-screen sort order. Row 1 records which filters were
+     active so a shared file explains itself. */
+  function xlYN(v){ return v ? 'Yes' : 'No'; }
+  function msLabels(key){
+    return msIds(key).map(function(id){
+      if (MS[key].sel[id]) return MS[key].sel[id];
+      if (idLock && idLock.name && idLock.pmId != null && String(idLock.pmId) === String(id)) return idLock.name;
+      return '#' + id;
+    });
+  }
+  function chipLabel(list, k){
+    for (var i = 0; i < list.length; i++){ if (list[i].k === k) return list[i].label; }
+    return k;
+  }
+  var U_XL_COLS = [
+    { label:'Property',        key:'property_name', w:26 },
+    { label:'Building',        key:'building_name', w:18 },
+    { label:'Unit',            key:'unit_number', w:10 },
+    { label:'Address',         key:'address_line1', w:26 },
+    { label:'City',            key:'city', w:14 },
+    { label:'Beds',            key:'unit_bedrooms', type:'num', w:7 },
+    { label:'Baths',           key:'unit_bathrooms', type:'num', w:7 },
+    { label:'Sq ft',           key:'unit_size', type:'num', w:8 },
+    { label:'Status',          w:14, get:function(r){ return CF_OCC[r.occupancy_status] || r.occupancy_status; } },
+    { label:'Take-back',       w:10, get:function(r){ return xlYN(r.is_owner_takeback); } },
+    { label:'Not ready',       w:10, get:function(r){ return xlYN(r.is_not_ready); } },
+    { label:'Listed',          w:8,  get:function(r){ return xlYN(r.is_listed); } },
+    { label:'Days vacant',     key:'days_vacant', type:'num', w:11 },
+    { label:'Available from',  key:'listing_available_date', w:14 },
+    { label:'Rent (as shown)', type:'money', w:14, get:rentBasis },
+    { label:'Listing rent',    key:'listing_rent', type:'money', w:13 },
+    { label:'Lease rent',      key:'monthly_rent', type:'money', w:13 },
+    { label:'Market rent',     key:'market_rent', type:'money', w:13 },
+    { label:'Event',           key:'unit_event', w:16 },
+    { label:'Renewal',         w:12, get:function(r){ var n = rnByUnit[r.unit_id]; return n ? n.renewal_state : ''; } },
+    { label:'Pending app',     w:13, get:function(r){ return r.pending_app_stage === 'draft_lease' ? 'Draft lease' : r.pending_app_stage === 'approved' ? 'Approved' : ''; } },
+    { label:'Move-in',         key:'move_in_disp', w:12 },
+    { label:'Move-in source',  w:13, get:function(r){ return r.move_in_src === 'appt' ? 'Appointment' : r.move_in_src === 'lease' ? 'Lease start' : ''; } },
+    { label:'Lease type',      key:'lease_type', w:13 },
+    { label:'Lease start',     key:'lease_from_date', w:12 },
+    { label:'Lease end',       key:'lease_to_date', w:12 },
+    { label:'Days remaining',  key:'days_remaining', type:'num', w:13 },
+    { label:'Next move-out',   key:'next_move_out', w:13 },
+    { label:'Balance',         key:'balance_disp', type:'money', w:13 },
+    { label:'Balance basis',   w:12, get:function(r){ return r.balance_src === 'active' ? 'Active lease' : r.balance_src === 'pre' ? 'Pre move-in' : ''; } },
+    { label:'Security deposit', key:'security_deposit', type:'money', w:14 },
+    { label:'SD charged',      key:'sd_charged', type:'money', w:12 },
+    { label:'SD paid',         key:'sd_paid', type:'money', w:12 },
+    { label:'Tenant',          key:'tenant_names', w:26 },
+    { label:'Owner',           key:'primary_owner_name', w:22 },
+    { label:'Manager',         key:'property_manager_name', w:18 },
+    { label:'Nookbook',        w:10, get:function(r){ return xlYN(r.is_nookbook); } },
+    { label:'Building type',   key:'nb_building_type', w:16 },
+    { label:'Parking',         key:'nb_parking', w:14 },
+    { label:'Appliances',      key:'nb_appliances', w:11 },
+    { label:'Appliances installed', key:'nb_appliances_installed_on', w:15 },
+    { label:'Amenities',       w:30, get:function(r){ return (r.amenities || []).join(', '); } },
+    { label:'Facebook agent',  key:'fb_agent', w:14 },
+    { label:'Facebook URL',    key:'fb_url', w:30 },
+    { label:'Listing URL',     key:'listing_url', w:30 },
+    { label:'Unit ID',         key:'unit_id', type:'num', w:10 }
+  ];
+  function unitsFilterBits(){
+    var bits = [], q = (el('u-search').value || '').trim();
+    if (q) bits.push('Search: ' + q);
+    if (uOcc !== 'all') bits.push('Occupancy: ' + chipLabel(OCC, uOcc));
+    if (uMkt !== 'all') bits.push('Marketing: ' + chipLabel(MKT, uMkt));
+    if (uDV){ var dv = el('u-dv'); bits.push('Days vacant: ' + (dv.options[dv.selectedIndex] ? dv.options[dv.selectedIndex].text : uDV)); }
+    var flags = Object.keys(uSel);
+    if (flags.length) bits.push('Flags: ' + flags.map(function(k){ return chipLabel(QFILTERS, k); }).join(', '));
+    var rmin = el('u-rmin').value, rmax = el('u-rmax').value;
+    if (rmin || rmax) bits.push('Rent: ' + (rmin || 'any') + ' to ' + (rmax || 'any'));
+    var amen = msLabels('u_amen');
+    if (amen.length) bits.push('Amenity: ' + amen.join(', '));
+    var bt = cgArr('nb-bt'), park = msLabels('nb_park'), appl = cgArr('nb-appl');
+    if (bt.length) bits.push('Building type: ' + bt.join(', '));
+    if (park.length) bits.push('Parking: ' + park.join(', '));
+    if (appl.length) bits.push('Appliances: ' + appl.join(', '));
+    if (el('nb-notready').checked) bits.push('Not-ready units only');
+    if (uSel['otb']) bits.push('Owner take-backs shown');
+    ['managers', 'owners', 'properties'].forEach(function(key){
+      var names = msLabels(key);
+      if (names.length) bits.push(key.charAt(0).toUpperCase() + key.slice(1) + ': ' + names.join(', '));
+    });
+    Object.keys(COLF['utable'] || {}).forEach(function(col){
+      if (!colActive('utable', col)) return;
+      var d = colDef('utable', col), s = COLF['utable'][col], lab = d.label || col;
+      if (d.t === 'num' || d.t === 'date'){
+        bits.push(lab + ': ' + (s.min != null && s.min !== '' ? s.min : 'any') + ' to ' + (s.max != null && s.max !== '' ? s.max : 'any'));
+        return;
+      }
+      var vals = Object.keys(s.sel).map(function(k){ return colDisp(d, k === '__blank__' ? '' : k); });
+      if (s.q) vals.push('contains ' + s.q);
+      bits.push(lab + ': ' + vals.join(', '));
+    });
+    return bits;
+  }
+  function unitsExport(){
+    if (unitsAll === null){ loadUnits(unitsExport); return; }
+    var rows = uRowsCur || [];
+    if (!rows.length){ alert('Nothing matches the current filters — nothing to export.'); return; }
+    var bits = unitsFilterBits(), today = dstr(new Date());
+    var note = rows.length + ' of ' + unitsAll.length + ' units · exported ' + today + ' · ' +
+      (bits.length ? bits.join(' · ') : 'no filters applied');
+    var slug = bits.slice(0, 2).join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    xlsxDownload('units-' + today + (slug ? '-' + slug : '') + '.xlsx',
+      { sheet:'Units', note: note, cols: U_XL_COLS, rows: rows });
+  }
+  if (el('u-export')) el('u-export').addEventListener('click', unitsExport);
 
   /* ── map view (Leaflet + OpenStreetMap) ───── */
   function drawMap(rows){

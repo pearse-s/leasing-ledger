@@ -877,6 +877,7 @@ window.addEventListener('error', function(e){
          color:var(--ink);font-family:var(--sans);font-size:.82rem;padding:7px 10px;cursor:pointer}
   .kuopt:last-child{border-bottom:0}
   .kuopt:hover{background:var(--glass-2)}
+  .kuopt.on{background:var(--glass-2);box-shadow:inset 2px 0 0 var(--clay)}   /* keyboard highlight (↑/↓) */
   .kuaddr{color:var(--ink-soft);font-size:.74rem}
   .kunote{padding:8px 10px;color:var(--ink-soft);font-size:.78rem;font-style:italic}
   .khist{display:flex;flex-direction:column}
@@ -5968,7 +5969,7 @@ window.addEventListener('error', function(e){
       kLinkUnit = null;
       h = '<div class="kfh">' + (r.unit_id ? 'Change linked unit' : 'Link this key to a unit') + '</div>' +
         (r.unit_id ? '<div class="kfctx">Currently: <b>' + esc((r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : '')) + '</b> &middot; <a href="#" data-kunlink="1">unlink</a></div>' : '') +
-        '<label>Find the unit</label><input id="kf-unitq" placeholder="Type address or unit #" autocomplete="off">' +
+        '<label>Find the unit</label><input id="kf-unitq" placeholder="Address or unit &mdash; e.g. 8051 24" autocomplete="off">' +
         '<div id="kf-unitres" class="kures"></div>' +
         '<div class="kfctx" id="kf-unitsel">No unit chosen yet.</div>' +
         '<label>Note (optional)</label><textarea id="kf-note"></textarea>';
@@ -6005,30 +6006,47 @@ window.addEventListener('error', function(e){
     if (e.target.closest('[data-kunlink]')) { e.preventDefault(); submitKeyUnlink(); return; }
     var s = e.target.closest('[data-ksubmit]'); if (s) submitKey(s.getAttribute('data-ksubmit'));
   });
+  // The unit picker now hits the server per keystroke (ranked search), so it debounces like
+  // the tour-location fields; the key picker still filters a loaded array and stays instant.
+  var kfUnitDeb = deb(renderKeyLinkResults, 260);
   el('km-form').addEventListener('input', function(e){
     if (!e.target) return;
-    if (e.target.id === 'kf-unitq') renderKeyLinkResults(e.target.value);
+    if (e.target.id === 'kf-unitq') kfUnitDeb();
     if (e.target.id === 'kf-keyq') renderAttachResults(e.target.value);
+  });
+  el('km-form').addEventListener('keydown', function(e){
+    if (e.target && e.target.id === 'kf-unitq') schUnitKeyNav(el('kf-unitres'), e, '.kuopt');
   });
 
   // ── admin: "Link to unit" picker (key -> unit) ──
+  // Searching goes through the SAME ranked endpoint as the tour-location fields
+  // (schUnitLookup → /tour-unit-search → dashboard.search_units), so "24 8051" finds
+  // 8051 … - 24 here too and the best match is first. It used to be a plain substring
+  // scan of unitsAll in load order: word order mattered and a big property's units came
+  // back in whatever order /units happened to return them.
+  // unitsAll is STILL loaded up front — pickLinkUnit resolves the chosen row from it for
+  // property_id, and /units and the search read the same v_unit_directory, so every
+  // result is guaranteed to be in there.
   function initUnitPicker(){
-    if (unitsAll === null) { var b = el('kf-unitres'); if (b) b.textContent = 'Loading units…'; loadUnits(function(){ renderKeyLinkResults(''); }); }
-    else renderKeyLinkResults('');
+    if (unitsAll === null) { var b = el('kf-unitres'); if (b) b.textContent = 'Loading units…'; loadUnits(renderKeyLinkResults); }
+    else renderKeyLinkResults();
   }
-  function renderKeyLinkResults(q){
-    var box = el('kf-unitres'); if (!box) return;
-    q = (q || '').toLowerCase().trim();
-    if (!q) { box.innerHTML = '<div class="kunote">Start typing to find a unit.</div>'; return; }
-    var matches = (unitsAll || []).filter(function(u){
-      return ((u.property_name || '') + ' ' + (u.unit_number || '') + ' ' + (u.address_line1 || '')).toLowerCase().indexOf(q) >= 0;
-    }).slice(0, 25);
-    if (!matches.length) { box.innerHTML = '<div class="kunote">No units match.</div>'; return; }
-    box.innerHTML = matches.map(function(u){
+  function keyUnitResHtml(rows){
+    return rows.map(function(u){
+      var st = [schUnitState(u), u.is_listed ? 'Listed' : ''].filter(Boolean).join(' · ');
       return '<button type="button" class="kuopt" data-luid="' + u.unit_id + '">' +
         esc(u.property_name || '') + (u.unit_number ? ' · ' + esc(u.unit_number) : '') +
-        (u.address_line1 ? ' <span class="kuaddr">' + esc(u.address_line1) + '</span>' : '') + '</button>';
+        (u.address ? ' <span class="kuaddr">' + esc(u.address) + '</span>' : '') +
+        (st ? ' <span class="kuaddr">' + esc(st) + '</span>' : '') + '</button>';
     }).join('');
+  }
+  function renderKeyLinkResults(){
+    schUnitLookup(el('kf-unitq'), el('kf-unitres'), {
+      render: keyUnitResHtml,
+      idle: '<div class="kunote">Start typing to find a unit &mdash; any order, e.g. 8051 24.</div>',
+      none: '<div class="kunote">No units match. Any order works &mdash; street number and unit number is usually enough, e.g. 8051 24.</div>',
+      err:  '<div class="kunote">Could not search units just now &mdash; type again to retry.</div>'
+    });
   }
   function pickLinkUnit(uid){
     var u = null; (unitsAll || []).forEach(function(x){ if (String(x.unit_id) === String(uid)) u = x; });
@@ -6036,6 +6054,7 @@ window.addEventListener('error', function(e){
     kLinkUnit = { unit_id: u.unit_id, property_id: u.property_id || null,
       label: (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '') };
     var sel = el('kf-unitsel'); if (sel) sel.innerHTML = 'Chosen: <b>' + esc(kLinkUnit.label) + '</b>';
+    var box = el('kf-unitres'); if (box) box.innerHTML = '';   // the pick is made; clear the list
   }
 
   // ── admin: "Link existing key" picker (unit -> key) ──
@@ -12032,10 +12051,13 @@ window.addEventListener('error', function(e){
     }
     var btn = el('sch-bk-book-all'); if (btn) btn.disabled = !schBkStops.length;
   }
-  /* ── Unit lookup — ONE picker behind all three "type to search our units" fields ──
-     (Confirm & book location · offer-link location · each back-to-back stop). They are
-     the same control in three places, so the fetch, the markup and the keyboard nav live
-     here once — a change to any of them must land on all three (sibling-surfaces rule).
+  /* ── Unit lookup — ONE picker behind every "find a unit" field ────────────────────
+     Three tour-location fields (Confirm & book · offer link · each back-to-back stop)
+     plus the admin Key Manager "Find the unit" picker. Same control in four places, so
+     the fetch, the keyboard nav and the ranking source live here once — a change to any
+     of them must land on all of them (sibling-surfaces rule). Only the ROW MARKUP
+     differs (the key picker has its own .kuopt style and pick contract), which is what
+     opts.render is for.
      ORDER COMES FROM THE SERVER (dashboard.search_units ranks exact unit number, street
      number, then listed/vacant): rows arrive best-first — never re-sort them here. */
   function schUnitState(u){
@@ -12054,31 +12076,35 @@ window.addEventListener('error', function(e){
         '<span>' + esc(bits.filter(Boolean).join(' · ')) + '</span></button>';
     }).join('');
   }
-  function schUnitLookup(inputEl, resEl){
+  // opts (all optional): render(rows) -> row markup · idle = what an under-2-char box shows
+  // · none = the no-match message · sel = the row selector keyboard nav walks.
+  function schUnitLookup(inputEl, resEl, opts){
     if (!inputEl || !resEl) return;
+    opts = opts || {};
     var q = (inputEl.value || '').trim();
-    if (q.length < 2){ resEl.innerHTML = ''; return; }
+    if (q.length < 2){ resEl.innerHTML = opts.idle || ''; return; }
     var gen = ++schUnitReq;
     authFetch('/tour-unit-search?q=' + encodeURIComponent(q)).then(function(j){
       if (gen !== schUnitReq) return;   // a newer keystroke already answered
       var rows = (j && j.results) || [];
-      resEl.innerHTML = rows.length ? schUnitResHtml(rows)
-        : '<div class="note">No unit matches that. Any order works &mdash; street number and unit number is usually enough, e.g. 8051 24.</div>';
+      resEl.innerHTML = rows.length ? (opts.render || schUnitResHtml)(rows)
+        : (opts.none || '<div class="note">No unit matches that. Any order works &mdash; street number and unit number is usually enough, e.g. 8051 24.</div>');
     }).catch(function(e){
       if (gen !== schUnitReq) return;
       if (String(e && e.message) === 'AUTH') return;
       console.error('unit search failed', e);
-      resEl.innerHTML = '<div class="note">Could not search units just now &mdash; type again to retry.</div>';
+      resEl.innerHTML = opts.err || '<div class="note">Could not search units just now &mdash; type again to retry.</div>';
     });
   }
   // ↑/↓ to move through the matches, Enter to take one (Enter with nothing highlighted
   // takes the top match), Esc to dismiss. Enter clicks the button so selection keeps
   // running through each field's existing click handler — one pick path, not two.
-  function schUnitKeyNav(resEl, e){
+  function schUnitKeyNav(resEl, e, sel){
     if (!resEl) return;
-    var opts = [].slice.call(resEl.querySelectorAll('.schres'));
+    sel = sel || '.schres';
+    var opts = [].slice.call(resEl.querySelectorAll(sel));
     if (!opts.length) return;
-    var i = opts.indexOf(resEl.querySelector('.schres.on'));
+    var i = opts.indexOf(resEl.querySelector(sel + '.on'));
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
       e.preventDefault();
       i = (e.key === 'ArrowDown') ? ((i + 1) % opts.length) : (i <= 0 ? opts.length - 1 : i - 1);

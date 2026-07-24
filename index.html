@@ -404,7 +404,10 @@ window.addEventListener('error', function(e){
   summary.panel-head::-webkit-details-marker{display:none}
   .ph-chev{flex:none;margin-left:8px;color:var(--ink-soft);font-size:.72rem;transition:transform .18s ease;transform:rotate(90deg)}
   details.pnl:not([open]) > summary .ph-chev{transform:rotate(0deg)}
-  .ph-count{margin-left:10px;font-size:.7rem;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  /* Wrap, never clip (health-audit finding 7): "$175,492 rent at risk/mo"-class figures were
+     ellipsis-clipping in the 901-950px sidebar-present band. min-width:0 keeps the flex item
+     shrinkable; normal white-space wraps the text and the panel-head row grows instead. */
+  .ph-count{margin-left:10px;font-size:.7rem;color:var(--ink-soft);min-width:0}
   .ph-count b{font-size:.82rem}
   @media(max-width:700px){
     .panel-head{flex-wrap:wrap;row-gap:2px}
@@ -4798,7 +4801,9 @@ window.addEventListener('error', function(e){
     authFetch('/move-tracker?kind=out&days=all').then(function(j){ m.trackOut = (j && j.rows) || []; }).catch(function(e){
       if (String(e && e.message) !== 'AUTH') console.error('move-tracker out failed', e);
     }).then(step);
-    authFetch('/stats?' + buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(){}).then(step);
+    authFetch('/stats?' + buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(e){
+      if (String(e && e.message) !== 'AUTH') console.error('manager stats failed', e);
+    }).then(step);
     gcalMovesFetch().then(function(j){ m.moves = j; }).catch(function(e){
       if (String(e && e.message) !== 'AUTH') console.error('gcal moves (manager) failed', e);
     }).then(step);
@@ -7614,7 +7619,7 @@ window.addEventListener('error', function(e){
             { headers: { 'Authorization': 'Bearer ' + TOKEN } })
         .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function(b){ img.src = URL.createObjectURL(b); })
-        .catch(function(){});
+        .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('photo proxy failed', e); });
     });
   }
   function downloadAll(photos, btn, noteEl){
@@ -9230,7 +9235,8 @@ window.addEventListener('error', function(e){
       if (!colfPass('atable', r)) return false;
       if (asel.length && asel.indexOf(r.application_status) < 0) return false;
       if (!q) return true;
-      return ((r.applicant_name||'') + ' ' + (r.applicant_email||'') + ' ' + (r.property_name||'') + ' ' +
+      // no applicant_email term — contact left the LIST payload (PII-on-click, audit 2.1)
+      return ((r.applicant_name||'') + ' ' + (r.property_name||'') + ' ' +
               (r.unit_number||'') + ' ' + (r.property_manager_name||'') + ' ' + (r.primary_owner_name||'')).toLowerCase().indexOf(q) >= 0;
     });
     rows.sort(cmpRows(aSort.k, aSort.d));
@@ -9265,34 +9271,54 @@ window.addEventListener('error', function(e){
     if (!r) return;
     el('am-title').textContent = r.applicant_name || 'Application';
     el('am-sub').innerHTML = appChip(r.application_status) + ' &middot; submitted ' + esc((r.submitted_at||'').slice(0,10));
-    // action row — In Buildium (primary) · View unit · View in Tours
-    var a = '';
-    if (r.applicant_id) a += '<a class="btn primary rmact" target="_blank" rel="noopener" href="' + BMGR + '/leasing/applicant/' + r.applicant_id + '/summary">In Buildium &rarr;</a>';
-    if (r.unit_id) a += '<button type="button" class="btn rmact" data-amunit="' + r.unit_id + '">View unit &rarr;</button>';
-    if (r.applicant_email) a += '<button type="button" class="btn rmact" data-tourq="' + esc(r.applicant_email) + '">View in Tours &rarr;</button>';
-    el('am-actrow').innerHTML = a;
-    // identity strip — the applicant, tap-to-call/text/email
-    var nm = (r.applicant_name || r.applicant_email || '?').trim();
-    var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0,2).toUpperCase();
-    var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div>' +
-      '<div class="rmpro-main"><div class="rmpro-name">' + esc(r.applicant_name || 'Applicant') + '</div>' +
-      '<div class="rmpro-stat" id="am-prostat">' + esc(r.applicant_email || r.applicant_phone || '') + '</div></div>' +
-      '<div class="rmpro-acts">';
-    if (r.applicant_phone) { var tel = String(r.applicant_phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>' + threadIcon(tel, r.applicant_name); }
-    if (r.applicant_email) pc += '<a href="mailto:' + esc(r.applicant_email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
-    pc += '</div></div>';
-    el('am-contact').innerHTML = pc;
-    // collapsed details
-    var f = '';
-    f += fitem('Property', esc(r.property_name));
-    f += fitem('Unit', esc(r.unit_number));
-    f += fitem('Email', r.applicant_email ? '<a href="mailto:' + esc(r.applicant_email) + '" style="color:var(--clay)">' + esc(r.applicant_email) + '</a>' : null);
-    f += fitem('Phone', esc(r.applicant_phone));
-    f += fitem('Days to decision', r.approx_decision_days != null ? r.approx_decision_days + 'd (approx)' : null);
-    f += fitem('Manager', esc(r.property_manager_name));
-    f += fitem('Owner', esc(r.primary_owner_name));
-    f += fitem('Buildium app ID', esc(r.application_id));
-    el('am-fields').innerHTML = f;
+    // Contact (email/phone) is NOT in the /applications list any more (PII-on-click, health
+    // audit 2026-07-23 finding 2.1) — it arrives via /application-detail on modal open, the
+    // /lease-detail pattern. paintContact renders the contact-dependent chrome twice: once
+    // with det=null (loading), once with the fetched detail; the amCurAid compare guards the
+    // async paint against the modal having moved on to another application.
+    function paintContact(det){
+      var em = det ? String(det.applicant_email || '') : '';
+      var ph = det ? String(det.applicant_phone || '') : '';
+      // action row — In Buildium (primary) · View unit · View in Tours
+      var a = '';
+      if (r.applicant_id) a += '<a class="btn primary rmact" target="_blank" rel="noopener" href="' + BMGR + '/leasing/applicant/' + r.applicant_id + '/summary">In Buildium &rarr;</a>';
+      if (r.unit_id) a += '<button type="button" class="btn rmact" data-amunit="' + r.unit_id + '">View unit &rarr;</button>';
+      if (em) a += '<button type="button" class="btn rmact" data-tourq="' + esc(em) + '">View in Tours &rarr;</button>';
+      el('am-actrow').innerHTML = a;
+      // identity strip — the applicant, tap-to-call/text/email
+      var nm = (r.applicant_name || em || '?').trim();
+      var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0,2).toUpperCase();
+      var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div>' +
+        '<div class="rmpro-main"><div class="rmpro-name">' + esc(r.applicant_name || 'Applicant') + '</div>' +
+        '<div class="rmpro-stat" id="am-prostat">' + (det ? esc(em || ph || '') : 'Loading contact…') + '</div></div>' +
+        '<div class="rmpro-acts">';
+      if (ph) { var tel = String(ph).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>' + threadIcon(tel, r.applicant_name); }
+      if (em) pc += '<a href="mailto:' + esc(em) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
+      pc += '</div></div>';
+      el('am-contact').innerHTML = pc;
+      // collapsed details
+      var f = '';
+      f += fitem('Property', esc(r.property_name));
+      f += fitem('Unit', esc(r.unit_number));
+      f += fitem('Email', em ? '<a href="mailto:' + esc(em) + '" style="color:var(--clay)">' + esc(em) + '</a>' : null);
+      f += fitem('Phone', ph ? esc(ph) : null);
+      f += fitem('Days to decision', r.approx_decision_days != null ? r.approx_decision_days + 'd (approx)' : null);
+      f += fitem('Manager', esc(r.property_manager_name));
+      f += fitem('Owner', esc(r.primary_owner_name));
+      f += fitem('Buildium app ID', esc(r.application_id));
+      el('am-fields').innerHTML = f;
+    }
+    paintContact(null);
+    authFetch('/application-detail?application_id=' + encodeURIComponent(r.application_id))
+      .then(function(j){
+        if (String(amCurAid) !== String(aid)) return;   // modal moved on — don't paint stale contact
+        paintContact((j && j.application) || {});
+      })
+      .catch(function(e){
+        if (String(amCurAid) !== String(aid) || String(e && e.message) === 'AUTH') return;
+        var s = el('am-prostat'); if (s) s.textContent = 'Contact unavailable right now.';
+        console.error('application-detail failed', e);
+      });
     el('am-detwrap').open = false;
     el('am-noteinput').value = '';
     // activity feed — this prospect's tours + notes + applications
@@ -11671,6 +11697,7 @@ window.addEventListener('error', function(e){
   }
   var schOfferMsgs = {};   // offer id -> composed message text, for the offers-panel "Copy message" button
   var schOfferSource = '';   // active lead-source filter for the offers panel (''=all); persisted
+  var schOffersReq = 0;   // generation guard — a slow stale /tour-offers response (rapid source-chip switches) must not paint over a newer one (schUnitReq pattern)
   try { schOfferSource = localStorage.getItem('ledger_offer_source_v1') || ''; } catch (e) {}
   // Lead-source filter chips: always surface Facebook, then any other sources seen, each with a
   // booked/total conversion count. Clicking re-queries the offers list scoped to that source.
@@ -11692,8 +11719,10 @@ window.addEventListener('error', function(e){
   }
   function loadTourOffers(){
     var box = el('sch-offers'); if (!box) return;
+    var q = ++schOffersReq;
     var qs = '/tour-offers?limit=50' + (schOfferSource ? '&source=' + encodeURIComponent(schOfferSource) : '');
     authFetch(qs).then(function(j){
+      if (q !== schOffersReq) return;   // superseded by a newer load — bail before painting
       var rows = j.offers || [];
       var noteEl = el('sch-offers-note');
       schRenderOfferSrcChips(j.sources || []);
@@ -11731,7 +11760,7 @@ window.addEventListener('error', function(e){
         var copyMsg = r.message_text ? '<button type="button" class="schoffer-copymsg" data-id="' + esc(r.id) + '" title="Copy message">✎</button>' : '';
         return '<div class="schoffer"><div class="schoffer-main">' + who + srcChip + ' · ' + esc(r.agent_name || '') + ' · ' + (r.slot_count || 0) + ' time' + (r.slot_count === 1 ? '' : 's') + '<div class="schoffer-sub">' + sub + '</div>' + pills + '</div>' + chip + copyLink + copyMsg + '</div>';
       }).join('');
-    }).catch(function(e){ if (String(e.message) !== 'AUTH') box.innerHTML = '<div class="note">Could not load recent offers.</div>'; });
+    }).catch(function(e){ if (q !== schOffersReq) return; if (String(e.message) !== 'AUTH') box.innerHTML = '<div class="note">Could not load recent offers.</div>'; });
   }
   function schUnlock(id, on){ var n = el(id); if (n) n.classList.toggle('schlocked', !on); }
   function schEdFmt(iso, opts){ try { return new Intl.DateTimeFormat('en-CA', Object.assign({ timeZone:'America/Edmonton' }, opts)).format(new Date(iso)); } catch(e){ return iso; } }

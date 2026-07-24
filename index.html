@@ -1880,10 +1880,8 @@ window.addEventListener('error', function(e){
     /* Option C trends block (under the pulse chips) */
     #page-today .tdtrend-row{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:.85rem;color:var(--ink-soft);flex-wrap:wrap}
     #page-today .tdtrend-row b{color:var(--ink)}
-    #page-today .tdtrend-h{margin-top:10px;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
-    #page-today .tdtrend-li{font-size:.82rem;padding:3px 0;color:var(--ink)}
-    #page-today .tdtrend-li.tdurow{cursor:pointer}
-    #page-today .tdtrend-li.tdurow:hover{color:var(--clay)}
+    /* .tdtrend-h / .tdtrend-li removed 2026-07-24 with the days-on-market + rent-gap lists
+       (their only users). .tdtrend-row below still backs the sparkline/retention/tasks rows. */
     </style>
     <div class="tdhead">
       <div>
@@ -3847,21 +3845,24 @@ window.addEventListener('error', function(e){
     }
     if (role === 'manager'){
       tdSub(idLock && idLock.role === 'manager'
-        ? 'Manager — scoped to you (' + idLock.name + ')' + (idLock.pmId ? '' : ' — no Buildium portfolio linked, showing company-wide') + '. The brief first, then tasks, renewals and unit movement.'
-        : 'Manager — the brief first, then tasks, renewals and unit movement across your scope.');
+        ? 'Manager — scoped to you (' + idLock.name + ')' + (idLock.pmId ? '' : ' — no Buildium portfolio linked, showing company-wide') + '. The brief first, then moves, renewals, tasks and unit movement.'
+        : 'Manager — the brief first, then moves, renewals, tasks and unit movement across your scope.');
       if (tmRoster === null){ var wq = tdReq; idRosterLoad(function(){ if (wq === tdReq && tdRole() === 'manager') tdRender(); }); }
+      // Card order is Pearse's (2026-07-24): moves → renewals → tasks → unit updates → aging.
+      // Only the MARKUP moved; every element id is unchanged, and tdRenderMgr() fills by id, so
+      // the render order below it stays irrelevant (CLAUDE.md "move markup, keep element ids").
       g.innerHTML = tdMgrWorkasHtml() + '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
           '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div><div id="td-mgr-trends"></div></section>' +
-        tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks', true) +
-        tdPanel('td-mgr-ren', 'Renewals &middot; next 90 days', 'renewals', 'Open Renewals', true) +   /* WS-M M5: wide — the 5-stage worklist table needs a full row */
-        tdPanel('td-mgr-aging', 'Aging vacancies &middot; 60d+', 'units', 'Open Units', true) +
         '<section class="panel tdq tdwide"><h3>Move-ins &amp; move-outs <span class="qn2" id="td-mgr-moves-n"></span></h3>' +
           '<div class="mvbar" id="td-mv-bar"><div class="note">Loading&hellip;</div></div>' +
           '<div id="td-mv-cal" hidden></div><div id="td-mv-track" hidden></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
+        tdPanel('td-mgr-ren', 'Renewals &middot; next 90 days', 'renewals', 'Open Renewals', true) +   /* WS-M M5: wide — the 5-stage worklist table needs a full row */
+        tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks', true) +
         '<section class="panel tdq tdwide"><h3>Unit updates <span class="qn2" id="td-mgr-units-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-units"><div class="note">Loading&hellip;</div></div>' +
-          '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>';
+          '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
+        tdPanel('td-mgr-aging', 'Aging vacancies &middot; 60d+', 'units', 'Open Units', true);
       tdMgrAssemble();
     } else if (role === 'admin'){
       g.innerHTML = '';
@@ -4837,9 +4838,10 @@ window.addEventListener('error', function(e){
     tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderAging(m); tdMvRenderCard(m); tdMgrRenderUnits(m);
   }
   // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
-  // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff,
-  // days-on-market by property, rent-gap drill rows (tdurow → unit modal). Notices/evictions
-  // deltas are deliberately absent: no history table, current-only is stated, never faked.
+  // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff.
+  // (Days-on-market and rent-gap rows were removed 2026-07-24 — see the note below.)
+  // Notices/evictions deltas are deliberately absent: no history table, current-only is
+  // stated, never faked.
   function tdMgrRenderTrends(m){
     var box = el('td-mgr-trends'); if (!box) return;
     var t = m.trends;
@@ -4864,22 +4866,10 @@ window.addEventListener('error', function(e){
       h += '<div class="tdtrend-row"><span>Tasks this week: <b>' + fmtNum(wd.tasks_opened || 0) + '</b> opened &middot; <b>' +
         fmtNum(wd.tasks_closed || 0) + '</b> closed</span></div>';
     }
-    var dom = t.dom_by_property || [];
-    if (dom.length){
-      h += '<div class="tdtrend-h">Days on market &middot; listed vacants</div>';
-      dom.slice(0, 5).forEach(function(d2){
-        h += '<div class="tdtrend-li">' + esc(d2.property_name || '?') + ' &mdash; ' + fmtNum(d2.listed) + ' listed &middot; avg ' + fmtNum(d2.avg_days) + 'd &middot; max ' + fmtNum(d2.max_days) + 'd</div>';
-      });
-    }
-    var rg = t.rent_gap || [];
-    if (rg.length){
-      h += '<div class="tdtrend-h">Listed vs market rent &middot; gaps &ge;5%</div>';
-      rg.slice(0, 5).forEach(function(g2){
-        h += '<div class="tdtrend-li tdurow" data-uid="' + esc(String(g2.unit_id)) + '" role="button" tabindex="0">' +
-          esc((g2.property_name || '') + (g2.unit_number ? ' · ' + g2.unit_number : '')) + ' &mdash; listed ' + fmtMoney(g2.listing_rent) +
-          ' vs market ' + fmtMoney(g2.market_rent) + ' (' + (g2.gap_pct > 0 ? '+' : '') + g2.gap_pct + '%)</div>';
-      });
-    }
+    // Pearse 2026-07-24: the "Days on market · listed vacants" and "Listed vs market rent ·
+    // gaps ≥5%" lists are REMOVED from the brief. get_manager_brief still returns
+    // trends.dom_by_property and trends.rent_gap — left in place deliberately so the RPC
+    // contract is unchanged; do not re-add renderers for them without asking.
     box.innerHTML = h;
   }
   // M1 — aging-vacancy watchlist: op-vacant 60d+ in scope, oldest first, with price context
@@ -4977,22 +4967,56 @@ window.addEventListener('error', function(e){
       var dd = ks.op_vacancy.delta;
       oprD = ' <span style="color:var(' + (dd < 0 ? '--moss' : '--clay') + ')">' + (dd > 0 ? '&#9650;' : '&#9660;') + Math.abs(dd).toFixed(1) + '</span>';
     }
-    function chip(label, val, go, tip){
-      return '<button type="button" class="tdpulsec" data-goto="' + go + '"' + (tip ? ' title="' + esc(tip) + '"' : '') +
+    // Pearse 2026-07-24: a chip that has a matching CARD on this page scrolls to it instead of
+    // leaving Today (5th arg). data-goto stays on every chip as the fallback — tdMgrCardGo
+    // returns false when the card is absent and the tab jump takes over. Only three chips have
+    // a real counterpart: op vacant / op rate / rent at risk / signed MTD have no card whose
+    // population matches them, so they keep their tab jump (never point a chip at a card that
+    // counts something else — the A-14 lesson).
+    function chip(label, val, go, tip, card){
+      return '<button type="button" class="tdpulsec" data-goto="' + go + '"' + (card ? ' data-mgrcard="' + card + '"' : '') +
+        (tip ? ' title="' + esc(tip) + '"' : '') +
         '><span class="tdp-v">' + val + '</span><span class="tdp-l">' + esc(label) + '</span></button>';
     }
     box.innerHTML =
       chip('op vacant', v.op_vacant != null ? fmtNum(v.op_vacant) : '–', 'units') +
       chip('op rate', v.op_vacancy_rate != null ? v.op_vacancy_rate + '%' + oprD : '–', 'ledger', oprD ? 'vs last week — manager-scoped' : '') +
       chip('rent at risk', mo.rent_at_risk != null ? fmtMoney(mo.rent_at_risk) : '–', 'units') +
-      chip('expiring 90d', p.expiring_90d != null ? fmtNum(p.expiring_90d) : '–', 'renewals') +
-      chip('undecided', p.undecided != null ? fmtNum(p.undecided) : '–', 'renewals') +
+      chip('expiring 90d', p.expiring_90d != null ? fmtNum(p.expiring_90d) : '–', 'renewals',
+        'Leases ending in the next 90 days — jumps to the Renewals worklist below', 'ren') +
+      // the worklist SPLITS this number into Undecided + Offer sent, so the chip lands on the
+      // unfiltered card (both chips visible) rather than on a narrower stage showing fewer rows
+      chip('undecided', p.undecided != null ? fmtNum(p.undecided) : '–', 'renewals',
+        'No renewal decision recorded yet — the worklist below splits these into Undecided and Offer sent', 'ren') +
       // signed MTD comes from get_kpis(), which takes NO arguments and is portfolio-wide by
       // design (see the /stats route comment). Under scope it's the only company-wide number in
       // the row, so label it — otherwise it reads as this manager's own (A-15's mixed row).
       chip(scoped ? 'signed MTD · all' : 'signed MTD', (k.signed_month && k.signed_month.cur != null) ? fmtNum(k.signed_month.cur) : '–', 'ledger',
         scoped ? 'Company-wide — signed-lease KPIs are portfolio-level and do not follow the sidebar scope' : '') +
-      chip('move-ins 30d', v.upcoming_move_ins != null ? fmtNum(v.upcoming_move_ins) : '–', 'units');
+      chip('move-ins 30d', v.upcoming_move_ins != null ? fmtNum(v.upcoming_move_ins) : '–', 'units',
+        'Upcoming move-ins — jumps to the Moves card below, filtered to move-ins', 'moves-in');
+  }
+  // Pulse chip → the matching card on this same page (Pearse 2026-07-24). Returns false when
+  // the card is not in the DOM so the caller can fall back to the tab jump.
+  // Sets ONLY the filter the chip's own label already implies — never a narrower one: a chip
+  // reading 57 must not land on a list of 18 (get_stats.pipeline.undecided folds the worklist's
+  // Undecided + Offer sent together), so the renewals jump CLEARS the stage filter.
+  function tdMgrCardGo(card){
+    var box = el(card === 'moves-in' ? 'td-mv-bar' : 'td-mgr-ren');
+    if (!box) return false;
+    if (card === 'moves-in'){
+      // mirror tdMvCtl's kind branch exactly (persist + refetch + re-show); view/day prefs are
+      // left as the user set them — "In" is the only filter the chip's label actually asserts
+      tdMvKind = 'in';
+      try { localStorage.setItem('ledger_mgrmoves_kind_v1', 'in'); } catch (e) {}
+      if (mvcal) mvcal.refetchEvents();
+      tdMvShow();
+    } else {
+      tdRwStageF = '';
+      if (tdRwLast) tdMgrRenderRenewals({ renewals: tdRwLast });
+    }
+    (box.closest('section.panel') || box).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return true;
   }
   function tdMgrRenderTasks(m){
     if (m.tasks === null){ tdFail('td-mgr-tasks', 'tasks'); return; }
@@ -5267,6 +5291,10 @@ window.addEventListener('error', function(e){
       if (ur){ openUnitEnsure(ur.getAttribute('data-uid')); return; }
       var br = e.target.closest('.tdbrief');
       if (br){ tdMgrBriefGo(br.getAttribute('data-mgr')); return; }
+      // pulse chips that have a card on this page scroll to it; when the card is missing
+      // tdMgrCardGo returns false and we fall through to the data-goto tab jump below
+      var pc = e.target.closest('[data-mgrcard]');
+      if (pc && tdMgrCardGo(pc.getAttribute('data-mgrcard'))) return;
       var b = e.target.closest('[data-goto]'); if (!b) return;
       showTab(b.getAttribute('data-goto'));
     });

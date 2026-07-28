@@ -2967,6 +2967,44 @@ window.addEventListener('error', function(e){
   </div>
 </div>
 
+<!-- Lease story (commission-tracker drawer, Phase 3). TOP-LEVEL on purpose: modals live
+     outside the page divs, and scoping their CSS to a page is exactly how .tdact fell back
+     to browser-blue in #rentmodal (the v282 fix). Every rule here is scoped to #lstory. -->
+<div class="lmodal" id="lstory">
+  <style>
+  #lstory .ls-scroll{max-height:56vh;overflow:auto}
+  #lstory .ls-facts{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.78rem;color:var(--ink-soft);margin-bottom:8px}
+  #lstory .ls-facts b{color:var(--ink)}
+  #lstory .ls-tier{display:inline-block;font-size:.7rem;padding:2px 8px;border-radius:10px;background:var(--glass);color:var(--ink-soft)}
+  #lstory .ls-tier.ls-warn{background:rgba(232,180,62,.18);color:var(--clay)}
+  #lstory .ls-src{font-size:.7rem;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:4px 12px;margin-bottom:8px}
+  #lstory .ls-ev{display:flex;flex-wrap:wrap;gap:4px 10px;padding:7px 2px;border-bottom:1px solid rgba(244,236,225,.08)}
+  #lstory .ls-when{flex:0 0 132px;font-size:.7rem;color:var(--ink-soft)}
+  #lstory .ls-what{flex:1 1 200px;font-size:.84rem;line-height:1.4;word-break:break-word;color:var(--ink)}
+  #lstory .ls-who{font-size:.7rem;color:var(--ink-soft)}
+  #lstory .ls-tag{display:inline-block;font-size:.64rem;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:8px;background:var(--glass);color:var(--ink-soft);margin-right:6px}
+  #lstory .ls-live-on{background:rgba(93,202,165,.16);color:#9fe1cb}
+  @media (max-width:520px){ #lstory .ls-when{flex:1 1 100%} }
+  </style>
+  <div class="lmback" data-close="lstory"></div>
+  <div class="lmcard">
+    <button type="button" class="lmclose" data-close="lstory">&times;</button>
+    <div class="lmhead">
+      <h3 id="lst-title">Lease story</h3>
+      <div class="lmsub" id="lst-sub"></div>
+    </div>
+    <div class="lmbody">
+      <div class="ls-facts" id="lst-facts"></div>
+      <div class="ls-src" id="lst-src"></div>
+      <div class="ls-scroll" id="lst-body"></div>
+    </div>
+    <div class="lmfoot" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button type="button" class="btn rmact" id="lst-live">&#8635; Load full history</button>
+      <span class="note" id="lst-livenote">our records go back a few months &mdash; this pulls the rest live</span>
+    </div>
+  </div>
+</div>
+
 <div class="lmodal" id="kmodal">
   <div class="lmback" data-close="kmodal"></div>
   <div class="lmcard">
@@ -12522,7 +12560,9 @@ window.addEventListener('error', function(e){
       var acts = '<button type="button" class="hubact" data-act="editmi" data-id="' + r.lease_id + '">Move&#8209;in</button> ' +
                  '<button type="button" class="hubact" data-act="reassign" data-id="' + r.lease_id + '">Reassign</button> ' +
                  '<button type="button" class="hubact" data-act="exclude" data-id="' + r.lease_id + '">Exclude</button>';
-      h += '<tr>' +
+      // data-lease makes the whole row the drawer's hit target (Phase 3). The action
+      // buttons keep their own data-id; the row handler ignores clicks that land on them.
+      h += '<tr data-lease="' + esc(String(r.lease_id)) + '" style="cursor:pointer" title="Open the full story for this lease">' +
         '<td data-label="Property &middot; unit">' + esc(r.property_name || '–') + (r.unit_number ? ' &middot; ' + esc(r.unit_number) : '') + '</td>' +
         '<td data-label="Signed">' + esc((r.signed_date || '').slice(0, 10)) + '</td>' +
         '<td data-label="Tenant">' + esc(r.tenant_name || '–') + '</td>' +
@@ -12732,6 +12772,35 @@ window.addEventListener('error', function(e){
   if (el('hs-q')) el('hs-q').addEventListener('input', function(){
     hubSignedQ = this.value || ''; hubRenderSigned();
   });
+  // Phase 3: row click opens the lease story. Separate listener from the .hubact one above —
+  // both fire, and this one bails on any interactive descendant so Move-in / Reassign /
+  // Exclude (and the inline reassign select) keep working without opening the drawer.
+  // NB: write tag names bare in comments — a literal angle-bracket tag here trips the
+  // tag-balance gate as a phantom unclosed element.
+  if (el('hub-team-leases')) el('hub-team-leases').addEventListener('click', function(e){
+    if (e.target.closest('button, select, a, input')) return;
+    var tr = e.target.closest('tbody tr'); if (!tr) return;
+    var id = tr.getAttribute('data-lease'); if (!id) return;   // empty-state rows have none
+    openLeaseStory(id);
+  });
+  if (el('lst-live')) el('lst-live').addEventListener('click', function(){
+    if (!lsLease) return;
+    var b = this, q = ++lsReq;
+    b.disabled = true; b.textContent = 'Loading full history…';
+    var n = el('lst-livenote'); if (n) n.textContent = 'Calendly, RingCentral and Aptly — this can take ~15s';
+    authFetch('/lease-story?lease_id=' + encodeURIComponent(lsLease) + '&live=1').then(function(j){
+      if (q !== lsReq) return;                                  // a newer open superseded this
+      renderLeaseStory(j);
+      b.innerHTML = '&#10003; Full history loaded';
+      if (n) n.textContent = 'live rows are tagged; per-source status is above';
+    }).catch(function(e){
+      if (q !== lsReq) return;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('lease-story live load failed', e);
+      b.disabled = false; b.innerHTML = '&#8635; Retry full history';
+      if (n) n.textContent = 'Live pull failed — everything above is from our own records.';
+    });
+  });
   if (el('hub-team-leases')) el('hub-team-leases').addEventListener('click', function(e){
     var b = e.target.closest('.hubact'); if (!b || b.tagName === 'SELECT') return;   // the inline reassign picker handles its own change
     hubTeamAct(b.getAttribute('data-id'), b.getAttribute('data-act'), b);
@@ -12797,6 +12866,124 @@ window.addEventListener('error', function(e){
   }
   function ctDay(d){ try { return d.toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch (e) { return ''; } }
   function ctTime(d){ try { return d.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' }); } catch (e) { return ''; } }
+
+  /* ── Lease story drawer (commission tracker Phase 3) ──────────────────────
+     GET /lease-story is gated on a VERIFIED admin sign-in — the shared admin password
+     returns 403 there, unlike every other admin route. That is deliberate (tenant contact
+     + every call and text), so the 403 gets a real explanation rather than a dead modal. */
+  var lsLease = null, lsReq = 0;
+  function lsWhen(at){
+    var d = new Date(at); if (isNaN(d.getTime())) return '';
+    try { return d.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) + ' · ' + ctTime(d); }
+    catch (e) { return String(at).slice(0, 10); }
+  }
+  var LS_TIER = {
+    lease_tenant: 'matched from the lease tenant record',
+    name_unit: 'matched by name + unit',
+    name_only: 'matched by name',
+    ambiguous: 'could not identify — the name is ambiguous',
+    none: 'no contact found for this lease'
+  };
+  function openLeaseStory(leaseId){
+    if (!leaseId) return;
+    lsLease = leaseId;
+    var q = ++lsReq;
+    if (el('lst-title')) el('lst-title').textContent = 'Lease story';
+    if (el('lst-sub')) el('lst-sub').textContent = 'Loading…';
+    if (el('lst-facts')) el('lst-facts').innerHTML = '';
+    if (el('lst-src')) el('lst-src').innerHTML = '';
+    if (el('lst-body')) el('lst-body').innerHTML = '<div class="note" style="padding:18px;text-align:center">Loading…</div>';
+    var b = el('lst-live'); if (b){ b.disabled = false; b.innerHTML = '&#8635; Load full history'; }
+    var n = el('lst-livenote'); if (n) n.textContent = 'our records go back a few months — this pulls the rest live';
+    openModal('lstory');
+    authFetch('/lease-story?lease_id=' + encodeURIComponent(leaseId)).then(function(j){
+      if (q !== lsReq) return;
+      renderLeaseStory(j);
+    }).catch(function(e){
+      if (q !== lsReq) return;
+      if (String(e && e.message) === 'AUTH') return;
+      lsFail(e);
+    });
+  }
+  function lsFail(e){
+    var forbidden = String(e && e.message) === 'HTTP 403';
+    var msg = forbidden
+      ? 'Signed-in admin access required. This view includes tenant contact details and every call and text, so the shared admin password is not enough — sign in with your work email from the sidebar, then reopen this lease.'
+      : 'Could not load this lease story.';
+    if (el('lst-sub')) el('lst-sub').textContent = '';
+    if (el('lst-body')) el('lst-body').innerHTML = '<div class="note" style="padding:18px;text-align:center;line-height:1.5">' + esc(msg) + '</div>';
+    var b = el('lst-live'); if (b) b.disabled = true;
+    console.error('lease-story load failed', e);
+  }
+  // Per-source health. A silent gap is the failure mode here: if RingCentral 429s, the drawer
+  // must SAY so rather than quietly render a shorter history that looks complete.
+  function lsSrcHtml(j){
+    var s = j.sources || {}, keys = Object.keys(s);
+    if (!keys.length) return '';
+    return keys.map(function(k){
+      var v = s[k] || {};
+      var body = v.error ? '&#9888; ' + esc(String(v.error).slice(0, 44))
+                         : (v.count != null ? v.count : '–') + ' · ' + (v.ms != null ? v.ms + 'ms' : '');
+      return '<span><b>' + esc(k) + '</b> ' + body + '</span>';
+    }).join('');
+  }
+  function renderLeaseStory(j){
+    var L = j.lease || {}, seed = j.contact_seed || {};
+    if (el('lst-title')) el('lst-title').textContent = (L.property_name || 'Lease') + (L.unit_number ? ' · ' + L.unit_number : '');
+    if (el('lst-sub')) el('lst-sub').textContent = (L.tenant_name || 'Tenant unknown') + ' · signed ' + String(L.signed_date || '').slice(0, 10);
+    var credited = L.status === 'confirmed' ? (L.credited_agent || '?')
+                 : (L.suggested_agent ? L.suggested_agent + ' (suggested)' : 'unclaimed');
+    var warn = (seed.tier === 'ambiguous' || seed.tier === 'none');
+    var f = '<span>Credited: <b>' + esc(credited) + '</b></span>';
+    if (L.rent != null) f += '<span>Rent: <b>' + esc(fmtNum(L.rent)) + '</b></span>';
+    if (L.move_in_date) f += '<span>Move-in: <b>' + esc(String(L.move_in_date).slice(0, 10)) + '</b></span>';
+    f += '<span class="ls-tier' + (warn ? ' ls-warn' : '') + '"' + (seed.note ? ' title="' + esc(seed.note) + '"' : '') + '>'
+       + esc(LS_TIER[seed.tier] || seed.tier || 'unmatched') + '</span>';
+    if (el('lst-facts')) el('lst-facts').innerHTML = f;
+    if (el('lst-src')) el('lst-src').innerHTML = lsSrcHtml(j);
+
+    var ev = [];
+    (j.timeline || []).forEach(function(t){
+      ev.push({ at:t.at, tag:t.kind || 'event', txt:(t.label || '') + (t.status ? ' — ' + t.status : ''), who:'' });
+    });
+    (j.attribution || []).forEach(function(a){
+      ev.push({ at:a.created_at, tag:'attribution', txt:(a.event_type || '') + (a.detail ? ' — ' + a.detail : ''), who:a.actor || '' });
+    });
+    var comms = j.comms || {};
+    (comms.calls || []).forEach(function(c){
+      var bits = [c.direction, c.result, (c.duration ? c.duration + 's' : '')].filter(Boolean).join(' · ');
+      ev.push({ at:c.start_time, tag:'call', txt:bits, who:c.agent_name || c.queue_name || '', src:c.src });
+    });
+    (comms.texts || []).forEach(function(t){
+      ev.push({ at:t.creation_time, tag:'text', txt:t.body || '(no message body)', who:(t.direction || '') + (t.agent_name ? ' · ' + t.agent_name : ''), src:t.src });
+    });
+    ((j.live && j.live.aptly) || []).forEach(function(cd){
+      (cd.stage_history || []).forEach(function(h){
+        if (h && h.at) ev.push({ at:h.at, tag:'aptly', txt:'stage → ' + (h.stage || '?'), who:'lead card' });
+      });
+    });
+    ev = ev.filter(function(x){ return x.at && !isNaN(Date.parse(x.at)); })
+           .sort(function(a, b){ return Date.parse(b.at) - Date.parse(a.at); });   // newest first
+
+    var body = el('lst-body'); if (!body) return;
+    if (!ev.length){
+      var why = (seed.tier === 'ambiguous' || seed.tier === 'none')
+        ? 'We could not identify who this lease belongs to, so there is nothing to show. ' + esc(seed.note || '')
+        : 'Nothing on record for this lease yet.';
+      body.innerHTML = '<div class="note" style="padding:18px;text-align:center;line-height:1.5">' + why + '</div>';
+      return;
+    }
+    var h = '';
+    ev.slice(0, 400).forEach(function(x){
+      h += '<div class="ls-ev">'
+         + '<div class="ls-when">' + esc(lsWhen(x.at)) + '</div>'
+         + '<div class="ls-what"><span class="ls-tag' + (x.src === 'live' ? ' ls-live-on' : '') + '">' + esc(x.tag) + (x.src === 'live' ? ' live' : '') + '</span>'
+         + esc(x.txt) + (x.who ? ' <span class="ls-who">· ' + esc(x.who) + '</span>' : '') + '</div>'
+         + '</div>';
+    });
+    if (ev.length > 400) h += '<div class="note" style="padding:10px;text-align:center">Showing the newest 400 of ' + ev.length + ' events.</div>';
+    body.innerHTML = h;
+  }
   function openThread(phone, name){
     var d = String(phone || '').replace(/\D/g, ''); if (d.length < 10) return;
     if (el('ct-title')) el('ct-title').textContent = name || 'Conversation';

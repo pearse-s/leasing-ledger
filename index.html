@@ -2742,6 +2742,14 @@ window.addEventListener('error', function(e){
   </div>
 </div>
 
+<div class="lmodal" id="rentmodal">
+  <div class="lmback" data-close="rentmodal"></div>
+  <div class="lmcard" style="max-width:560px">
+    <button type="button" class="lmclose" data-close="rentmodal">&times;</button>
+    <div id="rent-d-body"><div class="note">Loading&hellip;</div></div>
+  </div>
+</div>
+
 <div class="lmodal" id="orcfg">
   <div class="lmback" data-close="orcfg"></div>
   <div class="lmcard">
@@ -3882,13 +3890,23 @@ window.addEventListener('error', function(e){
       // Card order is Pearse's (2026-07-24): moves → renewals → tasks → unit updates → aging.
       // Only the MARKUP moved; every element id is unchanged, and tdRenderMgr() fills by id, so
       // the render order below it stays irrelevant (CLAUDE.md "move markup, keep element ids").
+      // Card order: Pearse's 2026-07-24 relative order is preserved (moves → renewals →
+      // tasks → unit movement); the two new cards slot in as money-first and
+      // decisions-next-to-renewals. Reordering is a markup move only — every renderer fills
+      // by id, so the render-call order above stays irrelevant.
       g.innerHTML = tdMgrWorkasHtml() + '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
           '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div><div id="td-mgr-trends"></div></section>' +
+        '<section class="panel tdq tdwide"><h3>Rent owing <span class="qn2" id="td-mgr-rent-n"></span></h3>' +
+          '<div class="schoffers" id="td-mgr-rent"><div class="note">Loading&hellip;</div></div>' +
+          '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
         '<section class="panel tdq tdwide"><h3>Move-ins &amp; move-outs <span class="qn2" id="td-mgr-moves-n"></span></h3>' +
           '<div class="mvbar" id="td-mv-bar"><div class="note">Loading&hellip;</div></div>' +
           '<div id="td-mv-cal" hidden></div><div id="td-mv-track" hidden></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
         tdPanel('td-mgr-ren', 'Renewals &middot; next 90 days', 'renewals', 'Open Renewals', true) +   /* WS-M M5: wide — the 5-stage worklist table needs a full row */
+        '<section class="panel tdq tdwide"><h3>Applications <span class="qn2" id="td-mgr-apps-n"></span></h3>' +
+          '<div class="schoffers" id="td-mgr-apps"><div class="note">Loading&hellip;</div></div>' +
+          '<div class="tdmore"><button type="button" class="tdact" data-goto="applications">Open Applications &rarr;</button></div></section>' +
         tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks', true) +
         // merged 2026-07-28: this ONE card replaces "Unit updates" + "Aging vacancies · 60d+"
         // (same population, two different counts). tdPanel is not reused here because the card
@@ -5028,7 +5046,7 @@ window.addEventListener('error', function(e){
     });
   }
   function tdMgrAssemble(){
-    var m = { stats: null, tasks: null, renewals: null, units: null, moves: null, trends: null, trackIn: null, trackOut: null }, done = 0, q = tdReq;
+    var m = { stats: null, tasks: null, renewals: null, units: null, moves: null, trends: null, trackIn: null, trackOut: null, apps: null }, done = 0, q = tdReq;
     // mirror of the agent guard: a manager assembly that finishes after a flip to Agent must not
     // paint (its targets are null-guarded today, but that is luck, not a contract).
     // Option C: ONE /manager-brief read replaces the three list fetches (server-scoped by the
@@ -5058,6 +5076,11 @@ window.addEventListener('error', function(e){
       m.tasks = (j.tasks || []).filter(tdMgrOpenTask);   // server pre-filters open; belt for parity
       m.renewals = j.renewals || [];   // WS-M M5: full 5-stage worklist (v_renewal_worklist) — no longer Pending-only
       m.units = j.units || [];
+      // 2026-07-28: applications awaiting a DECISION (New + Undecided), server-scoped and
+      // PII-free. NOT a new fetch — it rides the brief, so the counter above is unchanged.
+      // Absent on the legacy path (/tasks+/renewals+/units has no application source), which
+      // is why the renderer treats null as "unavailable" and not as "none waiting".
+      m.apps = j.apps || [];
       m.trends = j.trends || null;
     }).catch(function(e){
       // deploy-ordering / outage fallback: Option B's client assembly (delete a release later)
@@ -5078,7 +5101,7 @@ window.addEventListener('error', function(e){
     ]);
   }
   function tdRenderMgr(m){
-    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMvRenderCard(m); tdMgrRenderUnits(m);
+    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderRent(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderApps(m); tdMvRenderCard(m); tdMgrRenderUnits(m);
   }
   // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
   // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff.
@@ -5148,8 +5171,10 @@ window.addEventListener('error', function(e){
       if (mi) L.push({ k: 'units', t: mi + ' move-in' + (mi === 1 ? '' : 's') + ' landing in the next two weeks' });
       // M2 — balance watch: in-scope tenants with money owing, one line, drills to Units
       // sorted by balance (the existing 'balance' flag + sort pathway)
+      // tdRentOwing is the ONE definition, shared with the Rent-owing card below, so this
+      // line and that card's header can never disagree (the chip-vs-number trap)
       var owed = 0, oweN = 0;
-      m.units.forEach(function(u){ var b = Number(u.total_balance) || 0; if (b > 0){ owed += b; oweN++; } });
+      m.units.filter(tdRentOwing).forEach(function(u){ owed += Number(u.total_balance) || 0; oweN++; });
       if (oweN) L.push({ k: 'balance', t: oweN + (oweN === 1 ? ' tenant owes ' : ' tenants owe ') + fmtMoney(owed) });
     }
     // WS-M M3 (D8): tracker-driven at-risk lines — click lands on the Moves card in
@@ -5260,17 +5285,56 @@ window.addEventListener('error', function(e){
     });
     tdMgrTasksPaint();
   }
+  // ── the maintenance lane on the Tasks card (2026-07-28) ──────────────────────────────
+  // v_task_directory has always carried work_order_id / wo_status / wo_vendor_id / wo_amount /
+  // wo_count on EVERY row and this card rendered none of them — live, 56 of 113 open tasks
+  // have a work order attached. ⚠ There is NO vendor NAME available anywhere: buildium has no
+  // vendors table in the mirror at all (checked 2026-07-28), only wo_vendor_id. So the row
+  // shows work-order status + amount and, when the id is null, a "no vendor" flag — which is
+  // the actionable half anyway (a raised work order nobody has been assigned to). NEVER render
+  // the raw wo_vendor_id: an integer sitting beside a dollar amount reads as meaningful data.
+  // These filters deliberately OVERLAP (no-vendor is a subset of maintenance) — they are
+  // filters, not a partition, so each chip's count is "rows matching this filter" and they are
+  // not expected to sum to the header.
+  var TD_TK_ORDER = ['maint', 'novendor', 'overdue'];
+  var TD_TK_META = {
+    maint:    { label: 'Maintenance', test: function(t){ return t.work_order_id != null; } },
+    novendor: { label: 'No vendor',   test: function(t){ return t.work_order_id != null && t.wo_vendor_id == null; } },
+    overdue:  { label: 'Overdue',     test: function(t){ return !!t.is_overdue; } }
+  };
+  var tdTkF = '';   // '' = every open task
   function tdMgrTasksPaint(){
     if (tdMgrTasksLast === null) return;
-    var rows = tdMgrTasksLast, h = '';
+    var all = tdMgrTasksLast;
+    var counts = {}; TD_TK_ORDER.forEach(function(k){ counts[k] = all.filter(TD_TK_META[k].test).length; });
+    var chips = '<div class="mvchips">' + TD_TK_ORDER.map(function(k){
+      return '<button type="button" class="chip' + (tdTkF === k ? ' on' : '') + '" data-tk-filter="' + k + '">' +
+        TD_TK_META[k].label + ' ' + counts[k] + '</button>';
+    }).join('') + '</div>';
+    var rows = tdTkF ? all.filter(TD_TK_META[tdTkF].test) : all;
+    var h = '';
     tdMoreSlice('tasks', rows).forEach(function(t){
       var due = t.is_overdue ? '<span class="chip c-hot">overdue</span>' : (t.due_date ? '<span class="chip c-warm">due ' + esc(String(t.due_date).slice(0, 10)) + '</span>' : '');
       var pri = (t.priority === 'High' || t.priority === 'Urgent') ? ' <span class="chip c-bad">' + esc(t.priority) + '</span>' : '';
+      var sub = esc([t.property_name, t.unit_number].filter(Boolean).join(' · ')) + (t.assignee_name ? ' &middot; ' + esc(t.assignee_name) : '');
+      // the work-order line only appears when there IS one, so a plain admin task reads clean
+      if (t.work_order_id != null){
+        var wo = ['Work order' + (t.wo_status ? ' &middot; ' + esc(String(t.wo_status)) : '')];
+        if (t.wo_amount != null && Number(t.wo_amount) > 0) wo.push(fmtMoney(Number(t.wo_amount)));
+        if (t.wo_count != null && Number(t.wo_count) > 1) wo.push(Number(t.wo_count) + ' orders');
+        sub += '<br><span class="srctag">' + wo.join(' &middot; ') + '</span>' +
+          (t.wo_vendor_id == null ? ' <span class="chip c-hot">no vendor</span>' : '');
+      }
       h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(t.title || t.category_name || 'Task') + '</b>' +
-        '<div class="schoffer-sub">' + esc([t.property_name, t.unit_number].filter(Boolean).join(' · ')) + (t.assignee_name ? ' &middot; ' + esc(t.assignee_name) : '') + '</div></div>' + due + pri + '</div>';
+        '<div class="schoffer-sub">' + sub + '</div></div>' + due + pri +
+        (t.task_id != null ? '<a class="tdact" target="_blank" rel="noopener" href="' + esc(BMGR + '/tasks/' + encodeURIComponent(t.task_id) + '/task-summary?searchOption=new') + '">Buildium &#8599;</a>' : '') +
+        '</div>';
     });
-    // tdFill sets the header count from the FULL row count, not the capped slice
-    tdFill('td-mgr-tasks', h + tdMoreBtn('tasks', rows.length), rows.length, 'No open tasks in scope.');
+    var box = el('td-mgr-tasks');
+    if (box) box.innerHTML = chips + (h ? h + tdMoreBtn('tasks', rows.length)
+      : '<div class="note">' + (tdTkF ? 'Nothing matches this filter.' : 'No open tasks in scope.') + '</div>');
+    // the header count is always the FULL open-task population, never the filtered or capped one
+    var n = el('td-mgr-tasks-n'); if (n) n.textContent = all.length ? all.length + ' waiting' : '';
   }
   // ── WS-M M5: the renewals card (5 stage chips + worklist rows + per-stage actions) ─────────
   // Rows + counts come from get_manager_brief.renewals = dashboard.v_renewal_worklist, which is
@@ -5447,7 +5511,7 @@ window.addEventListener('error', function(e){
   // read 8 of 113 open tasks and had to leave Today for the other 105. Two call sites is
   // exactly where a third copy starts — add a call site here, never a second helper.
   // tdMoreOpen is deliberately NOT persisted: expanded-by-default would undo the cap.
-  var TD_MORE_CAP = { units: 10, tasks: 8 };
+  var TD_MORE_CAP = { units: 10, tasks: 8, apps: 8, rent: 10 };
   var tdMoreOpen = {};
   function tdMoreSlice(key, list){
     return tdMoreOpen[key] ? list : list.slice(0, TD_MORE_CAP[key] || 10);
@@ -5525,9 +5589,228 @@ window.addEventListener('error', function(e){
     var n = el('td-mgr-units-n');
     if (n) n.textContent = feed.length ? feed.length + ' update' + (feed.length === 1 ? '' : 's') : '';
   }
+  // ── applications the manager is holding up (2026-07-28) ───────────────────────────────
+  // Two DIFFERENT populations from two DIFFERENT sources, deliberately not merged into one
+  // number, because they mean different things and only one of them is a decision you owe:
+  //   decide  = get_manager_brief.apps — application_status New + Undecided. Live 17, every
+  //             one scopeable and every one submitted inside a week.
+  //   nolease = v_unit_directory.pending_app_stage — the EXISTING Units-board classifier
+  //             (migration 20260722070000) with its 21-day draft-staleness cutoff. Live 12.
+  // 'Approved' is NOT queried as a status: live it holds 171 rows of which 170 have a NULL
+  // applicant unit_id, so they carry no unit, no property and no property_manager_id and
+  // cannot be scoped to a manager at all — and the oldest was submitted 2014-04-14. Buildium
+  // simply never advances that status once a lease exists. pending_app_stage already answers
+  // "approved but no lease yet" honestly; do not add a second rule here (ONE source of truth).
+  var TD_AP_ORDER = ['decide', 'nolease'];
+  var TD_AP_META = {
+    decide:  { label: 'Waiting on a decision' },
+    nolease: { label: 'Approved, no lease yet' }
+  };
+  var tdApF = '';
+  var tdApLast = null;
+  var TD_AP_STALE_D = 3;   // Pearse-visible threshold: an undecided application older than this is flagged
+  function tdMgrRenderApps(m){
+    var box = el('td-mgr-apps'); if (!box) return;
+    // null (not []) means the source never answered — the legacy assembly path has NO
+    // application source at all, so it must read "could not load", never "none waiting".
+    if (m.apps === null && m.units === null){ tdApLast = null; tdFail('td-mgr-apps', 'applications'); return; }
+    var rows = [];
+    (m.apps || []).filter(tdMgrScopePass).forEach(function(a){
+      var age = Math.floor((Date.now() - Date.parse(a.submitted_at || '')) / 86400000);
+      rows.push({ k: 'decide', id: a.application_id, unitId: a.unit_id,
+        t: a.applicant_name || 'Applicant',
+        sub: [a.property_name, a.unit_number].filter(Boolean).join(' · '),
+        age: (isFinite(age) && age >= 0) ? age : null,
+        stale: isFinite(age) && age > TD_AP_STALE_D });
+    });
+    (m.units || []).forEach(function(u){
+      if (!u.pending_app_stage) return;
+      rows.push({ k: 'nolease', id: null, unitId: u.unit_id,
+        t: [u.property_name, u.unit_number].filter(Boolean).join(' · ') || 'Unit',
+        sub: u.pending_app_stage === 'draft_lease' ? 'Draft lease started, not signed' : 'Application approved, no lease yet',
+        age: null, stale: false });
+    });
+    // oldest-waiting first inside the decide group; nolease rows carry no age to sort by
+    rows.sort(function(a, b){
+      if (a.k !== b.k) return a.k === 'decide' ? -1 : 1;
+      return (b.age == null ? -1 : b.age) - (a.age == null ? -1 : a.age);
+    });
+    tdApLast = rows;
+    tdApPaint();
+  }
+  function tdApPaint(){
+    var box = el('td-mgr-apps'); if (!box || tdApLast === null) return;
+    var rows = tdApLast;
+    var counts = {}; TD_AP_ORDER.forEach(function(k){ counts[k] = rows.filter(function(r){ return r.k === k; }).length; });
+    var chips = '<div class="mvchips">' + TD_AP_ORDER.map(function(k){
+      return '<button type="button" class="chip' + (tdApF === k ? ' on' : '') + '" data-ap-kind="' + k + '">' +
+        TD_AP_META[k].label + ' ' + counts[k] + '</button>';
+    }).join('') + '</div>';
+    var vis = rows.filter(function(r){ return !tdApF || r.k === tdApF; });
+    var h = tdMoreSlice('apps', vis).map(function(r){
+      var age = r.age == null ? '' : '<span class="chip ' + (r.stale ? 'c-hot' : 'c-warm') + '">' +
+        (r.age === 0 ? 'today' : r.age + 'd') + '</span>';
+      // a decide row opens the APPLICATION (contact arrives on click via /application-detail —
+      // the no-PII-in-lists rule); a nolease row has no application id, so it opens the unit
+      var attrs = r.k === 'decide'
+        ? 'class="schoffer tdaprow" data-apid="' + esc(String(r.id)) + '"'
+        : 'class="schoffer tdurow" data-uid="' + esc(String(r.unitId)) + '"';
+      return '<div ' + attrs + ' role="button" tabindex="0"><div class="schoffer-main"><b>' + esc(r.t) + '</b>' +
+        (r.sub ? '<div class="schoffer-sub">' + esc(r.sub) + '</div>' : '') + '</div>' + age + '</div>';
+    }).join('');
+    box.innerHTML = chips + (h ? h + tdMoreBtn('apps', vis.length)
+      : '<div class="note">' + (tdApF ? 'Nothing in this group.' : 'No applications waiting on you.') + '</div>');
+    var n = el('td-mgr-apps-n');
+    if (n){ var d = counts.decide; n.textContent = d ? d + ' to decide' : ''; }
+  }
+  // ── Rent owing (2026-07-28) ───────────────────────────────────────────────────────────
+  // No new fetch: total_balance and the four ageing buckets ride on the units payload
+  // (migration 20260728010000 joins buildium.lease_balances inside get_manager_brief).
+  // The brief already had a "N tenants owe $X" line but no list and no action — it drilled
+  // to the Units tab sorted by balance. That line now scrolls HERE, and the count is computed
+  // from the SAME filter so the line and the card can never disagree.
+  // Pearse 2026-07-28: the row opens a DRAWER and the reminder lives inside it — a rent text
+  // should take a deliberate second tap, not a mis-click in a list of 49.
+  var TD_RENT_ORDER = ['over1k', 'd31_60', 'd61_90', 'd90'];
+  var TD_RENT_META = {
+    over1k: { label: 'Over $1k',  test: function(u){ return Number(u.total_balance) >= 1000; } },
+    d31_60: { label: '31–60d', test: function(u){ return Number(u.balance_31_60_days) > 0; } },
+    d61_90: { label: '61–90d', test: function(u){ return Number(u.balance_61_90_days) > 0; } },
+    d90:    { label: '90d+',      test: function(u){ return Number(u.balance_over_90_days) > 0; } }
+  };
+  var tdRentF = '';
+  var tdRentLast = null;
+  var tdRentRows = {};   // unit_id -> the units row (the drawer reads address/tenant/buckets here)
+  // the ONE definition of "owing", shared by the card and the brief line
+  function tdRentOwing(u){ return (Number(u.total_balance) || 0) > 0; }
+  function tdMgrRenderRent(m){
+    var box = el('td-mgr-rent'); if (!box) return;
+    if (m.units === null){ tdRentLast = null; tdFail('td-mgr-rent', 'balances'); return; }
+    var rows = m.units.filter(tdRentOwing)
+      .sort(function(a, b){ return (Number(b.total_balance) || 0) - (Number(a.total_balance) || 0); });
+    tdRentLast = rows;
+    tdRentRows = {};
+    rows.forEach(function(u){ tdRentRows[u.unit_id] = u; });
+    tdRentPaint();
+  }
+  function tdRentPaint(){
+    var box = el('td-mgr-rent'); if (!box || tdRentLast === null) return;
+    var rows = tdRentLast;
+    // a chip with nothing behind it is noise — hide it rather than offer an empty filter
+    var chips = TD_RENT_ORDER.map(function(k){
+      var n = rows.filter(TD_RENT_META[k].test).length;
+      if (!n) return '';
+      return '<button type="button" class="chip' + (tdRentF === k ? ' on' : '') + '" data-rent-f="' + k + '">' +
+        TD_RENT_META[k].label + ' ' + n + '</button>';
+    }).join('');
+    chips = chips ? '<div class="mvchips">' + chips + '</div>' : '';
+    var vis = tdRentF ? rows.filter(TD_RENT_META[tdRentF].test) : rows;
+    var h = tdMoreSlice('rent', vis).map(function(u){
+      var bal = Number(u.total_balance) || 0;
+      var aged = (Number(u.balance_31_60_days) || 0) + (Number(u.balance_61_90_days) || 0) + (Number(u.balance_over_90_days) || 0);
+      return '<div class="schoffer tdrentrow" data-rentuid="' + esc(String(u.unit_id)) + '" role="button" tabindex="0">' +
+        '<div class="schoffer-main"><b>' + esc([u.property_name, u.unit_number].filter(Boolean).join(' · ')) + '</b>' +
+        '<div class="schoffer-sub">' + esc(u.tenant_names || '–') + '</div></div>' +
+        '<span class="chip ' + (aged > 0 ? 'c-hot' : 'c-warm') + '">' + fmtMoney(bal) + '</span></div>';
+    }).join('');
+    box.innerHTML = chips + (h ? h + tdMoreBtn('rent', vis.length)
+      : '<div class="note">' + (tdRentF ? 'Nothing in this band.' : 'No outstanding balances in scope.') + '</div>');
+    var n2 = el('td-mgr-rent-n');
+    if (n2){
+      var tot = 0; rows.forEach(function(u){ tot += Number(u.total_balance) || 0; });
+      n2.textContent = rows.length ? rows.length + ' owing · ' + fmtMoney(tot) : '';
+    }
+  }
+  // Drawer: ageing breakdown + the lease in Buildium + the two reminder actions. Contact is
+  // NOT in the list payload — it arrives here on click via the existing /lease-detail, sharing
+  // tdRwLeaseCache with the renewal chase (same endpoint, same key, one cache).
+  function tdRentOpen(unitId){
+    var u = tdRentRows[unitId];
+    var mm = el('rentmodal'), body = el('rent-d-body');
+    if (!u || !mm || !body) return;
+    body.innerHTML = tdRentDrawerBody(u);
+    if (!mm.classList.contains('open')) openModal('rentmodal');
+  }
+  function tdRentDrawerBody(u){
+    var b = [
+      { l: '0–30 days',  v: Number(u.balance_0_30_days) || 0 },
+      { l: '31–60 days', v: Number(u.balance_31_60_days) || 0 },
+      { l: '61–90 days', v: Number(u.balance_61_90_days) || 0 },
+      { l: 'Over 90 days',    v: Number(u.balance_over_90_days) || 0 }
+    ].filter(function(x){ return x.v > 0; });
+    var h = '<h3 style="margin:0 0 2px">' + esc([u.property_name, u.unit_number].filter(Boolean).join(' · ')) + '</h3>' +
+      '<div class="note" style="margin-bottom:12px">' + esc(u.tenant_names || 'No tenant name on file') + '</div>' +
+      '<div class="tdp-v" style="font-size:1.5rem">' + fmtMoney(Number(u.total_balance) || 0) + '</div>' +
+      '<div class="note" style="margin-bottom:12px">outstanding balance</div>';
+    // NOT .mvtable — that class carries min-width:840px for the wide scrollx data tables, and
+    // inside this 560px drawer it forces an 840px child that .lmcard's overflow:hidden clips
+    // (measured 840 vs 558). A four-row breakdown needs a plain full-width table.
+    if (b.length) h += '<table style="width:100%;border-collapse:collapse;font-size:.86rem">' + b.map(function(x){
+      return '<tr><td style="padding:4px 0">' + x.l + '</td><td style="padding:4px 0;text-align:right">' + fmtMoney(x.v) + '</td></tr>';
+    }).join('') + '</table>';
+    else h += '<div class="note">No ageing breakdown on this account.</div>';
+    h += '<div class="tdmore" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">';
+    if (u.lease_id != null)
+      h += '<a class="tdact" target="_blank" rel="noopener" href="' + esc(tdRwBuildium(u.lease_id)) + '">Open lease in Buildium &#8599;</a>';
+    if (u.lease_id != null)
+      h += '<button type="button" class="tdact" data-rent-remind="email" data-rent-lease="' + esc(String(u.lease_id)) + '" data-rent-uid="' + esc(String(u.unit_id)) + '">Send a reminder &#9993;</button>' +
+           '<button type="button" class="tdact" data-rent-remind="sms" data-rent-lease="' + esc(String(u.lease_id)) + '" data-rent-uid="' + esc(String(u.unit_id)) + '" title="Text the tenant">&#128172;</button>';
+    h += '</div>';
+    return h;
+  }
+  function tdRentRemind(leaseId, unitId, channel){
+    var u = tdRentRows[unitId]; if (!u) return;
+    var go = function(det){
+      var t0 = (det && det.tenants && det.tenants[0]) || {};
+      var first = String((t0.name || u.tenant_names || '').trim().split(/\s+/)[0] || 'there').trim() || 'there';
+      var addr = [u.property_name, u.unit_number].filter(Boolean).join(' ') || 'your unit';
+      var amt = fmtMoney(Number(u.total_balance) || 0);
+      var me = String(getActor() || '').trim().split(/\s+/)[0] || 'the Live Furnished team';
+      if (channel === 'sms'){
+        if (!t0.phone){ alert('No phone number on file for this tenant — try the email reminder.'); return; }
+        window.location.href = rcText(String(t0.phone), tdRentMsgText(first, addr, amt, me));
+      } else {
+        var email = t0.email || t0.alt_email;
+        if (!email){ alert('No email on file for this tenant — try the text reminder.'); return; }
+        window.location.href = tdMailto(email, tdRentMsgSubject(addr), tdRentMsgBody(first, addr, amt, me));
+      }
+    };
+    if (tdRwLeaseCache[leaseId]) return go(tdRwLeaseCache[leaseId]);
+    authFetch('/lease-detail?lease_id=' + encodeURIComponent(leaseId)).then(function(j){ tdRwLeaseCache[leaseId] = j; go(j); }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('lease-detail (rent reminder) failed', e);
+      alert('Could not load the tenant contact — please try again.');
+    });
+  }
+  // Tenant-facing money copy — /lf voice (premium but approachable, clear and direct, no
+  // jargon). Deliberately NOT a demand: it assumes good faith, allows for payments in flight,
+  // and offers to talk about timing. NO URLs of any kind (CLAUDE.md: never put internal links
+  // in tenant-facing strings). Change this only with Pearse's sign-off.
+  function tdRentMsgSubject(addr){ return 'Your account balance — ' + addr; }
+  function tdRentMsgBody(first, addr, amt, me){
+    return 'Hi ' + first + ',\n\n' +
+      'A quick note from Live Furnished — our records show an outstanding balance of ' + amt + ' on your account for ' + addr + '.\n\n' +
+      'If you have already sent this through, thank you, and please disregard this note — payments can take a few days to appear on our end. If something does not look right, or you would like to arrange a different timeline, just reply here and we will sort it out together.\n\n' +
+      'Thanks so much,\n' + me + '\nLive Furnished';
+  }
+  function tdRentMsgText(first, addr, amt, me){
+    return 'Hi ' + first + ', it\'s ' + me + ' with Live Furnished — a quick note that our records show a balance of ' + amt + ' on your account for ' + addr + '. If you have already sent it, thank you and please ignore this. If anything looks off or you would like to talk through timing, just reply here and I will help.';
+  }
   function tdMgrBriefGo(k){
     if (k === 'ledger'){ showTab('ledger'); return; }
-    if (k === 'balance'){ gotoUnitsFiltered('balance'); return; }   // M2: Units sorted by balance
+    // 2026-07-28: this used to jump to the Units tab sorted by balance. There is a card on
+    // this page now whose population is the SAME filter (tdRentOwing), so stay here. Clear
+    // the band filter first — the brief line counts every owing tenant, and landing a line
+    // reading 49 on a filtered list of 11 is the A-14 chip-vs-number trap.
+    if (k === 'balance'){
+      var rb = el('td-mgr-rent');
+      if (rb){
+        tdRentF = ''; tdRentPaint();
+        (rb.closest('section.panel') || rb).scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      gotoUnitsFiltered('balance'); return;   // fallback if the card is absent
+    }
     if (k === 'moves'){
       // land on the tracker pre-filtered to At-risk (the brief line's population)
       tdMvView = 'track'; tdMvStageF = 'risk';
@@ -5605,13 +5888,29 @@ window.addEventListener('error', function(e){
       // card and a chip click must not fall through and open a unit modal.
       var muk = e.target.closest('[data-mu-kind]');
       if (muk){ var mv2 = muk.getAttribute('data-mu-kind'); tdMuKindF = (tdMuKindF === mv2 ? '' : mv2); tdMuPaint(); return; }
+      // Tasks maintenance lane, Applications groups, Rent bands — all repaint from stashed rows
+      var tkf = e.target.closest('[data-tk-filter]');
+      if (tkf){ var tv = tkf.getAttribute('data-tk-filter'); tdTkF = (tdTkF === tv ? '' : tv); tdMgrTasksPaint(); return; }
+      var apk = e.target.closest('[data-ap-kind]');
+      if (apk){ var av = apk.getAttribute('data-ap-kind'); tdApF = (tdApF === av ? '' : av); tdApPaint(); return; }
+      var rf = e.target.closest('[data-rent-f]');
+      if (rf){ var rv2 = rf.getAttribute('data-rent-f'); tdRentF = (tdRentF === rv2 ? '' : rv2); tdRentPaint(); return; }
+      // NOTE: the rent drawer's reminder buttons are NOT handled here — #rentmodal lives
+      // outside #td-grid, so they get their own boot delegate (see the mvmodal precedent).
       var mo = e.target.closest('[data-tdmore]');
       if (mo){
         var mk = mo.getAttribute('data-tdmore');
         tdMoreOpen[mk] = !tdMoreOpen[mk];
-        if (mk === 'units') tdMuPaint(); else if (mk === 'tasks') tdMgrTasksPaint();
+        if (mk === 'units') tdMuPaint();
+        else if (mk === 'tasks') tdMgrTasksPaint();
+        else if (mk === 'apps') tdApPaint();
+        else if (mk === 'rent') tdRentPaint();
         return;
       }
+      var rrow = e.target.closest('.tdrentrow');
+      if (rrow){ tdRentOpen(rrow.getAttribute('data-rentuid')); return; }
+      var arow = e.target.closest('.tdaprow');
+      if (arow){ openAppEnsure(arow.getAttribute('data-apid')); return; }
       var ur = e.target.closest('.tdurow');
       if (ur){ openUnitEnsure(ur.getAttribute('data-uid')); return; }
       var br = e.target.closest('.tdbrief');
@@ -5654,6 +5953,15 @@ window.addEventListener('error', function(e){
       }
       var u = e.target.closest('[data-uid]');
       if (u){ closeModal('mvmodal'); openUnitEnsure(u.getAttribute('data-uid')); }   // the mimodal precedent
+    });
+  })();
+  // Rent drawer — same reason as mvmodal above: #rentmodal is outside #td-grid, so its
+  // reminder buttons need their own boot delegate or they are dead markup.
+  (function(){
+    var rm = el('rentmodal'); if (!rm) return;
+    rm.addEventListener('click', function(e){
+      var b = e.target.closest('[data-rent-remind]');
+      if (b) tdRentRemind(b.getAttribute('data-rent-lease'), b.getAttribute('data-rent-uid'), b.getAttribute('data-rent-remind'));
     });
   })();
 
@@ -9871,7 +10179,9 @@ window.addEventListener('error', function(e){
       x.classList.toggle('on', x.getAttribute('data-days') === aWin.mode);
     });
   }
-  function loadApps(){
+  // The "after" callback mirrors loadUnits(after) — it lets openAppEnsure open one application
+  // from a surface that never loaded the Applications tab (the manager Today card).
+  function loadApps(after){
     el('veil').classList.remove('hide');
     authFetch('/applications?' + appsQuery().toString())
       .then(function(j){
@@ -9881,11 +10191,19 @@ window.addEventListener('error', function(e){
         syncAPresets();
         drawAppChips(); drawApps();
         el('veil').classList.add('hide');
+        if (after) after();
       })
-      .catch(function(){
+      .catch(function(e){
         el('veil').classList.add('hide');
         el('atable').querySelector('tbody').innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center">Could not load applications.</td></tr>';
+        if (String(e && e.message) !== 'AUTH') console.error('applications load failed', e);
       });
+  }
+  // the openUnitEnsure pattern: openApp resolves against appsAll, which is null until the
+  // Applications tab has been opened at least once.
+  function openAppEnsure(aid){
+    if (appsAll === null) loadApps(function(){ openApp(aid); });
+    else openApp(aid);
   }
   function drawAppChips(){
     var html = '', empty = Object.keys(aSel).length === 0;

@@ -2042,6 +2042,13 @@ window.addEventListener('error', function(e){
     #page-hub.teamview .hubmine{display:none}
     #page-hub:not(.teamview) #hub-team{display:none}
     #page-hub #hub-team-health{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px}
+    /* Commission-tracker controls (range + search) above the signed-leases table. Wraps at
+       every width — the search grows, the select and button keep their intrinsic size, so
+       there is no clipping and no horizontal overflow on a 375px screen. */
+    #page-hub .sltools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 2px}
+    #page-hub .sltools select,#page-hub .sltools input[type=search]{min-height:40px;font-size:13px}
+    #page-hub .sltools input[type=search]{flex:1 1 220px;min-width:0}
+    #page-hub .sltools .chip-mini{min-height:40px}
     /* funnel/KPI tiles (also the team-health tiles) — class-based so they compact on mobile */
     #page-hub .hubtile{background:var(--glass);border-radius:14px;padding:14px 12px;text-align:center}
     #page-hub .hubtile-l{font-size:.72rem;color:var(--ink-soft);letter-spacing:.05em;text-transform:uppercase}
@@ -2152,6 +2159,11 @@ window.addEventListener('error', function(e){
           <button type="button" class="qchip" data-s="all">All</button>
         </div>
         <div class="qchips" id="hub-signed-chips"></div>
+        <!-- Sibling surface (Phase 2): the agent My-view gets the SEARCH only. Agent chips
+             and a range control are meaningless on a single-agent list. -->
+        <div class="sltools">
+          <input type="search" id="hs-q" placeholder="Search tenant, property or unit" autocomplete="off">
+        </div>
         <div class="scrolly tallscroll">
           <table id="hubsigned"><thead><tr>
             <th>Property &middot; unit</th><th>Signed</th><th class="rt">Rent</th><th>Tenant</th><th>Credit</th>
@@ -2195,7 +2207,21 @@ window.addEventListener('error', function(e){
       </div>
       <div class="card tablecard" style="margin-top:18px">
         <div class="tablebar"><h2>All signed leases</h2><span class="count-note" id="hub-team-leases-note"></span></div>
+        <!-- Phase 2 commission-tracker controls. Ids are load-bearing: the listeners bind by
+             id and slRestore() writes the remembered values back into these controls. The
+             range select refetches; search + agent chips filter the loaded set client-side. -->
+        <div class="sltools">
+          <select id="sl-range" aria-label="Signed-date range">
+            <option value="window">Sidebar window</option>
+            <option value="month">This month</option>
+            <option value="lastmonth">Last month</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <input type="search" id="sl-q" placeholder="Search tenant, property, unit or agent" autocomplete="off">
+          <button type="button" class="chip-mini" id="sl-clear">Clear filters</button>
+        </div>
         <div class="qchips" id="hub-team-leases-chips"></div>
+        <div class="qchips" id="hub-team-leases-agents"></div>
         <div class="scrolly tallscroll">
           <table id="hub-team-leases"><thead><tr>
             <th data-k="property_name">Property &middot; unit</th><th data-k="signed_date">Signed</th><th data-k="tenant_name">Tenant</th><th data-k="credited_agent">Credited</th><th data-k="move_in_date">Move-in</th><th>Actions</th>
@@ -7685,7 +7711,7 @@ window.addEventListener('error', function(e){
       event_type:{ t:'enum', label:'Event', disp:function(v){ return CF_EVT[v] || v; } },
       created_at:{ t:'date', label:'When', get:function(r){ return (r.created_at||'').slice(0,10); } }
     }},
-    'hub-team-leases': { rows:function(){ return hubTeamSigned || []; }, redraw:function(){ hubRenderTeamLeases(); }, cols:{
+    'hub-team-leases': { rows:function(){ return slRows(); }, redraw:function(){ hubRenderTeamLeases(); }, cols:{
       property_name:{ t:'auto', label:'Property' },
       signed_date:{ t:'date', label:'Signed', get:function(r){ return (r.signed_date||'').slice(0,10); } },
       tenant_name:{ t:'auto', label:'Tenant' },
@@ -11739,8 +11765,63 @@ window.addEventListener('error', function(e){
       hubSigned = null, hubFollow = null, hubSignedFilter = 'all', hubFuFilter = 'all',
       hubSignedScope = 'mine',
       hubTours = null, hubToursView = 'today',
-      hubView = 'mine', hubTeamSigned = null, hubTeamTours = null, hubTeamLeasesFilter = 'all', hubTeamLeasesSort = { k:'signed_date', d:-1 };
+      hubView = 'mine', hubTeamSigned = null, hubTeamTours = null, hubTeamLeasesFilter = 'all', hubTeamLeasesSort = { k:'signed_date', d:-1 },
+      // Phase 2 commission-tracker filters. hubSlRows holds the SEPARATE dataset fetched when
+      // the range control leaves 'window' — it must NOT overwrite hubTeamSigned, because the
+      // Leasing-overview tiles and the By-agent table are computed from that and labelled with
+      // the sidebar window. Silently repointing them under a different range is exactly the
+      // chip-says-57-list-shows-18 trap.
+      hubSlRows = null, hubTeamLeasesQ = '', hubTeamLeasesAgent = '', hubTeamLeasesRange = 'window',
+      hubSignedQ = '';
   function hubWindow(){ return windowDates(); }   // unified with the global sidebar Activity window (state.from/to)
+  // The signed-leases table reads THIS, never hubTeamSigned directly.
+  function slRows(){ return (hubTeamLeasesRange === 'window' ? hubTeamSigned : hubSlRows) || []; }
+  // Credited when confirmed, else the system's guess — the same rule the Credited column and
+  // its COLF filter use, so chips, column filter and rows can never disagree.
+  function slAgentOf(r){ return (r && r.status === 'confirmed' ? r.credited_agent : r.suggested_agent) || ''; }
+  function slHay(r){
+    return [r.property_name, r.unit_number, r.tenant_name, r.credited_agent, r.suggested_agent]
+      .filter(Boolean).join(' ').toLowerCase();
+  }
+  // dstr() is UTC, but a local midnight in Mountain time lands on the same calendar date, so
+  // these boundaries are correct for Edmonton (the house bucketing timezone).
+  function slRangeDates(){
+    var r = hubTeamLeasesRange, d = new Date();
+    if (r === 'month') return { from: dstr(new Date(d.getFullYear(), d.getMonth(), 1)), to: dstr(d) };
+    if (r === 'lastmonth') return { from: dstr(new Date(d.getFullYear(), d.getMonth() - 1, 1)),
+                                    to: dstr(new Date(d.getFullYear(), d.getMonth(), 0)) };
+    if (r === '90') return { from: dstr(new Date(Date.now() - 90 * 86400000)), to: dstr(d) };
+    return hubWindow();
+  }
+  // Own request + generation guard: a range flip or a role switch can outrun this, and a stale
+  // resolve must never repaint the table it no longer describes.
+  var hubSlReq = 0;
+  function loadHubTeamSigned(){
+    var w = slRangeDates(), q = ++hubSlReq;
+    var t = el('hub-team-leases'); if (t) t.querySelector('tbody').innerHTML = emptyRow('hub-team-leases', 'Loading&hellip;');
+    return authFetch('/signed-leases?from=' + w.from + '&to=' + w.to).then(function(j){
+      if (q !== hubSlReq) return;
+      hubSlRows = (j && j.signed) || [];
+      hubRenderTeamLeases();
+    }).catch(function(e){
+      if (q !== hubSlReq) return;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('signed-leases (range) load failed', e);
+      hubSlRows = [];
+      var tb = el('hub-team-leases');
+      if (tb) tb.querySelector('tbody').innerHTML = emptyRow('hub-team-leases', 'Could not load signed leases for this range.');
+    });
+  }
+  // Restored HERE, not at boot: this runs only when the admin board loads, so a bad stored
+  // value can never take the init path down with it.
+  function slRestore(){
+    try {
+      hubTeamLeasesRange = localStorage.getItem('ledger_slrange_v1') || 'window';
+      hubTeamLeasesAgent = localStorage.getItem('ledger_slagent_v1') || '';
+    } catch (e) { hubTeamLeasesRange = 'window'; hubTeamLeasesAgent = ''; }
+    var s = el('sl-range'); if (s) s.value = hubTeamLeasesRange;
+    if (hubTeamLeasesRange !== 'window') loadHubTeamSigned();
+  }
   function hubMatchAgent(actor, agents){
     if (!agents.length) return '';
     if (!actor) return agents[0];
@@ -11901,9 +11982,11 @@ window.addEventListener('error', function(e){
   function hubRenderSigned(){
     var tbl = el('hubsigned'); if (!tbl) return; var tb = tbl.querySelector('tbody');
     var all = hubSigned || [];
+    var hq = (hubSignedQ || '').trim().toLowerCase();
     var rows = all.filter(function(r){
-      if (hubSignedFilter === 'confirmed') return r.status === 'confirmed';
-      if (hubSignedFilter === 'pending') return r.status !== 'confirmed';
+      if (hubSignedFilter === 'confirmed' && r.status !== 'confirmed') return false;
+      if (hubSignedFilter === 'pending' && r.status === 'confirmed') return false;
+      if (hq && slHay(r).indexOf(hq) === -1) return false;
       return true;
     });
     var h = '';
@@ -12239,6 +12322,7 @@ window.addEventListener('error', function(e){
      + /signed-leases + /tours. ── */
   function loadHubTeam(){
     var w = hubWindow();
+    slRestore();   // remembered range/agent — safe here, this only runs on the admin board
     var pSigned = authFetch('/signed-leases?from=' + w.from + '&to=' + w.to);
     var pTours = (hubTours !== null) ? Promise.resolve({ tours: hubTours })
       : authFetch('/tours?from=' + dstr(new Date(Date.now() - 90 * 86400000)) + '&to=' + dstr(new Date(Date.now() + 60 * 86400000)));
@@ -12413,11 +12497,14 @@ window.addEventListener('error', function(e){
   }
   function hubRenderTeamLeases(){
     var t = el('hub-team-leases'); if (!t) return; var tb = t.querySelector('tbody');
-    var all = hubTeamSigned || [];
+    var all = slRows();
+    var q = (hubTeamLeasesQ || '').trim().toLowerCase();
     var rows = all.filter(function(r){
       if (!colfPass('hub-team-leases', r)) return false;
-      if (hubTeamLeasesFilter === 'confirmed') return r.status === 'confirmed';
-      if (hubTeamLeasesFilter === 'pending') return r.status !== 'confirmed';
+      if (hubTeamLeasesFilter === 'confirmed' && r.status !== 'confirmed') return false;
+      if (hubTeamLeasesFilter === 'pending' && r.status === 'confirmed') return false;
+      if (hubTeamLeasesAgent && !sameAgent(slAgentOf(r), hubTeamLeasesAgent)) return false;
+      if (q && slHay(r).indexOf(q) === -1) return false;
       return true;
     });
     var raw = (hubTeamLeasesSort.k === 'signed_date' || hubTeamLeasesSort.k === 'move_in_date');
@@ -12443,13 +12530,37 @@ window.addEventListener('error', function(e){
         '<td data-label="Move-in">' + miCell + '</td>' +
         '<td data-label="Actions">' + acts + '</td></tr>';
     });
-    tb.innerHTML = h || emptyRow('hub-team-leases', 'No signed leases in this window');
-    var note = el('hub-team-leases-note'); if (note) note.textContent = rows.length + ' of ' + all.length;
+    tb.innerHTML = h || emptyRow('hub-team-leases', 'No signed leases match these filters');
+    var note = el('hub-team-leases-note');
+    if (note) {
+      var w = slRangeDates();
+      note.textContent = rows.length + ' of ' + all.length + ' · ' + w.from + ' – ' + w.to;
+    }
     hubRenderTeamLeasesChips();
+    hubRenderTeamLeasesAgents();
+  }
+  // One chip per credited agent, counted over the SAME set the table draws from, so a chip
+  // count can never disagree with the list it filters to.
+  function hubRenderTeamLeasesAgents(){
+    var c = el('hub-team-leases-agents'); if (!c) return;
+    var all = slRows(), m = {}, order = [];
+    all.forEach(function(r){
+      var a = slAgentOf(r); if (!a) return;
+      var k = a.toLowerCase();
+      if (!m[k]){ m[k] = { name:a, n:0 }; order.push(k); }
+      m[k].n++;
+    });
+    order.sort(function(x, y){ return m[y].n - m[x].n || m[x].name.localeCompare(m[y].name); });
+    var h = '<button type="button" class="qchip' + (hubTeamLeasesAgent ? '' : ' on') + '" data-ag="">All agents <span class="qn">' + all.length + '</span></button>';
+    order.forEach(function(k){
+      h += '<button type="button" class="qchip' + (sameAgent(m[k].name, hubTeamLeasesAgent) ? ' on' : '') + '" data-ag="' + esc(m[k].name) + '">'
+         + esc(m[k].name) + ' <span class="qn">' + m[k].n + '</span></button>';
+    });
+    c.innerHTML = h;
   }
   function hubRenderTeamLeasesChips(){
     var c = el('hub-team-leases-chips'); if (!c) return;
-    var all = hubTeamSigned || [];
+    var all = slRows();
     var conf = all.filter(function(r){ return r.status === 'confirmed'; }).length;
     function chip(k, label, n){ return '<button type="button" class="qchip' + (hubTeamLeasesFilter === k ? ' on' : '') + '" data-f="' + k + '">' + label + ' <span class="qn">' + n + '</span></button>'; }
     c.innerHTML = chip('all', 'All', all.length) + chip('pending', 'Unconfirmed', all.length - conf) + chip('confirmed', 'Confirmed', conf);
@@ -12592,6 +12703,34 @@ window.addEventListener('error', function(e){
   // chips are the only switch; the by-agent drill below still flips Admin → Agent.)
   if (el('hub-team-leases-chips')) el('hub-team-leases-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return; hubTeamLeasesFilter = b.getAttribute('data-f'); hubRenderTeamLeases();
+  });
+  // Phase 2 commission-tracker controls. Every binding null-guarded (boot-crash class #1).
+  if (el('hub-team-leases-agents')) el('hub-team-leases-agents').addEventListener('click', function(e){
+    var b = e.target.closest('.qchip'); if (!b) return;
+    hubTeamLeasesAgent = b.getAttribute('data-ag') || '';
+    try { localStorage.setItem('ledger_slagent_v1', hubTeamLeasesAgent); } catch (err) {}
+    hubRenderTeamLeases();
+  });
+  if (el('sl-q')) el('sl-q').addEventListener('input', function(){
+    hubTeamLeasesQ = this.value || ''; hubRenderTeamLeases();
+  });
+  if (el('sl-range')) el('sl-range').addEventListener('change', function(){
+    hubTeamLeasesRange = this.value || 'window';
+    try { localStorage.setItem('ledger_slrange_v1', hubTeamLeasesRange); } catch (err) {}
+    // Back to 'window' reuses hubTeamSigned, which is already loaded — no request needed.
+    if (hubTeamLeasesRange === 'window'){ hubRenderTeamLeases(); return; }
+    loadHubTeamSigned();
+  });
+  if (el('sl-clear')) el('sl-clear').addEventListener('click', function(){
+    hubTeamLeasesQ = ''; hubTeamLeasesAgent = ''; hubTeamLeasesFilter = 'all';
+    var i = el('sl-q'); if (i) i.value = '';
+    // Also drop any column-filter state, else "Clear filters" leaves invisible ones armed.
+    COLF['hub-team-leases'] = {}; refreshFunnels();
+    try { localStorage.removeItem('ledger_slagent_v1'); } catch (err) {}
+    hubRenderTeamLeases();
+  });
+  if (el('hs-q')) el('hs-q').addEventListener('input', function(){
+    hubSignedQ = this.value || ''; hubRenderSigned();
   });
   if (el('hub-team-leases')) el('hub-team-leases').addEventListener('click', function(e){
     var b = e.target.closest('.hubact'); if (!b || b.tagName === 'SELECT') return;   // the inline reassign picker handles its own change

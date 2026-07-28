@@ -3890,10 +3890,12 @@ window.addEventListener('error', function(e){
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
         tdPanel('td-mgr-ren', 'Renewals &middot; next 90 days', 'renewals', 'Open Renewals', true) +   /* WS-M M5: wide — the 5-stage worklist table needs a full row */
         tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks', true) +
-        '<section class="panel tdq tdwide"><h3>Unit updates <span class="qn2" id="td-mgr-units-n"></span></h3>' +
+        // merged 2026-07-28: this ONE card replaces "Unit updates" + "Aging vacancies · 60d+"
+        // (same population, two different counts). tdPanel is not reused here because the card
+        // renders its own chip row and expander inside #td-mgr-units.
+        '<section class="panel tdq tdwide"><h3>Unit movement <span class="qn2" id="td-mgr-units-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-units"><div class="note">Loading&hellip;</div></div>' +
-          '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
-        tdPanel('td-mgr-aging', 'Aging vacancies &middot; 60d+', 'units', 'Open Units', true);
+          '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>';
       tdMgrAssemble();
     } else if (role === 'admin'){
       g.innerHTML = '';
@@ -5032,15 +5034,18 @@ window.addEventListener('error', function(e){
     // Option C: ONE /manager-brief read replaces the three list fetches (server-scoped by the
     // same ids appendScope sends); /stats stays separate so brief/pulse numbers can never
     // diverge from the Ledger, and the GCal moves stay their own request (not in the RPC).
-    // WS-M M3: FIVE fetches — + the two tracker reads (days=all once; the window chips
-    // filter client-side, so toggles never refetch). Adding a fetch here means bumping the
-    // counter below, or the ENTIRE manager brief hangs on "Loading" (the v226 lesson).
-    var step = function(){ if (++done === 5 && q === tdReq) tdRenderMgr(m); };
-    authFetch('/move-tracker?kind=in&days=all').then(function(j){ m.trackIn = (j && j.rows) || []; }).catch(function(e){
-      if (String(e && e.message) !== 'AUTH') console.error('move-tracker in failed', e);
-    }).then(step);
-    authFetch('/move-tracker?kind=out&days=all').then(function(j){ m.trackOut = (j && j.rows) || []; }).catch(function(e){
-      if (String(e && e.message) !== 'AUTH') console.error('move-tracker out failed', e);
+    // FOUR fetches (was five until 2026-07-28: the two tracker reads are now one kind=both
+    // call — the brief's at-risk lines need both lists anyway, so two round trips bought
+    // nothing). days=all once; the window chips filter client-side, so toggles never refetch.
+    // ⚠ Adding or removing a fetch here means changing the counter below to match, or the
+    // ENTIRE manager brief hangs on "Loading" (the v226 lesson). Count the .then(step) calls.
+    var step = function(){ if (++done === 4 && q === tdReq) tdRenderMgr(m); };
+    // one failure must not blank BOTH lists: a null trackIn/trackOut is the "could not load"
+    // state, so only the side that actually failed should stay null.
+    authFetch('/move-tracker?kind=both&days=all').then(function(j){
+      m.trackIn = (j && j.in) || []; m.trackOut = (j && j.out) || [];
+    }).catch(function(e){
+      if (String(e && e.message) !== 'AUTH') console.error('move-tracker (both) failed', e);
     }).then(step);
     authFetch('/stats?' + buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(e){
       if (String(e && e.message) !== 'AUTH') console.error('manager stats failed', e);
@@ -5073,7 +5078,7 @@ window.addEventListener('error', function(e){
     ]);
   }
   function tdRenderMgr(m){
-    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderAging(m); tdMvRenderCard(m); tdMgrRenderUnits(m);
+    tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMvRenderCard(m); tdMgrRenderUnits(m);
   }
   // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
   // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff.
@@ -5110,31 +5115,11 @@ window.addEventListener('error', function(e){
     // contract is unchanged; do not re-add renderers for them without asking.
     box.innerHTML = h;
   }
-  // M1 — aging-vacancy watchlist: op-vacant 60d+ in scope, oldest first, with price context
-  // from rentBasis (listed rent, else the last lease rent — /units rows carry NO market_rent;
-  // that key exists only on tour rows, so no market comparison here). NOT-listed = the hot
-  // flag: aging AND unmarketed is the actionable combination.
-  function tdMgrRenderAging(m){
-    var box = el('td-mgr-aging'); if (!box) return;
-    if (m.units === null){ box.innerHTML = '<div class="note">Could not load units.</div>'; return; }
-    // house stats convention (CLAUDE.md): owner take-backs + not-ready construction units are
-    // excluded everywhere — without this the list leads with decade-old zombie rows
-    // (live: "316- INACTIVE · vacant 4826d") and buries the actionable 60–120d units
-    var rows = m.units.filter(function(u){
-      return u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60 && !u.is_owner_takeback && !u.is_not_ready;
-    }).sort(function(a, b){ return (b.days_vacant || 0) - (a.days_vacant || 0); });
-    var h = '';
-    rows.slice(0, 10).forEach(function(u){
-      var label = (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '');
-      var rent = rentBasis(u);
-      var sub = 'vacant ' + (u.days_vacant || 0) + 'd' + ((rent != null && rent > 0) ? ' · ' + (u.is_listed ? 'listed ' : 'last rent ') + fmtMoney(rent) : '');
-      var flag = u.is_listed ? '<span class="chip c-warm">listed</span>' : '<span class="chip c-hot">NOT listed</span>';
-      h += '<div class="schoffer tdurow" data-uid="' + esc(String(u.unit_id)) + '" role="button" tabindex="0"><div class="schoffer-main"><b>' + esc(label) + '</b><div class="schoffer-sub">' + esc(sub) + '</div></div>' + flag + '</div>';
-    });
-    tdFill('td-mgr-aging', h, 0, 'No units vacant 60+ days in scope.');
-    var n = el('td-mgr-aging-n');
-    if (n) n.textContent = rows.length ? rows.length + ' aging' + (rows.length > 10 ? ' · showing 10' : '') : '';
-  }
+  // tdMgrRenderAging was MERGED into tdMgrRenderUnits (the "Unit movement" card) — see the
+  // comment there. It listed the same op-vacant 60d+ population as the Unit-updates feed but
+  // with the house exclusion applied, so the two cards printed two different counts for one
+  // thing. Its rent context (rentBasis + the listed / NOT-listed flag) survives on the merged
+  // card's aging rows; do not re-add a second aging card.
   function tdMgrRenderBrief(m){
     var box = el('td-mgr-brief'); if (!box) return;
     var L = [];
@@ -5264,20 +5249,28 @@ window.addEventListener('error', function(e){
     (box.closest('section.panel') || box).scrollIntoView({ behavior: 'smooth', block: 'start' });
     return true;
   }
+  // split render/paint (2026-07-28) so the "Show all" expander re-renders from the last rows
+  // instead of refetching — same shape as tdRwLast on the renewals card.
+  var tdMgrTasksLast = null;
   function tdMgrRenderTasks(m){
-    if (m.tasks === null){ tdFail('td-mgr-tasks', 'tasks'); return; }
-    var rows = m.tasks.slice().sort(function(a, b){
+    if (m.tasks === null){ tdMgrTasksLast = null; tdFail('td-mgr-tasks', 'tasks'); return; }
+    tdMgrTasksLast = m.tasks.slice().sort(function(a, b){
       var d = (b.is_overdue ? 1 : 0) - (a.is_overdue ? 1 : 0); if (d) return d;
       return (Date.parse(a.due_date || '') || 9e15) - (Date.parse(b.due_date || '') || 9e15);
     });
-    var h = '';
-    rows.slice(0, 8).forEach(function(t){
+    tdMgrTasksPaint();
+  }
+  function tdMgrTasksPaint(){
+    if (tdMgrTasksLast === null) return;
+    var rows = tdMgrTasksLast, h = '';
+    tdMoreSlice('tasks', rows).forEach(function(t){
       var due = t.is_overdue ? '<span class="chip c-hot">overdue</span>' : (t.due_date ? '<span class="chip c-warm">due ' + esc(String(t.due_date).slice(0, 10)) + '</span>' : '');
       var pri = (t.priority === 'High' || t.priority === 'Urgent') ? ' <span class="chip c-bad">' + esc(t.priority) + '</span>' : '';
       h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(t.title || t.category_name || 'Task') + '</b>' +
         '<div class="schoffer-sub">' + esc([t.property_name, t.unit_number].filter(Boolean).join(' · ')) + (t.assignee_name ? ' &middot; ' + esc(t.assignee_name) : '') + '</div></div>' + due + pri + '</div>';
     });
-    tdFill('td-mgr-tasks', h, rows.length, 'No open tasks in scope.');
+    // tdFill sets the header count from the FULL row count, not the capped slice
+    tdFill('td-mgr-tasks', h + tdMoreBtn('tasks', rows.length), rows.length, 'No open tasks in scope.');
   }
   // ── WS-M M5: the renewals card (5 stage chips + worklist rows + per-stage actions) ─────────
   // Rows + counts come from get_manager_brief.renewals = dashboard.v_renewal_worklist, which is
@@ -5449,24 +5442,88 @@ window.addEventListener('error', function(e){
   function tdRwChaseText(first, addr, end, me){
     return 'Hi ' + first + ', it\'s ' + me + ' with Live Furnished — a quick reminder that your lease renewal for ' + addr + ' is ready to e-sign. Please complete the signing request in your email before ' + end + ' so your renewal is all set. Happy to help if you have any questions!';
   }
+  // ── ONE "Show all" expander for the capped manager lists ──────────────────────────────
+  // Tasks capped at 8 rows and Unit movement at 10, with no way to reach the rest: you could
+  // read 8 of 113 open tasks and had to leave Today for the other 105. Two call sites is
+  // exactly where a third copy starts — add a call site here, never a second helper.
+  // tdMoreOpen is deliberately NOT persisted: expanded-by-default would undo the cap.
+  var TD_MORE_CAP = { units: 10, tasks: 8 };
+  var tdMoreOpen = {};
+  function tdMoreSlice(key, list){
+    return tdMoreOpen[key] ? list : list.slice(0, TD_MORE_CAP[key] || 10);
+  }
+  function tdMoreBtn(key, total){
+    var cap = TD_MORE_CAP[key] || 10;
+    if (total <= cap) return '';
+    return '<div class="tdmore"><button type="button" class="tdact" data-tdmore="' + esc(key) + '">' +
+      (tdMoreOpen[key] ? 'Show fewer' : 'Show all ' + total) + '</button></div>';
+  }
+  // ── ONE unit-movement card (merged 2026-07-28) ────────────────────────────────────────
+  // Was TWO cards — "Unit updates" and "Aging vacancies · 60d+" — both listing the SAME
+  // op-vacant 60d+ population, but only the Aging card applied the house exclusion (owner
+  // take-backs + not-ready construction units). One screen therefore carried two counts for
+  // one thing: live at merge time 139 and 22. The whole gap was owner take-backs — measured
+  // 63 of the 85 aging units, while 0 of 52 notices and 0 of 2 evictions were take-backs or
+  // not-ready, so applying the exclusion card-wide costs those two groups nothing.
+  // ONE population, ONE filter, ONE count. Do not reintroduce a second aging list.
+  var TD_MU_ORDER = ['evict', 'notice', 'aging'];
+  var TD_MU_META = {
+    evict:  { label: 'Eviction',   chip: 'c-bad',  w: 0 },
+    notice: { label: 'Notice',     chip: 'c-hot',  w: 1 },
+    aging:  { label: 'Aging 60d+', chip: 'c-cold', w: 4 }
+  };
+  var tdMuKindF = '';    // '' = every group
+  var tdMuLast = null;   // last built feed — chip and expander re-render from it, never refetch
   function tdMgrRenderUnits(m){
     var box = el('td-mgr-units'); if (!box) return;
-    if (m.units === null){ box.innerHTML = '<div class="note">Could not load units.</div>'; return; }
+    if (m.units === null){ tdMuLast = null; tdFail('td-mgr-units', 'units'); return; }
     var feed = [];
     m.units.forEach(function(u){
+      // the house stats convention (CLAUDE.md), now card-wide. Without it the aging rows lead
+      // with decade-old zombies (live: "316- INACTIVE · vacant 4826d") and bury the 60–120d
+      // units that can actually be acted on.
+      if (u.is_owner_takeback || u.is_not_ready) return;
       var label = (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '');
-      // WS-M M3 (D1): the move-in/move-out ≤14d lines are GONE — the Moves card owns move
-      // movement now (same units, richer stage state). This feed keeps only what the card
-      // does not carry: evictions, notices, and vacancy aging.
-      if (u.unit_event === 'Eviction Pending') feed.push({ w: 0, chip: '<span class="chip c-bad">eviction</span>', t: label, sub: u.tenant_names || '', id: u.unit_id });
-      else if (u.unit_event === 'Notice to Vacate') feed.push({ w: 1, chip: '<span class="chip c-hot">notice</span>', t: label, sub: (u.next_move_out ? 'moving out ' + u.next_move_out : '') + (u.tenant_names ? ' · ' + u.tenant_names : ''), id: u.unit_id });
-      if (u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60) feed.push({ w: 4, chip: '<span class="chip c-cold">aging</span>', t: label, sub: 'vacant ' + u.days_vacant + 'd' + (u.is_listed ? ' · listed' : ' · NOT listed'), id: u.unit_id });
+      // WS-M M3 (D1): the move-in/move-out ≤14d lines stay GONE — the Moves card owns move
+      // movement (same units, richer stage state). This feed keeps what that card does not.
+      if (u.unit_event === 'Eviction Pending')
+        feed.push({ k: 'evict', t: label, sub: u.tenant_names || '', id: u.unit_id, d: 0 });
+      else if (u.unit_event === 'Notice to Vacate')
+        feed.push({ k: 'notice', t: label, id: u.unit_id, d: 0,
+          sub: (u.next_move_out ? 'moving out ' + u.next_move_out : '') + (u.tenant_names ? ' · ' + u.tenant_names : '') });
+      if (u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60){
+        var rent = rentBasis(u);
+        feed.push({ k: 'aging', t: label, id: u.unit_id, d: u.days_vacant || 0,
+          sub: 'vacant ' + (u.days_vacant || 0) + 'd' + ((rent != null && rent > 0) ? ' · ' + (u.is_listed ? 'listed ' : 'last rent ') + fmtMoney(rent) : ''),
+          // aging AND unmarketed is the actionable combination — keep the flag from the old card
+          flag: u.is_listed ? '' : '<span class="chip c-hot">NOT listed</span>' });
+      }
     });
-    feed.sort(function(a, b){ return a.w - b.w; });
-    box.innerHTML = feed.slice(0, 10).map(function(f){
-      return '<div class="schoffer tdurow" data-uid="' + esc(String(f.id)) + '" role="button" tabindex="0"><div class="schoffer-main"><b>' + esc(f.t) + '</b>' + (f.sub ? '<div class="schoffer-sub">' + esc(f.sub) + '</div>' : '') + '</div>' + f.chip + '</div>';
-    }).join('') || '<div class="note">No unit movement right now.</div>';
-    var n = el('td-mgr-units-n'); if (n) n.textContent = feed.length ? feed.length + ' update' + (feed.length === 1 ? '' : 's') : '';
+    feed.sort(function(a, b){ return (TD_MU_META[a.k].w - TD_MU_META[b.k].w) || (b.d - a.d); });
+    tdMuLast = feed;
+    tdMuPaint();
+  }
+  function tdMuPaint(){
+    var box = el('td-mgr-units'); if (!box || tdMuLast === null) return;
+    var feed = tdMuLast;
+    var counts = {}; TD_MU_ORDER.forEach(function(k){ counts[k] = 0; });
+    feed.forEach(function(f){ if (counts[f.k] != null) counts[f.k]++; });
+    var chips = '<div class="mvchips">' + TD_MU_ORDER.map(function(k){
+      return '<button type="button" class="chip' + (tdMuKindF === k ? ' on' : '') + '" data-mu-kind="' + k + '">' +
+        TD_MU_META[k].label + ' ' + counts[k] + '</button>';
+    }).join('') + '</div>';
+    var vis = feed.filter(function(f){ return !tdMuKindF || f.k === tdMuKindF; });
+    var h = tdMoreSlice('units', vis).map(function(f){
+      return '<div class="schoffer tdurow" data-uid="' + esc(String(f.id)) + '" role="button" tabindex="0">' +
+        '<div class="schoffer-main"><b>' + esc(f.t) + '</b>' +
+        (f.sub ? '<div class="schoffer-sub">' + esc(f.sub) + '</div>' : '') + '</div>' +
+        (f.flag || '') + '<span class="chip ' + TD_MU_META[f.k].chip + '">' + TD_MU_META[f.k].label + '</span></div>';
+    }).join('');
+    box.innerHTML = chips + (h ? h + tdMoreBtn('units', vis.length)
+      : '<div class="note">' + (tdMuKindF ? 'Nothing in this group.' : 'No unit movement right now.') + '</div>');
+    // the header count is always the FULL population, never the filtered or capped one
+    var n = el('td-mgr-units-n');
+    if (n) n.textContent = feed.length ? feed.length + ' update' + (feed.length === 1 ? '' : 's') : '';
   }
   function tdMgrBriefGo(k){
     if (k === 'ledger'){ showTab('ledger'); return; }
@@ -5542,6 +5599,19 @@ window.addEventListener('error', function(e){
       var rnc = e.target.closest('[data-rn-chase]');
       if (rnc){ tdRwChase(rnc.getAttribute('data-rn-lease'), rnc.getAttribute('data-rn-chase')); return; }
       if (e.target.closest('[data-rn-moves]')){ tdMgrBriefGo('moves'); return; }
+      // Unit-movement group chips + the shared "Show all / Show fewer" expander. Both repaint
+      // from the stashed rows (tdMuLast / tdMgrTasksLast) — never a refetch, so a toggle cannot
+      // race the assembly or double-count. Checked BEFORE .tdurow: the chips sit in the same
+      // card and a chip click must not fall through and open a unit modal.
+      var muk = e.target.closest('[data-mu-kind]');
+      if (muk){ var mv2 = muk.getAttribute('data-mu-kind'); tdMuKindF = (tdMuKindF === mv2 ? '' : mv2); tdMuPaint(); return; }
+      var mo = e.target.closest('[data-tdmore]');
+      if (mo){
+        var mk = mo.getAttribute('data-tdmore');
+        tdMoreOpen[mk] = !tdMoreOpen[mk];
+        if (mk === 'units') tdMuPaint(); else if (mk === 'tasks') tdMgrTasksPaint();
+        return;
+      }
       var ur = e.target.closest('.tdurow');
       if (ur){ openUnitEnsure(ur.getAttribute('data-uid')); return; }
       var br = e.target.closest('.tdbrief');

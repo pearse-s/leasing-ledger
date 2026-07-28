@@ -741,7 +741,7 @@ window.addEventListener('error', function(e){
   .mvchips .chip{cursor:pointer;border:1px solid var(--hairline-dark);background:var(--glass-2)}
   .mvchips .chip.on{background:var(--clay-soft);border-color:rgba(232,180,62,.45);color:var(--clay)}
   .mvsec-h{font-family:var(--serif);font-weight:600;font-size:1rem;margin:14px 0 4px}
-  .mvtable{width:100%;border-collapse:collapse;font-size:.78rem;min-width:720px}
+  .mvtable{width:100%;border-collapse:collapse;font-size:.78rem;min-width:840px}   /* 8 columns since the Actions column landed (2026-07-27); .scrollx carries it on small screens */
   .mvtable th{font-size:.58rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:6px 8px;border-bottom:1px solid var(--hairline-dark);white-space:nowrap}
   .mvtable td{padding:8px;border-bottom:1px solid var(--hairline);vertical-align:top}
   .mvtable tr[data-mvl]{cursor:pointer}
@@ -755,6 +755,17 @@ window.addEventListener('error', function(e){
   .mvtick.man{color:var(--ink)}
   .mvtick.pend{color:var(--ink-soft);font-weight:600}
   .mvtick.warn{color:var(--clay)}
+  /* 2026-07-27: the tracker's tickable cells are buttons in place of the drawer round-trip.
+     40px min target (the touch-target rule) with negative margins so the row height is
+     unchanged — the button is the hit area, the chip inside it stays the same size. */
+  .mvtickb{background:none;border:1px solid transparent;border-radius:8px;cursor:pointer;padding:9px 10px;margin:-9px -10px;font:inherit;color:inherit;min-width:40px;min-height:40px}
+  .mvtickb:hover{border-color:var(--clay);background:rgba(232,180,62,.08)}
+  .mvtickb:disabled{opacity:.5;cursor:progress}
+  .mvacts{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+  .mvacts .tdact{padding:5px 8px}
+  .mvexp{margin-left:auto}
+  .mvdate{font:inherit;font-size:.82rem;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:8px;padding:6px 9px;min-height:40px}
+  @media (max-width:880px){ .mvexp{margin-left:0} }
   .srctag{display:inline-block;font-size:.58rem;font-weight:700;letter-spacing:.06em;border:1px solid var(--hairline-dark);border-radius:5px;padding:1px 6px;color:var(--ink-soft);text-decoration:none}
   .srctag.ok{color:var(--moss);border-color:rgba(157,190,134,.4)}
   .srctag.ghost{border-style:dashed;color:var(--clay)}
@@ -4397,6 +4408,18 @@ window.addEventListener('error', function(e){
     if (pr.length && pr.indexOf(String(r.property_id)) < 0) return false;
     return true;
   }
+  // ── the move date: ONE reader ─────────────────────────────────────────────
+  // effective_on (server, migrations 20260727010000/020000) = the manually recorded ACTUAL
+  // date when someone set one — the tenant who moved in early and nobody edited the lease —
+  // else Buildium's lease date. EVERY consumer reads tdMvOn(): display, sort, the day
+  // window, at-risk, SODA-days, the ghost events, the gcal draft and the export. Reading
+  // r.move_in_date/r.move_out_date directly is the bug: the row would count down to a day
+  // that already passed. Those stay on the row as provenance and render beside the actual.
+  function tdMvOn(r, k){
+    k = k || r.__k;
+    return r.effective_on || (k === 'in' ? r.move_in_date : r.move_out_date) || null;
+  }
+  function tdMvLeaseOn(r, k){ k = k || r.__k; return (k === 'in' ? r.move_in_date : r.move_out_date) || null; }
   // ── stage state: auto evidence beats manual; a manual 'cleared' undoes a manual 'done'
   // but never hides auto (the tracker views serve both side by side). NULL SD = UNKNOWN →
   // no chip, never "SD due" (the v229 lease_deposits rule).
@@ -4421,14 +4444,14 @@ window.addEventListener('error', function(e){
     };
   }
   function tdMvSodaDays(r){
-    var t = Date.parse(r.move_out_date || ''); if (!t || t > Date.now()) return 0;
+    var t = Date.parse(tdMvOn(r, 'out') || ''); if (!t || t > Date.now()) return 0;
     if (tdMvStagesOut(r).soda !== 'no') return 0;
     return Math.floor((Date.now() - t) / 86400000);
   }
   // At-risk (Pearse 2026-07-20): move-in inside 7 days AND (SD unpaid OR not cleaned);
   // move-out: SODA still outstanding 7+ days after the move (red at 10 — Alberta's deadline).
   function tdMvRiskIn(r){
-    var d = tdMgrDays(r.move_in_date);
+    var d = tdMgrDays(tdMvOn(r, 'in'));
     if (d == null || d < 0 || d > 7) return false;
     var s = tdMvStagesIn(r);
     return s.sd === 'due' || s.cleaned === 'no';
@@ -4457,7 +4480,7 @@ window.addEventListener('error', function(e){
   // Prefilled Google Calendar draft (D9: deep-link OUT for now — no write scope). All-day
   // event on the move date; creating + inviting cleaners stays a parked later phase.
   function tdMvGcalDraft(r){
-    var d = String((r.__k === 'in' ? r.move_in_date : r.move_out_date) || '').replace(/-/g, '');
+    var d = String(tdMvOn(r) || '').replace(/-/g, '');
     if (!d) return '';
     var t = (r.__k === 'in' ? 'Move-in' : 'Move-out') + ' — ' + tdMvWhere(r);
     return 'https://calendar.google.com/calendar/r/eventedit?text=' + encodeURIComponent(t) +
@@ -4477,18 +4500,22 @@ window.addEventListener('error', function(e){
     tdMvData.in_ = m.trackIn === null ? null : tdMvPrep(m.trackIn, 'in');
     tdMvData.out_ = m.trackOut === null ? null : tdMvPrep(m.trackOut, 'out');
     tdMvData.movesStale = !!(m.moves && m.moves.stale);
-    var n = el('td-mgr-moves-n');
-    if (n){
-      var bits = [];
-      if (tdMvData.in_) bits.push(tdMvData.in_.length + ' in');
-      if (tdMvData.out_) bits.push(tdMvData.out_.length + ' out');
-      var rk = (tdMvData.in_ || []).filter(function(r){ return r.__risk; }).length +
-               (tdMvData.out_ || []).filter(function(r){ return r.__risk; }).length;
-      if (rk) bits.push(rk + ' at risk');
-      if (tdMvData.movesStale) bits.push('mirror stale');
-      n.textContent = bits.join(' · ');
-    }
+    tdMvCountNote();
     tdMvShow();
+  }
+  // its own function so a tick or a date change refreshes the header count too — both can
+  // flip a row's at-risk state, and a stale "24 at risk" beside a corrected table is the
+  // chip-vs-number trap in miniature
+  function tdMvCountNote(){
+    var n = el('td-mgr-moves-n'); if (!n) return;
+    var bits = [];
+    if (tdMvData.in_) bits.push(tdMvData.in_.length + ' in');
+    if (tdMvData.out_) bits.push(tdMvData.out_.length + ' out');
+    var rk = (tdMvData.in_ || []).filter(function(r){ return r.__risk; }).length +
+             (tdMvData.out_ || []).filter(function(r){ return r.__risk; }).length;
+    if (rk) bits.push(rk + ' at risk');
+    if (tdMvData.movesStale) bits.push('mirror stale');
+    n.textContent = bits.join(' · ');
   }
   function tdMvShow(){
     var bar = el('td-mv-bar'), cal = el('td-mv-cal'), tr = el('td-mv-track');
@@ -4502,6 +4529,10 @@ window.addEventListener('error', function(e){
     if (tdMvView === 'cal') h += tg('cal', tdMvCalView, ['month', 'week'], ['Month', 'Week']);
     h += tg('kind', tdMvKind, ['both', 'in', 'out'], ['Both', 'In', 'Out']);
     if (tdMvView === 'track') h += tg('days', tdMvDays, ['30', '60', '90', 'all'], ['30d', '60d', '90d', 'All']);
+    // available in BOTH views — the export always writes the tracker set under the current
+    // filters, and the file's first row spells out which ones applied (a filter set in one
+    // view still counts in the other, so the note is what makes the file self-explaining)
+    h += '<button type="button" class="tdact mvexp" data-mv-export="1" title="Download the moves this card is showing">Export XLSX</button>';
     bar.innerHTML = h;
     cal.hidden = tdMvView !== 'cal';
     tr.hidden = tdMvView !== 'track';
@@ -4545,7 +4576,7 @@ window.addEventListener('error', function(e){
       });
       var from = info.startStr.slice(0, 10), to = info.endStr.slice(0, 10);
       tdMvGhostRows().forEach(function(r){
-        var d = r.__k === 'in' ? r.move_in_date : r.move_out_date;
+        var d = tdMvOn(r);
         if (!d || d < from || d >= to) return;
         evs.push({ id: 't' + r.__k + r.lease_id, title: tdMvWhere(r) + ' — no appt', start: d, allDay: true,
           classNames: ['fc-mv', 'fc-mv-ghost', r.__k === 'in' ? 'fc-mv-in' : 'fc-mv-out'],
@@ -4617,51 +4648,110 @@ window.addEventListener('error', function(e){
   }
   function tdMvWindowPass(r, k){
     if (tdMvDays === 'all') return true;
-    var d = k === 'in' ? r.move_in_date : r.move_out_date;
+    var d = tdMvOn(r, k);
     return !d || d <= dstr(new Date(Date.now() + Number(tdMvDays) * 86400000));
   }
   function tdMvDateCell(r, k){
-    var d = k === 'in' ? r.move_in_date : r.move_out_date;
+    var d = tdMvOn(r, k), lease = tdMvLeaseOn(r, k);
     var h = '<b>' + esc(String(d || '–')) + '</b>';
+    // a manually recorded date says so, and the lease date it replaced stays visible — the
+    // number and its provenance in one cell, so nobody has to open the drawer to ask why
+    // this row moved a week
+    if (r.actual_on) h += ' <span class="srctag ok" title="Actual date' + (r.actual_actor ? ' &middot; set by ' + esc(r.actual_actor) : '') + '">actual</span>' +
+      (lease && lease !== d ? '<div class="schoffer-sub">lease: ' + esc(String(lease)) + '</div>' : '');
     if (r.appt_at) h += ' <span class="srctag ok">' + esc(schEdFmt(r.appt_at, { hour: 'numeric', minute: '2-digit', hour12: true })) + (r.appt_tentative ? '?' : '') + '</span>';
     else h += ' <a class="srctag ghost" href="' + esc(tdMvGcalDraft(r)) + '" target="_blank" rel="noopener" title="Nothing booked — draft it in Google Calendar">no appt &#8599;</a>';
     return h;
+  }
+  // The tracker cells ARE the controls (Pearse 2026-07-27): a manager works a row without
+  // opening the drawer. Auto-detected stages stay plain text — Buildium already proved it,
+  // and a manual tick could never beat auto anyway (tdMvSt).
+  function tdMvTickCellBtn(r, k, stage, st, who, at){
+    var chip = tdMvTickCell(st, who, at);
+    if (st !== 'no' && st !== 'man') return chip;
+    return '<button type="button" class="mvtickb" data-mvtick="' + stage + '" data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k +
+      '" data-mvst="' + (st === 'man' ? 'cleared' : 'done') + '" title="' + (st === 'man' ? 'Undo this checkmark' : 'Mark done') + '">' + chip + '</button>';
+  }
+  // Contact is PII, so it is NOT in the tracker payload (the v_leases rule). The button
+  // fetches /move-detail for that one row on click and swaps itself for the call/text/email
+  // links — same "on click only" contract the drawer has, one tap instead of a modal.
+  function tdMvActionsCell(r, k){
+    var unit = '<button type="button" class="tdact" data-mvunit="' + esc(String(r.unit_id)) + '" title="Open the unit">Unit</button>';
+    var c = r.__contact;
+    var idAttrs = ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '"';
+    if (c === undefined) return '<div class="mvacts"><button type="button" class="tdact" ' + idAttrs + ' data-mvcontact="1">Contact</button>' + unit + '</div>';
+    if (c === null) return '<div class="mvacts"><span class="note">Contact failed</span>' + unit + '</div>';
+    if (!c.length) return '<div class="mvacts"><span class="note">No contact on file</span>' + unit + '</div>';
+    var c0 = c[0], nm = [c0.first_name, c0.last_name].filter(Boolean).join(' ');
+    var h = '<div class="mvacts" title="' + esc(nm || 'Tenant') + (c.length > 1 ? ' (+' + (c.length - 1) + ' more — open the row)' : '') + '">';
+    if (c0.phone) h += '<a class="tdact" href="' + esc(rcCall(String(c0.phone))) + '">&#128222;</a>' +
+      '<a class="tdact" href="' + esc(rcText(String(c0.phone), '')) + '">&#128172;</a>';
+    if (c0.email) h += '<a class="tdact" href="mailto:' + esc(String(c0.email)) + '">&#9993;</a>';
+    if (!c0.phone && !c0.email) h += '<span class="note">No phone or email</span>';
+    return h + unit + '</div>';
+  }
+  function tdMvContact(btn){
+    var leaseId = btn.getAttribute('data-mvl'), k = btn.getAttribute('data-mvk');
+    var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+    var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
+    if (!r) return;
+    btn.disabled = true; btn.textContent = 'Loading…';
+    authFetch('/move-detail?lease_id=' + encodeURIComponent(String(leaseId)) + '&kind=' + k).then(function(j){
+      r.__contact = (j && j.contact) || [];
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('move contact failed', e);
+      r.__contact = null;
+    }).then(function(){
+      // cached on the row, so a later re-render keeps the links (and a second click never refetches)
+      if (tdMvView === 'track') tdMvRenderTrack();
+    });
+  }
+  // the day window and the stage filter, split out so the table and the export read the SAME
+  // set — an export that re-derived its own rows is how a "filtered" file quietly ships the
+  // wrong ones (the Units-board uRowsCur lesson)
+  function tdMvWindowed(k){
+    var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+    return (L || []).filter(function(r){ return tdMvWindowPass(r, k); });
+  }
+  function tdMvVisible(k){
+    return tdMvWindowed(k).filter(function(r){ return tdMvPass(r, k, tdMvStageF); })
+      .sort(function(a, b){
+        var d = (b.__risk ? 1 : 0) - (a.__risk ? 1 : 0); if (d) return d;
+        var da = tdMvOn(a, k) || '9999', db = tdMvOn(b, k) || '9999';
+        return da < db ? -1 : (da > db ? 1 : 0);
+      });
   }
   function tdMvTrackTable(k){
     var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
     var head = k === 'in' ? 'Move-ins' : 'Move-outs';
     if (L === null) return '<div class="note">Could not load ' + head.toLowerCase() + '.</div>';
-    var rows = (L || []).filter(function(r){ return tdMvWindowPass(r, k); });
+    var rows = tdMvWindowed(k);
     var chips = '<div class="mvchips">' + TD_MV_FILT[k].map(function(f){
       var cnt = rows.filter(function(r){ return tdMvPass(r, k, f[0]); }).length;
       return '<button type="button" class="chip' + (tdMvStageF === f[0] ? ' on' : '') + '" data-mv-stage="' + f[0] + '">' + f[1] + ' ' + cnt + '</button>';
     }).join('') + '</div>';
-    var vis = rows.filter(function(r){ return tdMvPass(r, k, tdMvStageF); })
-      .sort(function(a, b){
-        var d = (b.__risk ? 1 : 0) - (a.__risk ? 1 : 0); if (d) return d;
-        var da = a[k === 'in' ? 'move_in_date' : 'move_out_date'] || '9999';
-        var db = b[k === 'in' ? 'move_in_date' : 'move_out_date'] || '9999';
-        return da < db ? -1 : (da > db ? 1 : 0);
-      });
+    var vis = tdMvVisible(k);
     var th = k === 'in'
-      ? '<tr><th>Unit</th><th>Incoming tenant</th><th>Move-in</th><th>SD</th><th>Clean</th><th>Insur</th><th>Inspect</th></tr>'
-      : '<tr><th>Unit</th><th>Outgoing tenant</th><th>Move-out</th><th>NTV</th><th>Inspect</th><th>SODA</th><th>Turned</th></tr>';
+      ? '<tr><th>Unit</th><th>Incoming tenant</th><th>Move-in</th><th>SD</th><th>Clean</th><th>Insur</th><th>Inspect</th><th>Actions</th></tr>'
+      : '<tr><th>Unit</th><th>Outgoing tenant</th><th>Move-out</th><th>NTV</th><th>Inspect</th><th>SODA</th><th>Turned</th><th>Actions</th></tr>';
     var body = vis.map(function(r){
       var s = k === 'in' ? tdMvStagesIn(r) : tdMvStagesOut(r);
       var cells = k === 'in'
-        ? '<td data-label="SD">' + tdMvTickCell(s.sd) + '</td>' +
-          '<td data-label="Clean">' + tdMvTickCell(s.cleaned, r.cleaned_manual_actor, r.cleaned_manual_at) + '</td>' +
-          '<td data-label="Insur">' + tdMvTickCell(s.insurance, r.insurance_manual_actor, r.insurance_manual_at) + '</td>' +
-          '<td data-label="Inspect">' + tdMvTickCell(s.inspection, r.inspection_manual_actor, r.inspection_manual_at) + '</td>'
-        : '<td data-label="NTV">' + tdMvTickCell(s.ntv, r.ntv_manual_actor, r.ntv_manual_at) + '</td>' +
-          '<td data-label="Inspect">' + tdMvTickCell(s.inspection, r.inspection_manual_actor, r.inspection_manual_at) + '</td>' +
-          '<td data-label="SODA">' + tdMvTickCell(s.soda, r.soda_manual_actor, r.soda_manual_at) + (tdMvSodaDays(r) >= 10 ? ' <span class="mvtick warn" title="10+ days past move-out">' + tdMvSodaDays(r) + 'd</span>' : '') + '</td>' +
-          '<td data-label="Turned">' + tdMvTickCell(s.turned, r.turned_manual_actor, r.turned_manual_at) + '</td>';
+        ? '<td data-label="SD">' + tdMvTickCell(s.sd) + '</td>' +   /* SD comes from the ledger — never tickable */
+          '<td data-label="Clean">' + tdMvTickCellBtn(r, k, 'cleaned', s.cleaned, r.cleaned_manual_actor, r.cleaned_manual_at) + '</td>' +
+          '<td data-label="Insur">' + tdMvTickCellBtn(r, k, 'insurance', s.insurance, r.insurance_manual_actor, r.insurance_manual_at) + '</td>' +
+          '<td data-label="Inspect">' + tdMvTickCellBtn(r, k, 'inspection', s.inspection, r.inspection_manual_actor, r.inspection_manual_at) + '</td>'
+        : '<td data-label="NTV">' + tdMvTickCellBtn(r, k, 'ntv', s.ntv, r.ntv_manual_actor, r.ntv_manual_at) + '</td>' +
+          '<td data-label="Inspect">' + tdMvTickCellBtn(r, k, 'inspection', s.inspection, r.inspection_manual_actor, r.inspection_manual_at) + '</td>' +
+          '<td data-label="SODA">' + tdMvTickCellBtn(r, k, 'soda', s.soda, r.soda_manual_actor, r.soda_manual_at) + (tdMvSodaDays(r) >= 10 ? ' <span class="mvtick warn" title="10+ days past move-out">' + tdMvSodaDays(r) + 'd</span>' : '') + '</td>' +
+          '<td data-label="Turned">' + tdMvTickCellBtn(r, k, 'turned', s.turned, r.turned_manual_actor, r.turned_manual_at) + '</td>';
       return '<tr' + (r.__risk ? ' class="mvrisk"' : '') + ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '" role="button" tabindex="0">' +
         '<td data-label="Unit"><b>' + esc([r.property_name, r.unit_number].filter(Boolean).join(' · ')) + '</b>' +
           (r.address_line1 ? '<div class="schoffer-sub">' + esc(r.address_line1) + '</div>' : '') + '</td>' +
         '<td data-label="Tenant">' + esc((k === 'in' ? r.incoming_tenant_names : r.outgoing_tenant_names) || '–') + '</td>' +
-        '<td data-label="' + head.slice(0, -1) + '">' + tdMvDateCell(r, k) + '</td>' + cells + '</tr>';
+        '<td data-label="' + head.slice(0, -1) + '">' + tdMvDateCell(r, k) + '</td>' + cells +
+        '<td data-label="Actions">' + tdMvActionsCell(r, k) + '</td></tr>';
     }).join('');
     return '<div class="mvsec-h">' + head + ' <span class="qn2">' + vis.length + (vis.length === rows.length ? '' : ' of ' + rows.length) + '</span></div>' +
       chips + (body ? '<div class="scrollx"><table class="mvtable" id="td-mv-t' + k + '"><thead>' + th + '</thead><tbody>' + body + '</tbody></table></div>'
@@ -4674,6 +4764,76 @@ window.addEventListener('error', function(e){
     if (tdMvKind !== 'in') h += tdMvTrackTable('out');
     tr.innerHTML = h;
   }
+  /* ── Moves export (Pearse 2026-07-27) ──────────────────────────────────────
+     REUSES the generic xlsxDownload writer from the Units board — never a second
+     copy. Writes tdMvVisible(), i.e. exactly the rows the tracker is showing under
+     the current In/Out, day-window and stage filters plus the sidebar scope, in the
+     on-screen order. Move-ins and move-outs share ONE sheet with a Move column; the
+     stage columns that don't apply to a kind stay blank. Contact is NEVER exported —
+     it is PII fetched per row on click and lives only on __contact. */
+  function tdMvXlSt(st){
+    return st === 'auto' ? 'Yes (auto)' : st === 'man' ? 'Yes (manual)'
+      : st === 'due' ? 'Due' : st === 'unk' ? 'Unknown' : 'No';
+  }
+  function tdMvXlStage(key){
+    return function(r){
+      var s = r.__k === 'in' ? tdMvStagesIn(r) : tdMvStagesOut(r);
+      return (key in s) ? tdMvXlSt(s[key]) : '';   // blank = not a stage of this move kind
+    };
+  }
+  var MV_XL_COLS = [
+    { label:'Move',          w:10, get:function(r){ return r.__k === 'in' ? 'Move-in' : 'Move-out'; } },
+    { label:'Date',          w:12, get:function(r){ return tdMvOn(r) || ''; } },
+    { label:'Date source',   w:14, get:function(r){ return r.actual_on ? 'Actual (manual)' : 'Lease'; } },
+    { label:'Lease date',    w:12, get:function(r){ return tdMvLeaseOn(r) || ''; } },
+    { label:'Actual set by', w:16, key:'actual_actor' },
+    { label:'Days out',      w:10, type:'num', get:function(r){ return tdMgrDays(tdMvOn(r)); } },
+    { label:'At risk',       w:9,  get:function(r){ return r.__risk ? 'Yes' : 'No'; } },
+    { label:'Property',      w:26, key:'property_name' },
+    { label:'Building',      w:18, key:'building_name' },
+    { label:'Unit',          w:10, key:'unit_number' },
+    { label:'Address',       w:26, key:'address_line1' },
+    { label:'Tenant',        w:26, get:function(r){ return (r.__k === 'in' ? r.incoming_tenant_names : r.outgoing_tenant_names) || ''; } },
+    { label:'Appointment',   w:20, get:function(r){ return r.appt_at ? schEdFmt(r.appt_at, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true }) + (r.appt_tentative ? ' (tentative)' : '') : 'none booked'; } },
+    { label:'Security deposit', w:16, get:function(r){ return r.__k === 'in' ? tdMvXlSt(tdMvStagesIn(r).sd) : ''; } },
+    { label:'Welcome email', w:14, get:tdMvXlStage('welcome') },
+    { label:'Cleaned',       w:12, get:tdMvXlStage('cleaned') },
+    { label:'Insurance',     w:12, get:tdMvXlStage('insurance') },
+    { label:'Inspection',    w:14, get:tdMvXlStage('inspection') },
+    { label:'NTV signed',    w:12, get:tdMvXlStage('ntv') },
+    { label:'SODA sent',     w:12, get:tdMvXlStage('soda') },
+    { label:'Days since move-out', w:16, type:'num', get:function(r){ return r.__k === 'out' ? (tdMvSodaDays(r) || null) : null; } },
+    { label:'Turned',        w:10, get:tdMvXlStage('turned') },
+    { label:'Manager',       w:18, key:'property_manager_name' },
+    { label:'Owner',         w:22, key:'primary_owner_name' },
+    { label:'Lease ID',      w:11, type:'num', key:'lease_id' },
+    { label:'Unit ID',       w:10, type:'num', key:'unit_id' }
+  ];
+  function tdMvFilterBits(){
+    var bits = [tdMvKind === 'both' ? 'Move-ins and move-outs' : (tdMvKind === 'in' ? 'Move-ins only' : 'Move-outs only'),
+      tdMvDays === 'all' ? 'Window: all dates' : 'Window: next ' + tdMvDays + ' days'];
+    if (tdMvStageF !== 'all'){
+      var lst = TD_MV_FILT[tdMvKind === 'out' ? 'out' : 'in'], lab = tdMvStageF;
+      for (var i = 0; i < lst.length; i++) if (lst[i][0] === tdMvStageF) lab = lst[i][1];
+      bits.push('Stage: ' + String(lab).replace(/&#\d+;/g, '').trim());   // chip labels carry entities (⚠)
+    }
+    ['managers', 'owners', 'properties'].forEach(function(key){
+      var names = msLabels(key);   // the Units-export helper: real names, not raw ids
+      if (names.length) bits.push(key.charAt(0).toUpperCase() + key.slice(1) + ': ' + names.join(', '));
+    });
+    return bits;
+  }
+  function tdMvExport(){
+    var rows = [];
+    if (tdMvKind !== 'out') rows = rows.concat(tdMvVisible('in'));
+    if (tdMvKind !== 'in') rows = rows.concat(tdMvVisible('out'));
+    if (!rows.length){ alert('Nothing matches the current filters — nothing to export.'); return; }
+    var bits = tdMvFilterBits(), today = dstr(new Date());
+    var note = rows.length + ' moves · exported ' + today + ' · ' + bits.join(' · ');
+    var slug = bits.slice(0, 2).join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    xlsxDownload('moves-' + today + (slug ? '-' + slug : '') + '.xlsx',
+      { sheet:'Moves', note: note, cols: MV_XL_COLS, rows: rows });
+  }
   // ── the move drawer ───────────────────────────────────────────────────────
   function tdMvTickBtn(r, stage, st){
     if (st === 'auto') return '<span class="mvtick ok">&#10003; auto</span>';
@@ -4682,7 +4842,7 @@ window.addEventListener('error', function(e){
   }
   function tdMvDrawerBody(r, det){
     var k = r.__k, s = k === 'in' ? tdMvStagesIn(r) : tdMvStagesOut(r);
-    var d = k === 'in' ? r.move_in_date : r.move_out_date;
+    var d = tdMvOn(r, k);
     var h = '<div class="lmhead"><h3>' + esc(tdMvWhere(r)) + ' &middot; ' + (k === 'in' ? 'move-in' : 'move-out') + ' ' + esc(String(d || '')) + '</h3>' +
       '<div class="lmsub">' + esc((k === 'in' ? r.incoming_tenant_names : r.outgoing_tenant_names) || '') +
       (r.property_manager_name ? ' &middot; Manager: ' + esc(r.property_manager_name) : '') + (r.__risk ? ' &middot; <span class="mvtick warn">&#9888; at risk</span>' : '') + '</div></div><div class="lmbody">';
@@ -4705,7 +4865,7 @@ window.addEventListener('error', function(e){
         var amt = (Number(r.sd_charged) || 0) - (Number(r.sd_paid) || 0);
         var msg = 'Hi ' + first + ', a friendly reminder from Live Furnished: the security deposit' +
           (amt > 0 ? ' balance of ' + fmtMoney(amt) : '') + ' for ' + tdMvWhere(r) +
-          ' is still outstanding and needs to be received before your move-in on ' + String(r.move_in_date || '') + '. Reply here if you have any questions.';
+          ' is still outstanding and needs to be received before your move-in on ' + String(tdMvOn(r, 'in') || '') + '. Reply here if you have any questions.';
         h += '<div class="mvd-row">' +
           (c0.phone ? '<a class="tdact" href="' + esc(rcText(String(c0.phone), msg)) + '">&#128172; Send SD reminder text</a> ' : '') +
           (c0.email ? '<a class="tdact" href="mailto:' + esc(String(c0.email)) + '?subject=' + encodeURIComponent('Security deposit — ' + tdMvWhere(r)) + '&body=' + encodeURIComponent(msg) + '">&#9993; SD reminder email</a>' : '') + '</div>';
@@ -4721,6 +4881,23 @@ window.addEventListener('error', function(e){
         (r.other_charged ? '<div class="mvd-row">Other charges: ' + fmtMoney(r.other_paid || 0) + ' of ' + fmtMoney(r.other_charged) + '</div>' : '') +
         (r.ledger_balance != null ? '<div class="mvd-row"><b>Balance to clear before keys: ' + fmtMoney(r.ledger_balance) + '</b></div>' : '') + '</div>';
     }
+    // the actual move date (Pearse 2026-07-27) — for the tenant who moved in early with
+    // nothing recording it. For a move-IN this writes lease_attributions.move_in_date, the
+    // SAME override the Signed-leases table edits, so the two surfaces can never disagree;
+    // for a move-OUT it writes move_out_actual_dates. Blank + Save, or "Use the lease date",
+    // clears it. The lease date is never overwritten — it stays below as provenance.
+    var mvLease = tdMvLeaseOn(r, k), mvIds = ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '"';
+    h += '<div class="orcfg-h">Move date</div>' +
+      '<div class="mvd-row"><input type="date" id="mv-d-date" class="mvdate" min="2020-01-01" max="2035-12-31" value="' + esc(String(d || '')) + '">' +
+      '<button type="button" class="tdact"' + mvIds + ' data-mvdate="save">Save actual date</button>' +
+      (r.actual_on ? '<button type="button" class="tdact"' + mvIds + ' data-mvdate="clear">Use the lease date</button>' : '') + '</div>' +
+      '<div class="mvd-row note">' + (r.actual_on
+        ? 'Actual date' + (r.actual_actor ? ' &middot; set by ' + esc(r.actual_actor) : '') +
+          (r.actual_at ? ' on ' + esc(String(r.actual_at).slice(0, 10)) : '') +
+          ' &middot; the lease says ' + esc(String(mvLease || '–'))
+        : 'Following the lease (' + esc(String(mvLease || '–')) + '). Set a date if they moved ' +
+          (k === 'in' ? 'in' : 'out') + ' on a different day.') +
+      (k === 'in' ? ' Shared with the Signed leases table.' : '') + '</div>';
     // checklist
     var steps = k === 'in'
       ? [['welcome', 'Welcome email sent', s.welcome], ['sd', 'SD paid (gates booking)', s.sd],
@@ -4747,6 +4924,13 @@ window.addEventListener('error', function(e){
           }).join('') : '<span class="note">No documents on the lease, unit or tenants.</span>')) + '</div>';
     return h + '</div>';
   }
+  // tdMvOpen OPENS the drawer when it is closed, so a write that happened ON THE TABLE must
+  // never call it directly — the row would sprout a modal, which is exactly what ticking in
+  // place is meant to avoid. Refresh the drawer only when it is already showing.
+  function tdMvRefreshDrawer(k, leaseId){
+    var mm = el('mvmodal');
+    if (mm && mm.classList.contains('open')) tdMvOpen(k, leaseId);
+  }
   function tdMvOpen(k, leaseId){
     var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
     var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
@@ -4764,13 +4948,18 @@ window.addEventListener('error', function(e){
       body.innerHTML = tdMvDrawerBody(r, null);
     });
   }
+  // The UI keys stages by the tracker views' COLUMN prefix ('welcome' -> welcome_manual_*),
+  // but move_stage_ticks.stage — and the route's allow-list — use the DB value. The two
+  // differ for exactly these two, and posting the UI key 400s: that is why "Welcome email
+  // sent" and "Signed notice to vacate" could never be ticked (move_stage_ticks was empty).
+  var TD_MV_STAGE_API = { welcome: 'welcome_email', ntv: 'ntv_signed' };
   function tdMvTick(btn){
     var leaseId = Number(btn.getAttribute('data-mvl')), k = btn.getAttribute('data-mvk');
     var stage = btn.getAttribute('data-mvtick'), state = btn.getAttribute('data-mvst') || 'done';
     var actor = getActor();
     if (!actor){ alert('Pick your name first (the actor selector in the sidebar).'); return; }
     btn.disabled = true;
-    postJSON('/move/tick', { lease_id: leaseId, move_kind: k, stage: stage, state: state, actor: actor }).then(function(j){
+    postJSON('/move/tick', { lease_id: leaseId, move_kind: k, stage: TD_MV_STAGE_API[stage] || stage, state: state, actor: actor }).then(function(j){
       var t = (j && j.tick) || {};
       var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
       var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
@@ -4779,12 +4968,41 @@ window.addEventListener('error', function(e){
         r[stage + '_manual_actor'] = t.actor || actor;
         r[stage + '_manual_at'] = t.noted_at || new Date().toISOString();
         r.__risk = (k === 'in') ? tdMvRiskIn(r) : tdMvRiskOut(r);
-        tdMvOpen(k, leaseId);                       // re-render the drawer from local state
+        tdMvRefreshDrawer(k, leaseId);
+        tdMvCountNote();
         if (tdMvView === 'track') tdMvRenderTrack();
       }
     }).catch(function(e){
       btn.disabled = false;
       if (String(e && e.message) !== 'AUTH') alert('Could not save that checkmark — try again.');
+    });
+  }
+  // Set / clear the actual move date. Kept beside tdMvTick because it shares the contract:
+  // actor required, optimistic local update, then re-render whatever view is showing —
+  // at-risk and the day window both read the date, so a change can move a row's bucket.
+  function tdMvSetDate(k, leaseId, val, btn){
+    var actor = getActor();
+    if (!actor){ alert('Pick your name first (the actor selector in the sidebar).'); return; }
+    var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+    var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
+    if (!r) return;
+    if (btn) btn.disabled = true;
+    postJSON('/move/date', { lease_id: Number(leaseId), move_kind: k, actual_on: val || '', actor: actor }).then(function(j){
+      var d = (j && j.date) || {};
+      r.actual_on = d.actual_on || null;
+      r.actual_actor = r.actual_on ? (d.actor || actor) : null;
+      r.actual_at = r.actual_on ? (d.noted_at || new Date().toISOString()) : null;
+      r.effective_on = r.actual_on || tdMvLeaseOn(r, k);
+      r.__risk = (k === 'in') ? tdMvRiskIn(r) : tdMvRiskOut(r);
+      tdMvRefreshDrawer(k, leaseId);
+      tdMvCountNote();
+      if (tdMvView === 'track') tdMvRenderTrack();
+      else if (mvcal) mvcal.refetchEvents();       // the ghost event carries the date too
+    }).catch(function(e){
+      if (btn) btn.disabled = false;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('move date save failed', e);
+      alert('Could not save that date — try again.');
     });
   }
   function tdMgrAssemble(){
@@ -5274,9 +5492,18 @@ window.addEventListener('error', function(e){
       // WS-M M3: Moves-card controls + tracker rows (the card lives inside this grid)
       var mvc = e.target.closest('[data-mv-view],[data-mv-cal],[data-mv-kind],[data-mv-days],[data-mv-stage]');
       if (mvc){ tdMvCtl(mvc); return; }
+      if (e.target.closest('[data-mv-export]')){ tdMvExport(); return; }
+      // 2026-07-27: the row's own controls are checked BEFORE the row itself, or every
+      // in-place action would fall through and open the drawer instead
+      var mvtk = e.target.closest('[data-mvtick]');
+      if (mvtk){ tdMvTick(mvtk); return; }
+      var mvct = e.target.closest('[data-mvcontact]');
+      if (mvct){ tdMvContact(mvct); return; }
+      var mvun = e.target.closest('[data-mvunit]');
+      if (mvun){ openUnitEnsure(mvun.getAttribute('data-mvunit')); return; }
       var mvr = e.target.closest('tr[data-mvl]');
       if (mvr){
-        if (e.target.closest('a')) return;   // the "no appt ↗" gcal-draft link keeps its default
+        if (e.target.closest('a')) return;   // the "no appt ↗" gcal-draft link and the row's call/text/email keep their default
         tdMvOpen(mvr.getAttribute('data-mvk'), mvr.getAttribute('data-mvl'));
         return;
       }
@@ -5320,6 +5547,13 @@ window.addEventListener('error', function(e){
     mm.addEventListener('click', function(e){
       var t = e.target.closest('[data-mvtick]');
       if (t){ tdMvTick(t); return; }
+      var dt = e.target.closest('[data-mvdate]');
+      if (dt){
+        var inp = el('mv-d-date');
+        tdMvSetDate(dt.getAttribute('data-mvk'), dt.getAttribute('data-mvl'),
+          dt.getAttribute('data-mvdate') === 'clear' ? '' : (inp ? inp.value : ''), dt);
+        return;
+      }
       var u = e.target.closest('[data-uid]');
       if (u){ closeModal('mvmodal'); openUnitEnsure(u.getAttribute('data-uid')); }   // the mimodal precedent
     });

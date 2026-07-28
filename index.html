@@ -5675,17 +5675,42 @@ window.addEventListener('error', function(e){
   function idApplyAdmin(){
     applyRole((authIdent && authIdent.role === 'admin') ? 'admin' : pwTierRole);
   }
+  // In-flight dedup. The tmRoster === null guard below stays true for the WHOLE flight, so
+  // concurrent callers each used to send their own /team-roster: on a normal signed-in manager
+  // boot that is TWO requests in one tick (startApp and tdRender's manager branch), and role-chip
+  // mashing during a slow response multiplies it. The flag + queue collapse them into one flight;
+  // every caller is still served, and every future caller is immune to the same class of bug.
+  // Both synchronous returns below are DELIBERATE and must stay synchronous (fn v277): the
+  // no-token path fires cb in the same tick, and tdRender's manager branch only re-enters
+  // tdRender once tmRoster !== null — a PROGRESS predicate, the only thing that catches
+  // synchronous re-entry. Deferring these callbacks would trade that stack overflow for a
+  // silent infinite async loop.
+  var tmRosterLoading = false, tmRosterQ = [];
   function idRosterLoad(cb){
     if (tmRoster !== null){ if (cb) cb(); return; }
     if (!TOKEN){ if (cb) cb(); return; }   // pre-login: nothing to fetch yet
+    if (cb) tmRosterQ.push(cb);
+    if (tmRosterLoading) return;           // a flight is already up — its settle serves this cb
+    tmRosterLoading = true;
     authFetch('/team-roster').then(function(j){
-      tmRoster = (j && j.roster) || [];
-      if (cb) cb();
+      tmRosterSettle((j && j.roster) || []);
     }).catch(function(e){
-      tmRoster = [];
       if (String(e && e.message) !== 'AUTH') console.error('team-roster failed', e);
-      if (cb) cb();
+      tmRosterSettle([]);   // [] = loaded, no tailoring (and no retry storm behind a dead token)
     });
+  }
+  // Settle exactly once: roster first, then the flag, THEN drain — so a queued callback that
+  // calls idRosterLoad again takes the cached synchronous path instead of opening a second
+  // flight. The queue is swapped out before it runs, and each callback is isolated, so one
+  // throw can neither strand the rest nor (as the old shape did, via .then throwing into
+  // .catch) wipe a good roster to empty and fire the same callback twice.
+  function tmRosterSettle(rows){
+    tmRoster = rows;
+    tmRosterLoading = false;
+    var q = tmRosterQ; tmRosterQ = [];
+    for (var i = 0; i < q.length; i++){
+      try { q[i](); } catch (e) { console.error('team-roster callback failed', e); }
+    }
   }
   function idRosterMatch(name){
     var n = String(name || '').trim().toLowerCase();

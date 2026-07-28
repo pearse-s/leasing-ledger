@@ -3814,7 +3814,10 @@ window.addEventListener('error', function(e){
       b.style.display = (idLock && idLock.role && r !== idLock.role) ? 'none' : '';
     });
   }
-  function loadToday(){ todayLoaded = 1; tdSyncRoles(); tdRender(); }
+  // the !TOKEN guard sits ABOVE todayLoaded = 1 deliberately: marking Today "loaded" from a
+  // signed-out call would make the next authenticated showTab('today') skip loadToday entirely
+  // (2147 only loads when todayLoaded === null), leaving the tab blank for the rest of the session.
+  function loadToday(){ if (!TOKEN) return; todayLoaded = 1; tdSyncRoles(); tdRender(); }
   function tdPanel(id, title, gotoTab, gotoLabel, wide){
     return '<section class="panel tdq' + (wide ? ' tdwide' : '') + '">' +
       '<h3>' + title + ' <span class="qn2" id="' + id + '-n"></span></h3>' +
@@ -3832,6 +3835,11 @@ window.addEventListener('error', function(e){
   function tdSub(txt){ var s = el('td-sub'); if (s) s.textContent = txt; }
   function tdRender(){
     var g = el('td-grid'); if (!g) return;
+    // Signed out there is nothing to render and nothing that could load: every panel would
+    // fire an unauthenticated request, each 401 would re-enter onAuthFail, and the brief would
+    // print "All clear" off zero data. Mirrors the guard the hashchange router already has.
+    // No-op for anyone signed in — TOKEN is only ever falsy behind the login veil.
+    if (!TOKEN) return;
     tdReq++;   // anything still in flight from the previous render/role is now stale
     var role = tdRole();
     // coordinator = the scheduling workspace (moved Schedule page + team calendar);
@@ -3858,7 +3866,19 @@ window.addEventListener('error', function(e){
       tdSub(idLock && idLock.role === 'manager'
         ? 'Manager — scoped to you (' + idLock.name + ')' + (idLock.pmId ? '' : ' — no Buildium portfolio linked, showing company-wide') + '. The brief first, then moves, renewals, tasks and unit movement.'
         : 'Manager — the brief first, then moves, renewals, tasks and unit movement across your scope.');
-      if (tmRoster === null){ var wq = tdReq; idRosterLoad(function(){ if (wq === tdReq && tdRole() === 'manager') tdRender(); }); }
+      // idRosterLoad fires its callback SYNCHRONOUSLY on its no-token path (nothing to fetch
+      // yet), which used to re-enter tdRender with tmRoster STILL null — the same guard, the
+      // same state, forever: RangeError and an empty #td-grid, because the recursion happens
+      // above the g.innerHTML below. The wq/tdReq generation guard cannot catch this: each
+      // frame captures the counter it just bumped, so every level's check passes. A generation
+      // defends against a STALE ASYNC resolve; only a PROGRESS predicate defends against
+      // synchronous re-entry — hence tmRoster !== null. (Do NOT also require TOKEN in the
+      // callback: a roster request sent with a still-good token can legitimately land after a
+      // 401 cleared it, and skipping that repaint loses the admin "working as" strip.)
+      if (tmRoster === null && TOKEN){
+        var wq = tdReq;
+        idRosterLoad(function(){ if (wq === tdReq && tmRoster !== null && tdRole() === 'manager') tdRender(); });
+      }
       // Card order is Pearse's (2026-07-24): moves → renewals → tasks → unit updates → aging.
       // Only the MARKUP moved; every element id is unchanged, and tdRenderMgr() fills by id, so
       // the render order below it stays irrelevant (CLAUDE.md "move markup, keep element ids").
@@ -5164,7 +5184,15 @@ window.addEventListener('error', function(e){
       // parenthetical silently never rendered. The real key is vacancy.op_vacancy_rate.
       L.push({ k: 'ledger', t: 'Op vacancy ' + (v.op_vacant != null ? v.op_vacant : '–') + (v.op_vacancy_rate != null ? ' (' + v.op_vacancy_rate + '%)' : '') + (old60 ? ' — ' + old60 + ' vacant 60+ days' : '') });
     }
-    if (!L.length) L.push({ k: 'ledger', t: 'All clear — nothing needs you this morning.' });
+    // "All clear" is a CLAIM, and every line above it is gated on its source having loaded —
+    // so with all six sources null (a 500 storm, or a render that got no data) the brief used
+    // to print reassurance built from nothing, sitting above four "Could not load" panels.
+    // Say it only when at least one source actually answered.
+    if (!L.length){
+      var loaded = !!(m.stats || m.tasks || m.renewals || m.units || m.trackIn || m.trackOut);
+      L.push({ k: 'ledger', t: loaded ? 'All clear — nothing needs you this morning.'
+        : 'Could not load the brief — none of its sources answered. Try refreshing.' });
+    }
     box.innerHTML = L.map(function(x){ return '<button type="button" class="tdbrief" data-mgr="' + x.k + '">' + esc(x.t) + '</button>'; }).join('');
   }
   function tdMgrRenderPulse(m){
@@ -11148,6 +11176,16 @@ window.addEventListener('error', function(e){
     el('page-owners').style.display = 'none';
     el('page-keys').style.display = 'none';
     el('page-history').style.display = 'none';
+    // These four were missed when their tabs were added, so signing out with one of them open
+    // left it displayed behind the login veil — which is what let onScopeChange see
+    // page-today as 'block' and drive a whole render cycle with no token. Resetting
+    // todayLoaded matters just as much: without it a re-login skips loadToday (todayLoaded is
+    // still 1) and Today never repaints, stranding the manager on pre-sign-out content.
+    el('page-today').style.display = 'none';
+    el('page-leases').style.display = 'none';
+    el('page-renewals').style.display = 'none';
+    el('page-tasks').style.display = 'none';
+    todayLoaded = null;
     ACTIVE_TAB = 'ledger';   // clean slate so the next login (or deep link) lands deterministically
     el('login').style.display = 'flex';
     setTimeout(function(){ try { el('loginpw').focus(); } catch (e) {} }, 60);

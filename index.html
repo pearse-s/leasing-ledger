@@ -2048,7 +2048,7 @@ window.addEventListener('error', function(e){
     #page-hub .sltools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 2px}
     #page-hub .sltools select,#page-hub .sltools input[type=search]{min-height:40px;font-size:13px}
     #page-hub .sltools input[type=search]{flex:1 1 220px;min-width:0}
-    #page-hub .sltools .chip-mini{min-height:40px}
+    #page-hub .sltools .chip-mini,#page-hub .sltools .rfreshbtn{min-height:40px}
     /* funnel/KPI tiles (also the team-health tiles) — class-based so they compact on mobile */
     #page-hub .hubtile{background:var(--glass);border-radius:14px;padding:14px 12px;text-align:center}
     #page-hub .hubtile-l{font-size:.72rem;color:var(--ink-soft);letter-spacing:.05em;text-transform:uppercase}
@@ -2219,6 +2219,7 @@ window.addEventListener('error', function(e){
           </select>
           <input type="search" id="sl-q" placeholder="Search tenant, property, unit or agent" autocomplete="off">
           <button type="button" class="chip-mini" id="sl-clear">Clear filters</button>
+          <button type="button" class="rfreshbtn" id="sl-export" title="Download the signed leases matching the current filters as an Excel workbook">&#8681; Export XLSX</button>
         </div>
         <div class="qchips" id="hub-team-leases-chips"></div>
         <div class="qchips" id="hub-team-leases-agents"></div>
@@ -2996,6 +2997,7 @@ window.addEventListener('error', function(e){
     <div class="lmbody">
       <div class="ls-facts" id="lst-facts"></div>
       <div class="ls-src" id="lst-src"></div>
+      <div class="qchips" id="lst-chips" style="margin-bottom:6px"></div>
       <div class="ls-scroll" id="lst-body"></div>
     </div>
     <div class="lmfoot" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -11810,7 +11812,7 @@ window.addEventListener('error', function(e){
       // the sidebar window. Silently repointing them under a different range is exactly the
       // chip-says-57-list-shows-18 trap.
       hubSlRows = null, hubTeamLeasesQ = '', hubTeamLeasesAgent = '', hubTeamLeasesRange = 'window',
-      hubSignedQ = '';
+      hubSignedQ = '', slRowsCur = [];
   function hubWindow(){ return windowDates(); }   // unified with the global sidebar Activity window (state.from/to)
   // The signed-leases table reads THIS, never hubTeamSigned directly.
   function slRows(){ return (hubTeamLeasesRange === 'window' ? hubTeamSigned : hubSlRows) || []; }
@@ -12547,6 +12549,10 @@ window.addEventListener('error', function(e){
     });
     var raw = (hubTeamLeasesSort.k === 'signed_date' || hubTeamLeasesSort.k === 'move_in_date');
     rows.sort(cmpRows(hubTeamLeasesSort.k, hubTeamLeasesSort.d, raw));
+    // The FULL filtered+sorted set — what the XLSX export writes. The table itself renders
+    // only the first 500, so the export must never re-derive its own rows (a "filtered"
+    // file that quietly disagrees with the screen is the failure mode here).
+    slRowsCur = rows;
     var h = '';
     rows.slice(0, 500).forEach(function(r){
       // Credited colour = attribution state: confirmed/assigned = green (no arrow),
@@ -12772,6 +12778,45 @@ window.addEventListener('error', function(e){
   if (el('hs-q')) el('hs-q').addEventListener('input', function(){
     hubSignedQ = this.value || ''; hubRenderSigned();
   });
+  /* Signed-leases XLSX. REUSES the generic xlsxDownload writer from the Units board —
+     never a second copy (the same rule the moves export follows). */
+  var SL_XL_COLS = [
+    { label:'Property',     key:'property_name', w:30 },
+    { label:'Unit',         key:'unit_number', w:12 },
+    { label:'Signed',       w:12, get:function(r){ return (r.signed_date || '').slice(0, 10); } },
+    { label:'Tenant',       key:'tenant_name', w:24 },
+    { label:'Credited',     w:20, get:function(r){ return slAgentOf(r); } },
+    { label:'Attribution',  w:13, get:function(r){ return r.status === 'confirmed' ? 'confirmed' : (r.suggested_agent ? 'suggested' : 'unclaimed'); } },
+    { label:'Lease status', key:'lease_status', w:12 },
+    { label:'Rent',         key:'rent', type:'money', w:12 },
+    { label:'Move-in',      w:12, get:function(r){ return (r.move_in_date || '').slice(0, 10); } },
+    { label:'Lease start',  w:12, get:function(r){ return (r.lease_start_date || '').slice(0, 10); } },
+    { label:'Manager',      key:'property_manager_name', w:20 },
+    { label:'Owner',        key:'primary_owner_name', w:24 },
+    { label:'Lease ID',     key:'lease_id', type:'num', w:12 }
+  ];
+  function slFilterBits(){
+    var bits = [], w = slRangeDates();
+    bits.push('Signed ' + w.from + ' to ' + w.to);
+    if (hubTeamLeasesFilter !== 'all') bits.push(hubTeamLeasesFilter === 'confirmed' ? 'Confirmed only' : 'Unconfirmed only');
+    if (hubTeamLeasesAgent) bits.push('Agent: ' + hubTeamLeasesAgent);
+    var q = (hubTeamLeasesQ || '').trim();
+    if (q) bits.push('Search: ' + q);
+    var cf = COLF['hub-team-leases'] || {};
+    var act = Object.keys(cf).filter(function(k){ return colActive('hub-team-leases', k); });
+    if (act.length) bits.push('Column filters: ' + act.join(', '));
+    return bits;
+  }
+  function slExport(){
+    var rows = slRowsCur || [];
+    if (!rows.length) return;
+    var today = dstr(new Date()), bits = slFilterBits();
+    var note = rows.length + ' of ' + slRows().length + ' signed leases · exported ' + today + ' · ' + bits.join(' · ');
+    var slug = (hubTeamLeasesAgent || hubTeamLeasesRange || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+    xlsxDownload('signed-leases-' + today + (slug ? '-' + slug : '') + '.xlsx',
+      { sheet:'Signed leases', note: note, cols: SL_XL_COLS, rows: rows });
+  }
+  if (el('sl-export')) el('sl-export').addEventListener('click', slExport);
   // Phase 3: row click opens the lease story. Separate listener from the .hubact one above —
   // both fire, and this one bails on any interactive descendant so Move-in / Reassign /
   // Exclude (and the inline reassign select) keep working without opening the drawer.
@@ -12782,6 +12827,11 @@ window.addEventListener('error', function(e){
     var tr = e.target.closest('tbody tr'); if (!tr) return;
     var id = tr.getAttribute('data-lease'); if (!id) return;   // empty-state rows have none
     openLeaseStory(id);
+  });
+  if (el('lst-chips')) el('lst-chips').addEventListener('click', function(e){
+    var b = e.target.closest('.qchip'); if (!b) return;
+    lsFilter = b.getAttribute('data-lsf') || 'all';
+    lsDrawFeed();                       // filter only — never refetch
   });
   if (el('lst-live')) el('lst-live').addEventListener('click', function(){
     if (!lsLease) return;
@@ -12871,7 +12921,10 @@ window.addEventListener('error', function(e){
      GET /lease-story is gated on a VERIFIED admin sign-in — the shared admin password
      returns 403 there, unlike every other admin route. That is deliberate (tenant contact
      + every call and text), so the 403 gets a real explanation rather than a dead modal. */
-  var lsLease = null, lsReq = 0;
+  var lsLease = null, lsReq = 0, lsEvents = [], lsFilter = 'all', lsSeedNote = null;
+  // v_prospect_timeline's vocabulary -> the team's. "tour" IS the showing record.
+  var LS_KIND = { tour:'showing', application:'application', lease_signed:'lease signed',
+                  booking:'booking', offer:'offer sent' };
   function lsWhen(at){
     var d = new Date(at); if (isNaN(d.getTime())) return '';
     try { return d.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) + ' · ' + ctTime(d); }
@@ -12887,7 +12940,9 @@ window.addEventListener('error', function(e){
   function openLeaseStory(leaseId){
     if (!leaseId) return;
     lsLease = leaseId;
+    lsFilter = 'all'; lsEvents = []; lsSeedNote = null;   // a new lease starts unfiltered
     var q = ++lsReq;
+    if (el('lst-chips')) el('lst-chips').innerHTML = '';
     if (el('lst-title')) el('lst-title').textContent = 'Lease story';
     if (el('lst-sub')) el('lst-sub').textContent = 'Loading…';
     if (el('lst-facts')) el('lst-facts').innerHTML = '';
@@ -12937,51 +12992,93 @@ window.addEventListener('error', function(e){
     var f = '<span>Credited: <b>' + esc(credited) + '</b></span>';
     if (L.rent != null) f += '<span>Rent: <b>' + esc(fmtNum(L.rent)) + '</b></span>';
     if (L.move_in_date) f += '<span>Move-in: <b>' + esc(String(L.move_in_date).slice(0, 10)) + '</b></span>';
+    // Lease facts (Pearse 2026-07-28). A Future lease's live question is "is the deposit
+    // paid"; an Active lease's is "do they owe anything". Show the one that applies rather
+    // than both, and never render a missing deposits row as "unpaid" — that would read as a
+    // problem where the truth is simply that we have not computed one.
+    var ft = j.facts || {};
+    if (ft.lease_status) f += '<span>Lease: <b>' + esc(ft.lease_status) + '</b></span>';
+    if (ft.is_future) {
+      var sd = { paid:'SD paid', partial:'SD part-paid', unpaid:'SD not paid',
+                 none_charged:'no SD charged', unknown:'SD not computed' }[ft.sd_state] || 'SD unknown';
+      var sdBad = (ft.sd_state === 'unpaid' || ft.sd_state === 'partial');
+      var sdAmt = (ft.sd_charged ? ' ' + fmtNum(ft.sd_paid || 0) + ' of ' + fmtNum(ft.sd_charged) : '');
+      f += '<span class="ls-tier' + (sdBad ? ' ls-warn' : '') + '">' + esc(sd + sdAmt) + '</span>';
+    } else if (ft.lease_status === 'Active') {
+      var owe = Number(ft.balance_owing || 0);
+      f += '<span class="ls-tier' + (owe > 0 ? ' ls-warn' : '') + '">'
+         + (owe > 0 ? 'Owing ' + esc(fmtNum(owe)) : 'Nothing owing') + '</span>';
+    }
     f += '<span class="ls-tier' + (warn ? ' ls-warn' : '') + '"' + (seed.note ? ' title="' + esc(seed.note) + '"' : '') + '>'
        + esc(LS_TIER[seed.tier] || seed.tier || 'unmatched') + '</span>';
     if (el('lst-facts')) el('lst-facts').innerHTML = f;
     if (el('lst-src')) el('lst-src').innerHTML = lsSrcHtml(j);
 
     var ev = [];
+    // v_prospect_timeline calls a showing a "tour" — relabel it here so the story reads in
+    // the words the team uses. Kinds present live: application, tour, lease_signed,
+    // booking, offer.
     (j.timeline || []).forEach(function(t){
-      ev.push({ at:t.at, tag:t.kind || 'event', txt:(t.label || '') + (t.status ? ' — ' + t.status : ''), who:'' });
+      var k = t.kind || 'event';
+      ev.push({ at:t.at, grp:'event', tag:(LS_KIND[k] || k),
+                txt:(t.label || '') + (t.status ? ' — ' + t.status : ''), who:'' });
     });
     (j.attribution || []).forEach(function(a){
-      ev.push({ at:a.created_at, tag:'attribution', txt:(a.event_type || '') + (a.detail ? ' — ' + a.detail : ''), who:a.actor || '' });
+      ev.push({ at:a.created_at, grp:'event', tag:'attribution',
+                txt:(a.event_type || '') + (a.detail ? ' — ' + a.detail : ''), who:a.actor || '' });
     });
     var comms = j.comms || {};
     (comms.calls || []).forEach(function(c){
       var bits = [c.direction, c.result, (c.duration ? c.duration + 's' : '')].filter(Boolean).join(' · ');
-      ev.push({ at:c.start_time, tag:'call', txt:bits, who:c.agent_name || c.queue_name || '', src:c.src });
+      ev.push({ at:c.start_time, grp:'call', tag:'call', txt:bits, who:c.agent_name || c.queue_name || '', src:c.src });
     });
     (comms.texts || []).forEach(function(t){
-      ev.push({ at:t.creation_time, tag:'text', txt:t.body || '(no message body)', who:(t.direction || '') + (t.agent_name ? ' · ' + t.agent_name : ''), src:t.src });
+      ev.push({ at:t.creation_time, grp:'text', tag:'text', txt:t.body || '(no message body)',
+                who:(t.direction || '') + (t.agent_name ? ' · ' + t.agent_name : ''), src:t.src });
     });
-    ((j.live && j.live.aptly) || []).forEach(function(cd){
+    // Aptly now arrives on EVERY open (top-level j.aptly), not just the live pass; the
+    // j.live fallback keeps older payload shapes working.
+    ((j.aptly && j.aptly.length ? j.aptly : ((j.live && j.live.aptly) || []))).forEach(function(cd){
       (cd.stage_history || []).forEach(function(h){
-        if (h && h.at) ev.push({ at:h.at, tag:'aptly', txt:'stage → ' + (h.stage || '?'), who:'lead card' });
+        if (h && h.at) ev.push({ at:h.at, grp:'event', tag:'aptly', txt:'stage → ' + (h.stage || '?'), who:'lead card' });
       });
     });
-    ev = ev.filter(function(x){ return x.at && !isNaN(Date.parse(x.at)); })
-           .sort(function(a, b){ return Date.parse(b.at) - Date.parse(a.at); });   // newest first
-
+    lsEvents = ev.filter(function(x){ return x.at && !isNaN(Date.parse(x.at)); })
+                 .sort(function(a, b){ return Date.parse(b.at) - Date.parse(a.at); });   // newest first
+    lsSeedNote = (seed.tier === 'ambiguous' || seed.tier === 'none') ? (seed.note || '') : null;
+    lsDrawFeed();
+  }
+  // Chips + feed are split from the render so filtering never refetches.
+  function lsDrawFeed(){
     var body = el('lst-body'); if (!body) return;
-    if (!ev.length){
-      var why = (seed.tier === 'ambiguous' || seed.tier === 'none')
-        ? 'We could not identify who this lease belongs to, so there is nothing to show. ' + esc(seed.note || '')
-        : 'Nothing on record for this lease yet.';
+    var all = lsEvents || [];
+    var n = { all: all.length, event:0, text:0, call:0 };
+    all.forEach(function(x){ if (n[x.grp] != null) n[x.grp]++; });
+    var c = el('lst-chips');
+    if (c) {
+      var chip = function(k, label){
+        return '<button type="button" class="qchip' + (lsFilter === k ? ' on' : '') + '" data-lsf="' + k + '">'
+             + label + ' <span class="qn">' + n[k] + '</span></button>';
+      };
+      c.innerHTML = chip('all', 'All') + chip('event', 'Events') + chip('text', 'Texts') + chip('call', 'Calls');
+    }
+    var rows = (lsFilter === 'all') ? all : all.filter(function(x){ return x.grp === lsFilter; });
+    if (!rows.length){
+      var why = lsSeedNote
+        ? 'We could not identify who this lease belongs to, so there is nothing to show. ' + esc(lsSeedNote)
+        : (all.length ? 'Nothing in this filter.' : 'Nothing on record for this lease yet.');
       body.innerHTML = '<div class="note" style="padding:18px;text-align:center;line-height:1.5">' + why + '</div>';
       return;
     }
     var h = '';
-    ev.slice(0, 400).forEach(function(x){
+    rows.slice(0, 400).forEach(function(x){
       h += '<div class="ls-ev">'
          + '<div class="ls-when">' + esc(lsWhen(x.at)) + '</div>'
          + '<div class="ls-what"><span class="ls-tag' + (x.src === 'live' ? ' ls-live-on' : '') + '">' + esc(x.tag) + (x.src === 'live' ? ' live' : '') + '</span>'
          + esc(x.txt) + (x.who ? ' <span class="ls-who">· ' + esc(x.who) + '</span>' : '') + '</div>'
          + '</div>';
     });
-    if (ev.length > 400) h += '<div class="note" style="padding:10px;text-align:center">Showing the newest 400 of ' + ev.length + ' events.</div>';
+    if (rows.length > 400) h += '<div class="note" style="padding:10px;text-align:center">Showing the newest 400 of ' + rows.length + '.</div>';
     body.innerHTML = h;
   }
   function openThread(phone, name){

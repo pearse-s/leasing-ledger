@@ -7076,14 +7076,40 @@ window.addEventListener('error', function(e){
   // the rest degrade to a recipient-less mailto (Phase 1 — the coordinator fills the recipient in).
   var FB_EXTRA = ['Ben', 'Cheryl', 'Jeannine', 'Kevin', 'Sarah'];
   var FB_CUSTOM_KEY = 'ledger_fb_agents_v1';
-  var fbAgents = null;   // cached active tour-agent display names
+  var fbAgents = null;   // cached active tour-agent display names ([] once settled, even on failure)
+  var fbAgentsErr = false;  // the roster load failed → picker still works off the fallback names, but say so
   var fbReq = 0;         // monotonic generation for the FB panel loader (A→B→A safe, not keyed on unit_id)
   function fbLoadAgents(cb){
+    // Cache hit fires cb SYNCHRONOUSLY, in the same tick as mountFbPanel's box._fbReq = my — so
+    // that generation guard can never trip on this path. It is only load-bearing on the fetch
+    // path below, where a second mount can land mid-flight.
     if (fbAgents !== null){ cb(); return; }
     authFetch('/tour-agents').then(function(j){
-      fbAgents = ((j && j.agents) || []).map(function(a){ return a.display_name; }).filter(Boolean);
-      cb();
-    }).catch(function(e){ if (String(e && e.message) === 'AUTH') return; fbAgents = []; cb(); });
+      fbSettleAgents(((j && j.agents) || []).map(function(a){ return a.display_name; }).filter(Boolean), null, cb);
+    }).catch(function(e){
+      fbSettleAgents([], e || new Error('load failed'), cb);   // [] = loaded, no roster (and no retry storm behind a dead token)
+    });
+  }
+  // Settle exactly once: state FIRST, then the callback, isolated. EVERY exit must assign
+  // fbAgents *and* fire cb — mountFbPanel paints 'Loading…' before calling, so an exit that
+  // skips cb strands the panel on 'Loading…' for the rest of the page life. That is exactly
+  // what the old AUTH early-return did (it returned before both). Quiet on AUTH — the login
+  // veil already explains it — but never silent. cb is try/caught so a render throw can neither
+  // fall into the .catch above (which would wipe a good roster to [] and re-fire the same
+  // callback) nor escape unhandled.
+  function fbSettleAgents(names, err, cb){
+    fbAgents = names;
+    fbAgentsErr = !!err;
+    if (err && String(err.message) !== 'AUTH') console.error('tour-agents failed', err);
+    try { cb(); } catch (e){ console.error('fb panel render failed', e); }
+    // A FAILED load is not an answer worth caching: drop back to null once this render is done,
+    // so the next mount retries and a 401 that ends in a re-login recovers the full roster (the
+    // old code got that for free by never assigning — at the cost of stranding the panel). Safe
+    // here where idRosterLoad's "no retry storm" rule would not be: the only callers of
+    // mountFbPanel are a unit-modal open and a save/email round-trip, so retries are bounded by
+    // user actions. Reset AFTER the callback — anything re-entering mid-render must still take
+    // the synchronous cache path rather than open a second flight.
+    if (err) fbAgents = null;
   }
   function fbCustomNames(){ try { return JSON.parse(localStorage.getItem(FB_CUSTOM_KEY) || '[]') || []; } catch (e) { return []; } }
   function fbAddCustom(nm){
@@ -7124,7 +7150,9 @@ window.addEventListener('error', function(e){
     var my = ++fbReq; box._fbReq = my;
     box.textContent = 'Loading…';
     fbLoadAgents(function(){
-      if (box._fbReq !== my) return;   // a newer mount superseded this load
+      // A newer mount superseded this load — it owns the box, repainted 'Loading…' itself and
+      // will render, so bailing here cannot strand the panel. Every OTHER path must render.
+      if (box._fbReq !== my) return;
       fbRenderPanel(box, r);
     });
   }
@@ -7157,7 +7185,12 @@ window.addEventListener('error', function(e){
         '<button type="button" class="listbtn" id="fb-save">Save</button>' +
         '<button type="button" class="btn" id="fb-email">Email to post</button>' +
       '</div>' +
-      '<div class="lmphnote" id="fb-hint" style="margin-top:6px"></div>';
+      // Honest failed state: the panel renders either way, but if /tour-agents never landed the
+      // picker is missing the active tour agents — say so instead of looking complete. Transient
+      // status (Saving… / errors) overwrites this on the first action, which is fine.
+      '<div class="lmphnote" id="fb-hint" style="margin-top:6px">' +
+        (fbAgentsErr ? 'Agent list unavailable right now — pick from the saved names or add one.' : '') +
+      '</div>';
     var selEl = box.querySelector('#fb-agent-sel');
     var urlEl = box.querySelector('#fb-url-in');
     var hintEl = box.querySelector('#fb-hint');

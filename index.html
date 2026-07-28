@@ -738,7 +738,15 @@ window.addEventListener('error', function(e){
   .mvtgl button{background:transparent;border:none;color:var(--ink-soft);font:700 .68rem var(--sans);letter-spacing:.04em;padding:6px 12px;cursor:pointer}
   .mvtgl button.on{background:var(--clay);color:var(--on-accent)}
   .mvchips{display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 10px}
-  .mvchips .chip{cursor:pointer;border:1px solid var(--hairline-dark);background:var(--glass-2)}
+  /* The filter chips are <button class="chip"> with NO c-* modifier, and the base .chip rule
+     sets no colour of its own — it leaves that to .c-ok/.c-warm/.c-hot/.c-bad/.c-cold. A
+     <button> does not inherit colour from its ancestors, so without this line every INACTIVE
+     filter chip fell back to the UA default (buttontext = black) and was unreadable on the
+     dark card; only the .on chip was legible, because that rule sets clay. Reported from a
+     screenshot 2026-07-28. Every chip-filter row is affected (moves stage, renewals stage,
+     unit movement, tasks, applications, rent bands), so fix it here once, not per card. */
+  .mvchips .chip{cursor:pointer;border:1px solid var(--hairline-dark);background:var(--glass-2);color:var(--ink-soft)}
+  .mvchips .chip:hover{border-color:var(--clay);color:var(--ink)}
   .mvchips .chip.on{background:var(--clay-soft);border-color:rgba(232,180,62,.45);color:var(--clay)}
   .mvsec-h{font-family:var(--serif);font-weight:600;font-size:1rem;margin:14px 0 4px}
   .mvtable{width:100%;border-collapse:collapse;font-size:.78rem;min-width:840px}   /* 8 columns since the Actions column landed (2026-07-27); .scrollx carries it on small screens */
@@ -1842,12 +1850,18 @@ window.addEventListener('error', function(e){
     #page-today .tdroles{display:flex;gap:6px;flex-wrap:wrap}
     #page-today .tdgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px}
     #page-today .tdwide{grid-column:1/-1}
-    @media (max-width:880px){ #page-today .tdgrid{grid-template-columns:minmax(0,1fr)} #page-today .tdwide{grid-column:auto} #page-today .tdact{padding:10px 12px} }
+    @media (max-width:880px){ #page-today .tdgrid{grid-template-columns:minmax(0,1fr)} #page-today .tdwide{grid-column:auto} .tdact{padding:10px 12px} }
     #page-today .tdq{margin-top:0;min-width:0}
     #page-today .tdq h3{margin:0 0 10px;font-size:1rem;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
     #page-today .qn2{font-size:.76rem;color:var(--ink-soft);font-weight:600}
-    #page-today .tdact{font-family:var(--sans);font-size:.74rem;border:1px solid var(--hairline-dark);border-radius:8px;padding:5px 9px;color:var(--ink);text-decoration:none;white-space:nowrap;background:none;cursor:pointer;flex:0 0 auto}
-    #page-today .tdact:hover{border-color:var(--clay)}
+    /* NOT scoped to #page-today (2026-07-28). The drawers that use .tdact — #rentmodal and
+       #mvmodal — are TOP-LEVEL elements outside this page, so under the old #page-today scope
+       they matched nothing and their <a class="tdact"> rendered as a default browser link:
+       underlined, link-blue, unreadable on the dark card. An <a> needs an explicit colour and
+       text-decoration or the UA supplies its own. Keep this rule global; anything with
+       .tdact anywhere should look like the same control. */
+    .tdact{font-family:var(--sans);font-size:.74rem;border:1px solid var(--hairline-dark);border-radius:8px;padding:5px 9px;color:var(--ink);text-decoration:none;white-space:nowrap;background:none;cursor:pointer;flex:0 0 auto}
+    .tdact:hover{border-color:var(--clay);color:var(--clay)}
     #page-today .tdmore{margin-top:10px}
     #page-today .schoffer{flex-wrap:wrap}
     /* clickable tour address → opens the unit's listing (My tours today) */

@@ -3002,6 +3002,10 @@ window.addEventListener('error', function(e){
     </div>
     <div class="lmfoot" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button type="button" class="btn rmact" id="lst-live">&#8635; Load full history</button>
+      <button type="button" class="btn rmact" id="lst-unit">Unit &#8599;</button>
+      <button type="button" class="btn rmact" id="lst-lease">Lease &#8599;</button>
+      <button type="button" class="hubact" id="lst-reassign">Reassign</button>
+      <button type="button" class="hubact" id="lst-exclude">Exclude</button>
       <span class="note" id="lst-livenote">our records go back a few months &mdash; this pulls the rest live</span>
     </div>
   </div>
@@ -12828,23 +12832,63 @@ window.addEventListener('error', function(e){
     var id = tr.getAttribute('data-lease'); if (!id) return;   // empty-state rows have none
     openLeaseStory(id);
   });
+  // Jump-outs and the two attribution actions, so a lease can be worked without leaving
+  // the story. Both actions route through hubTeamAct — the SAME handler the table rows
+  // use — so the confirm prompt, the audit row and the board refresh stay in one place.
+  // openUnit()/openLease() both return silently when the id is not in their dataset, so a
+  // bare call here would be a dead click — the exact silent no-op this drawer is supposed to
+  // avoid. Check the dataset (same IIFE scope) and SAY something when the target is absent.
+  function lstNote(msg){ var n = el('lst-livenote'); if (n) n.textContent = msg; }
+  if (el('lst-unit')) el('lst-unit').addEventListener('click', function(){
+    if (!lstUnitId) return;
+    var go = function(){
+      if (!(unitsAll || []).some(function(x){ return String(x.unit_id) === String(lstUnitId); })){
+        lstNote('That unit is not in the loaded Units list — open the Units tab first.'); return;
+      }
+      closeModal('lstory'); openUnit(lstUnitId);
+    };
+    if (unitsAll === null) loadUnits(go); else go();
+  });
+  if (el('lst-lease')) el('lst-lease').addEventListener('click', function(){
+    if (!lstLease) return;
+    var go = function(){
+      if (!(leasesAll || []).some(function(x){ return String(x.lease_id) === String(lstLease); })){
+        lstNote('That lease is not in the loaded Leases list — open the Leases tab first.'); return;
+      }
+      closeModal('lstory'); openLease(lstLease);
+    };
+    if (leasesAll === null) loadLeases(go); else go();
+  });
+  if (el('lst-reassign')) el('lst-reassign').addEventListener('click', function(){
+    if (!lstLease) return;
+    hubTeamAct(lstLease, 'reassign', this);   // inserts its roster picker beside this button
+  });
+  if (el('lst-exclude')) el('lst-exclude').addEventListener('click', function(){
+    if (!lstLease) return;
+    var id = lstLease;
+    hubTeamAct(id, 'exclude', this);
+    // hubTeamAct confirms first; only close if the lease actually left the board.
+    setTimeout(function(){
+      if (!(slRows() || []).some(function(r){ return String(r.lease_id) === String(id); })) closeModal('lstory');
+    }, 1200);
+  });
   if (el('lst-chips')) el('lst-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return;
-    lsFilter = b.getAttribute('data-lsf') || 'all';
-    lsDrawFeed();                       // filter only — never refetch
+    lstFilter = b.getAttribute('data-lsf') || 'all';
+    lstDrawFeed();                       // filter only — never refetch
   });
   if (el('lst-live')) el('lst-live').addEventListener('click', function(){
-    if (!lsLease) return;
-    var b = this, q = ++lsReq;
+    if (!lstLease) return;
+    var b = this, q = ++lstReq;
     b.disabled = true; b.textContent = 'Loading full history…';
     var n = el('lst-livenote'); if (n) n.textContent = 'Calendly, RingCentral and Aptly — this can take ~15s';
-    authFetch('/lease-story?lease_id=' + encodeURIComponent(lsLease) + '&live=1').then(function(j){
-      if (q !== lsReq) return;                                  // a newer open superseded this
+    authFetch('/lease-story?lease_id=' + encodeURIComponent(lstLease) + '&live=1').then(function(j){
+      if (q !== lstReq) return;                                  // a newer open superseded this
       renderLeaseStory(j);
       b.innerHTML = '&#10003; Full history loaded';
       if (n) n.textContent = 'live rows are tagged; per-source status is above';
     }).catch(function(e){
-      if (q !== lsReq) return;
+      if (q !== lstReq) return;
       if (String(e && e.message) === 'AUTH') return;
       console.error('lease-story live load failed', e);
       b.disabled = false; b.innerHTML = '&#8635; Retry full history';
@@ -12921,16 +12965,20 @@ window.addEventListener('error', function(e){
      GET /lease-story is gated on a VERIFIED admin sign-in — the shared admin password
      returns 403 there, unlike every other admin route. That is deliberate (tenant contact
      + every call and text), so the 403 gets a real explanation rather than a dead modal. */
-  var lsLease = null, lsReq = 0, lsEvents = [], lsFilter = 'all', lsSeedNote = null;
+  // NOTE the lst* prefix: the ls* namespace belongs to the LEASES TAB (lsReq, lsStatus,
+  // lsBal, lsLedRows...). This drawer briefly shared lsReq with the lease-detail modal's
+  // generation guard — same IIFE scope, so a redeclared var is the SAME variable and each
+  // modal was cancelling the other's in-flight fetch. Keep drawer state on lst*.
+  var lstLease = null, lstUnitId = null, lstReq = 0, lstEvents = [], lstFilter = 'all', lstSeedNote = null;
   // v_prospect_timeline's vocabulary -> the team's. "tour" IS the showing record.
-  var LS_KIND = { tour:'showing', application:'application', lease_signed:'lease signed',
+  var LST_KIND = { tour:'showing', application:'application', lease_signed:'lease signed',
                   booking:'booking', offer:'offer sent' };
-  function lsWhen(at){
+  function lstWhen(at){
     var d = new Date(at); if (isNaN(d.getTime())) return '';
     try { return d.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) + ' · ' + ctTime(d); }
     catch (e) { return String(at).slice(0, 10); }
   }
-  var LS_TIER = {
+  var LST_TIER = {
     lease_tenant: 'matched from the lease tenant record',
     name_unit: 'matched by name + unit',
     name_only: 'matched by name',
@@ -12939,9 +12987,11 @@ window.addEventListener('error', function(e){
   };
   function openLeaseStory(leaseId){
     if (!leaseId) return;
-    lsLease = leaseId;
-    lsFilter = 'all'; lsEvents = []; lsSeedNote = null;   // a new lease starts unfiltered
-    var q = ++lsReq;
+    lstLease = leaseId;
+    lstFilter = 'all'; lstEvents = []; lstSeedNote = null; lstUnitId = null;   // a new lease starts unfiltered
+    // Hide the jump-outs until the payload says the ids exist (renderLeaseStory re-shows).
+    ['lst-unit', 'lst-lease'].forEach(function(id){ var n = el(id); if (n) n.style.display = 'none'; });
+    var q = ++lstReq;
     if (el('lst-chips')) el('lst-chips').innerHTML = '';
     if (el('lst-title')) el('lst-title').textContent = 'Lease story';
     if (el('lst-sub')) el('lst-sub').textContent = 'Loading…';
@@ -12952,15 +13002,15 @@ window.addEventListener('error', function(e){
     var n = el('lst-livenote'); if (n) n.textContent = 'our records go back a few months — this pulls the rest live';
     openModal('lstory');
     authFetch('/lease-story?lease_id=' + encodeURIComponent(leaseId)).then(function(j){
-      if (q !== lsReq) return;
+      if (q !== lstReq) return;
       renderLeaseStory(j);
     }).catch(function(e){
-      if (q !== lsReq) return;
+      if (q !== lstReq) return;
       if (String(e && e.message) === 'AUTH') return;
-      lsFail(e);
+      lstFail(e);
     });
   }
-  function lsFail(e){
+  function lstFail(e){
     var forbidden = String(e && e.message) === 'HTTP 403';
     var msg = forbidden
       ? 'Signed-in admin access required. This view includes tenant contact details and every call and text, so the shared admin password is not enough — sign in with your work email from the sidebar, then reopen this lease.'
@@ -12972,7 +13022,7 @@ window.addEventListener('error', function(e){
   }
   // Per-source health. A silent gap is the failure mode here: if RingCentral 429s, the drawer
   // must SAY so rather than quietly render a shorter history that looks complete.
-  function lsSrcHtml(j){
+  function lstSrcHtml(j){
     var s = j.sources || {}, keys = Object.keys(s);
     if (!keys.length) return '';
     return keys.map(function(k){
@@ -12984,6 +13034,10 @@ window.addEventListener('error', function(e){
   }
   function renderLeaseStory(j){
     var L = j.lease || {}, seed = j.contact_seed || {};
+    lstUnitId = L.unit_id != null ? L.unit_id : null;
+    // Unit/Lease jumps need their ids; hide rather than offer a dead button.
+    var ub = el('lst-unit'); if (ub) ub.style.display = lstUnitId ? '' : 'none';
+    var lb = el('lst-lease'); if (lb) lb.style.display = L.lease_id ? '' : 'none';
     if (el('lst-title')) el('lst-title').textContent = (L.property_name || 'Lease') + (L.unit_number ? ' · ' + L.unit_number : '');
     if (el('lst-sub')) el('lst-sub').textContent = (L.tenant_name || 'Tenant unknown') + ' · signed ' + String(L.signed_date || '').slice(0, 10);
     var credited = L.status === 'confirmed' ? (L.credited_agent || '?')
@@ -13010,9 +13064,9 @@ window.addEventListener('error', function(e){
          + (owe > 0 ? 'Owing ' + esc(fmtNum(owe)) : 'Nothing owing') + '</span>';
     }
     f += '<span class="ls-tier' + (warn ? ' ls-warn' : '') + '"' + (seed.note ? ' title="' + esc(seed.note) + '"' : '') + '>'
-       + esc(LS_TIER[seed.tier] || seed.tier || 'unmatched') + '</span>';
+       + esc(LST_TIER[seed.tier] || seed.tier || 'unmatched') + '</span>';
     if (el('lst-facts')) el('lst-facts').innerHTML = f;
-    if (el('lst-src')) el('lst-src').innerHTML = lsSrcHtml(j);
+    if (el('lst-src')) el('lst-src').innerHTML = lstSrcHtml(j);
 
     var ev = [];
     // v_prospect_timeline calls a showing a "tour" — relabel it here so the story reads in
@@ -13020,7 +13074,7 @@ window.addEventListener('error', function(e){
     // booking, offer.
     (j.timeline || []).forEach(function(t){
       var k = t.kind || 'event';
-      ev.push({ at:t.at, grp:'event', tag:(LS_KIND[k] || k),
+      ev.push({ at:t.at, grp:'event', tag:(LST_KIND[k] || k),
                 txt:(t.label || '') + (t.status ? ' — ' + t.status : ''), who:'' });
     });
     (j.attribution || []).forEach(function(a){
@@ -13043,29 +13097,29 @@ window.addEventListener('error', function(e){
         if (h && h.at) ev.push({ at:h.at, grp:'event', tag:'aptly', txt:'stage → ' + (h.stage || '?'), who:'lead card' });
       });
     });
-    lsEvents = ev.filter(function(x){ return x.at && !isNaN(Date.parse(x.at)); })
+    lstEvents = ev.filter(function(x){ return x.at && !isNaN(Date.parse(x.at)); })
                  .sort(function(a, b){ return Date.parse(b.at) - Date.parse(a.at); });   // newest first
-    lsSeedNote = (seed.tier === 'ambiguous' || seed.tier === 'none') ? (seed.note || '') : null;
-    lsDrawFeed();
+    lstSeedNote = (seed.tier === 'ambiguous' || seed.tier === 'none') ? (seed.note || '') : null;
+    lstDrawFeed();
   }
   // Chips + feed are split from the render so filtering never refetches.
-  function lsDrawFeed(){
+  function lstDrawFeed(){
     var body = el('lst-body'); if (!body) return;
-    var all = lsEvents || [];
+    var all = lstEvents || [];
     var n = { all: all.length, event:0, text:0, call:0 };
     all.forEach(function(x){ if (n[x.grp] != null) n[x.grp]++; });
     var c = el('lst-chips');
     if (c) {
       var chip = function(k, label){
-        return '<button type="button" class="qchip' + (lsFilter === k ? ' on' : '') + '" data-lsf="' + k + '">'
+        return '<button type="button" class="qchip' + (lstFilter === k ? ' on' : '') + '" data-lsf="' + k + '">'
              + label + ' <span class="qn">' + n[k] + '</span></button>';
       };
       c.innerHTML = chip('all', 'All') + chip('event', 'Events') + chip('text', 'Texts') + chip('call', 'Calls');
     }
-    var rows = (lsFilter === 'all') ? all : all.filter(function(x){ return x.grp === lsFilter; });
+    var rows = (lstFilter === 'all') ? all : all.filter(function(x){ return x.grp === lstFilter; });
     if (!rows.length){
-      var why = lsSeedNote
-        ? 'We could not identify who this lease belongs to, so there is nothing to show. ' + esc(lsSeedNote)
+      var why = lstSeedNote
+        ? 'We could not identify who this lease belongs to, so there is nothing to show. ' + esc(lstSeedNote)
         : (all.length ? 'Nothing in this filter.' : 'Nothing on record for this lease yet.');
       body.innerHTML = '<div class="note" style="padding:18px;text-align:center;line-height:1.5">' + why + '</div>';
       return;
@@ -13073,7 +13127,7 @@ window.addEventListener('error', function(e){
     var h = '';
     rows.slice(0, 400).forEach(function(x){
       h += '<div class="ls-ev">'
-         + '<div class="ls-when">' + esc(lsWhen(x.at)) + '</div>'
+         + '<div class="ls-when">' + esc(lstWhen(x.at)) + '</div>'
          + '<div class="ls-what"><span class="ls-tag' + (x.src === 'live' ? ' ls-live-on' : '') + '">' + esc(x.tag) + (x.src === 'live' ? ' live' : '') + '</span>'
          + esc(x.txt) + (x.who ? ' <span class="ls-who">· ' + esc(x.who) + '</span>' : '') + '</div>'
          + '</div>';

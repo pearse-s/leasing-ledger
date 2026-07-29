@@ -12881,7 +12881,7 @@ window.addEventListener('error', function(e){
     if (!lstLease) return;
     var b = this, q = ++lstReq;
     b.disabled = true; b.textContent = 'Loading full history…';
-    var n = el('lst-livenote'); if (n) n.textContent = 'Calendly, RingCentral and Aptly — this can take ~15s';
+    var n = el('lst-livenote'); if (n) n.textContent = 'Calendly + older texts — a few seconds';
     authFetch('/lease-story?lease_id=' + encodeURIComponent(lstLease) + '&live=1').then(function(j){
       if (q !== lstReq) return;                                  // a newer open superseded this
       renderLeaseStory(j);

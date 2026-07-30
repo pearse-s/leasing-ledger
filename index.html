@@ -842,6 +842,11 @@ window.addEventListener('error', function(e){
   .fitem .fl{font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
   .fitem .fv{font-size:.88rem;font-weight:600;font-variant-numeric:tabular-nums;margin-top:1px}
   .fitem .fv.neg{color:var(--clay)}
+  /* .fgrid packs auto-fill minmax(160px,1fr), so a plain fitem is one ~160-200px cell —
+     fine for a date or a dollar figure, unusable for typing a note. fspan gives a field
+     the whole row at every breakpoint (1/-1 works for any column count, so no media query
+     and no orphan tile). Used by the two Nookbook note boxes. */
+  .fitem.fspan{grid-column:1/-1}
   .trow{display:flex;gap:14px;flex-wrap:wrap;align-items:baseline;padding:7px 0;border-bottom:1px dotted var(--hairline-dark);font-size:.82rem}
   .trow:last-child{border-bottom:none}
   .trow .tn{font-weight:700;min-width:160px}
@@ -3230,6 +3235,7 @@ window.addEventListener('error', function(e){
   var curLease = null, lsReq = 0;             // lease modal state + generation guard (the tdReq pattern)
   var lsLedRows = null, lsLedFilter = 'all';  // live-ledger rows for the open lease modal + type chip filter
   var umLsReq = 0;                            // guard for the unit modal's aged-buckets append
+  var umUnitReq = 0;                          // guard for the unit modal's /unit fetch (tenants + Nookbook notes)
   var uPage = 0, uSig = '', U_PER = 200;
   var uRowsCur = [];   // the FULL filtered+sorted Units set (every page) — what the XLSX export writes
   var uSel = {};   // Units flag chips multi-select (on-notice / move-out / eviction / balance / take-backs)
@@ -9298,6 +9304,7 @@ window.addEventListener('error', function(e){
     { label:'Parking',         key:'nb_parking', w:14 },
     { label:'Appliances',      key:'nb_appliances', w:11 },
     { label:'Appliances installed', key:'nb_appliances_installed_on', w:15 },
+    { label:'Turnover done',   key:'nb_turnover_completed_on', w:14 },
     { label:'Amenities',       w:30, get:function(r){ return (r.amenities || []).join(', '); } },
     { label:'Facebook agent',  key:'fb_agent', w:14 },
     { label:'Facebook URL',    key:'fb_url', w:30 },
@@ -9516,8 +9523,138 @@ window.addEventListener('error', function(e){
     var sv = el('um-nba-save'); if (sv) sv.addEventListener('click', function(){ go(false); });
     var cl = el('um-nba-clear'); if (cl) cl.addEventListener('click', function(){ go(true); });
   }
-  function fitem(label, value, neg){
-    return '<div class="fitem"><div class="fl">' + esc(label) + '</div><div class="fv' + (neg ? ' neg' : '') + '">' + (value == null || value === '' ? '–' : value) + '</div></div>';
+  // ── Nookbook turnover + notes (Pearse 2026-07-29) ────────────────────────
+  // TURNOVER copies the appliances model deliberately: the DATE is the state
+  // (set = done, blank = not done) via POST /unit/nb-turnover. Same state the
+  // client's sync sheet shows as its TURNOVER DONE checkbox, so the two agree.
+  // Saving with the date box empty means "done today" — that is the one-tap
+  // flick; the picker is there so a turnover finished last week can be backdated.
+  //
+  // NOTES are TWO SEPARATE CHANNELS, never one field plus a "share" checkbox:
+  // 'sheet' publishes to the client's spreadsheet, 'internal' never leaves the
+  // dashboard. Separate fields make a leak impossible by construction rather
+  // than merely unlikely — nothing reads internal into any client surface.
+  function nbtToday(){
+    // Edmonton, not the browser's zone — the whole app buckets dates there.
+    try { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' }); }
+    catch (e) { return new Date().toISOString().slice(0, 10); }
+  }
+  function nbtChip(d){
+    return d ? '<span class="chip c-ok" title="Turnover completed ' + esc(d) + '">turnover done</span>'
+             : '<span class="chip c-cold">turnover pending</span>';
+  }
+  function nbtStatHtml(d){
+    return d ? '<span class="chip c-ok">Done</span> <span class="qn">' + esc(d) + '</span>'
+             : '<span class="chip c-cold">Not done</span>';
+  }
+  function nbtValueHtml(r){
+    var d = r.nb_turnover_completed_on || '';
+    return '<span id="um-nbt-stat">' + nbtStatHtml(d) + '</span>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px">' +
+        '<input type="date" id="um-nbt-date" value="' + esc(d) + '" style="width:150px" aria-label="Turnover completed date">' +
+        '<button type="button" class="listbtn" id="um-nbt-save">Mark done</button>' +
+        '<button type="button" class="listbtn" id="um-nbt-clear"' + (d ? '' : ' style="display:none"') + '>Not done</button>' +
+      '</div>' +
+      '<div class="lmphnote" id="um-nbt-hint"></div>';
+  }
+  function nbtBind(r){
+    var wrap = el('um-fields');
+    if (!wrap) return;
+    wrap.setAttribute('data-nba-uid', String(r.unit_id));   // same marker nbaBind sets; safe to re-assert
+    function go(clearing){
+      var hint = el('um-nbt-hint');
+      var actor = getActor();
+      if (!actor){ if (hint) hint.textContent = 'Pick your name first (on the sign-in screen).'; return; }
+      // empty + "Mark done" = done TODAY (the flick); a chosen date backdates it
+      var dv = clearing ? '' : (((el('um-nbt-date') || {}).value || '') || nbtToday());
+      if (hint) hint.textContent = 'Saving…';
+      var uid = String(r.unit_id);
+      postJSON('/unit/nb-turnover', { unit_id: Number(r.unit_id), property_id: Number(r.property_id), completed_on: dv, actor: actor })
+        .then(function(j){
+          var d = (j && j.nb && j.nb.turnover_completed_on) || null;
+          r.nb_turnover_completed_on = d;
+          drawUnits();   // the Units board + XLSX export read this row
+          // the modal may show another unit by now — these ids would be ITS nodes, not ours
+          var w2 = el('um-fields');
+          if (!w2 || w2.getAttribute('data-nba-uid') !== uid) return;
+          var st = el('um-nbt-stat'); if (st) st.innerHTML = nbtStatHtml(d || '');
+          var ch = el('um-nbt-chip'); if (ch) ch.innerHTML = nbtChip(d || '');
+          var di = el('um-nbt-date'); if (di) di.value = d || '';
+          var cb = el('um-nbt-clear'); if (cb) cb.style.display = d ? '' : 'none';
+          var h2 = el('um-nbt-hint'); if (h2) h2.textContent = 'Saved.';
+        })
+        .catch(function(e){
+          if (String(e && e.message) === 'AUTH') return;
+          console.error('nb-turnover save failed', e);
+          var w2 = el('um-fields');
+          if (!w2 || w2.getAttribute('data-nba-uid') !== uid) return;
+          var h2 = el('um-nbt-hint'); if (h2) h2.textContent = 'Could not save: ' + (e && e.message ? e.message : 'error');
+        });
+    }
+    var sv = el('um-nbt-save'); if (sv) sv.addEventListener('click', function(){ go(false); });
+    var cl = el('um-nbt-clear'); if (cl) cl.addEventListener('click', function(){ go(true); });
+  }
+  function nbnValueHtml(scope, hint){
+    return '<div class="qn" id="um-nbn-meta-' + scope + '">Loading…</div>' +
+      '<textarea id="um-nbn-body-' + scope + '" rows="3" style="width:100%;box-sizing:border-box;margin-top:4px" aria-label="' + esc(hint) + '"></textarea>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px">' +
+        '<button type="button" class="listbtn" id="um-nbn-save-' + scope + '">Save</button>' +
+        '<span class="qn">' + esc(hint) + '</span>' +
+      '</div>' +
+      '<div class="lmphnote" id="um-nbn-hint-' + scope + '"></div>';
+  }
+  // textContent everywhere here: note bodies and actor names are user-supplied.
+  function nbnPaint(scope, n){
+    var ta = el('um-nbn-body-' + scope);
+    if (ta) ta.value = (n && n.body) || '';
+    var meta = el('um-nbn-meta-' + scope);
+    if (!meta) return;
+    if (!n || !n.body) { meta.textContent = 'No note yet.'; return; }
+    var bits = ['Last saved by ' + (n.actor || 'someone')];
+    if (n.noted_at) bits.push(String(n.noted_at).slice(0, 10));
+    if (n.source && n.source !== 'ledger') bits.push('from the ' + n.source);
+    meta.textContent = bits.join(' · ');
+  }
+  function nbnBind(r){
+    var wrap = el('um-fields');
+    if (!wrap) return;
+    ['sheet', 'internal'].forEach(function(scope){
+      var btn = el('um-nbn-save-' + scope);
+      if (!btn) return;
+      btn.addEventListener('click', function(){
+        var uid = String(r.unit_id);
+        var hint = el('um-nbn-hint-' + scope);
+        var actor = getActor();
+        if (!actor){ if (hint) hint.textContent = 'Pick your name first (on the sign-in screen).'; return; }
+        var ta = el('um-nbn-body-' + scope);
+        if (!ta) return;
+        var txt = ta.value || '';
+        // mirrors the route's 400 and the table CHECK — say so before the round trip
+        if (txt.length > 4000){ if (hint) hint.textContent = 'Too long (' + txt.length + ' characters, max 4000).'; return; }
+        if (hint) hint.textContent = 'Saving…';
+        postJSON('/unit/nb-note', { unit_id: Number(r.unit_id), property_id: Number(r.property_id), scope: scope, body: txt, source: 'ledger', actor: actor })
+          .then(function(j){
+            var w2 = el('um-fields');
+            if (!w2 || w2.getAttribute('data-nba-uid') !== uid) return;
+            nbnPaint(scope, (j && j.note) || null);
+            var h2 = el('um-nbn-hint-' + scope);
+            if (h2) h2.textContent = scope === 'sheet' ? 'Saved — will appear on the client sheet.' : 'Saved.';
+          })
+          .catch(function(e){
+            if (String(e && e.message) === 'AUTH') return;
+            console.error('nb-note save failed', e);
+            var w2 = el('um-fields');
+            if (!w2 || w2.getAttribute('data-nba-uid') !== uid) return;
+            var h2 = el('um-nbn-hint-' + scope);
+            if (h2) h2.textContent = 'Could not save: ' + (e && e.message ? e.message : 'error');
+          });
+      });
+    });
+  }
+  // cls is OPTIONAL and purely additive — every existing 1/2/3-arg call site renders
+  // byte-identically. Only the Nookbook note fields pass it ('fspan' = full row).
+  function fitem(label, value, neg, cls){
+    return '<div class="fitem' + (cls ? ' ' + cls : '') + '"><div class="fl">' + esc(label) + '</div><div class="fv' + (neg ? ' neg' : '') + '">' + (value == null || value === '' ? '–' : value) + '</div></div>';
   }
   // the Ledger's Marketed-units table can open the unit popup before the Units
   // tab has loaded; fetch the directory first if needed, then open.
@@ -9535,6 +9672,7 @@ window.addEventListener('error', function(e){
     if (r.is_not_ready) stat = '<span class="chip c-otb">not ready</span> ' + stat;
     if (r.is_owner_takeback) stat += ' <span class="chip c-otb">take-back</span>';
     if (r.is_nookbook) stat += ' <span id="um-nba-chip">' + nbaChip(r.nb_appliances_installed_on) + '</span>';
+    if (r.is_nookbook) stat += ' <span id="um-nbt-chip">' + nbtChip(r.nb_turnover_completed_on) + '</span>';
     stat += sdChip(r);
     stat += appStageChip(r);
     if (stat) sub.push(stat);
@@ -9563,6 +9701,9 @@ window.addEventListener('error', function(e){
       f += fitem('Building type', esc(r.nb_building_type));
       f += fitem('Parking', esc(r.nb_parking));
       f += fitem('Appliances', nbaValueHtml(r));
+      f += fitem('Turnover', nbtValueHtml(r));
+      f += fitem('Note · client sheet', nbnValueHtml('sheet', 'Shown on the Nookbook sync sheet.'), false, 'fspan');
+      f += fitem('Note · internal', nbnValueHtml('internal', 'Never leaves the dashboard.'), false, 'fspan');
     }
     f += fitem('Lease', r.lease_source ? esc(r.lease_source) + (r.lease_type ? ' · ' + esc(r.lease_type) : '') : 'None');
     f += fitem('Lease start', esc(r.lease_from_date));
@@ -9581,7 +9722,7 @@ window.addEventListener('error', function(e){
     f += fitem('Days vacant', r.days_vacant != null ? r.days_vacant + 'd' : null);
     f += fitem('Available', esc(r.listing_available_date));
     el('um-fields').innerHTML = f;
-    if (r.is_nookbook) nbaBind(r);   // listeners bind to the freshly rendered editor nodes
+    if (r.is_nookbook) { nbaBind(r); nbtBind(r); nbnBind(r); }   // listeners bind to the freshly rendered editor nodes
     // Aged AR buckets live only in the lease directory (v_lease_directory) — fetched on
     // demand, and only when something is owing, so the /units payload stays flat (R5 spirit).
     if (r.lease_id && ((r.total_balance || 0) > 0 || r.balance_src === 'pre')) {
@@ -9611,10 +9752,23 @@ window.addEventListener('error', function(e){
     mountIncomingPanel(el('um-incoming'), uid);
     mountTaskPanel(el('um-tasks'), uid);
     mountFbPanel(el('um-fb'), r);
-    // tenants → identity strip (primary) + full list in details
-    if (r.lease_id) {
+    // tenants → identity strip (primary) + full list in details.
+    // ALSO carries the Nookbook notes, so the condition is no longer lease-only: /unit
+    // returns them and a unit mid-TURNOVER is precisely the one with NO lease — gating
+    // this on r.lease_id alone would leave its note boxes stuck on "Loading…" forever.
+    // Generation-guarded: opening unit A then B quickly could otherwise paint A's tenants
+    // and notes into B's modal, since every id written below exists in both.
+    if (r.lease_id || r.is_nookbook) {
+      var uReq = ++umUnitReq;
       authFetch('/unit?unit_id=' + encodeURIComponent(uid))
         .then(function(j){
+          if (uReq !== umUnitReq) return;   // a newer unit modal owns these nodes now
+          if (r.is_nookbook) {
+            var nn = (j && j.notes) || {};
+            nbnPaint('sheet', nn.sheet || null);
+            nbnPaint('internal', nn.internal || null);
+          }
+          if (!r.lease_id) return;          // Nookbook with no lease: notes only, no tenant strip
           var ts = j.tenants || [];
           if (ts.length) {
             var t0 = ts[0], nm = (t0.name || 'Tenant').trim();
@@ -9634,7 +9788,19 @@ window.addEventListener('error', function(e){
           });
           el('um-tenants').innerHTML = th;
         })
-        .catch(function(){ el('um-tenants').textContent = 'Contacts unavailable right now.'; });
+        .catch(function(e){
+          if (uReq !== umUnitReq) return;
+          if (String(e && e.message) === 'AUTH') return;
+          console.error('unit detail load failed', e);
+          if (r.is_nookbook) {
+            ['sheet', 'internal'].forEach(function(s){
+              var m = el('um-nbn-meta-' + s);
+              if (m) m.textContent = 'Notes unavailable right now.';
+            });
+          }
+          var tn = el('um-tenants');
+          if (r.lease_id && tn) tn.textContent = 'Contacts unavailable right now.';
+        });
     }
     // photos — listed units carry listing photos; UNLISTED units fall back to the
     // unit + property image lists server-side (P1). Always attempt; reveal the strip

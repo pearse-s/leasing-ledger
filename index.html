@@ -3889,12 +3889,27 @@ window.addEventListener('error', function(e){
   // agent queues. Deliberately NOT written back to storage: tapping a role chip persists a
   // real choice (data-role handler) and wins. (Admin names per Pearse 2026-07-17.)
   var TD_ROLE_INFER = { danai: 'coordinator', pearse: 'admin', levi: 'admin', connor: 'admin', jamey: 'admin', sarah: 'manager' };
+  // Which Today personas a locked identity may actually use. WS-M M4 pinned every non-admin
+  // to exactly one; leasing agents also get the coordinator workspace (Pearse 2026-07-30) so
+  // they can book and offer tours themselves instead of routing everything through Danai.
+  // This grants NOTHING server-side: every route that workspace calls (/tour-agents,
+  // /agent-availability, /agent-event-types, /tour-offer, /tour-book, /agent-schedule,
+  // /schedule-funnel, /tour/*) is a plain DATA_ROUTE the team token already cleared, and none
+  // are in ADMIN_ROUTES — the pin is a UI affordance, never an auth boundary. A role absent
+  // from this map stays pinned to itself, so manager/coordinator behaviour is unchanged.
+  var TD_ROLE_ALLOW = { agent: ['agent', 'coordinator'] };
+  function tdRoleAllowed(lockRole){ return TD_ROLE_ALLOW[lockRole] || [lockRole]; }
   function tdRole(){
     // WS-M M4 (D11): an identity lock pins the persona — a signed-in (or name-picked)
-    // manager/agent/coordinator can't wander into other roles. Admins are never locked.
-    if (idLock && idLock.role) return idLock.role;
+    // manager/coordinator can't wander into other roles, and an agent may only reach the
+    // personas TD_ROLE_ALLOW lists. Admins are never locked.
     var r = '';
     try { r = localStorage.getItem(TD_ROLE_KEY) || ''; } catch (e) {}
+    if (idLock && idLock.role) {
+      // honour a saved chip only when this persona is allowed to use it; anything else
+      // (stale storage, a role they no longer hold) falls back to the pinned persona.
+      return tdRoleAllowed(idLock.role).indexOf(r) >= 0 ? r : idLock.role;
+    }
     if (!(r === 'coordinator' || r === 'agent' || r === 'manager' || r === 'admin'))
       r = TD_ROLE_INFER[tdFt(getActor())] || 'agent';
     // the admin view needs the admin token — CSS hides the chip, this gates the render;
@@ -3905,11 +3920,13 @@ window.addEventListener('error', function(e){
   function tdSyncRoles(){
     var box = el('td-roles'); if (!box) return;
     var cur = tdRole();
+    var ok = (idLock && idLock.role) ? tdRoleAllowed(idLock.role) : null;   // null = unlocked, show all
     box.querySelectorAll('.chip-mini').forEach(function(b){
       var r = b.getAttribute('data-role');
       b.classList.toggle('on', r === cur);
-      // WS-M M4: a locked identity sees only its own persona chip
-      b.style.display = (idLock && idLock.role && r !== idLock.role) ? 'none' : '';
+      // WS-M M4: a locked identity sees only the persona chips TD_ROLE_ALLOW grants it
+      // (one for managers/coordinators; agent + coordinator for leasing agents).
+      b.style.display = (ok && ok.indexOf(r) < 0) ? 'none' : '';
     });
   }
   // the !TOKEN guard sits ABOVE todayLoaded = 1 deliberately: marking Today "loaded" from a

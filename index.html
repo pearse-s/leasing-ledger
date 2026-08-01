@@ -9547,10 +9547,15 @@ window.addEventListener('error', function(e){
   // Saving with the date box empty means "done today" — that is the one-tap
   // flick; the picker is there so a turnover finished last week can be backdated.
   //
-  // NOTES are TWO SEPARATE CHANNELS, never one field plus a "share" checkbox:
-  // 'sheet' publishes to the client's spreadsheet, 'internal' never leaves the
-  // dashboard. Separate fields make a leak impossible by construction rather
-  // than merely unlikely — nothing reads internal into any client surface.
+  // NOTES: only the 'sheet' channel is edited here. It publishes to the Nookbook
+  // workbooks, and it is a SEPARATE FIELD rather than one field plus a "share"
+  // checkbox, so a leak is impossible by construction rather than merely unlikely.
+  //
+  // The 'internal' scope still exists in nookbook_unit_notes and on /unit/nb-note
+  // (team-token only), but its editor was REMOVED from this modal 2026-07-31: it
+  // duplicated Buildium's own unit notes, which the dashboard already surfaces via
+  // mountNotesDocs. The helpers below stay scope-parameterised rather than
+  // hard-coded to 'sheet' — the channel is still real, it just has no UI here.
   function nbtToday(){
     // Edmonton, not the browser's zone — the whole app buckets dates there.
     try { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' }); }
@@ -9635,7 +9640,7 @@ window.addEventListener('error', function(e){
   function nbnBind(r){
     var wrap = el('um-fields');
     if (!wrap) return;
-    ['sheet', 'internal'].forEach(function(scope){
+    ['sheet'].forEach(function(scope){
       var btn = el('um-nbn-save-' + scope);
       if (!btn) return;
       btn.addEventListener('click', function(){
@@ -9719,8 +9724,7 @@ window.addEventListener('error', function(e){
       f += fitem('Parking', esc(r.nb_parking));
       f += fitem('Appliances', nbaValueHtml(r));
       f += fitem('Turnover', nbtValueHtml(r));
-      f += fitem('Note · client sheet', nbnValueHtml('sheet', 'Shown on the Nookbook sync sheet.'), false, 'fspan');
-      f += fitem('Note · internal', nbnValueHtml('internal', 'Never leaves the dashboard.'), false, 'fspan');
+      f += fitem('Note · client sheet', nbnValueHtml('sheet', 'Shown on the Nookbook sync sheets.'), false, 'fspan');
     }
     f += fitem('Lease', r.lease_source ? esc(r.lease_source) + (r.lease_type ? ' · ' + esc(r.lease_type) : '') : 'None');
     f += fitem('Lease start', esc(r.lease_from_date));
@@ -9783,7 +9787,6 @@ window.addEventListener('error', function(e){
           if (r.is_nookbook) {
             var nn = (j && j.notes) || {};
             nbnPaint('sheet', nn.sheet || null);
-            nbnPaint('internal', nn.internal || null);
           }
           if (!r.lease_id) return;          // Nookbook with no lease: notes only, no tenant strip
           var ts = j.tenants || [];
@@ -9810,7 +9813,7 @@ window.addEventListener('error', function(e){
           if (String(e && e.message) === 'AUTH') return;
           console.error('unit detail load failed', e);
           if (r.is_nookbook) {
-            ['sheet', 'internal'].forEach(function(s){
+            ['sheet'].forEach(function(s){
               var m = el('um-nbn-meta-' + s);
               if (m) m.textContent = 'Notes unavailable right now.';
             });

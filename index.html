@@ -2535,7 +2535,7 @@ window.addEventListener('error', function(e){
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">Migrated from the Monday Key Ledger &mdash; this is now the system of record. Click a key to check it out / in, change status, or add a note; every action is logged in <b>History</b>. Sidebar scope filters apply to matched keys. Every action is logged under the name you picked on the sign-in screen &mdash; sign out and back in to change it.</div>
+      <div class="note" style="margin-top:10px">Migrated from the Monday Key Ledger &mdash; this is now the system of record. Click a key to check it out / in, change status, or add a note; every action is logged in <b>History</b>. Sidebar owner and property filters apply to matched keys &mdash; the ledger always lists every key, even when your sign-in scopes the rest of the dashboard to your own portfolio. Every action is logged under the name you picked on the sign-in screen &mdash; sign out and back in to change it.</div>
     </div>
   </div>
 
@@ -2585,7 +2585,7 @@ window.addEventListener('error', function(e){
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">Append-only audit trail of every key action (and the one-time import). Sidebar scope filters apply to matched keys.</div>
+      <div class="note" style="margin-top:10px">Append-only audit trail of every key action (and the one-time import). Sidebar owner and property filters apply to matched keys &mdash; like the ledger, this feed is never narrowed to your own portfolio.</div>
     </div>
   </div>
   </main>
@@ -6512,8 +6512,18 @@ window.addEventListener('error', function(e){
     for (var i = 0; i < ksel.length; i++){ if (keyMatchesFilter(r, ksel[i])) return true; }
     return false;
   }
+  // WS-M M4 (D11) pins the sidebar manager scope to a signed-in manager's own Buildium
+  // portfolio at msIds('managers'). The Key Manager deliberately OPTS OUT of that pin:
+  // keys are a shared PHYSICAL resource — whoever is in the office has to be able to find
+  // and check out any set, not just the ones in their own portfolio. Both key surfaces
+  // (this ledger + the History feed) read this one seam, so they stay consistent.
+  // Under the pin the manager axis is dropped ENTIRELY rather than falling back to the
+  // stored sidebar selection: idPaintLock DISABLES the manager button while locked, so a
+  // stale stored pick would filter the ledger with no way left to clear it. Owner and
+  // property scope stay user-controllable, so those still apply.
+  function kMgrPinActive(){ return !!(idLock && idLock.role === 'manager' && idLock.pmId); }
   function scopedKeys(){
-    var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
+    var mg = kMgrPinActive() ? [] : msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
     return (keysAll || []).filter(function(r){
       if (mg.length && mg.indexOf(String(r.property_manager_id)) < 0) return false;
       if (ow.length && ow.indexOf(String(r.primary_owner_id)) < 0) return false;
@@ -7203,6 +7213,9 @@ window.addEventListener('error', function(e){
   function loadHistory(){
     el('veil').classList.remove('hide');
     var p = new URLSearchParams(); p.set('limit','800'); appendScope(p);
+    // Sibling of the keys ledger — same opt-out from the D11 manager pin (see kMgrPinActive),
+    // or a manager would see every key here and only their own portfolio's events.
+    if (kMgrPinActive()) p.delete('managers');
     authFetch('/key-events?' + p.toString()).then(function(j){
       historyAll = j.events || []; drawHistoryChips(); drawHistory(); el('veil').classList.add('hide');
     }).catch(function(){ el('veil').classList.add('hide');

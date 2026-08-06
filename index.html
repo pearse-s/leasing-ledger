@@ -776,6 +776,9 @@ window.addEventListener('error', function(e){
   @media (max-width:880px){ .mvexp{margin-left:0} }
   .srctag{display:inline-block;font-size:.58rem;font-weight:700;letter-spacing:.06em;border:1px solid var(--hairline-dark);border-radius:5px;padding:1px 6px;color:var(--ink-soft);text-decoration:none}
   .srctag.ok{color:var(--moss);border-color:rgba(157,190,134,.4)}
+  /* a manually entered move-in date — amber, matching .c-warm, so "somebody typed this"
+     reads the same everywhere it appears */
+  .srctag.warn{color:var(--amber);border-color:rgba(230,182,92,.5);background:var(--amber-soft)}
   .srctag.ghost{border-style:dashed;color:var(--clay)}
   .mvd-row{margin:6px 0;font-size:.84rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .mvd-crow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--hairline);font-size:.84rem;flex-wrap:wrap}
@@ -4725,7 +4728,9 @@ window.addEventListener('error', function(e){
       tdMvGhostRows().forEach(function(r){
         var d = tdMvOn(r);
         if (!d || d < from || d >= to) return;
-        evs.push({ id: 't' + r.__k + r.lease_id, title: tdMvWhere(r) + ' — no appt', start: d, allDay: true,
+        // keyed on unit_id, not lease_id: a manually forced move-in has no lease, and two
+        // of them would otherwise collide on the same FullCalendar event id
+        evs.push({ id: 't' + r.__k + r.unit_id, title: tdMvWhere(r) + ' — no appt', start: d, allDay: true,
           classNames: ['fc-mv', 'fc-mv-ghost', r.__k === 'in' ? 'fc-mv-in' : 'fc-mv-out'],
           extendedProps: { kind: r.__k === 'in' ? 'move_in' : 'move_out', unit_id: r.unit_id,
             lease_id: r.lease_id, ghost: true, risk: !!r.__risk } });
@@ -4806,6 +4811,10 @@ window.addEventListener('error', function(e){
     // this row moved a week
     if (r.actual_on) h += ' <span class="srctag ok" title="Actual date' + (r.actual_actor ? ' &middot; set by ' + esc(r.actual_actor) : '') + '">actual</span>' +
       (lease && lease !== d ? '<div class="schoffer-sub">lease: ' + esc(String(lease)) + '</div>' : '');
+    // is_manual (move-ins only) = no Buildium lease stands behind this row; the date is a
+    // placeholder somebody typed because Buildium cannot see their draft lease. Say so, or
+    // it reads exactly like a booked one. The gcal draft link below is the point of it.
+    if (r.is_manual) h += ' <span class="srctag warn" title="Manually entered — Buildium has no lease for this yet">expected</span>';
     if (r.appt_at) h += ' <span class="srctag ok">' + esc(schEdFmt(r.appt_at, { hour: 'numeric', minute: '2-digit', hour12: true })) + (r.appt_tentative ? '?' : '') + '</span>';
     else h += ' <a class="srctag ghost" href="' + esc(tdMvGcalDraft(r)) + '" target="_blank" rel="noopener" title="Nothing booked — draft it in Google Calendar">no appt &#8599;</a>';
     return h;
@@ -4815,6 +4824,10 @@ window.addEventListener('error', function(e){
   // and a manual tick could never beat auto anyway (tdMvSt).
   function tdMvTickCellBtn(r, k, stage, st, who, at){
     var chip = tdMvTickCell(st, who, at);
+    // move_stage_ticks is keyed by lease_id, and a manually forced move-in has no lease —
+    // so the stages are not merely unticked, they are unrecordable. Plain text says
+    // "nothing to do here yet"; a button would 400 on every press.
+    if (r.is_manual) return chip;
     if (st !== 'no' && st !== 'man') return chip;
     return '<button type="button" class="mvtickb" data-mvtick="' + stage + '" data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k +
       '" data-mvst="' + (st === 'man' ? 'cleared' : 'done') + '" title="' + (st === 'man' ? 'Undo this checkmark' : 'Mark done') + '">' + chip + '</button>';
@@ -4825,6 +4838,9 @@ window.addEventListener('error', function(e){
   function tdMvActionsCell(r, k){
     var unit = '<button type="button" class="tdact" data-mvunit="' + esc(String(r.unit_id)) + '" title="Open the unit">Unit</button>';
     var c = r.__contact;
+    // /move-detail looks up by lease_id, so a forced row has nothing to fetch. Unit still
+    // works, and it opens the very modal where the override is cleared or its date edited.
+    if (r.is_manual) return '<div class="mvacts">' + unit + '</div>';
     var idAttrs = ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '"';
     if (c === undefined) return '<div class="mvacts"><button type="button" class="tdact" ' + idAttrs + ' data-mvcontact="1">Contact</button>' + unit + '</div>';
     if (c === null) return '<div class="mvacts"><span class="note">Contact failed</span>' + unit + '</div>';
@@ -4893,7 +4909,12 @@ window.addEventListener('error', function(e){
           '<td data-label="Inspect">' + tdMvTickCellBtn(r, k, 'inspection', s.inspection, r.inspection_manual_actor, r.inspection_manual_at) + '</td>' +
           '<td data-label="SODA">' + tdMvTickCellBtn(r, k, 'soda', s.soda, r.soda_manual_actor, r.soda_manual_at) + (tdMvSodaDays(r) >= 10 ? ' <span class="mvtick warn" title="10+ days past move-out">' + tdMvSodaDays(r) + 'd</span>' : '') + '</td>' +
           '<td data-label="Turned">' + tdMvTickCellBtn(r, k, 'turned', s.turned, r.turned_manual_actor, r.turned_manual_at) + '</td>';
-      return '<tr' + (r.__risk ? ' class="mvrisk"' : '') + ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '" role="button" tabindex="0">' +
+      // No data-mvl on a forced row: the drawer fetches /move-detail?lease_id=, which a row
+      // with no lease cannot answer. Dropping the attribute also drops the pointer cursor
+      // and hover (the .mvtable CSS keys on tr[data-mvl]), so the row does not advertise a
+      // click that would fail.
+      return '<tr' + (r.__risk ? ' class="mvrisk"' : '') +
+        (r.is_manual ? '' : ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '" role="button" tabindex="0"') + '>' +
         '<td data-label="Unit"><b>' + esc([r.property_name, r.unit_number].filter(Boolean).join(' · ')) + '</b>' +
           (r.address_line1 ? '<div class="schoffer-sub">' + esc(r.address_line1) + '</div>' : '') + '</td>' +
         '<td data-label="Tenant">' + esc((k === 'in' ? r.incoming_tenant_names : r.outgoing_tenant_names) || '–') + '</td>' +
@@ -8919,9 +8940,25 @@ window.addEventListener('error', function(e){
         // start for leases whose move-in already happened (Active/Historic — no future
         // appointment will ever come). A FUTURE lease without an appointment stays blank
         // on purpose: that gap IS the "no move-in booked yet" signal for pre-leased units.
+        //
+        // A MANUALLY FORCED move-in is the third source, and it deliberately DOES show
+        // where a Future lease start would not: the whole reason someone typed it is that
+        // Buildium cannot see their draft lease and no calendar appointment exists yet.
+        // A typed date is a human statement about a real move-in; a Future lease start is
+        // just data. Precedence: a booked appointment still beats the placeholder.
+        //
+        // MANUAL OUTRANKS THE LEASE FALLBACK, and the order matters. That fallback fires on
+        // Active/Historic leases, i.e. move-ins that ALREADY HAPPENED — on a forced row that
+        // is the previous tenant's arrival, or the sitting tenant's on a flip. A forthcoming
+        // move-in beats a past one in a column headed "Move-in". This mirrors
+        // v_nookbook_sheet's move_in_source CASE (appt -> expected -> lease -> started);
+        // the two orders must not drift.
         unitsAll.forEach(function(u){
-          u.move_in_disp = u.next_move_in_appt || ((u.lease_source === 'Active' || u.lease_source === 'Historic') ? u.lease_from_date : null) || null;
-          u.move_in_src = u.next_move_in_appt ? 'appt' : (u.move_in_disp ? 'lease' : null);
+          var miAppt  = u.next_move_in_appt || null;
+          var miMan   = u.status_override_mode === 'pre_leased' ? (u.future_move_in_date || null) : null;
+          var miLease = (u.lease_source === 'Active' || u.lease_source === 'Historic') ? (u.lease_from_date || null) : null;
+          u.move_in_disp = miAppt || miMan || miLease || null;
+          u.move_in_src  = miAppt ? 'appt' : (miMan ? 'manual' : (miLease ? 'lease' : null));
           // Balance blend: Active-lease total_balance (outstanding-balances mirror) wins;
           // else a FUTURE lease's ledger_balance (amount due before move-in — the balances
           // mirror has no future-lease rows). Row-flagging (r-bal) stays Active-only.
@@ -9080,9 +9117,9 @@ window.addEventListener('error', function(e){
         '<td>' + esc(r.property_name) + '</td>' +
         '<td>' + esc(r.unit_number) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
-        '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + sdChip(r) + appStageChip(r) + '</td>' +
+        '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + usoChip(r) + sdChip(r) + appStageChip(r) + '</td>' +
         '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + fbChip(r) + '</td>' +
-        '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + ' <span class="qn">' + (r.move_in_src === 'appt' ? 'appt' : 'lease') + '</span>' : '–') + '</td>' +
+        '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + ' <span class="qn">' + miSrcTag(r.move_in_src) + '</span>' : '–') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
         '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>'
@@ -9315,7 +9352,7 @@ window.addEventListener('error', function(e){
     { label:'Renewal',         w:12, get:function(r){ var n = rnByUnit[r.unit_id]; return n ? n.renewal_state : ''; } },
     { label:'Pending app',     w:13, get:function(r){ return r.pending_app_stage === 'draft_lease' ? 'Draft lease' : r.pending_app_stage === 'approved' ? 'Approved' : ''; } },
     { label:'Move-in',         key:'move_in_disp', w:12 },
-    { label:'Move-in source',  w:13, get:function(r){ return r.move_in_src === 'appt' ? 'Appointment' : r.move_in_src === 'lease' ? 'Lease start' : ''; } },
+    { label:'Move-in source',  w:13, get:function(r){ return r.move_in_src === 'appt' ? 'Appointment' : r.move_in_src === 'lease' ? 'Lease start' : r.move_in_src === 'manual' ? 'Expected (manual)' : ''; } },
     { label:'Lease type',      key:'lease_type', w:13 },
     { label:'Lease start',     key:'lease_from_date', w:12 },
     { label:'Lease end',       key:'lease_to_date', w:12 },
@@ -9487,6 +9524,132 @@ window.addEventListener('error', function(e){
     var tr2 = e.target.closest('tr[data-uid]');
     if (tr2) openUnit(tr2.getAttribute('data-uid'));
   });
+
+  // ── Manual status override (Pearse 2026-08-06) ───────────────────────────
+  // Buildium's API cannot see a DRAFT lease — GET /leases returns only
+  // Active/Past/Future — so a lease typed straight into its Draft Lease section
+  // leaves the unit reading vacant on every surface until somebody signs. And
+  // Buildium never retracts a Future lease when a deal dies quietly. Hence two
+  // directions, both written through POST /unit/status-override.
+  //
+  // THIS MOVES COMPANY VACANCY NUMBERS. The override is folded into
+  // dashboard.v_unit_status, the single vacancy classifier, so op-vacancy rate,
+  // vacant totals and the daily snapshots all follow it. The copy below says so
+  // out loud rather than making it a thing you have to know.
+  //
+  // The modal never guesses which direction is available — the server's derived
+  // future_lease_id decides, and it 409s on the wrong one. Same reason the
+  // server, not this code, resolves the lease a force-vacant pins to.
+  function miSrcTag(s){
+    return s === 'appt' ? 'appt' : s === 'manual' ? 'expected' : 'lease';
+  }
+  function usoChip(r){
+    if (r.status_override_mode === 'pre_leased') {
+      return ' <span class="chip c-warm" title="Manually marked as having an upcoming move-in' +
+        (r.status_override_actor ? ' by ' + esc(r.status_override_actor) : '') + '">expected move-in</span>';
+    }
+    if (r.status_override_mode === 'vacant') {
+      return ' <span class="chip c-otb" title="Manually marked back as vacant' +
+        (r.status_override_actor ? ' by ' + esc(r.status_override_actor) : '') + '">forced vacant</span>';
+    }
+    return '';
+  }
+  function usoStatHtml(r){
+    if (r.status_override_mode === 'pre_leased') {
+      return '<span class="chip c-warm">Expected move-in</span> <span class="qn">' +
+        (r.future_move_in_date ? esc(r.future_move_in_date) : 'date TBD') +
+        (r.status_override_actor ? ' &middot; set by ' + esc(r.status_override_actor) : '') + '</span>';
+    }
+    if (r.status_override_mode === 'vacant') {
+      return '<span class="chip c-otb">Forced vacant</span> <span class="qn">' +
+        'Buildium still shows a future lease' +
+        (r.status_override_actor ? ' &middot; set by ' + esc(r.status_override_actor) : '') + '</span>';
+    }
+    return '<span class="qn">Following Buildium.</span>';
+  }
+  function usoValueHtml(r){
+    var on = !!r.status_override_mode;
+    var h = '<span id="um-uso-stat">' + usoStatHtml(r) + '</span>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px">';
+    if (on) {
+      h += '<button type="button" class="listbtn" id="um-uso-clear">Clear override</button>';
+    } else if (r.future_lease_id) {
+      // Buildium HAS a future lease. The only useful direction is contradicting it.
+      h += '<button type="button" class="listbtn" id="um-uso-vacant">Mark back as vacant</button>';
+    } else {
+      h += '<input type="date" id="um-uso-date" value="" style="width:150px" aria-label="Expected move-in date">' +
+           '<button type="button" class="listbtn" id="um-uso-force">Mark as moving in</button>';
+    }
+    h += '</div>';
+    if (!on) {
+      h += '<div class="qn" style="margin-top:4px">' + (r.future_lease_id
+        ? 'Use when a signed lease fell through and Buildium has not been updated yet.'
+        : 'Use when the lease is only a draft in Buildium. Leave the date blank if it is still TBD.') +
+        ' This changes the vacancy numbers.</div>';
+    }
+    if (on && r.status_override_note) {
+      h += '<div class="qn" style="margin-top:4px">' + esc(r.status_override_note) + '</div>';
+    }
+    h += '<div class="lmphnote" id="um-uso-hint"></div>';
+    return h;
+  }
+  function usoBind(r){
+    var wrap = el('um-fields');
+    if (!wrap) return;
+    wrap.setAttribute('data-uso-uid', String(r.unit_id));
+    function go(mode){
+      var hint = el('um-uso-hint');
+      var actor = getActor();
+      if (!actor){ if (hint) hint.textContent = 'Pick your name first (on the sign-in screen).'; return; }
+      var body = { unit_id: Number(r.unit_id), property_id: Number(r.property_id), mode: mode, actor: actor };
+      if (mode === 'pre_leased') body.expected_move_in_on = (el('um-uso-date') || {}).value || '';
+      if (hint) hint.textContent = 'Saving…';
+      var uid = String(r.unit_id);
+      postJSON('/unit/status-override', body)
+        .then(function(j){
+          // Repaint from the SERVER's derived row, never from what we just sent: the
+          // override can be stored yet inert (forced on a flip, where the Active lease
+          // still owns occupancy_status), and only the server knows that.
+          var u = (j && j.unit) || {};
+          r.status_override_mode  = u.status_override_mode || null;
+          r.status_override_actor = u.status_override_actor || null;
+          r.status_override_at    = u.status_override_at || null;
+          r.status_override_note  = u.status_override_note || null;
+          r.occupancy_status      = u.occupancy_status || r.occupancy_status;
+          r.has_upcoming_move_in  = !!u.has_upcoming_move_in;
+          r.future_move_in_date   = u.future_move_in_date || null;
+          // Re-derive the Move-in column the same way loadUnits does, so the board and
+          // the modal cannot disagree about which source won. Keep the two in step —
+          // including the manual-before-lease precedence explained there.
+          var miAppt  = r.next_move_in_appt || null;
+          var miMan   = r.status_override_mode === 'pre_leased' ? (r.future_move_in_date || null) : null;
+          var miLease = (r.lease_source === 'Active' || r.lease_source === 'Historic') ? (r.lease_from_date || null) : null;
+          r.move_in_disp = miAppt || miMan || miLease || null;
+          r.move_in_src  = miAppt ? 'appt' : (miMan ? 'manual' : (miLease ? 'lease' : null));
+          drawChips(); drawUnits();
+          // the modal may show another unit by now — these ids would be ITS nodes, not ours
+          var w2 = el('um-fields');
+          if (!w2 || w2.getAttribute('data-uso-uid') !== uid) return;
+          var st = el('um-uso-stat'); if (st) st.innerHTML = usoStatHtml(r);
+          var ch = el('um-uso-chip'); if (ch) ch.innerHTML = usoChip(r);
+          // The available buttons depend on the new state, so re-render the control and
+          // re-bind — a stale "Mark as moving in" button after forcing would be a trap.
+          var host = el('um-uso-host');
+          if (host){ host.innerHTML = usoValueHtml(r); usoBind(r); }
+          var h2 = el('um-uso-hint'); if (h2) h2.textContent = 'Saved.';
+        })
+        .catch(function(e){
+          if (String(e && e.message) === 'AUTH') return;
+          console.error('status-override save failed', e);
+          var w2 = el('um-fields');
+          if (!w2 || w2.getAttribute('data-uso-uid') !== uid) return;
+          var h2 = el('um-uso-hint'); if (h2) h2.textContent = 'Could not save: ' + (e && e.message ? e.message : 'error');
+        });
+    }
+    var bf = el('um-uso-force');  if (bf) bf.addEventListener('click', function(){ go('pre_leased'); });
+    var bv = el('um-uso-vacant'); if (bv) bv.addEventListener('click', function(){ go('vacant'); });
+    var bc = el('um-uso-clear');  if (bc) bc.addEventListener('click', function(){ go(''); });
+  }
 
   /* ── unit detail popup ────────────────────── */
   // ── Nookbook appliances (Pearse 2026-07-22) ──────────────────────────────
@@ -9708,6 +9871,7 @@ window.addEventListener('error', function(e){
     if (r.is_owner_takeback) stat += ' <span class="chip c-otb">take-back</span>';
     if (r.is_nookbook) stat += ' <span id="um-nba-chip">' + nbaChip(r.nb_appliances_installed_on) + '</span>';
     if (r.is_nookbook) stat += ' <span id="um-nbt-chip">' + nbtChip(r.nb_turnover_completed_on) + '</span>';
+    stat += '<span id="um-uso-chip">' + usoChip(r) + '</span>';
     stat += sdChip(r);
     stat += appStageChip(r);
     if (stat) sub.push(stat);
@@ -9755,7 +9919,13 @@ window.addEventListener('error', function(e){
     f += fitem('Listed rent', r.is_listed && r.listing_rent != null ? fmtMoney(r.listing_rent) : null);
     f += fitem('Days vacant', r.days_vacant != null ? r.days_vacant + 'd' : null);
     f += fitem('Available', esc(r.listing_available_date));
+    // Every unit, not just Nookbook: a draft lease Buildium cannot see, and a dead
+    // Future lease it has not retracted, both happen portfolio-wide. The host div is
+    // what usoBind re-renders into after a save, since which buttons apply changes
+    // with the state.
+    f += fitem('Status override', '<div id="um-uso-host">' + usoValueHtml(r) + '</div>', false, 'fspan');
     el('um-fields').innerHTML = f;
+    usoBind(r);
     if (r.is_nookbook) { nbaBind(r); nbtBind(r); nbnBind(r); }   // listeners bind to the freshly rendered editor nodes
     // Aged AR buckets live only in the lease directory (v_lease_directory) — fetched on
     // demand, and only when something is owing, so the /units payload stays flat (R5 spirit).

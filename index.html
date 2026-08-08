@@ -8936,29 +8936,8 @@ window.addEventListener('error', function(e){
     authFetch('/units')
       .then(function(j){
         unitsAll = j.units || [];
-        // Move-in display value: the CALENDAR appointment when one exists, else the lease
-        // start for leases whose move-in already happened (Active/Historic — no future
-        // appointment will ever come). A FUTURE lease without an appointment stays blank
-        // on purpose: that gap IS the "no move-in booked yet" signal for pre-leased units.
-        //
-        // A MANUALLY FORCED move-in is the third source, and it deliberately DOES show
-        // where a Future lease start would not: the whole reason someone typed it is that
-        // Buildium cannot see their draft lease and no calendar appointment exists yet.
-        // A typed date is a human statement about a real move-in; a Future lease start is
-        // just data. Precedence: a booked appointment still beats the placeholder.
-        //
-        // MANUAL OUTRANKS THE LEASE FALLBACK, and the order matters. That fallback fires on
-        // Active/Historic leases, i.e. move-ins that ALREADY HAPPENED — on a forced row that
-        // is the previous tenant's arrival, or the sitting tenant's on a flip. A forthcoming
-        // move-in beats a past one in a column headed "Move-in". This mirrors
-        // v_nookbook_sheet's move_in_source CASE (appt -> expected -> lease -> started);
-        // the two orders must not drift.
         unitsAll.forEach(function(u){
-          var miAppt  = u.next_move_in_appt || null;
-          var miMan   = u.status_override_mode === 'pre_leased' ? (u.future_move_in_date || null) : null;
-          var miLease = (u.lease_source === 'Active' || u.lease_source === 'Historic') ? (u.lease_from_date || null) : null;
-          u.move_in_disp = miAppt || miMan || miLease || null;
-          u.move_in_src  = miAppt ? 'appt' : (miMan ? 'manual' : (miLease ? 'lease' : null));
+          miDerive(u);
           // Balance blend: Active-lease total_balance (outstanding-balances mirror) wins;
           // else a FUTURE lease's ledger_balance (amount due before move-in — the balances
           // mirror has no future-lease rows). Row-flagging (r-bal) stays Active-only.
@@ -9352,7 +9331,7 @@ window.addEventListener('error', function(e){
     { label:'Renewal',         w:12, get:function(r){ var n = rnByUnit[r.unit_id]; return n ? n.renewal_state : ''; } },
     { label:'Pending app',     w:13, get:function(r){ return r.pending_app_stage === 'draft_lease' ? 'Draft lease' : r.pending_app_stage === 'approved' ? 'Approved' : ''; } },
     { label:'Move-in',         key:'move_in_disp', w:12 },
-    { label:'Move-in source',  w:13, get:function(r){ return r.move_in_src === 'appt' ? 'Appointment' : r.move_in_src === 'lease' ? 'Lease start' : r.move_in_src === 'manual' ? 'Expected (manual)' : ''; } },
+    { label:'Move-in source',  w:13, get:function(r){ return r.move_in_src === 'appt' ? 'Appointment' : r.move_in_src === 'lease' ? 'Lease start' : r.move_in_src === 'expected' ? 'Expected (manual)' : r.move_in_src === 'manual' ? 'Actual (manual)' : ''; } },
     { label:'Lease type',      key:'lease_type', w:13 },
     { label:'Lease start',     key:'lease_from_date', w:12 },
     { label:'Lease end',       key:'lease_to_date', w:12 },
@@ -9540,8 +9519,39 @@ window.addEventListener('error', function(e){
   // The modal never guesses which direction is available — the server's derived
   // future_lease_id decides, and it 409s on the wrong one. Same reason the
   // server, not this code, resolves the lease a force-vacant pins to.
+  // ── the Move-in column: ONE derivation ────────────────────────────────────
+  // This was TWO copies (loadUnits + usoBind) kept in step by a comment. That is exactly
+  // how a precedence drifts, so there is now one function and both call it.
+  //
+  // Precedence, mirroring v_nookbook_sheet's move_in_source CASE
+  // (appt -> expected -> lease -> started) with the lease-keyed manual date slotted in:
+  //   appt     the CALENDAR appointment (Google mirror) — a booked time beats every guess
+  //   expected the status override's expected date. Unit-keyed, exists precisely BECAUSE
+  //            Buildium cannot see the draft lease, so it shows where a Future lease start
+  //            would not. A typed date is a human statement about a real move-in.
+  //   manual   lease_attributions.move_in_date for the DISPLAYED lease — a human correcting
+  //            the lease date (they came early), surfaced here 2026-08-07 so the board and
+  //            the unit modal cannot show one unit two different move-ins. Both stores were
+  //            EMPTY when this landed, so it changed zero live rows.
+  //   lease    the Active/Historic lease start. A FUTURE lease with none of the above stays
+  //            blank on purpose: that gap IS the "no move-in booked yet" signal.
+  //
+  // ORDER MATTERS. The lease fallback fires on Active/Historic leases — move-ins that
+  // ALREADY HAPPENED (the previous tenant's arrival on a forced row, or the sitting tenant's
+  // on a flip). A forthcoming move-in beats a past one in a column headed "Move-in", which is
+  // why both human sources outrank it. Keep this in step with the SQL CASE.
+  function miDerive(u){
+    var miAppt   = u.next_move_in_appt || null;
+    var miExp    = u.status_override_mode === 'pre_leased' ? (u.future_move_in_date || null) : null;
+    var miManual = u.move_in_override_on || null;
+    var miLease  = (u.lease_source === 'Active' || u.lease_source === 'Historic') ? (u.lease_from_date || null) : null;
+    u.move_in_disp = miAppt || miExp || miManual || miLease || null;
+    u.move_in_src  = miAppt ? 'appt' : (miExp ? 'expected' : (miManual ? 'manual' : (miLease ? 'lease' : null)));
+  }
+  // One vocabulary across the whole app: appt / expected / actual / lease. "actual" matches
+  // what the Moves card already calls a lease-keyed manual date (tdMvDateCell).
   function miSrcTag(s){
-    return s === 'appt' ? 'appt' : s === 'manual' ? 'expected' : 'lease';
+    return s === 'appt' ? 'appt' : s === 'expected' ? 'expected' : s === 'manual' ? 'actual' : 'lease';
   }
   function usoChip(r){
     if (r.status_override_mode === 'pre_leased') {
@@ -9556,9 +9566,14 @@ window.addEventListener('error', function(e){
   }
   function usoStatHtml(r){
     if (r.status_override_mode === 'pre_leased') {
+      // "held until" (migration 20260808010000): a pre-leased override has no lease to attach
+      // to, so it carries a 14-day clock and RETIRES SILENTLY. Silent is only acceptable if
+      // the expiry was visible first — say it here, before the unit quietly goes vacant again.
+      // Re-saving extends the clock; ignoring it does not.
       return '<span class="chip c-warm">Expected move-in</span> <span class="qn">' +
         (r.future_move_in_date ? esc(r.future_move_in_date) : 'date TBD') +
-        (r.status_override_actor ? ' &middot; set by ' + esc(r.status_override_actor) : '') + '</span>';
+        (r.status_override_actor ? ' &middot; set by ' + esc(r.status_override_actor) : '') +
+        (r.status_override_expires_on ? ' &middot; held until ' + esc(r.status_override_expires_on) : '') + '</span>';
     }
     if (r.status_override_mode === 'vacant') {
       return '<span class="chip c-otb">Forced vacant</span> <span class="qn">' +
@@ -9618,14 +9633,10 @@ window.addEventListener('error', function(e){
           r.occupancy_status      = u.occupancy_status || r.occupancy_status;
           r.has_upcoming_move_in  = !!u.has_upcoming_move_in;
           r.future_move_in_date   = u.future_move_in_date || null;
-          // Re-derive the Move-in column the same way loadUnits does, so the board and
-          // the modal cannot disagree about which source won. Keep the two in step —
-          // including the manual-before-lease precedence explained there.
-          var miAppt  = r.next_move_in_appt || null;
-          var miMan   = r.status_override_mode === 'pre_leased' ? (r.future_move_in_date || null) : null;
-          var miLease = (r.lease_source === 'Active' || r.lease_source === 'Historic') ? (r.lease_from_date || null) : null;
-          r.move_in_disp = miAppt || miMan || miLease || null;
-          r.move_in_src  = miAppt ? 'appt' : (miMan ? 'manual' : (miLease ? 'lease' : null));
+          r.status_override_expires_on = u.status_override_expires_on || null;
+          // ONE derivation shared with loadUnits — the board and the modal cannot disagree
+          // about which source won, because there is no second copy to drift.
+          miDerive(r);
           drawChips(); drawUnits();
           // the modal may show another unit by now — these ids would be ITS nodes, not ours
           var w2 = el('um-fields');
@@ -9649,6 +9660,155 @@ window.addEventListener('error', function(e){
     var bf = el('um-uso-force');  if (bf) bf.addEventListener('click', function(){ go('pre_leased'); });
     var bv = el('um-uso-vacant'); if (bv) bv.addEventListener('click', function(){ go('vacant'); });
     var bc = el('um-uso-clear');  if (bc) bc.addEventListener('click', function(){ go(''); });
+  }
+
+  // ── Move-in / move-out date fields (Pearse 2026-08-07) ────────────────────
+  // NO NEW STATE. Both dates already had a store, both LEASE-KEYED and already
+  // self-retiring; they were merely unreachable from the unit modal — the Manager Today
+  // Moves card was the only surface that could edit them. This is plumbing to POST
+  // /move/date, the SAME route the Moves card posts to, so one lease can never end up
+  // carrying two different dates:
+  //   kind 'in'  -> dashboard.lease_attributions.move_in_date (move_in_date_source='manual')
+  //   kind 'out' -> dashboard.move_out_actual_dates (append-only, latest row wins)
+  //
+  // Each field shows the EFFECTIVE date AND where it came from — overridden by a person, or
+  // derived from Buildium / Google Calendar. That was Pearse's explicit ask: the number alone
+  // is not enough, because a date somebody typed and a date Buildium supplied need different
+  // trust. Vocabulary matches the Moves card and the Move-in column: appt / expected /
+  // actual / lease.
+  //
+  // Keyed to r.lease_id — v_unit_directory's DISPLAYED lease (bl) — so the field always edits
+  // the lease the modal's own "Lease" row names. A unit with NO lease has nothing to key to:
+  // its expected move-in belongs on the status override above, and the field says so rather
+  // than offering a control that would 400 on every press.
+  var MVO = {
+    in:  { k:'in',  label:'Move-in date',  api:'in'  },
+    out: { k:'out', label:'Move-out date', api:'out' }
+  };
+  function mvoOverrideOn(r, k){ return (k === 'in' ? r.move_in_override_on : r.move_out_override_on) || null; }
+  function mvoActor(r, k){ return (k === 'in' ? r.move_in_override_actor : r.move_out_override_actor) || null; }
+  function mvoAt(r, k){ return (k === 'in' ? r.move_in_override_at : r.move_out_override_at) || null; }
+  // the date Buildium/the lease supplies, i.e. what shows if the override is cleared
+  function mvoDerivedOn(r, k){ return (k === 'in' ? r.lease_from_date : r.next_move_out) || null; }
+  // Move-in reuses the board's ONE reader (miDerive) so the field and the Move-in column can
+  // never disagree. Move-out has no such column — the override, else Buildium's notice date.
+  function mvoOn(r, k){
+    if (k === 'in') return r.move_in_disp || null;
+    return r.move_out_override_on || r.next_move_out || null;
+  }
+  function mvoSrc(r, k){
+    if (k === 'in') return r.move_in_src || null;
+    return r.move_out_override_on ? 'manual' : (r.next_move_out ? 'lease' : null);
+  }
+  function mvoSrcChip(s){
+    if (s === 'appt')     return ' <span class="srctag ok" title="Booked appointment from Google Calendar">appt</span>';
+    if (s === 'expected') return ' <span class="srctag warn" title="Expected date from the status override — no lease behind it">expected</span>';
+    if (s === 'manual')   return ' <span class="srctag ok" title="Recorded by a person against this lease">actual</span>';
+    if (s === 'lease')    return ' <span class="srctag" title="Derived from Buildium">lease</span>';
+    return '';
+  }
+  function mvoStatHtml(r, k){
+    var d = mvoOn(r, k);
+    return '<b>' + esc(String(d || '–')) + '</b>' + mvoSrcChip(mvoSrc(r, k));
+  }
+  // The provenance sentence — the "overridden vs derived" half of the field.
+  function mvoNote(r, k){
+    var ov = mvoOverrideOn(r, k), der = mvoDerivedOn(r, k), src = mvoSrc(r, k);
+    if (ov) {
+      var who = mvoActor(r, k), at = mvoAt(r, k);
+      var s = 'Set by ' + esc(who || 'someone') + (at ? ' on ' + esc(String(at).slice(0, 10)) : '') +
+        ' &middot; ' + (k === 'in' ? 'the lease says ' : 'Buildium says ') + esc(String(der || '–'));
+      // a booked appointment outranks a typed date in the Move-in column, so the number above
+      // is NOT this override — say which one is showing rather than looking self-contradictory
+      if (k === 'in' && src !== 'manual') s += ' &middot; the booked appointment is showing above';
+      return s;
+    }
+    if (src === 'appt')     return 'From Google Calendar &mdash; a booked move-in appointment.';
+    if (src === 'expected') return 'Expected move-in from the status override, not a lease.' +
+      (r.status_override_expires_on ? ' Held until ' + esc(r.status_override_expires_on) + '.' : '');
+    if (src === 'lease')    return k === 'in' ? 'From the lease.' : 'From the move-out notice in Buildium.';
+    return k === 'in' ? 'No move-in date yet.' : 'No move-out scheduled.';
+  }
+  function mvoValueHtml(r, k){
+    var id = 'um-mvo-' + k;
+    var h = '<span id="' + id + '-stat">' + mvoStatHtml(r, k) + '</span>';
+    if (r.lease_id) {
+      var ov = mvoOverrideOn(r, k);
+      h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px">' +
+        '<input type="date" id="' + id + '-date" min="2020-01-01" max="2035-12-31" value="' + esc(String(ov || '')) + '" style="width:150px" aria-label="' + esc(MVO[k].label) + '">' +
+        '<button type="button" class="listbtn" id="' + id + '-save">Save</button>' +
+        (ov ? '<button type="button" class="listbtn" id="' + id + '-clear">Use the ' +
+              (k === 'in' ? 'lease' : 'Buildium') + ' date</button>' : '') +
+        '</div>';
+    }
+    h += '<div class="qn" style="margin-top:4px">' + mvoNote(r, k) + '</div>';
+    if (!r.lease_id) {
+      h += '<div class="qn" style="margin-top:4px">' + (k === 'in'
+        ? 'No lease in Buildium to attach a date to. Set the expected move-in on the status override above.'
+        : 'No lease on this unit, so there is no move-out to record.') + '</div>';
+    }
+    h += '<div class="lmphnote" id="' + id + '-hint"></div>';
+    return h;
+  }
+  function mvoBind(r){
+    var wrap = el('um-fields');
+    if (!wrap) return;
+    wrap.setAttribute('data-mvo-uid', String(r.unit_id));
+    mvoBindOne(r, 'in');
+    mvoBindOne(r, 'out');
+  }
+  // ONE kind only. A save re-renders just its own host, so re-binding BOTH would attach a
+  // second listener to the other field's untouched button — two POSTs per click, and
+  // move_out_actual_dates is append-only, so that would be two rows.
+  function mvoBindOne(r, k){
+    var id = 'um-mvo-' + k;
+    function go(clearing){
+      var hint = el(id + '-hint');
+      var actor = getActor();
+      if (!actor){ if (hint) hint.textContent = 'Pick your name first (on the sign-in screen).'; return; }
+      var dv = clearing ? '' : ((el(id + '-date') || {}).value || '');
+      if (!clearing && !dv){ if (hint) hint.textContent = 'Pick a date first (or clear it).'; return; }
+      if (hint) hint.textContent = 'Saving…';
+      var uid = String(r.unit_id);
+      postJSON('/move/date', { lease_id: Number(r.lease_id), move_kind: MVO[k].api, actual_on: dv, actor: actor })
+        .then(function(j){
+          var d = (j && j.date) || {};
+          var on = d.actual_on || null;
+          if (k === 'in') {
+            r.move_in_override_on    = on;
+            r.move_in_override_actor = on ? (d.actor || actor) : null;
+            r.move_in_override_at    = on ? (d.noted_at || new Date().toISOString()) : null;
+            // the board's Move-in column reads this source — re-derive through the ONE
+            // reader so the row behind the modal follows in the same tick
+            miDerive(r);
+            drawUnits();
+          } else {
+            r.move_out_override_on    = on;
+            r.move_out_override_actor = on ? (d.actor || actor) : null;
+            r.move_out_override_at    = on ? (d.noted_at || new Date().toISOString()) : null;
+          }
+          // the modal may show another unit by now — these ids would be ITS nodes, not ours
+          var w2 = el('um-fields');
+          if (!w2 || w2.getAttribute('data-mvo-uid') !== uid) return;
+          // the Clear button appears/disappears with the state, so re-render + re-bind
+          var host = el(id + '-host');
+          if (host){ host.innerHTML = mvoValueHtml(r, k); mvoBindOne(r, k); }
+          var h2 = el(id + '-hint'); if (h2) h2.textContent = 'Saved.';
+        })
+        .catch(function(e){
+          if (String(e && e.message) === 'AUTH') return;
+          console.error('move date save failed', k, e);
+          var w2 = el('um-fields');
+          if (!w2 || w2.getAttribute('data-mvo-uid') !== uid) return;
+          // /move/date kind=in 404s when the lease has no lease_attributions row (349 of 552
+          // Active leases). Surface the server's sentence verbatim — hiding it would leave a
+          // field that silently does nothing.
+          var h2 = el(id + '-hint');
+          if (h2) h2.textContent = 'Could not save: ' + (e && e.message ? e.message : 'error');
+        });
+    }
+    var bs = el(id + '-save');  if (bs) bs.addEventListener('click', function(){ go(false); });
+    var bc = el(id + '-clear'); if (bc) bc.addEventListener('click', function(){ go(true); });
   }
 
   /* ── unit detail popup ────────────────────── */
@@ -9924,8 +10084,14 @@ window.addEventListener('error', function(e){
     // what usoBind re-renders into after a save, since which buttons apply changes
     // with the state.
     f += fitem('Status override', '<div id="um-uso-host">' + usoValueHtml(r) + '</div>', false, 'fspan');
+    // The two date overrides sit WITH the status override: all three are the same thing —
+    // a human correcting what Buildium can see. Each says whether the date on show was
+    // overridden or derived, so nobody has to guess whether a person stands behind it.
+    f += fitem('Move-in date',  '<div id="um-mvo-in-host">'  + mvoValueHtml(r, 'in')  + '</div>', false, 'fspan');
+    f += fitem('Move-out date', '<div id="um-mvo-out-host">' + mvoValueHtml(r, 'out') + '</div>', false, 'fspan');
     el('um-fields').innerHTML = f;
     usoBind(r);
+    mvoBind(r);
     if (r.is_nookbook) { nbaBind(r); nbtBind(r); nbnBind(r); }   // listeners bind to the freshly rendered editor nodes
     // Aged AR buckets live only in the lease directory (v_lease_directory) — fetched on
     // demand, and only when something is owing, so the /units payload stays flat (R5 spirit).

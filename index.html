@@ -6125,7 +6125,13 @@ window.addEventListener('error', function(e){
   }
 
   /* staff picker — self-attested actor, persisted per browser */
-  var STAFF_BASE = ['Connor','Pearse','Sarah','Danai','Miranda','Tristan','Jashan','Noor','Adam'];
+  // 'SarahM' = Sarah MacEachern (2026-08-18), deliberately distinct from 'Sarah' (Sarah
+  // Countryman): every agent surface matches through tdFt(), which compares only the FIRST
+  // whitespace token, so "Sarah M." here would resolve to Countryman. Same string as her
+  // tour_agents.display_name / gcal_calendars.person_name / rc_agent_map.agent_name.
+  // Deactivated people stay in this picker on purpose (Noor and now Tristan/Sarah) — it is
+  // the self-attested actor list for writes, not the bookable roster.
+  var STAFF_BASE = ['Connor','Pearse','Sarah','SarahM','Danai','Miranda','Tristan','Jashan','Noor','Adam'];
   var ACT_KEY = 'ledger_actor_v1', ACTLIST_KEY = 'ledger_actors_v1';
   function actorExtra(){ try { return JSON.parse(localStorage.getItem(ACTLIST_KEY) || '[]') || []; } catch (e) { return []; } }
   function actorList(){

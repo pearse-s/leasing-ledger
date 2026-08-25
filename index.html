@@ -737,6 +737,20 @@ window.addEventListener('error', function(e){
   .mvtgl{display:inline-flex;border:1px solid var(--hairline-dark);border-radius:999px;overflow:hidden;flex:none}
   .mvtgl button{background:transparent;border:none;color:var(--ink-soft);font:700 .68rem var(--sans);letter-spacing:.04em;padding:6px 12px;cursor:pointer}
   .mvtgl button.on{background:var(--clay);color:var(--on-accent)}
+  /* The "Working as" strip carries one chip per manager with a Buildium link (9 with the
+     current roster) — far more than a single segmented pill can hold. .mvtgl is nowrap +
+     overflow:hidden, so at 375px the trailing chips were UNREACHABLE rather than merely
+     off-screen: scrollLeft stays 0, there is nothing to scroll to. Wrap, never clip — so
+     this ONE strip drops the single-pill treatment and lets the chips flow onto more rows,
+     each keeping its own pill outline. Short .mvtgl groups (the Moves card toggles) keep
+     the segmented pill and are untouched. */
+  /* flex:1 1 auto + min-width:0 are load-bearing, not tidying: .mvtgl ships as an inline-flex
+     with flex:none, so its width is content-based and unconstrained — flex-wrap alone never
+     fires and the row just overflows .mvbar. It has to be allowed to shrink to the parent
+     before it will wrap. */
+  #td-mgr-workas .mvtgl{flex:1 1 auto;min-width:0;max-width:100%;flex-wrap:wrap;overflow:visible;border:none;border-radius:0;gap:6px}
+  #td-mgr-workas .mvtgl button{border:1px solid var(--hairline-dark);border-radius:999px}
+  #td-mgr-workas .mvtgl button.on{border-color:transparent}
   .mvchips{display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 10px}
   /* The filter chips are <button class="chip"> with NO c-* modifier, and the base .chip rule
      sets no colour of its own — it leaves that to .c-ok/.c-warm/.c-hot/.c-bad/.c-cold. A
@@ -1203,6 +1217,7 @@ window.addEventListener('error', function(e){
   .rm-send:disabled{background:var(--hairline-dark);color:var(--ink-soft);box-shadow:none;cursor:default}
   @media(max-width:768px){
     .agchip,.chip-mini,.mybtn{padding:8px 13px;font-size:.82rem}
+    #td-mgr-workas .mvtgl button{padding:8px 13px;font-size:.82rem}   /* a real touch target once managers get this strip on a phone */
     .presets button{padding:9px 13px;font-size:.82rem}
     .rfreshbtn{padding:8px 14px;font-size:.82rem}
     #rtable td,#rtable th{padding-top:11px;padding-bottom:11px}
@@ -3426,11 +3441,14 @@ window.addEventListener('error', function(e){
   function rcText(num, body){ return RC_SCHEME + 'r/sms?type=new&number=' + num + (body ? '&content=' + encodeURIComponent(body) : ''); }
   function dstr(d){ return d.toISOString().slice(0,10); }
   function msIds(key){
-    // WS-M M4 (D11): a locked manager identity pins the manager scope at THE single seam
-    // every consumer reads (appendScope → /stats + /manager-brief server scope, the Moves
-    // card, tdMgrScopePass, kpis_scoped). Stored selections are SHADOWED, never mutated —
-    // sign-out restores them untouched.
-    if (key === 'managers' && idLock && idLock.role === 'manager' && idLock.pmId) return [String(idLock.pmId)];
+    // WS-M M4 (D11) used to PIN a manager identity's manager scope here, shadowing the stored
+    // selection. Since 2026-08-25 their own portfolio is a DEFAULT instead (seeded as a real
+    // MS selection by idSeedMgrScope on every identity resolution — i.e. every load), so a
+    // manager can cover for anyone: this seam reads the selection like every other role, and
+    // the Today "Working as" strip + the sidebar manager picker both write to it. Nothing
+    // here is a permission boundary — the server never scoped by caller identity (/stats,
+    // /manager-brief et al. take the 'managers' param from the query string), so this decides
+    // which portfolio they LAND on, never what they could reach.
     return Object.keys(MS[key].sel);
   }
   // is a sidebar entity scope active? (drives the "this number is company-wide" labels — A-14/A-15)
@@ -3845,6 +3863,12 @@ window.addEventListener('error', function(e){
     try {
       var out = {};
       SCOPE_KEYS.forEach(function(k){ if (Object.keys(MS[k].sel).length) out[k] = MS[k].sel; });
+      // A manager's manager-scope is deliberately NOT persisted: their own portfolio is the
+      // default on EVERY load (Pearse 2026-08-25), so covering for someone yesterday must not
+      // silently become their dashboard today. Making it un-saved rather than relying on the
+      // seed to overwrite also means the boot fetch can never flash another manager's numbers.
+      // Their owner/property picks still persist (A-13).
+      if (idMgr()) delete out.managers;
       if (Object.keys(out).length) localStorage.setItem(SCOPE_KEY, JSON.stringify(out));
       else localStorage.removeItem(SCOPE_KEY);   // cleared scope must not resurrect next visit
     } catch (e) {}
@@ -3982,7 +4006,7 @@ window.addEventListener('error', function(e){
     }
     if (role === 'manager'){
       tdSub(idLock && idLock.role === 'manager'
-        ? 'Manager — scoped to you (' + idLock.name + ')' + (idLock.pmId ? '' : ' — no Buildium portfolio linked, showing company-wide') + '. The brief first, then moves, renewals, tasks and unit movement.'
+        ? 'Manager — ' + tdMgrScopeWord() + (idLock.pmId ? '' : ' — no Buildium portfolio linked, showing company-wide') + '. The brief first, then moves, renewals, tasks and unit movement.'
         : 'Manager — the brief first, then moves, renewals, tasks and unit movement across your scope.');
       // idRosterLoad fires its callback SYNCHRONOUSLY on its no-token path (nothing to fetch
       // yet), which used to re-enter tdRender with tmRoster STILL null — the same guard, the
@@ -6177,8 +6201,13 @@ window.addEventListener('error', function(e){
        2. the sidebar name picker under the shared password, matched against the no-PII
           GET /team-roster (exact display_name, else UNIQUE first name; ambiguous → none)
      Non-admin identity ⇒ idLock: persona pinned (tdRole), other role chips hidden
-     (tdSyncRoles), and for managers with a Buildium link the manager scope pinned at
-     msIds() — the one seam every scoped consumer reads. Admins are NEVER locked; verified
+     (tdSyncRoles). The ROLE is still a lock; the manager SCOPE is not — as of 2026-08-25 a
+     manager with a Buildium link merely DEFAULTS to their own portfolio (idSeedMgrScope
+     writes a real MS selection at every identity resolution) and can work as any other
+     manager, or team-wide, from the Today strip or the sidebar picker. msIds() stays the one
+     seam every scoped consumer reads; it just no longer overrides the selection. Note this
+     was never a permission boundary — no route scopes by caller identity — so the change is
+     about where a manager LANDS, not what they can reach. Admins are NEVER locked; verified
      admins also clear the server's ADMIN_ROUTES gate via JWT (D12) — the name picker
      never does, so picking "Pearse" under the team password tailors layout only. */
   var idLock = null;      // { role, pmId|null, name, verified } while a non-admin identity is active
@@ -6246,34 +6275,64 @@ window.addEventListener('error', function(e){
     idApplyAdmin();
     var now = idLock ? (idLock.role + ':' + idLock.pmId + ':' + idLock.name) : '';
     if (now === prev) return;
+    idSeedMgrScope();   // identity resolved (or changed) → land on THEIR portfolio
     idPaintLock();
     // onScopeChange refetches every scoped surface AND re-renders Today when visible
     // (todayLoaded reset + loadToday → tdSyncRoles + tdRender) — one call does it all.
     onScopeChange();
   }
+  // A manager identity with a Buildium portfolio link. One predicate, so the several surfaces
+  // that care (scopeSave, kMgrPinActive, the Working-as strip) can never drift apart.
+  function idMgr(){ return (idLock && idLock.role === 'manager' && idLock.pmId) ? idLock : null; }
+  // Their own portfolio is the DEFAULT scope, seeded as a real MS selection every time an
+  // identity resolves — which is once per load, and again if the picked name changes. That is
+  // the whole of "defaults to their portfolio first": it deliberately does NOT run on ordinary
+  // scope changes (idRecompute returns early when the identity key is unchanged), so a switch
+  // to another manager survives tab hops and refetches for the rest of the session.
+  // Seeding a real selection — rather than shadowing msIds as the old pin did — is what lets
+  // every existing scoped consumer, the sidebar button and the export labels work unchanged.
+  function idSeedMgrScope(){
+    var mg = idMgr(); if (!mg) return;
+    MS.managers.sel = {};
+    MS.managers.sel[String(mg.pmId)] = mg.name;
+  }
   function idPaintLock(){
     var b = el('msb-managers'); if (!b) return;
-    if (idLock && idLock.role === 'manager' && idLock.pmId){
-      b.textContent = 'Scoped to you — ' + esc(String(idLock.name).split(/\s+/)[0] || idLock.name);
-      b.classList.add('has');
-      b.disabled = true;
-    } else {
-      b.disabled = false;
-      msButton('managers');   // repaint from the untouched stored selection
-    }
+    b.disabled = false;   // never disabled since the scope became switchable (2026-08-25)
+    msButton('managers');
   }
-  // Admin "working as" strip on the manager view: Team-wide + every roster manager with a
-  // Buildium portfolio link. Not rendered for locked managers (they ARE their scope).
+  // The Today subtitle has to report where they ACTUALLY are, now that the scope is a default
+  // rather than a pin: reading "scoped to you" over Arathi's portfolio would be exactly the
+  // quiet lie the A-15/A-16 lessons were about. A manager with no Buildium link has nothing to
+  // switch away from, so that case keeps its original wording (the caller appends the reason).
+  function tdMgrScopeWord(){
+    if (!idLock) return 'the brief across your scope';
+    var mine = 'scoped to you (' + idLock.name + ')';
+    if (!idLock.pmId) return mine;
+    var cur = msIds('managers');
+    if (!cur.length) return 'working team-wide';
+    if (cur.length === 1 && String(cur[0]) === String(idLock.pmId)) return mine;
+    return 'working as ' + msLabels('managers').join(', ');
+  }
+  // "Working as" strip on the manager view: Team-wide + every roster manager with a Buildium
+  // portfolio link. Shown to admins AND to identified managers — a manager's own portfolio is
+  // a default, not a pin, so they can cover for anyone from here and get back in one tap.
   function tdMgrWorkasHtml(){
-    if (idLock && idLock.role === 'manager') return '';
     var pms = (tmRoster || []).filter(function(r){ return r.property_manager_id != null; });
     if (!pms.length) return '';
+    var me = idMgr();
+    var mine = me ? String(me.pmId) : '';
     var cur = msIds('managers');
     var one = cur.length === 0 ? '' : (cur.length === 1 ? String(cur[0]) : null);
-    var h = '<div class="mvbar" id="td-mgr-workas"><span class="sf-label" style="align-self:center">Working as</span><span class="mvtgl">' +
-      '<button type="button" data-workas=""' + (one === '' ? ' class="on"' : '') + '>Team-wide</button>';
+    var h = '<div class="mvbar" id="td-mgr-workas"><span class="sf-label" style="align-self:center">Working as</span><span class="mvtgl">';
+    // Their own chip leads and is named for the relationship, not the person — "My portfolio"
+    // reads as home in a way their own name next to five other names does not.
+    if (me) h += '<button type="button" data-workas="' + esc(mine) + '" data-workas-n="' + esc(me.name) + '"' +
+      (one === mine ? ' class="on"' : '') + '>My portfolio</button>';
+    h += '<button type="button" data-workas=""' + (one === '' ? ' class="on"' : '') + '>Team-wide</button>';
     pms.forEach(function(r){
       var id = String(r.property_manager_id);
+      if (id === mine) return;   // already rendered, as "My portfolio"
       h += '<button type="button" data-workas="' + esc(id) + '" data-workas-n="' + esc(r.display_name) + '"' +
         (one === id ? ' class="on"' : '') + '>' + esc(String(r.display_name).split(/\s+/)[0]) + '</button>';
     });
@@ -6539,16 +6598,23 @@ window.addEventListener('error', function(e){
     for (var i = 0; i < ksel.length; i++){ if (keyMatchesFilter(r, ksel[i])) return true; }
     return false;
   }
-  // WS-M M4 (D11) pins the sidebar manager scope to a signed-in manager's own Buildium
-  // portfolio at msIds('managers'). The Key Manager deliberately OPTS OUT of that pin:
-  // keys are a shared PHYSICAL resource — whoever is in the office has to be able to find
-  // and check out any set, not just the ones in their own portfolio. Both key surfaces
-  // (this ledger + the History feed) read this one seam, so they stay consistent.
-  // Under the pin the manager axis is dropped ENTIRELY rather than falling back to the
-  // stored sidebar selection: idPaintLock DISABLES the manager button while locked, so a
-  // stale stored pick would filter the ledger with no way left to clear it. Owner and
-  // property scope stay user-controllable, so those still apply.
-  function kMgrPinActive(){ return !!(idLock && idLock.role === 'manager' && idLock.pmId); }
+  // The Key Manager deliberately OPTS OUT of a manager's DEFAULT scope: keys are a shared
+  // PHYSICAL resource — whoever is in the office has to be able to find and check out any
+  // set, not just the ones in their own portfolio. Both key surfaces (this ledger + the
+  // History feed) read this one seam, so they stay consistent.
+  // Narrowed 2026-08-25, when the manager scope became switchable: the old opt-out fired for
+  // ANY manager identity, and its second rationale ("the manager button is disabled, so a
+  // stale pick could never be cleared") no longer holds now that the button is live. So it
+  // now opts out only while they are on their own portfolio — the default they never chose.
+  // An EXPLICIT pick of another manager is honoured here exactly as it is everywhere else,
+  // which is also what an admin working as that manager already sees. Derived from the
+  // current scope, so there is no extra state to keep in sync. Owner and property scope have
+  // always stayed user-controllable and still apply.
+  function kMgrPinActive(){
+    if (!idMgr()) return false;
+    var mg = msIds('managers');
+    return mg.length === 1 && String(mg[0]) === String(idLock.pmId);
+  }
   function scopedKeys(){
     var mg = kMgrPinActive() ? [] : msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
     return (keysAll || []).filter(function(r){
@@ -7324,7 +7390,6 @@ window.addEventListener('error', function(e){
 
   /* ── multi-select ─────────────────────────── */
   function msButton(key){
-    if (key === 'managers' && idLock && idLock.role === 'manager' && idLock.pmId) return;   // WS-M M4: the lock text owns this button (idPaintLock)
     var m = MS[key];
     var ids = msIds(key);
     var btn = el('msb-' + key);

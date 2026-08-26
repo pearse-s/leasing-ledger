@@ -763,7 +763,13 @@ window.addEventListener('error', function(e){
   .mvchips .chip:hover{border-color:var(--clay);color:var(--ink)}
   .mvchips .chip.on{background:var(--clay-soft);border-color:rgba(232,180,62,.45);color:var(--clay)}
   .mvsec-h{font-family:var(--serif);font-weight:600;font-size:1rem;margin:14px 0 4px}
-  .mvtable{width:100%;border-collapse:collapse;font-size:.78rem;min-width:840px}   /* 8 columns since the Actions column landed (2026-07-27); .scrollx carries it on small screens */
+  /* 2026-08-26 — .scrollx had NO rule at all: the class was applied to both wide data tables
+     and referenced in comments as the thing that carries them on small screens, but nothing
+     ever made it scroll. With .mvtable at min-width:840px that stayed latent; at 1010px (Done
+     + Notes) a 1000px-wide window pushed the PAGE 286px sideways. This is the house pattern
+     from CLAUDE.md: wide content scrolls inside its own overflow-x:auto box, the body never does. */
+  .scrollx{overflow-x:auto}
+  .mvtable{width:100%;border-collapse:collapse;font-size:.78rem;min-width:1010px}   /* 10 columns since Done + Notes landed (2026-08-26); .scrollx carries it on small screens */
   .mvtable th{font-size:.58rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:6px 8px;border-bottom:1px solid var(--hairline-dark);white-space:nowrap}
   .mvtable td{padding:8px;border-bottom:1px solid var(--hairline);vertical-align:top}
   .mvtable tr[data-mvl]{cursor:pointer}
@@ -783,6 +789,27 @@ window.addEventListener('error', function(e){
   .mvtickb{background:none;border:1px solid transparent;border-radius:8px;cursor:pointer;padding:9px 10px;margin:-9px -10px;font:inherit;color:inherit;min-width:40px;min-height:40px}
   .mvtickb:hover{border-color:var(--clay);background:rgba(232,180,62,.08)}
   .mvtickb:disabled{opacity:.5;cursor:progress}
+  /* 2026-08-26 — the whole-move Done checkbox. 40px target via the box, negative margins so
+     the row height is unchanged (the .mvtickb trick). */
+  /* vertical negative margin only: the horizontal bleed the tick buttons use would be clipped
+     at scrollLeft 0 now that .scrollx actually scrolls, and this is the FIRST column */
+  .mvdonebox{display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px;margin:-9px 0;cursor:pointer}
+  .mvdonebox input{width:17px;height:17px;accent-color:var(--moss);cursor:pointer}
+  .mvdonebox input:disabled{cursor:progress;opacity:.5}
+  /* a finished row stays readable, just visibly retired, and keeps the leftmost stripe the
+     at-risk rows use — in moss, not clay. tdMvRisk forces __risk false when done, so the two
+     stripes can never land on the same row. */
+  tr.mvdone td{opacity:.6}
+  tr.mvdone td:first-child{box-shadow:inset 3px 0 0 var(--moss)}
+  .mvdonechip.on{background:rgba(157,190,134,.16);border-color:rgba(157,190,134,.5);color:var(--moss)}
+  /* Notes: wrap, never clip (the 2026-07-17 policy) — the cell grows and the row grows with
+     it. pre-wrap so a note typed across two lines reads as two lines. */
+  .mvnoteb{display:block;width:100%;max-width:270px;text-align:left;font:inherit;font-size:.76rem;color:var(--ink);background:none;border:1px solid transparent;border-radius:8px;padding:6px 8px;margin:-6px -8px;cursor:pointer;white-space:pre-wrap;overflow-wrap:anywhere;min-height:40px}
+  .mvnoteb:hover{border-color:var(--clay);background:rgba(232,180,62,.08)}
+  .mvnoteb.empty{color:var(--ink-soft);font-weight:600}
+  .mvnote-ed{min-width:230px}
+  .mvnote-ta{width:100%;font:inherit;font-size:.78rem;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:8px;padding:7px 9px;resize:vertical}
+  .mvnote-btns{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
   .mvacts{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
   .mvacts .tdact{padding:5px 8px}
   .mvexp{margin-left:auto}
@@ -4528,11 +4555,18 @@ window.addEventListener('error', function(e){
   // rebuilt whenever the manager grid re-renders (g.innerHTML wipes its container —
   // a stale instance on a detached node paints nothing and leaks listeners).
   var tdMvView = 'cal', tdMvCalView = 'month', tdMvKind = 'both', tdMvDays = '90', tdMvStageF = 'all';
+  // Finished moves are HIDDEN by default — that is the point of the checkbox. The chip in
+  // each table's filter row brings them back, and its count means nothing is silently gone.
+  var tdMvShowDone = false;
+  // the one row whose Notes cell is open for editing: { k, lease, draft }. Held out here so
+  // the editor survives a re-render (a tick on another row repaints the whole table).
+  var tdMvNoteEdit = null;
   try {
     tdMvView = localStorage.getItem('ledger_mgrmoves_view_v1') || 'cal';
     tdMvCalView = localStorage.getItem('ledger_mgrmoves_calview_v1') || 'month';
     tdMvKind = localStorage.getItem('ledger_mgrmoves_kind_v1') || 'both';
     tdMvDays = localStorage.getItem('ledger_mgrmoves_days_v1') || '90';
+    tdMvShowDone = localStorage.getItem('ledger_mgrmoves_showdone_v1') === '1';
   } catch (e) {}
   var mvcal = null, tdMvData = { in_: null, out_: null, movesStale: false }, tdMvDetReq = 0;
   function gcalMoveWhen(r){
@@ -4631,12 +4665,37 @@ window.addEventListener('error', function(e){
     return s.sd === 'due' || s.cleaned === 'no';
   }
   function tdMvRiskOut(r){ return tdMvSodaDays(r) >= 7; }
+  // Whole-move DONE (Pearse 2026-08-26): move_stage_ticks stage='completed', surfaced by both
+  // tracker views as completed_state. 'cleared' is the undo, so only 'done' counts.
+  // NOT the same thing as the move-out stage filter keyed 'done' in TD_MV_FILT below — that
+  // one means "all four stages are ticked". This one means a person said the move is finished.
+  function tdMvDone(r){ return r.completed_state === 'done'; }
+  // ONE risk rule for every caller. A finished move is never at risk — it is finished — and
+  // that has to hold in the header count, the chip counts, the row sort, the calendar ghosts
+  // and the export at the same time, so the done check lives HERE, not in five call sites.
+  function tdMvRisk(r, k){
+    k = k || r.__k;
+    if (tdMvDone(r)) return false;
+    return (k === 'in') ? tdMvRiskIn(r) : tdMvRiskOut(r);
+  }
+  // The stages Done closes on its way past (Pearse 2026-08-26): the OPEN ones only.
+  // Auto-detected and already-ticked stages are left exactly as they are, and SD is absent by
+  // design — it is derived from the lease ledger and has no manual override (the M1 rule).
+  // Returns the DB stage names the route validates, not the UI keys.
+  function tdMvOpenStages(r, k){
+    k = k || r.__k;
+    var st = k === 'in' ? tdMvStagesIn(r) : tdMvStagesOut(r);
+    var keys = k === 'in' ? ['welcome', 'cleaned', 'insurance', 'inspection']
+                          : ['ntv', 'inspection', 'soda', 'turned'];
+    return keys.filter(function(key){ return st[key] === 'no'; })
+      .map(function(key){ return TD_MV_STAGE_API[key] || key; });
+  }
   function tdMvWhere(r){
     return r.address_line1 || [r.property_name || r.building_name, r.unit_number].filter(Boolean).join(' · ') || 'Unit ' + r.unit_id;
   }
   function tdMvPrep(list, k){
     return (list || []).filter(tdMgrScopePass).map(function(r){
-      r.__k = k; r.__risk = (k === 'in') ? tdMvRiskIn(r) : tdMvRiskOut(r);
+      r.__k = k; r.__risk = tdMvRisk(r, k);
       return r;
     });
   }
@@ -4647,8 +4706,10 @@ window.addEventListener('error', function(e){
   }
   function tdMvGhostRows(){
     var out = [];
-    if (tdMvKind !== 'out') (tdMvData.in_ || []).forEach(function(r){ if (!r.appt_at) out.push(r); });
-    if (tdMvKind !== 'in') (tdMvData.out_ || []).forEach(function(r){ if (!r.appt_at) out.push(r); });
+    // a finished move needs no "no appt" nag on the calendar — its real gcal event, if there
+    // is one, still comes through tdMvCalSrc untouched
+    if (tdMvKind !== 'out') (tdMvData.in_ || []).forEach(function(r){ if (!r.appt_at && !tdMvDone(r)) out.push(r); });
+    if (tdMvKind !== 'in') (tdMvData.out_ || []).forEach(function(r){ if (!r.appt_at && !tdMvDone(r)) out.push(r); });
     return out;
   }
   // Prefilled Google Calendar draft (D9: deep-link OUT for now — no write scope). All-day
@@ -4682,12 +4743,20 @@ window.addEventListener('error', function(e){
   // chip-vs-number trap in miniature
   function tdMvCountNote(){
     var n = el('td-mgr-moves-n'); if (!n) return;
-    var bits = [];
-    if (tdMvData.in_) bits.push(tdMvData.in_.length + ' in');
-    if (tdMvData.out_) bits.push(tdMvData.out_.length + ' out');
+    var bits = [], fin = 0;
+    ['in', 'out'].forEach(function(k){
+      var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+      if (!L) return;
+      var open = L.filter(function(r){ return !tdMvDone(r); });
+      fin += L.length - open.length;
+      bits.push(open.length + ' ' + k);
+    });
     var rk = (tdMvData.in_ || []).filter(function(r){ return r.__risk; }).length +
              (tdMvData.out_ || []).filter(function(r){ return r.__risk; }).length;
     if (rk) bits.push(rk + ' at risk');
+    // the in/out counts above EXCLUDE finished moves, so say how many were taken out. A header
+    // that quietly shrank is the chip-vs-number trap this function was split out to avoid.
+    if (fin) bits.push(fin + ' done');
     if (tdMvData.movesStale) bits.push('mirror stale');
     n.textContent = bits.join(' · ');
   }
@@ -4719,6 +4788,10 @@ window.addEventListener('error', function(e){
     else if ((v = b.getAttribute('data-mv-kind'))){ tdMvKind = v; try { localStorage.setItem('ledger_mgrmoves_kind_v1', v); } catch (e) {} if (mvcal) mvcal.refetchEvents(); }
     else if ((v = b.getAttribute('data-mv-days'))){ tdMvDays = v; try { localStorage.setItem('ledger_mgrmoves_days_v1', v); } catch (e) {} }
     else if ((v = b.getAttribute('data-mv-stage')) != null){ tdMvStageF = v; }
+    else if (b.getAttribute('data-mv-showdone') != null){
+      tdMvShowDone = !tdMvShowDone;
+      try { localStorage.setItem('ledger_mgrmoves_showdone_v1', tdMvShowDone ? '1' : '0'); } catch (e) {}
+    }
     tdMvShow();
   }
   // ── calendar view (FullCalendar — the bundled engine; .fc-ev-t keeps the documented
@@ -4856,6 +4929,41 @@ window.addEventListener('error', function(e){
     return '<button type="button" class="mvtickb" data-mvtick="' + stage + '" data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k +
       '" data-mvst="' + (st === 'man' ? 'cleared' : 'done') + '" title="' + (st === 'man' ? 'Undo this checkmark' : 'Mark done') + '">' + chip + '</button>';
   }
+  // The Done checkbox — the one control on this card that is a STATE toggle rather than an
+  // action, so it is a real <input type="checkbox">. It fires on 'change' (once), while the
+  // click delegate only stops the click reaching the row: a label forwards its click to the
+  // input, so handling 'click' here would post twice on every tick.
+  function tdMvDoneCell(r, k){
+    // keyed by lease_id like every other move write, so a manually forced move-in has nothing
+    // to complete against — the same reason its stage ticks are unrecordable, not just unticked
+    if (r.is_manual) return '<span class="mvtick pend" title="Buildium has no lease for this row yet, so there is nothing to mark finished">&ndash;</span>';
+    var on = tdMvDone(r);
+    var who = on ? (r.completed_actor || '') : '';
+    var when = on && r.completed_at ? String(r.completed_at).slice(0, 10) : '';
+    var tip = on ? ('Finished' + (who ? ' by ' + who : '') + (when ? ' on ' + when : '') + ' — untick to reopen it')
+                 : 'Mark this move finished and take it off the list';
+    return '<label class="mvdonebox" title="' + esc(tip) + '"><input type="checkbox" data-mvdone="1" data-mvl="' +
+      esc(String(r.lease_id)) + '" data-mvk="' + k + '"' + (on ? ' checked' : '') + '></label>';
+  }
+  // Notes (Pearse 2026-08-26) — ONE note per move, latest wins. The cell IS the editor, the
+  // same contract the tick cells have: work a row without opening the drawer. Only one row is
+  // ever open (tdMvNoteEdit), so the textarea id stays unique across both tables.
+  function tdMvNoteCell(r, k){
+    if (r.is_manual) return '<span class="note">&ndash;</span>';   // no lease to hang a note on
+    if (tdMvNoteEdit && tdMvNoteEdit.k === k && tdMvNoteEdit.lease === String(r.lease_id)){
+      return '<div class="mvnote-ed"><textarea id="mv-note-ta" class="mvnote-ta" rows="3" maxlength="2000" ' +
+        'placeholder="What should the next person know?">' + esc(tdMvNoteEdit.draft || '') + '</textarea>' +
+        '<div class="mvnote-btns"><button type="button" class="tdact" data-mvnote-save="1" data-mvl="' +
+        esc(String(r.lease_id)) + '" data-mvk="' + k + '">Save</button>' +
+        '<button type="button" class="tdact" data-mvnote-cancel="1">Cancel</button></div></div>';
+    }
+    var body = r.note_body || '';
+    var who = [r.note_actor, r.note_at ? String(r.note_at).slice(0, 10) : ''].filter(Boolean).join(' · ');
+    return '<button type="button" class="mvnoteb' + (body ? '' : ' empty') + '" data-mvnote-edit="1" data-mvl="' +
+      esc(String(r.lease_id)) + '" data-mvk="' + k + '" title="' +
+      esc(body ? ('Edit this note' + (who ? ' — last saved by ' + who : '')) : 'Add a note') + '">' +
+      (body ? esc(body) : '+ Note') + '</button>';
+  }
   // Contact is PII, so it is NOT in the tracker payload (the v_leases rule). The button
   // fetches /move-detail for that one row on click and swaps itself for the call/text/email
   // links — same "on click only" contract the drawer has, one tap instead of a modal.
@@ -4897,9 +5005,15 @@ window.addEventListener('error', function(e){
   // the day window and the stage filter, split out so the table and the export read the SAME
   // set — an export that re-derived its own rows is how a "filtered" file quietly ships the
   // wrong ones (the Units-board uRowsCur lesson)
+  // THE choke point for hiding finished moves: the table, its chip counts and the export all
+  // read this, so a row hidden here is hidden in all three at once and the export can never
+  // ship rows the screen isn't showing (the uRowsCur lesson).
   function tdMvWindowed(k){
     var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
-    return (L || []).filter(function(r){ return tdMvWindowPass(r, k); });
+    return (L || []).filter(function(r){
+      if (tdMvDone(r) && !tdMvShowDone) return false;
+      return tdMvWindowPass(r, k);
+    });
   }
   function tdMvVisible(k){
     return tdMvWindowed(k).filter(function(r){ return tdMvPass(r, k, tdMvStageF); })
@@ -4914,14 +5028,19 @@ window.addEventListener('error', function(e){
     var head = k === 'in' ? 'Move-ins' : 'Move-outs';
     if (L === null) return '<div class="note">Could not load ' + head.toLowerCase() + '.</div>';
     var rows = tdMvWindowed(k);
+    // the finished count comes from the FULL list, NOT from rows — rows has already dropped
+    // them when the toggle is off, which would render the chip that unhides them as "Done 0"
+    var fin = (L || []).filter(function(r){ return tdMvDone(r) && tdMvWindowPass(r, k); }).length;
     var chips = '<div class="mvchips">' + TD_MV_FILT[k].map(function(f){
       var cnt = rows.filter(function(r){ return tdMvPass(r, k, f[0]); }).length;
       return '<button type="button" class="chip' + (tdMvStageF === f[0] ? ' on' : '') + '" data-mv-stage="' + f[0] + '">' + f[1] + ' ' + cnt + '</button>';
-    }).join('') + '</div>';
+    }).join('') +
+      '<button type="button" class="chip mvdonechip' + (tdMvShowDone ? ' on' : '') + '" data-mv-showdone="1" title="' +
+      (tdMvShowDone ? 'Hide the moves marked finished' : 'Show the moves marked finished') + '">&#10003; Done ' + fin + '</button></div>';
     var vis = tdMvVisible(k);
     var th = k === 'in'
-      ? '<tr><th>Unit</th><th>Incoming tenant</th><th>Move-in</th><th>SD</th><th>Clean</th><th>Insur</th><th>Inspect</th><th>Actions</th></tr>'
-      : '<tr><th>Unit</th><th>Outgoing tenant</th><th>Move-out</th><th>NTV</th><th>Inspect</th><th>SODA</th><th>Turned</th><th>Actions</th></tr>';
+      ? '<tr><th>Done</th><th>Unit</th><th>Incoming tenant</th><th>Move-in</th><th>SD</th><th>Clean</th><th>Insur</th><th>Inspect</th><th>Notes</th><th>Actions</th></tr>'
+      : '<tr><th>Done</th><th>Unit</th><th>Outgoing tenant</th><th>Move-out</th><th>NTV</th><th>Inspect</th><th>SODA</th><th>Turned</th><th>Notes</th><th>Actions</th></tr>';
     var body = vis.map(function(r){
       var s = k === 'in' ? tdMvStagesIn(r) : tdMvStagesOut(r);
       var cells = k === 'in'
@@ -4937,12 +5056,16 @@ window.addEventListener('error', function(e){
       // with no lease cannot answer. Dropping the attribute also drops the pointer cursor
       // and hover (the .mvtable CSS keys on tr[data-mvl]), so the row does not advertise a
       // click that would fail.
-      return '<tr' + (r.__risk ? ' class="mvrisk"' : '') +
+      // finished beats at-risk on the row class: tdMvRisk already forces __risk false for a
+      // done row, so the two can never both be true — the ternary just says so out loud
+      return '<tr' + (tdMvDone(r) ? ' class="mvdone"' : (r.__risk ? ' class="mvrisk"' : '')) +
         (r.is_manual ? '' : ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '" role="button" tabindex="0"') + '>' +
+        '<td data-label="Done">' + tdMvDoneCell(r, k) + '</td>' +
         '<td data-label="Unit"><b>' + esc([r.property_name, r.unit_number].filter(Boolean).join(' · ')) + '</b>' +
           (r.address_line1 ? '<div class="schoffer-sub">' + esc(r.address_line1) + '</div>' : '') + '</td>' +
         '<td data-label="Tenant">' + esc((k === 'in' ? r.incoming_tenant_names : r.outgoing_tenant_names) || '–') + '</td>' +
         '<td data-label="' + head.slice(0, -1) + '">' + tdMvDateCell(r, k) + '</td>' + cells +
+        '<td data-label="Notes">' + tdMvNoteCell(r, k) + '</td>' +
         '<td data-label="Actions">' + tdMvActionsCell(r, k) + '</td></tr>';
     }).join('');
     return '<div class="mvsec-h">' + head + ' <span class="qn2">' + vis.length + (vis.length === rows.length ? '' : ' of ' + rows.length) + '</span></div>' +
@@ -4955,6 +5078,14 @@ window.addEventListener('error', function(e){
     if (tdMvKind !== 'out') h += tdMvTrackTable('in');
     if (tdMvKind !== 'in') h += tdMvTrackTable('out');
     tr.innerHTML = h;
+    // the open note editor survives this repaint (its state is tdMvNoteEdit, not the DOM), so
+    // put the caret back or opening one would take two clicks. If its row is no longer on
+    // screen — a filter or the Done toggle moved it — drop the state instead of stranding it.
+    if (tdMvNoteEdit){
+      var ta = el('mv-note-ta');
+      if (ta){ ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
+      else tdMvNoteEdit = null;
+    }
   }
   /* ── Moves export (Pearse 2026-07-27) ──────────────────────────────────────
      REUSES the generic xlsxDownload writer from the Units board — never a second
@@ -4981,6 +5112,9 @@ window.addEventListener('error', function(e){
     { label:'Actual set by', w:16, key:'actual_actor' },
     { label:'Days out',      w:10, type:'num', get:function(r){ return tdMgrDays(tdMvOn(r)); } },
     { label:'At risk',       w:9,  get:function(r){ return r.__risk ? 'Yes' : 'No'; } },
+    { label:'Done',          w:8,  get:function(r){ return tdMvDone(r) ? 'Yes' : 'No'; } },
+    { label:'Done by',       w:16, get:function(r){ return tdMvDone(r) ? (r.completed_actor || '') : ''; } },
+    { label:'Done on',       w:12, get:function(r){ return tdMvDone(r) && r.completed_at ? String(r.completed_at).slice(0, 10) : ''; } },
     { label:'Property',      w:26, key:'property_name' },
     { label:'Building',      w:18, key:'building_name' },
     { label:'Unit',          w:10, key:'unit_number' },
@@ -4996,6 +5130,8 @@ window.addEventListener('error', function(e){
     { label:'SODA sent',     w:12, get:tdMvXlStage('soda') },
     { label:'Days since move-out', w:16, type:'num', get:function(r){ return r.__k === 'out' ? (tdMvSodaDays(r) || null) : null; } },
     { label:'Turned',        w:10, get:tdMvXlStage('turned') },
+    { label:'Notes',         w:48, key:'note_body' },
+    { label:'Note by',       w:16, key:'note_actor' },
     { label:'Manager',       w:18, key:'property_manager_name' },
     { label:'Owner',         w:22, key:'primary_owner_name' },
     { label:'Lease ID',      w:11, type:'num', key:'lease_id' },
@@ -5003,7 +5139,10 @@ window.addEventListener('error', function(e){
   ];
   function tdMvFilterBits(){
     var bits = [tdMvKind === 'both' ? 'Move-ins and move-outs' : (tdMvKind === 'in' ? 'Move-ins only' : 'Move-outs only'),
-      tdMvDays === 'all' ? 'Window: all dates' : 'Window: next ' + tdMvDays + ' days'];
+      tdMvDays === 'all' ? 'Window: all dates' : 'Window: next ' + tdMvDays + ' days',
+      // the file writes tdMvVisible(), so whether finished moves are in it depends on the
+      // toggle — an export that silently dropped them would look like they never existed
+      tdMvShowDone ? 'Includes moves marked done' : 'Excludes moves marked done'];
     if (tdMvStageF !== 'all'){
       var lst = TD_MV_FILT[tdMvKind === 'out' ? 'out' : 'in'], lab = tdMvStageF;
       for (var i = 0; i < lst.length; i++) if (lst[i][0] === tdMvStageF) lab = lst[i][1];
@@ -5078,6 +5217,14 @@ window.addEventListener('error', function(e){
     // SAME override the Signed-leases table edits, so the two surfaces can never disagree;
     // for a move-OUT it writes move_out_actual_dates. Blank + Save, or "Use the lease date",
     // clears it. The lease date is never overwritten — it stays below as provenance.
+    // the same checkbox the table row carries, sharing tdMvDoneToggle and the mvmodal 'change'
+    // delegate — one control, one code path, two surfaces (the sibling-surfaces rule)
+    h += '<div class="orcfg-h">Status</div><div class="mvd-crow"><span>' +
+      (tdMvDone(r) ? 'Finished' + (r.completed_actor ? ' &middot; ' + esc(r.completed_actor) : '') +
+        (r.completed_at ? ' &middot; ' + esc(String(r.completed_at).slice(0, 10)) : '') +
+        ' &mdash; untick to reopen it'
+       : 'Mark this ' + (k === 'in' ? 'move-in' : 'move-out') + ' finished. It leaves the list; the Done chip brings it back.') +
+      '</span><span>' + tdMvDoneCell(r, k) + '</span></div>';
     var mvLease = tdMvLeaseOn(r, k), mvIds = ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '"';
     h += '<div class="orcfg-h">Move date</div>' +
       '<div class="mvd-row"><input type="date" id="mv-d-date" class="mvdate" min="2020-01-01" max="2035-12-31" value="' + esc(String(d || '')) + '">' +
@@ -5107,6 +5254,19 @@ window.addEventListener('error', function(e){
       return '<div class="mvd-crow"><span>' + st[1] + '</span><span>' +
         tdMvTickCell(st[2], r[st[0] + '_manual_actor'], r[st[0] + '_manual_at']) + ' ' + tdMvTickBtn(r, st[0], st[2]) + '</span></div>';
     }).join('');
+    // notes — the drawer edits the SAME one note the tracker's Notes column shows
+    // (dashboard.move_notes, latest wins), just with room to write it
+    h += '<div class="orcfg-h">Note</div>' +
+      (r.is_manual
+        ? '<div class="mvd-row note">This row has no Buildium lease behind it yet, so there is nowhere to store a note against it.</div>'
+        : '<div class="mvd-row note">' + (r.note_body
+            ? 'Last saved' + (r.note_actor ? ' by ' + esc(r.note_actor) : '') +
+              (r.note_at ? ' on ' + esc(String(r.note_at).slice(0, 10)) : '') + '. Saving replaces it; clearing the box removes it.'
+            : 'One note per move — whatever the next person needs to know.') + '</div>' +
+          '<textarea id="mv-d-note-ta" class="mvnote-ta" rows="4" maxlength="2000" placeholder="What should the next person know?">' +
+          esc(r.note_body || '') + '</textarea>' +
+          '<div class="mvnote-btns"><button type="button" class="tdact" data-mvnote-save="1" data-mvl="' +
+          esc(String(r.lease_id)) + '" data-mvk="' + k + '">Save note</button></div>');
     // documents
     h += '<div class="orcfg-h">Documents</div><div id="mv-d-docs">' +
       (det === undefined ? '<span class="note">Loading documents&hellip;</span>'
@@ -5145,6 +5305,9 @@ window.addEventListener('error', function(e){
   // differ for exactly these two, and posting the UI key 400s: that is why "Welcome email
   // sent" and "Signed notice to vacate" could never be ticked (move_stage_ticks was empty).
   var TD_MV_STAGE_API = { welcome: 'welcome_email', ntv: 'ntv_signed' };
+  // the same two, inverted — /move/done echoes back the stage rows it wrote using DB names,
+  // and the row columns they update are keyed by the UI prefix
+  var TD_MV_STAGE_UI = { welcome_email: 'welcome', ntv_signed: 'ntv' };
   function tdMvTick(btn){
     var leaseId = Number(btn.getAttribute('data-mvl')), k = btn.getAttribute('data-mvk');
     var stage = btn.getAttribute('data-mvtick'), state = btn.getAttribute('data-mvst') || 'done';
@@ -5195,6 +5358,81 @@ window.addEventListener('error', function(e){
       if (String(e && e.message) === 'AUTH') return;
       console.error('move date save failed', e);
       alert('Could not save that date — try again.');
+    });
+  }
+  // Tick / untick the whole move. Same contract as tdMvTick and tdMvSetDate: actor required,
+  // optimistic local update, then repaint whatever view is showing — done flips at-risk, the
+  // header counts and (via the ghost rows) the calendar, so all three have to be told.
+  //
+  // Ticking sends the stages still open so the route can close them in the SAME insert; each
+  // one it writes is marked, and clearing Done clears exactly those back (see /move/done).
+  function tdMvDoneToggle(cb){
+    var leaseId = cb.getAttribute('data-mvl'), k = cb.getAttribute('data-mvk');
+    var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+    var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
+    if (!r) return;
+    var actor = getActor();
+    if (!actor){ alert('Pick your name first (the actor selector in the sidebar).'); cb.checked = tdMvDone(r); return; }
+    var want = tdMvDone(r) ? 'cleared' : 'done';
+    var stages = want === 'done' ? tdMvOpenStages(r, k) : [];
+    cb.disabled = true;
+    postJSON('/move/done', { lease_id: Number(leaseId), move_kind: k, state: want, actor: actor, stages: stages }).then(function(j){
+      var d = (j && j.done) || {};
+      r.completed_state = d.state || want;
+      r.completed_actor = want === 'done' ? (d.actor || actor) : null;
+      r.completed_at = want === 'done' ? (d.noted_at || new Date().toISOString()) : null;
+      // mirror the stage rows the route ACTUALLY wrote (it skips ones already standing), so
+      // the checklist on screen matches what was stored without a refetch
+      ((j && j.ticks) || []).forEach(function(t){
+        var key = TD_MV_STAGE_UI[t.stage] || t.stage;
+        r[key + '_manual_state'] = t.state;
+        r[key + '_manual_actor'] = t.state === 'done' ? (t.actor || actor) : null;
+        r[key + '_manual_at'] = t.state === 'done' ? (t.noted_at || new Date().toISOString()) : null;
+      });
+      r.__risk = tdMvRisk(r, k);
+      tdMvRefreshDrawer(k, leaseId);
+      tdMvCountNote();
+      if (tdMvView === 'track') tdMvRenderTrack();
+      else if (mvcal) mvcal.refetchEvents();   // the ghost "no appt" event goes with it
+    }).catch(function(e){
+      cb.disabled = false;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('move done failed', e);
+      cb.checked = tdMvDone(r);   // put the box back the way the data actually reads
+      alert('Could not save that — try again.');
+    });
+  }
+  function tdMvNoteOpen(k, leaseId){
+    var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+    var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
+    if (!r) return;
+    tdMvNoteEdit = { k: k, lease: String(leaseId), draft: r.note_body || '' };
+    tdMvRenderTrack();
+  }
+  // Shared by the tracker cell and the drawer — they edit the same one note, so they save
+  // through the same function; taId is the only thing that differs between them.
+  function tdMvNoteSave(k, leaseId, btn, taId){
+    var actor = getActor();
+    if (!actor){ alert('Pick your name first (the actor selector in the sidebar).'); return; }
+    var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+    var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
+    if (!r) return;
+    var ta = el(taId || 'mv-note-ta');
+    var body = ta ? ta.value : ((tdMvNoteEdit && tdMvNoteEdit.draft) || '');
+    if (btn) btn.disabled = true;
+    postJSON('/move/note', { lease_id: Number(leaseId), move_kind: k, body: body, actor: actor }).then(function(j){
+      var n = (j && j.note) || {};
+      r.note_body = n.body || null;
+      r.note_actor = r.note_body ? (n.actor || actor) : null;
+      r.note_at = r.note_body ? (n.noted_at || new Date().toISOString()) : null;
+      tdMvNoteEdit = null;
+      tdMvRefreshDrawer(k, leaseId);
+      if (tdMvView === 'track') tdMvRenderTrack();
+    }).catch(function(e){
+      if (btn) btn.disabled = false;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('move note failed', e);
+      alert('Could not save that note — try again.');
     });
   }
   function tdMgrAssemble(){
@@ -6010,7 +6248,7 @@ window.addEventListener('error', function(e){
         return;
       }
       // WS-M M3: Moves-card controls + tracker rows (the card lives inside this grid)
-      var mvc = e.target.closest('[data-mv-view],[data-mv-cal],[data-mv-kind],[data-mv-days],[data-mv-stage]');
+      var mvc = e.target.closest('[data-mv-view],[data-mv-cal],[data-mv-kind],[data-mv-days],[data-mv-stage],[data-mv-showdone]');
       if (mvc){ tdMvCtl(mvc); return; }
       if (e.target.closest('[data-mv-export]')){ tdMvExport(); return; }
       // 2026-07-27: the row's own controls are checked BEFORE the row itself, or every
@@ -6021,6 +6259,15 @@ window.addEventListener('error', function(e){
       if (mvct){ tdMvContact(mvct); return; }
       var mvun = e.target.closest('[data-mvunit]');
       if (mvun){ openUnitEnsure(mvun.getAttribute('data-mvunit')); return; }
+      // the Done checkbox does its work on 'change' below — this only keeps the click from
+      // reaching the row, or every tick would also open the drawer behind it
+      if (e.target.closest('.mvdonebox')) return;
+      var mvne = e.target.closest('[data-mvnote-edit]');
+      if (mvne){ tdMvNoteOpen(mvne.getAttribute('data-mvk'), mvne.getAttribute('data-mvl')); return; }
+      var mvns = e.target.closest('[data-mvnote-save]');
+      if (mvns){ tdMvNoteSave(mvns.getAttribute('data-mvk'), mvns.getAttribute('data-mvl'), mvns); return; }
+      if (e.target.closest('[data-mvnote-cancel]')){ tdMvNoteEdit = null; tdMvRenderTrack(); return; }
+      if (e.target.closest('.mvnote-ed')) return;   // typing in the open editor never opens the drawer
       var mvr = e.target.closest('tr[data-mvl]');
       if (mvr){
         if (e.target.closest('a')) return;   // the "no appt ↗" gcal-draft link and the row's call/text/email keep their default
@@ -6074,6 +6321,18 @@ window.addEventListener('error', function(e){
       var b = e.target.closest('[data-goto]'); if (!b) return;
       showTab(b.getAttribute('data-goto'));
     });
+    // Moves: the Done checkbox and the note draft. 'change' fires ONCE for a checkbox however
+    // it was toggled (label, keyboard, click), which 'click' does not — a label forwards its
+    // click to the input, so a click handler would post twice per tick.
+    if (tg) tg.addEventListener('change', function(e){
+      var cb = e.target.closest('[data-mvdone]');
+      if (cb) tdMvDoneToggle(cb);
+    });
+    // keep the in-progress note on the state object, so a repaint triggered from another row
+    // (a tick, a date save) restores what was typed instead of throwing it away
+    if (tg) tg.addEventListener('input', function(e){
+      if (tdMvNoteEdit && e.target.id === 'mv-note-ta') tdMvNoteEdit.draft = e.target.value;
+    });
     var ca = el('td-cal-ag');
     if (ca) ca.addEventListener('click', function(e){
       var bk = e.target.closest('[data-book]');
@@ -6103,8 +6362,15 @@ window.addEventListener('error', function(e){
           dt.getAttribute('data-mvdate') === 'clear' ? '' : (inp ? inp.value : ''), dt);
         return;
       }
+      var dn = e.target.closest('[data-mvnote-save]');
+      if (dn){ tdMvNoteSave(dn.getAttribute('data-mvk'), dn.getAttribute('data-mvl'), dn, 'mv-d-note-ta'); return; }
       var u = e.target.closest('[data-uid]');
       if (u){ closeModal('mvmodal'); openUnitEnsure(u.getAttribute('data-uid')); }   // the mimodal precedent
+    });
+    // the drawer's Done checkbox — same 'change' reasoning as the tracker's (see #td-grid)
+    mm.addEventListener('change', function(e){
+      var cb = e.target.closest('[data-mvdone]');
+      if (cb) tdMvDoneToggle(cb);
     });
   })();
   // Rent drawer — same reason as mvmodal above: #rentmodal is outside #td-grid, so its

@@ -814,6 +814,10 @@ window.addEventListener('error', function(e){
   .mvacts .tdact{padding:5px 8px}
   .mvexp{margin-left:auto}
   .mvdate{font:inherit;font-size:.82rem;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:8px;padding:6px 9px;min-height:40px}
+  /* the booked appointment time - the one thing a manager wants off this row on the day */
+  .mvappt{margin-top:3px;font-weight:700;font-size:.8rem;color:var(--moss);white-space:normal}
+  .mvappt.off{color:var(--amber)}
+  .mvappt-t{font-weight:600;font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
   @media (max-width:880px){ .mvexp{margin-left:0} }
   .srctag{display:inline-block;font-size:.58rem;font-weight:700;letter-spacing:.06em;border:1px solid var(--hairline-dark);border-radius:5px;padding:1px 6px;color:var(--ink-soft);text-decoration:none}
   .srctag.ok{color:var(--moss);border-color:rgba(157,190,134,.4)}
@@ -844,6 +848,16 @@ window.addEventListener('error', function(e){
   .lmsub{font-size:.78rem;color:var(--ink-soft);margin-top:4px}
   .lmsub b{color:var(--ink)}
   .lmbody{padding:14px 22px;overflow:auto}
+  /* TWO drawers - #mvmodal and #rentmodal - render their whole body (.lmhead AND .lmbody)
+     into a wrapper div instead of making them direct children of .lmcard. .lmcard is a flex
+     column capped at max-height:88vh with overflow:hidden, and .lmbody's own overflow:auto
+     only engages when its ancestors can actually shrink: per the flexbox spec a flex item
+     gets an automatic min-height of 0 ONLY when it is itself a scroll container. This
+     wrapper is overflow:visible, so it kept its full content height and the card CLIPPED
+     everything past 88vh - unreachable, not merely off-screen. Every other modal puts
+     .lmbody directly in .lmcard, which is why only these two were affected. Adding Done +
+     Notes to the move drawer pushed it past the line and surfaced it. */
+  #mv-d-body,#rent-d-body{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;overflow:hidden}
   .lmphotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
   .lmph{position:relative;border:1px solid var(--hairline-dark);background:var(--paper-deep);border-radius:3px;overflow:hidden;aspect-ratio:4/3}
   .lmph img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s ease}
@@ -4912,7 +4926,21 @@ window.addEventListener('error', function(e){
     // placeholder somebody typed because Buildium cannot see their draft lease. Say so, or
     // it reads exactly like a booked one. The gcal draft link below is the point of it.
     if (r.is_manual) h += ' <span class="srctag warn" title="Manually entered — Buildium has no lease for this yet">expected</span>';
-    if (r.appt_at) h += ' <span class="srctag ok">' + esc(schEdFmt(r.appt_at, { hour: 'numeric', minute: '2-digit', hour12: true })) + (r.appt_tentative ? '?' : '') + '</span>';
+    // The booked appointment TIME (Pearse 2026-08-27). It was already here as a tiny srctag
+    // chip beside the date; on the day of a move the time IS the thing you need off this row,
+    // so it gets its own line. The appointment is matched within +/-21 days of the move date
+    // (the v_pm_moves lateral), so it can legitimately fall on ANOTHER day - show the date
+    // too whenever they differ, or the row reads as "10:00 AM on the move date" when it is
+    // nothing of the kind. Same reason the actual-vs-lease date shows its provenance above.
+    if (r.appt_at){
+      var apd = '', apSame = false;
+      try { apd = tdDayKeyEd(new Date(r.appt_at)); apSame = !!d && apd === d; } catch (e) {}
+      h += '<div class="mvappt' + (apSame ? '' : ' off') + '" title="' +
+        (apSame ? 'Booked appointment time' : 'Booked appointment is on a different day than the move date') + '">' +
+        esc(schEdFmt(r.appt_at, apSame ? { hour: 'numeric', minute: '2-digit', hour12: true }
+                                       : { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })) +
+        (r.appt_tentative ? ' <span class="mvappt-t">tentative</span>' : '') + '</div>';
+    }
     else h += ' <a class="srctag ghost" href="' + esc(tdMvGcalDraft(r)) + '" target="_blank" rel="noopener" title="Nothing booked — draft it in Google Calendar">no appt &#8599;</a>';
     return h;
   }

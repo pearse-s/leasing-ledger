@@ -2321,6 +2321,13 @@ window.addEventListener('error', function(e){
         </div>
         <div id="tm-list"><span class="count-note">Loading&hellip;</span></div>
       </div>
+      <!-- WS-CF Phase 2 (2026-09-23): take-backs now count if Buildium's Property Status says
+           "Take back" OR the Ledger's owner_takebacks list does. This card lists where the two
+           sides disagree, so neither list drifts silently. Read-only; admin-only (/takeback-recon). -->
+      <div class="card adminonly" style="margin-top:18px" id="hub-takebacks">
+        <div class="tablebar"><h2>Owner take-backs &middot; Buildium vs Ledger</h2><span class="count-note">a property counts as a take-back if either side flags it &middot; flag new ones in Buildium (Property Status = Take back)</span></div>
+        <div id="tbr-list"><span class="count-note">Loading&hellip;</span></div>
+      </div>
     </div>
   </div>
   </div>
@@ -4097,6 +4104,7 @@ window.addEventListener('error', function(e){
       if (hubLoaded === null) loadHub();
       loadHubTeam();
       tmLoad();   // WS-U M3: the Team & sign-ins roster card lives on this view
+      tbrLoad();  // WS-CF Phase 2: take-back disagreement card, same view
     } else {
       tdSub("Agent — today's tours first (in My tours), then follow-ups, signed leases and the team board.");
       g.innerHTML = '';
@@ -6804,6 +6812,54 @@ window.addEventListener('error', function(e){
       console.error('team list failed', e);
       if (gen === tmGen && box) box.innerHTML = '<span class="count-note">Could not load the team list &mdash; ' + esc(String(e && e.message || 'error')) + '</span>';
     });
+  }
+  /* ── Admin take-back reconciliation (WS-CF Phase 2, 2026-09-23) ───────── */
+  // Renders /takeback-recon into #tbr-list. Only disagreements get rows; agreements are
+  // summarised. "Ledger only" is expected (Pearse kept those 2026-09-23) — shown so a
+  // stale row is findable, not because it is wrong.
+  var tbrGen = 0;
+  var TBR_SRC = { buildium_only: 'Buildium only', ledger_only: 'Ledger only', units_only: 'Ledger unit rows only', both: 'Both' };
+  function tbrLoad(){
+    var gen = ++tbrGen;
+    var box = el('tbr-list');
+    if (!box) return;
+    box.innerHTML = '<span class="count-note">Loading&hellip;</span>';
+    authFetch('/takeback-recon').then(function(j){
+      if (gen !== tbrGen) return;
+      tbrRender((j && j.rows) || []);
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('take-back recon failed', e);
+      if (gen === tbrGen && box) box.innerHTML = '<span class="count-note">Could not load take-backs &mdash; ' + esc(String(e && e.message || 'error')) + '</span>';
+    });
+  }
+  function tbrRender(rows){
+    var box = el('tbr-list');
+    if (!box) return;
+    var n = { both: 0, buildium_only: 0, ledger_only: 0, units_only: 0 }, redund = 0;
+    rows.forEach(function(r){ if (n[r.source] !== undefined) n[r.source]++; redund += (r.redundant_unit_rows || 0); });
+    var diff = rows.filter(function(r){ return r.source === 'buildium_only' || r.source === 'ledger_only'; });
+    var order = { buildium_only: 0, ledger_only: 1 };
+    diff.sort(function(a, b){ return (order[a.source] - order[b.source]) || String(a.property_name || '').localeCompare(String(b.property_name || '')); });
+    var h = '<p class="count-note" style="margin:8px 0 10px">' +
+      n.both + ' flagged on both sides &middot; ' + n.buildium_only + ' in Buildium only &middot; ' +
+      n.ledger_only + ' in the Ledger only &middot; ' + n.units_only + ' with unit-level Ledger rows only' +
+      (redund ? ' &middot; ' + redund + ' Ledger unit rows sit on a property that is already flagged (harmless)' : '') + '</p>';
+    if (!diff.length){ box.innerHTML = h + '<span class="count-note">No disagreements &mdash; Buildium and the Ledger match.</span>'; return; }
+    h += '<div class="scrollx"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>' +
+      '<th style="text-align:left;padding:6px 5px">Property</th>' +
+      '<th style="text-align:left;padding:6px 5px">Source</th>' +
+      '<th style="text-align:right;padding:6px 5px">Units</th>' +
+      '<th style="text-align:right;padding:6px 5px">Vacant</th></tr></thead><tbody>';
+    diff.forEach(function(r){
+      h += '<tr>' +
+        '<td style="padding:6px 5px;vertical-align:top"><b>' + esc(r.property_name || ('#' + r.property_id)) + '</b>' +
+          (r.ledger_label ? '<br><span style="color:var(--ink-soft)">' + esc(r.ledger_label) + '</span>' : '') + '</td>' +
+        '<td style="padding:6px 5px;vertical-align:top">' + esc(TBR_SRC[r.source] || r.source) + '</td>' +
+        '<td style="padding:6px 5px;vertical-align:top;text-align:right">' + (r.units || 0) + '</td>' +
+        '<td style="padding:6px 5px;vertical-align:top;text-align:right">' + (r.op_vacant_units || 0) + '</td></tr>';
+    });
+    box.innerHTML = h + '</tbody></table></div>';
   }
   function tmRender(users){
     var box = el('tm-list');

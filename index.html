@@ -1565,6 +1565,15 @@ window.addEventListener('error', function(e){
           <div class="msfoot"><button type="button" class="msclear" data-key="properties">Clear</button><button type="button" class="msdone" data-key="properties">Done</button></div>
         </div>
       </div>
+      <div class="fgroup">
+        <label>Property type</label>
+        <button type="button" class="msbtn" id="msb-ptypes">All property types</button>
+        <div class="mspanel" id="msp-ptypes">
+          <input type="text" class="mssearch" id="mss-ptypes" placeholder="Search&hellip;">
+          <div class="mslist" id="msl-ptypes"></div>
+          <div class="msfoot"><button type="button" class="msclear" data-key="ptypes">Clear</button><button type="button" class="msdone" data-key="ptypes">Done</button></div>
+        </div>
+      </div>
     </div>
     <div class="sidewindow" id="sidewindow">
       <div class="eyebrow sf-label">Activity window &middot; all tabs</div>
@@ -2327,6 +2336,13 @@ window.addEventListener('error', function(e){
       <div class="card adminonly" style="margin-top:18px" id="hub-takebacks">
         <div class="tablebar"><h2>Owner take-backs &middot; Buildium vs Ledger</h2><span class="count-note">a property counts as a take-back if either side flags it &middot; flag new ones in Buildium (Property Status = Take back)</span></div>
         <div id="tbr-list"><span class="count-note">Loading&hellip;</span></div>
+      </div>
+      <!-- WS-CF Phase 3 (2026-09-23): units where Buildium's Furnished field and the furnished
+           amenity disagree. The field wins in the Ledger; this is the fix-in-Buildium list.
+           Read-only; admin-only (/furnished-recon). -->
+      <div class="card adminonly" style="margin-top:18px" id="hub-furnished">
+        <div class="tablebar"><h2>Furnished &middot; field vs amenity</h2><span class="count-note">the Furnished field decides in the Ledger &middot; fix whichever side is wrong in Buildium</span></div>
+        <div id="frc-list"><span class="count-note">Loading&hellip;</span></div>
       </div>
     </div>
   </div>
@@ -3285,6 +3301,10 @@ window.addEventListener('error', function(e){
     managers:   { sel:{}, items:[], all:'All managers',   scope:true,  cb:function(){ onScopeChange(); } },
     owners:     { sel:{}, items:[], all:'All owners',      scope:true,  cb:function(){ onScopeChange(); } },
     properties: { sel:{}, items:[], all:'All properties',  scope:true,  cb:function(){ onScopeChange(); } },
+    // WS-CF Phase 3: never sent to the server (scope:false). A chosen type is expanded into
+    // property ids INSIDE msIds('properties') (see ptypeNarrow), so every scoped route and
+    // every client-side scope pass narrows by type with no knowledge of types.
+    ptypes:     { sel:{}, items:[], all:'All property types', scope:false, cb:function(){ onScopeChange(); } },
     u_amen:     { sel:{}, items:[], all:'Any amenity',     scope:false, cb:function(){ drawUnits(); } },
     nb_park:    { sel:{}, items:[], all:'Any parking',     scope:false, cb:function(){ drawUnits(); } }
   };
@@ -3497,7 +3517,38 @@ window.addEventListener('error', function(e){
     // here is a permission boundary — the server never scoped by caller identity (/stats,
     // /manager-brief et al. take the 'managers' param from the query string), so this decides
     // which portfolio they LAND on, never what they could reach.
-    return Object.keys(MS[key].sel);
+    var ids = Object.keys(MS[key].sel);
+    return key === 'properties' ? ptypeNarrow(ids) : ids;
+  }
+  // Sidebar "Property type" (WS-CF Phase 3, 2026-09-23). ptypeMap = type -> [property id
+  // strings], served as /stats filter_options.property_types and cached in localStorage so
+  // the FIRST fetch after a reload is already narrowed. With types chosen, the effective
+  // property set is (picked properties, or all) AND (properties of any chosen type).
+  var PTYPE_MAP_KEY = 'ledger_ptype_map_v1';
+  var ptypeMap = {};
+  function ptypeNarrow(ids){
+    var types = Object.keys(MS.ptypes.sel);
+    if (!types.length) return ids;
+    var allow = {}, known = false;
+    types.forEach(function(t){
+      var ps = ptypeMap[t];
+      if (ps) { known = true; ps.forEach(function(id){ allow[id] = 1; }); }
+    });
+    if (!known) return ids;   // map not in yet: render() re-scopes the moment it lands
+    var out = ids.length ? ids.filter(function(id){ return allow[id]; }) : Object.keys(allow);
+    return out.length ? out : ['0'];   // an empty intersection scopes to NOTHING, never to everything
+  }
+  function ptypeSetOptions(list){
+    if (!Array.isArray(list)) return;                             // older fn build: keep the cached map
+    if (!list.length && Object.keys(ptypeMap).length) return;     // degraded read: keep the cached map
+    var before = msIds('properties').join(',');
+    var m = {};
+    list.forEach(function(o){ if (o && o.id != null) m[String(o.id)] = (o.property_ids || []).map(String); });
+    ptypeMap = m;
+    try { localStorage.setItem(PTYPE_MAP_KEY, JSON.stringify(m)); } catch (e) {}
+    msSetItems('ptypes', list.map(function(o){ return { id: String(o.id), name: String(o.name || o.id) }; }));
+    // the map changed what a saved type means (first visit, or Buildium re-typed a property)
+    if (Object.keys(MS.ptypes.sel).length && msIds('properties').join(',') !== before) onScopeChange();
   }
   // is a sidebar entity scope active? (drives the "this number is company-wide" labels — A-14/A-15)
   function scopeActive(){ return !!(msIds('managers').length || msIds('owners').length || msIds('properties').length); }
@@ -3906,7 +3957,7 @@ window.addEventListener('error', function(e){
   // (3 taps) on EVERY visit. MS[key].sel maps id -> display name, so saving it restores the
   // button labels too — before /stats has even returned filter_options.
   var SCOPE_KEY = 'ledger_scope_v1';
-  var SCOPE_KEYS = ['managers', 'owners', 'properties'];
+  var SCOPE_KEYS = ['managers', 'owners', 'properties', 'ptypes'];
   function scopeSave(){
     try {
       var out = {};
@@ -3922,6 +3973,10 @@ window.addEventListener('error', function(e){
     } catch (e) {}
   }
   function scopeRestore(){
+    try {
+      var pm = JSON.parse(localStorage.getItem(PTYPE_MAP_KEY) || '{}');
+      if (pm && typeof pm === 'object' && !Array.isArray(pm)) ptypeMap = pm;
+    } catch (e) {}
     try {
       var s = JSON.parse(localStorage.getItem(SCOPE_KEY) || '{}');
       SCOPE_KEYS.forEach(function(k){
@@ -4105,6 +4160,7 @@ window.addEventListener('error', function(e){
       loadHubTeam();
       tmLoad();   // WS-U M3: the Team & sign-ins roster card lives on this view
       tbrLoad();  // WS-CF Phase 2: take-back disagreement card, same view
+      frcLoad();  // WS-CF Phase 3: furnished field-vs-amenity card, same view
     } else {
       tdSub("Agent — today's tours first (in My tours), then follow-ups, signed leases and the team board.");
       g.innerHTML = '';
@@ -5184,9 +5240,9 @@ window.addEventListener('error', function(e){
       for (var i = 0; i < lst.length; i++) if (lst[i][0] === tdMvStageF) lab = lst[i][1];
       bits.push('Stage: ' + String(lab).replace(/&#\d+;/g, '').trim());   // chip labels carry entities (⚠)
     }
-    ['managers', 'owners', 'properties'].forEach(function(key){
+    ['managers', 'owners', 'properties', 'ptypes'].forEach(function(key){
       var names = msLabels(key);   // the Units-export helper: real names, not raw ids
-      if (names.length) bits.push(key.charAt(0).toUpperCase() + key.slice(1) + ': ' + names.join(', '));
+      if (names.length) bits.push(msScopeLabel(key) + ': ' + names.join(', '));
     });
     return bits;
   }
@@ -6861,6 +6917,46 @@ window.addEventListener('error', function(e){
     });
     box.innerHTML = h + '</tbody></table></div>';
   }
+  /* ── Admin furnished reconciliation (WS-CF Phase 3, 2026-09-23) ──────── */
+  var frcGen = 0;
+  function frcLoad(){
+    var gen = ++frcGen;
+    var box = el('frc-list');
+    if (!box) return;
+    box.innerHTML = '<span class="count-note">Loading&hellip;</span>';
+    authFetch('/furnished-recon').then(function(j){
+      if (gen !== frcGen) return;
+      frcRender((j && j.rows) || []);
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('furnished recon failed', e);
+      if (gen === frcGen && box) box.innerHTML = '<span class="count-note">Could not load the furnished check &mdash; ' + esc(String(e && e.message || 'error')) + '</span>';
+    });
+  }
+  function frcRender(rows){
+    var box = el('frc-list');
+    if (!box) return;
+    if (!rows.length){ box.innerHTML = '<span class="count-note">No mismatches &mdash; the Furnished field and the amenity agree on every unit.</span>'; return; }
+    var h = '<p class="count-note" style="margin:8px 0 10px">' + rows.length + ' unit' + (rows.length === 1 ? '' : 's') +
+      ' disagree &middot; amenities re-read from Buildium about every 3 days, the field 3 times a day</p>' +
+      '<div class="scrollx"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>' +
+      '<th style="text-align:left;padding:6px 5px">Unit</th>' +
+      '<th style="text-align:left;padding:6px 5px">Field</th>' +
+      '<th style="text-align:left;padding:6px 5px">Amenity</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var fix = r.furnished_field === 'Furnished' ? 'add the Furnished amenity (or set the field to Unfurnished)' : 'set the field to Furnished (or remove the amenity)';
+      var tags = [];
+      if (r.is_listed) tags.push('listed');
+      if (r.is_owner_takeback) tags.push('take-back');
+      h += '<tr>' +
+        '<td style="padding:6px 5px;vertical-align:top"><b>' + esc((r.property_name || '') + (r.unit_number ? ' #' + r.unit_number : '')) + '</b>' +
+          (tags.length ? '<br><span style="color:var(--ink-soft)">' + esc(tags.join(' · ')) + '</span>' : '') +
+          '<br><span style="color:var(--ink-soft)">Fix: ' + esc(fix) + '</span></td>' +
+        '<td style="padding:6px 5px;vertical-align:top">' + esc(r.furnished_field || '–') + '</td>' +
+        '<td style="padding:6px 5px;vertical-align:top">' + (r.furnished_amenity ? 'Furnished' : 'none') + '</td></tr>';
+    });
+    box.innerHTML = h + '</tbody></table></div>';
+  }
   function tmRender(users){
     var box = el('tm-list');
     if (!box) return;
@@ -7741,7 +7837,7 @@ window.addEventListener('error', function(e){
   /* ── multi-select ─────────────────────────── */
   function msButton(key){
     var m = MS[key];
-    var ids = msIds(key);
+    var ids = Object.keys(m.sel);   // the PICKED items (msIds('properties') is type-expanded)
     var btn = el('msb-' + key);
     if (!ids.length) { btn.textContent = m.all; btn.classList.remove('has'); }
     else if (ids.length === 1) { btn.textContent = m.sel[ids[0]]; btn.classList.add('has'); }
@@ -8756,6 +8852,7 @@ window.addEventListener('error', function(e){
     msSetItems('managers', fo.managers);
     msSetItems('owners', fo.owners);
     msSetItems('properties', fo.properties);
+    ptypeSetOptions(fo.property_types);
 
     // vacant units + occupied-but-listed (upcoming turnover) share one table.
     // Headline vacancy KPIs/rates/aging stay vacant-only (server-side).
@@ -9367,7 +9464,7 @@ window.addEventListener('error', function(e){
           u.balance_src = (u.total_balance || 0) > 0 ? 'active' : (u.balance_disp != null ? 'pre' : null);
         });
         fillParkMS();
-        fillAmenMS('u_amen', unitsAll, function(r){ return r.amenities; });
+        fillAmenMS('u_amen', unitsAll, uAmenOf);
         drawChips(); drawUnits();
         el('veil').classList.add('hide');
         if (after) after();
@@ -9406,6 +9503,24 @@ window.addEventListener('error', function(e){
   // global entity scope, applied client-side to the Units + Owners directories.
   // The caller passes the already-extracted selection-id arrays so we don't
   // re-derive Object.keys(MS.*.sel) for every row.
+  // WS-CF Phase 3 (Pearse 2026-09-23): "furnished" on the Units board follows
+  // dashboard.v_unit_attributes.furnished: Buildium's Furnished unit field decides, the
+  // unit-level amenity only where the field is blank. The raw Furnished/FurnishedAvailable
+  // amenity tokens are swapped for that one value, so "Furnished (any)" keeps working.
+  function uAmenOf(r){
+    var a = (r.amenities || []).filter(function(x){ return x !== 'Furnished' && x !== 'FurnishedAvailable'; });
+    if (r.furnished === 'Furnished') a.push('Furnished');
+    return a;
+  }
+  function furnChip(r){
+    return r.furnished === 'Furnished' ? ' <span class="chip c-ok" title="Furnished per Buildium' + (r.furnished_source === 'amenity' ? ' (amenity; the Furnished field is blank)' : '') + '">furnished</span>' : '';
+  }
+  function furnValueHtml(r){
+    if (!r.furnished) return null;
+    var h = esc(r.furnished) + (r.furnished_source === 'amenity' ? ' <span class="qn">from the amenity; the Furnished field is blank</span>' : '');
+    if (r.furnished_mismatch) h += '<br><span class="qn">Buildium disagrees with itself: the Furnished field says ' + esc(r.furnished_field) + ' but the furnished amenity is ' + (r.furnished_amenity ? 'set' : 'missing') + '. The field wins; fix the amenity in Buildium.</span>';
+    return h;
+  }
   function scopeTestUnit(r, mg, ow, pr){
     if (mg.length && mg.indexOf(String(r.property_manager_id)) < 0) return false;
     if (ow.length && ow.indexOf(String(r.primary_owner_id)) < 0) return false;
@@ -9483,11 +9598,11 @@ window.addEventListener('error', function(e){
         if (!isNaN(rmax) && (rent == null || rent > rmax)) return false;
         if (!isNaN(rmin) && (rent == null || rent < rmin)) return false;
       }
-      if (!amenMatchMulti(r.amenities, amenSel)) return false;
+      if (!amenMatchMulti(uAmenOf(r), amenSel)) return false;
       if (!q) return true;
       return ((r.property_name||'') + ' ' + (r.unit_number||'') + ' ' + (r.tenant_names||'') + ' ' +
               (r.primary_owner_name||'') + ' ' + (r.address_line1||'') + ' ' + (r.property_manager_name||'') + ' ' +
-              (r.nb_building_type||'') + ' ' + (r.nb_parking||'')).toLowerCase().indexOf(q) >= 0;
+              (r.nb_building_type||'') + ' ' + (r.nb_parking||'') + ' ' + (r.property_type||'')).toLowerCase().indexOf(q) >= 0;
     });
     rows.sort(cmpRows(uSort.k, uSort.d));
     uRowsCur = rows;   // export reads this — every matching row, not just the rendered page
@@ -9514,8 +9629,8 @@ window.addEventListener('error', function(e){
         ? esc(r.lease_to_date) + (r.days_remaining != null ? ' <span class="qn">(' + r.days_remaining + 'd)</span>' : '')
         : '–';
       html += '<tr class="' + cls.join(' ') + '" data-uid="' + r.unit_id + '">' +
-        '<td>' + esc(r.property_name) + '</td>' +
-        '<td>' + esc(r.unit_number) + '</td>' +
+        '<td>' + esc(r.property_name) + (r.property_type ? '<br><span class="qn">' + esc(r.property_type) + '</span>' : '') + '</td>' +
+        '<td>' + esc(r.unit_number) + furnChip(r) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
         '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + usoChip(r) + sdChip(r) + appStageChip(r) + '</td>' +
         '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + fbChip(r) + '</td>' +
@@ -9718,8 +9833,12 @@ window.addEventListener('error', function(e){
      page of it, in the on-screen sort order. Row 1 records which filters were
      active so a shared file explains itself. */
   function xlYN(v){ return v ? 'Yes' : 'No'; }
+  function msScopeLabel(key){
+    return key === 'ptypes' ? 'Property type' : key.charAt(0).toUpperCase() + key.slice(1);
+  }
   function msLabels(key){
-    return msIds(key).map(function(id){
+    // the PICKED items: msIds('properties') is type-expanded and would list every property
+    return (key === 'properties' ? Object.keys(MS[key].sel) : msIds(key)).map(function(id){
       if (MS[key].sel[id]) return MS[key].sel[id];
       if (idLock && idLock.name && idLock.pmId != null && String(idLock.pmId) === String(id)) return idLock.name;
       return '#' + id;
@@ -9733,6 +9852,8 @@ window.addEventListener('error', function(e){
     { label:'Property',        key:'property_name', w:26 },
     { label:'Building',        key:'building_name', w:18 },
     { label:'Unit',            key:'unit_number', w:10 },
+    { label:'Property type',   key:'property_type', w:14 },
+    { label:'Furnished',       key:'furnished', w:12 },
     { label:'Address',         key:'address_line1', w:26 },
     { label:'City',            key:'city', w:14 },
     { label:'Beds',            key:'unit_bedrooms', type:'num', w:7 },
@@ -9796,9 +9917,9 @@ window.addEventListener('error', function(e){
     if (appl.length) bits.push('Appliances: ' + appl.join(', '));
     if (el('nb-notready').checked) bits.push('Not-ready units only');
     if (uSel['otb']) bits.push('Owner take-backs shown');
-    ['managers', 'owners', 'properties'].forEach(function(key){
+    ['managers', 'owners', 'properties', 'ptypes'].forEach(function(key){
       var names = msLabels(key);
-      if (names.length) bits.push(key.charAt(0).toUpperCase() + key.slice(1) + ': ' + names.join(', '));
+      if (names.length) bits.push(msScopeLabel(key) + ': ' + names.join(', '));
     });
     Object.keys(COLF['utable'] || {}).forEach(function(col){
       if (!colActive('utable', col)) return;
@@ -10457,7 +10578,7 @@ window.addEventListener('error', function(e){
     stat += appStageChip(r);
     if (stat) sub.push(stat);
     if (r.address_line1) sub.push(esc(r.address_line1) + (r.city ? ', ' + esc(r.city) : ''));
-    sub.push((r.unit_bedrooms || '–') + ' bd / ' + (r.unit_bathrooms || '–') + ' ba');
+    sub.push((r.unit_bedrooms || '–') + ' bd / ' + (r.unit_bathrooms || '–') + ' ba' + (r.furnished === 'Furnished' ? ' &middot; furnished' : ''));
     var rentTxt = r.is_listed && r.listing_rent != null ? fmtMoney(r.listing_rent) + '/mo listed' : (r.monthly_rent != null ? fmtMoney(r.monthly_rent) + '/mo' : '');
     if (rentTxt) sub.push(rentTxt);
     if (r.property_manager_name) sub.push('managed by ' + esc(r.property_manager_name));
@@ -10477,6 +10598,8 @@ window.addEventListener('error', function(e){
     var f = '';
     f += fitem('Unit event', (evChip(r.unit_event) + rnUnitChip(r.unit_id)) || '–');
     f += fitem('Owner', esc(r.primary_owner_name));
+    f += fitem('Property type', esc(r.property_type));
+    f += fitem('Furnished', furnValueHtml(r));
     if (r.is_nookbook) {
       f += fitem('Building type', esc(r.nb_building_type));
       f += fitem('Parking', esc(r.nb_parking));

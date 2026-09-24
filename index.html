@@ -965,6 +965,21 @@ window.addEventListener('error', function(e){
   .kuopt.on{background:var(--glass-2);box-shadow:inset 2px 0 0 var(--clay)}   /* keyboard highlight (↑/↓) */
   .kuaddr{color:var(--ink-soft);font-size:.74rem}
   .kunote{padding:8px 10px;color:var(--ink-soft);font-size:.78rem;font-style:italic}
+  /* bin field: type any bin/location, or open the list of empty bins */
+  .kbinrow{display:flex;gap:8px;align-items:stretch}
+  .kbinrow input{flex:1;min-width:0}
+  .kbinrow .btn{flex:0 0 auto;min-height:40px;white-space:normal}
+  .kbinres{border:1px solid var(--hairline-dark);border-radius:var(--r-sm);margin-top:4px;background:var(--glass-1);padding:8px;max-height:210px;overflow:auto}
+  .kbinres[hidden]{display:none}
+  .kbinlab{font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:2px 0 6px}
+  .kbinlab+.kbingrid{margin-bottom:10px}
+  .kbingrid{display:flex;flex-wrap:wrap;gap:6px}
+  .kbinopt{min-width:48px;min-height:40px;padding:6px 10px;border-radius:var(--r-sm);border:1px solid var(--hairline-dark);
+           background:var(--glass-2);color:var(--ink);font-family:var(--sans);font-size:.82rem;font-variant-numeric:tabular-nums;cursor:pointer}
+  .kbinopt:hover,.kbinopt.on{border-color:var(--clay);color:var(--clay)}
+  .kbinhint{font-size:.76rem;color:var(--ink-soft);margin-top:4px}
+  .kbinhint b{color:var(--ink)}
+  .kbinhint.warn{color:var(--clay)}
   .khist{display:flex;flex-direction:column}
   .khrow{display:flex;gap:12px;align-items:baseline;padding:7px 0;border-bottom:1px dotted var(--hairline-dark);font-size:.8rem}
   .khrow:last-child{border-bottom:none}
@@ -7299,9 +7314,16 @@ window.addEventListener('error', function(e){
         '<label>Note (optional)</label><textarea id="kf-note" placeholder="why is the status changing?"></textarea>';
     } else if (kind === 'create') {
       var ctx = kCreateCtx || kCur || {};
+      kLinkUnit = null;
+      // A brand-new key from the Keys tab has no unit yet — pick it FIRST (same ranked
+      // unit search as "Link to unit"; optional, blank = add it unlinked).
+      var pickUnit = !!(kCreateCtx && !kCreateCtx.unit_id);
       h = '<div class="kfh">Add a key set' + (ctx.bin ? ' to bin ' + esc(ctx.bin) : '') + '</div>' +
         (ctx.unit_id ? '<div class="kfctx">Linked to <b>' + esc(ctx.property_name || 'this unit') + (ctx.unit_number ? ' · ' + esc(ctx.unit_number) : '') + '</b></div>' : '') +
-        (IS_ADMIN ? '<label>Bin</label><input id="kf-bin" value="' + esc((ctx.bin) || '') + '" placeholder="bin / location label">' : '') +
+        (pickUnit ? '<label>Link to unit</label><input id="kf-unitq" placeholder="Address or unit &mdash; e.g. 8051 24" autocomplete="off">' +
+          '<div id="kf-unitres" class="kures"></div>' +
+          '<div class="kfctx" id="kf-unitsel">No unit chosen &mdash; leave blank to add the key unlinked.</div>' : '') +
+        (IS_ADMIN ? kBinFieldHtml(ctx.bin || '') : '') +
         '<div class="kfrow"><div><label>Who is picking it up</label><input id="kf-holder" placeholder="Name — leave blank if it stays in the office"></div>' +
         '<div><label>Expected back</label><input id="kf-exp" type="date" value="' + kPlus2() + '"></div></div>' +
         '<label>Set name (optional)</label><input id="kf-setname" maxlength="40" placeholder="e.g. Tenant, Spare, Garage — auto-numbered if blank">' +
@@ -7310,7 +7332,7 @@ window.addEventListener('error', function(e){
       // admin: edit detail fields (wholesale overwrite; blank clears each, except label)
       h = '<div class="kfh">Edit key details</div>' +
         '<div class="kfrow"><div><label>Set name</label><input id="kf-setname" maxlength="40" value="' + esc(r.group_label || '') + '" placeholder="shown on the set chip"></div>' +
-        '<div><label>Bin</label><input id="kf-bin" value="' + esc(r.bin || '') + '"></div></div>' +
+        '</div>' + kBinFieldHtml(r.bin || '') +
         '<label>Reference label</label><input id="kf-label" value="' + esc(r.label || '') + '">' +
         '<div class="kfrow"><div><label>Building fob 1</label><input id="kf-f1" value="' + esc(r.building_fob_1 || '') + '"></div>' +
         '<div><label>Building fob 2</label><input id="kf-f2" value="' + esc(r.building_fob_2 || '') + '"></div></div>' +
@@ -7351,8 +7373,9 @@ window.addEventListener('error', function(e){
       '<button type="button" class="btn" data-kcancel="1">Cancel</button>' +
       '<button type="button" class="' + subCls + '" data-ksubmit="' + kind + '">' + subLbl + '</button></div>';
     box.innerHTML = h;
-    if (kind === 'link') initUnitPicker();
+    if (kind === 'link' || (kind === 'create' && el('kf-unitq'))) initUnitPicker();
     if (kind === 'attach') initKeyPicker();
+    if (el('kf-bin')) kBinInit(kind === 'edit' && r ? r.key_id : null);
     var first = box.querySelector('input,select,textarea'); if (first) first.focus();
   }
   el('km-form').addEventListener('click', function(e){
@@ -7360,6 +7383,9 @@ window.addEventListener('error', function(e){
     var ub = e.target.closest('[data-luid]'); if (ub) { e.preventDefault(); pickLinkUnit(ub.getAttribute('data-luid')); return; }
     var kb = e.target.closest('[data-lkid]'); if (kb) { e.preventDefault(); pickAttachKey(kb.getAttribute('data-lkid')); return; }
     if (e.target.closest('[data-kunlink]')) { e.preventDefault(); submitKeyUnlink(); return; }
+    if (e.target.closest('[data-kunitclr]')) { e.preventDefault(); kCreateUnitClear(); return; }
+    if (e.target.closest('[data-kbintog]')) { kBinToggle(); return; }
+    var bo = e.target.closest('[data-kbin]'); if (bo) { kBinPick(bo.getAttribute('data-kbin')); return; }
     var s = e.target.closest('[data-ksubmit]'); if (s) submitKey(s.getAttribute('data-ksubmit'));
   });
   // The unit picker now hits the server per keystroke (ranked search), so it debounces like
@@ -7369,6 +7395,10 @@ window.addEventListener('error', function(e){
     if (!e.target) return;
     if (e.target.id === 'kf-unitq') kfUnitDeb();
     if (e.target.id === 'kf-keyq') renderAttachResults(e.target.value);
+    if (e.target.id === 'kf-bin') {
+      var bx = el('kf-binres'); kBinTyped = true; if (bx && e.target.value.trim()) bx.hidden = false;   // typing shows matching open bins
+      kBinRender(); kBinHint();
+    }
   });
   el('km-form').addEventListener('keydown', function(e){
     if (e.target && e.target.id === 'kf-unitq') schUnitKeyNav(el('kf-unitres'), e, '.kuopt');
@@ -7411,6 +7441,118 @@ window.addEventListener('error', function(e){
       label: (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '') };
     var sel = el('kf-unitsel'); if (sel) sel.innerHTML = 'Chosen: <b>' + esc(kLinkUnit.label) + '</b>';
     var box = el('kf-unitres'); if (box) box.innerHTML = '';   // the pick is made; clear the list
+    if (kCreateCtx) kCreateUnitPicked();                        // same picker, reused by "Add key"
+  }
+  // "Add key" (Keys tab) — the unit chosen up front. If that unit already has keys in a
+  // bin, say so and prefill it (only when the bin is still blank — never overwrite a typed one).
+  function kCreateUnitPicked(){
+    if (!kLinkUnit) return;
+    var sel = el('kf-unitsel');
+    if (sel) sel.innerHTML = 'Chosen: <b>' + esc(kLinkUnit.label) + '</b> &middot; <a href="#" data-kunitclr="1">change</a>';
+    var q = el('kf-unitq'); if (q) q.value = '';
+    var sub = el('km-sub'); if (sub) sub.textContent = kLinkUnit.label;
+    var bins = [];
+    (keysAll || []).forEach(function(k){
+      if (String(k.unit_id) === String(kLinkUnit.unit_id) && k.bin && bins.indexOf(k.bin) < 0) bins.push(k.bin);
+    });
+    if (bins.length) {
+      if (sel) sel.innerHTML += '<br>This unit already has keys in bin <b>' + bins.map(esc).join('</b>, <b>') + '</b>.';
+      var bi = el('kf-bin'); if (bi && !bi.value.trim()) { bi.value = bins[0]; kBinRender(); kBinHint(); }
+    }
+  }
+  function kCreateUnitClear(){
+    kLinkUnit = null;
+    var sel = el('kf-unitsel'); if (sel) sel.textContent = 'No unit chosen — leave blank to add the key unlinked.';
+    var sub = el('km-sub'); if (sub) sub.textContent = 'New key set';
+    var q = el('kf-unitq'); if (q) { q.value = ''; q.focus(); }
+    renderKeyLinkResults();
+  }
+
+  // ── bin field (Add key + Edit details): type anything, or pick an empty bin ──
+  // There is no bin inventory table — bins are the numbered slots in the key cabinet plus a
+  // few named spots (Admin Ring, Orange Bins…). "Open" = a number from 1 to the highest
+  // number in use that no live key sits in, plus the next few past the top. Derived from
+  // keysAll (the /keys list, archived keys excluded), so it is never a second source of truth.
+  var kBinExclude = null;   // key being edited — its own bin doesn't count as "taken"
+  var kBinTyped = false;    // true = list opened by typing (filter to matches); the toggle shows all
+  function kBinFieldHtml(v){
+    return '<label for="kf-bin">Bin</label><div class="kbinrow">' +
+      '<input id="kf-bin" value="' + esc(v) + '" placeholder="Type a bin or location" autocomplete="off">' +
+      '<button type="button" class="btn" data-kbintog="1" aria-expanded="false" aria-controls="kf-binres">Open bins &#9662;</button></div>' +
+      '<div class="kbinhint" id="kf-binhint"></div><div class="kbinres" id="kf-binres" hidden></div>';
+  }
+  function kBinInit(excludeKeyId){
+    kBinExclude = excludeKeyId || null; kBinTyped = false;
+    if (keysAll === null) {
+      authFetch('/keys').then(function(j){ keysAll = j.keys || []; drawKeyChips(); kBinRender(); kBinHint(); })
+        .catch(function(e){ if (String(e && e.message) === 'AUTH') return; console.error('key bins load', e); });
+    }
+    kBinHint();
+  }
+  function kBinUse(){   // bin -> live keys in it (excluding the one being edited)
+    var m = {};
+    (keysAll || []).forEach(function(k){
+      if (!k.bin || (kBinExclude && k.key_id === kBinExclude)) return;
+      (m[k.bin] = m[k.bin] || []).push(k);
+    });
+    return m;
+  }
+  function kBinLists(){
+    var use = kBinUse(), max = 0, named = [];
+    Object.keys(use).forEach(function(b){
+      if (/^\d+$/.test(b)) max = Math.max(max, +b); else named.push(b);
+    });
+    var open = [];
+    for (var i = 1; i <= max + 10; i++) if (!use[String(i)]) open.push(String(i));
+    named.sort(function(a, b){ return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+    return { open: open, named: named, use: use };
+  }
+  function kBinRender(){
+    var box = el('kf-binres'), inp = el('kf-bin'); if (!box || !inp) return;
+    var q = kBinTyped ? inp.value.trim().toLowerCase() : '';
+    var tog = el('km-form').querySelector('[data-kbintog]');
+    if (box.hidden) return;   // opened by the toggle, or by typing (the input handler un-hides it)
+    if (keysAll === null) { box.innerHTML = '<div class="kunote">Loading bins…</div>'; return; }
+    var L = kBinLists();
+    var open = q ? L.open.filter(function(b){ return b.indexOf(q) === 0; }) : L.open;
+    var named = q ? L.named.filter(function(b){ return b.toLowerCase().indexOf(q) >= 0; }) : L.named;
+    var cur = inp.value.trim();
+    var chip = function(b){ return '<button type="button" class="kbinopt' + (b === cur ? ' on' : '') + '" data-kbin="' + esc(b) + '">' + esc(b) + '</button>'; };
+    var h = '';
+    h += '<div class="kbinlab">Open bins &middot; ' + open.length + '</div>' +
+      (open.length ? '<div class="kbingrid">' + open.map(chip).join('') + '</div>' : '<div class="kunote">No open bin starts with “' + esc(q) + '”.</div>');
+    if (named.length) h += '<div class="kbinlab">Named spots (shared)</div><div class="kbingrid">' + named.map(chip).join('') + '</div>';
+    box.innerHTML = h;
+    if (tog) tog.setAttribute('aria-expanded', 'true');
+  }
+  function kBinToggle(){
+    var box = el('kf-binres'), tog = el('km-form').querySelector('[data-kbintog]'); if (!box) return;
+    box.hidden = !box.hidden; kBinTyped = false;
+    if (tog) tog.setAttribute('aria-expanded', box.hidden ? 'false' : 'true');
+    kBinRender();
+  }
+  function kBinPick(b){
+    var inp = el('kf-bin'); if (!inp) return;
+    inp.value = b;
+    var box = el('kf-binres'); if (box) box.hidden = true;
+    var tog = el('km-form').querySelector('[data-kbintog]'); if (tog) tog.setAttribute('aria-expanded', 'false');
+    kBinHint();
+  }
+  // live status of whatever is in the field: open / already holds keys / a new named spot
+  function kBinHint(){
+    var hint = el('kf-binhint'), inp = el('kf-bin'); if (!hint || !inp) return;
+    var b = inp.value.trim();
+    hint.className = 'kbinhint';
+    if (!b || keysAll === null) { hint.textContent = ''; return; }
+    var inBin = kBinUse()[b] || [];
+    if (inBin.length) {
+      var who = inBin.slice(0, 2).map(function(k){
+        return esc(k.property_name ? (k.property_name + (k.unit_number ? ' · ' + k.unit_number : '')) : (k.label || ('Key ' + k.key_id)));
+      }).join('; ') + (inBin.length > 2 ? ' +' + (inBin.length - 2) + ' more' : '');
+      hint.className = 'kbinhint warn';
+      hint.innerHTML = 'Bin <b>' + esc(b) + '</b> is in use &mdash; ' + who + '. Saving puts this set in the same bin.';
+    } else if (/^\d+$/.test(b)) hint.innerHTML = 'Bin <b>' + esc(b) + '</b> is open.';
+    else hint.innerHTML = '<b>' + esc(b) + '</b> is a new location.';
   }
 
   // ── admin: "Link existing key" picker (unit -> key) ──
@@ -7480,8 +7622,9 @@ window.addEventListener('error', function(e){
     if (kind === 'create') {
       var ctx = kCreateCtx || kCur || {};
       var cHolder = ((el('kf-holder') && el('kf-holder').value) || '').trim();
+      var cUnit = ctx.unit_id ? ctx : (kLinkUnit || {});   // unit picked up front on the Keys-tab "Add key"
       var cbody = { actor: actor, note: note,
-        unit_id: ctx.unit_id || null, property_id: ctx.property_id || null,
+        unit_id: cUnit.unit_id || null, property_id: cUnit.property_id || null,
         bin: (IS_ADMIN && el('kf-bin')) ? (el('kf-bin').value.trim() || null) : (ctx.bin || null),
         group_label: ((el('kf-setname') && el('kf-setname').value) || '').trim() || null,
         holder: cHolder || null,

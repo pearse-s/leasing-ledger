@@ -1039,6 +1039,38 @@ window.addEventListener('error', function(e){
   #tm-detwrap[open] summary::after{content:'Condense ▴'}
   #tm-detwrap .fgrid{padding:2px 12px 0}
   #tm-detwrap .note{margin:2px 12px 10px}
+  /* account manager (/me/*, 2026-09-25) — personal: everything stays hidden until the server
+     accepts this sign-in (acmProbe adds body.acm-on). Plan: Fermatype repo docs/claude-os.md */
+  .acm-col{display:none}
+  body.acm-on .acm-col{display:table-cell}
+  #o-acmbar{display:none;gap:6px;flex-wrap:wrap;align-items:center;padding:0 0 12px}
+  body.acm-on #o-acmbar{display:flex}
+  .acmstar{background:none;border:none;cursor:pointer;color:var(--ink-soft);font-size:1.25rem;line-height:1;min-width:40px;min-height:40px;padding:0;flex:none}
+  .acmstar.on{color:var(--clay)}
+  .acmline{font-size:.78rem;color:var(--ink-soft);line-height:1.45}
+  .acmdue{color:var(--amber);font-weight:700}
+  .acmover{color:#ff6b6b;font-weight:700}
+  .acmtiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+  @media (min-width:700px){ .acmtiles{grid-template-columns:repeat(4,minmax(0,1fr))} }
+  .acmtile{background:var(--glass-2);border:1px solid var(--hairline);border-radius:var(--r-sm);padding:8px 10px;min-width:0}
+  .acmtile .acmv{display:block;font-family:var(--serif);font-weight:600;font-size:1.2rem;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .acmtile .acml{font-size:.72rem;color:var(--ink-soft)}
+  .acmrow{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--hairline)}
+  .acmrow:first-child{border-top:none}
+  .acmdot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex:none;background:var(--plum)}
+  .acmname{background:none;border:none;padding:0;cursor:pointer;color:var(--ink);font-family:var(--sans);font-size:.9rem;font-weight:600;text-align:left;min-height:28px}
+  .acmname:hover{color:var(--clay)}
+  .acmseg{display:inline-flex;border:1px solid var(--hairline-dark);border-radius:999px;overflow:hidden;flex:none}
+  .acmseg button{background:none;border:none;color:var(--ink-soft);font-family:var(--sans);font-size:.74rem;font-weight:600;padding:0 12px;min-height:40px;cursor:pointer}
+  .acmseg button.on{background:var(--clay-soft);color:var(--clay)}
+  #td-acm{margin-top:18px}
+  #td-acm .acmgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:4px 28px}
+  @media (min-width:880px){ #td-acm .acmgrid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  #td-acm .acmtiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #o-acmbar .chip-mini,#o-acmbar .tdact{min-height:40px}
+  /* the Account cell's content sets its column's floor: without it the auto table squeezed the
+     column to ~120px and every row grew to ~140px tall (measured in the preview at 800px) */
+  #otable td.acm-col > div{min-width:250px}
   /* owner modal — pattern redesign: action row + identity strip + collapsed details + portfolio */
   #om-actrow{margin-bottom:12px}
   /* owner-report customize modal */
@@ -2008,6 +2040,7 @@ window.addEventListener('error', function(e){
         <button type="button" class="chip-mini adminonly" data-role="admin">Admin</button>
       </div>
     </div>
+    <div id="td-acm" style="display:none"></div>
     <div id="td-coord" style="display:none">
   <div id="page-schedule">
     <div class="schfunnel" id="sch-funnel" style="display:none"></div>
@@ -2564,6 +2597,7 @@ window.addEventListener('error', function(e){
         <input type="text" id="o-search" placeholder="Search name, email, property&hellip;">
         <span class="count-note" id="o-count"></span>
       </div>
+      <div id="o-acmbar" role="group" aria-label="Your owners"></div>
       <div class="scrolly tallscroll">
         <table id="otable">
           <thead><tr>
@@ -2574,6 +2608,7 @@ window.addEventListener('error', function(e){
             <th data-k="property_count" class="rt">Props</th>
             <th data-k="management_agreement_start_date">Mgmt start</th>
             <th data-k="management_agreement_end_date">Mgmt end</th>
+            <th data-k="next_touch_due" class="acm-col">Account</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -2821,6 +2856,7 @@ window.addEventListener('error', function(e){
         <button type="button" class="btn rmact" id="om-report">Download owner report &darr;</button>
       </div>
       <div id="om-contact"></div>
+      <div id="om-acm"></div>
       <details id="om-detwrap"><summary>Owner details</summary>
         <div class="fgrid" id="om-fields"></div>
       </details>
@@ -2830,6 +2866,18 @@ window.addEventListener('error', function(e){
       <div class="sect">Notes &amp; documents</div>
       <div id="om-notesdocs" class="lmphnote">&nbsp;</div>
     </div>
+  </div>
+</div>
+
+<div class="lmodal" id="acmmodal">
+  <div class="lmback" data-close="acmmodal"></div>
+  <div class="lmcard" style="max-width:560px">
+    <button type="button" class="lmclose" data-close="acmmodal">&times;</button>
+    <div class="lmhead">
+      <h3>Alerts</h3>
+      <div class="lmsub">Your owners &middot; only you see this</div>
+    </div>
+    <div class="lmbody" id="acm-alerts-body"></div>
   </div>
 </div>
 
@@ -6741,7 +6789,7 @@ window.addEventListener('error', function(e){
     if (!SB || !TOKEN) return;
     var gen = ++authGen;
     sbJwt().then(function(jwt){
-      if (!jwt){ if (gen === authGen){ authIdent = null; renderAuthBlk(); idRosterLoad(idRecompute); } return; }
+      if (!jwt){ if (gen === authGen){ authIdent = null; renderAuthBlk(); idRosterLoad(idRecompute); acmProbe(); } return; }
       return postJSON('/user/hello', {}).then(function(j){
         if (gen !== authGen) return;
         if (j && j.ok){
@@ -6763,11 +6811,13 @@ window.addEventListener('error', function(e){
             var rt = el('auth-retry');
             if (rt) rt.addEventListener('click', function(ev){ ev.preventDefault(); renderAuthBlk(); });
             idRecompute();   // WS-M M4: identity gone → drop any lock
+            acmProbe();      // account manager off with it
             return;
           }
         }
         renderAuthBlk();
         idRecompute();   // WS-M M4: verified identity (or its loss) re-tailors role + scope
+        acmProbe();      // account manager: on only if the server accepts this sign-in
       });
     }).catch(function(e){
       if (String(e && e.message) === 'AUTH') return;
@@ -6790,6 +6840,7 @@ window.addEventListener('error', function(e){
         try { SB.auth.signOut(); } catch (e) {}
         renderAuthBlk();
         idRecompute();   // WS-M M4: back to the picker identity (or none)
+        acmProbe();      // account manager off with the sign-in
       });
       return;
     }
@@ -8444,7 +8495,8 @@ window.addEventListener('error', function(e){
       is_company:{ t:'enum', label:'Type', disp:function(v){ return v ? 'Company' : 'Individual'; } },
       property_count:{ t:'num', label:'Props' },
       management_agreement_start_date:{ t:'date', label:'Mgmt start' },
-      management_agreement_end_date:{ t:'date', label:'Mgmt end' }
+      management_agreement_end_date:{ t:'date', label:'Mgmt end' },
+      next_touch_due:{ t:'date', label:'Next touch' }
     }},
     ltable: { rows:function(){ return leasesAll || []; }, redraw:function(){ drawLeases(); }, cols:{
       lease_status:{ t:'enum', label:'Status' },
@@ -8744,6 +8796,7 @@ window.addEventListener('error', function(e){
 
   function render(d){
     statsLoaded = true; statsLoading = false;
+    acmStats = d; if (acmOn) setTimeout(acmRenderBrief, 0);   // account manager: the brief's numbers (own task, never blocks this render)
     el('errbox').classList.remove('show');
     // only reveal the Ledger page if it is the active tab — otherwise a stats
     // reload (filter reset, window change, sync, or the deep-link's initial load)
@@ -10997,12 +11050,350 @@ window.addEventListener('error', function(e){
     renderListingFeed();
   });
 
+  /* ── Account manager (/me/*, 2026-09-25) ─────────────────────── */
+  // Pearse's owner-account layer (plan: Fermatype repo docs/claude-os.md). Everything here is
+  // PERSONAL and appears only when the server accepts this sign-in: acmProbe asks /me/owners once
+  // identity resolves, and only a 200 turns the layer on (body.acm-on). A 403 (team password only,
+  // a teammate's sign-in, AM_EMAILS unset) leaves the page exactly as it was. The server gates every
+  // /me/ route itself; nothing in this block is trusted for access.
+  var acmOn = false, acmRows = null, acmMap = {}, acmReq = 0, acmFilter = 'all', acmPrefs = null, acmStats = null, acmTouchNote = '';
+  var ACM_KINDS = {
+    notice_given: 'A tenant gives notice',
+    unit_vacant: 'A unit goes vacant',
+    arrears: 'Arrears over $1,000',
+    deposit_unpaid: 'Deposit unpaid before a move-in',
+    urgent_work_order: 'An urgent work order',
+    lease_signed: 'A lease is signed or renewed',
+    move_in_out: 'A move-in or move-out',
+    milestone: 'Milestones: the 90-day mark, an agreement anniversary, a lease ending in 120 days'
+  };
+  // Generation-guarded: a sign-out or a newer probe superseding this one must win.
+  function acmProbe(){
+    var gen = ++acmReq;
+    if (!authIdent || !TOKEN){ acmSet(false, null); return; }
+    authFetch('/me/owners').then(function(j){
+      if (gen !== acmReq) return;
+      acmSet(true, (j && j.owners) || []);
+    }).catch(function(e){
+      if (gen !== acmReq) return;
+      var m = String(e && e.message);
+      // 403 = not switched on for this sign-in, the expected answer for everyone else
+      if (m !== 'AUTH' && m !== 'HTTP 403') console.error('me/owners failed', e);
+      acmSet(false, null);
+    });
+  }
+  function acmSet(on, rows){
+    acmOn = !!on; acmRows = acmOn ? rows : null; acmMap = {};
+    (acmRows || []).forEach(function(r){ acmMap[String(r.owner_id)] = r; });
+    document.body.classList.toggle('acm-on', acmOn);
+    acmMerge();
+    if (ownersAll !== null) drawOwners();
+    acmRenderBar();
+    acmRenderBrief();
+    if (curOwner && el('omodal') && el('omodal').classList.contains('open')) acmPaintOwner(curOwner);
+  }
+  function acmMerge(){
+    (ownersAll || []).forEach(function(r){
+      var a = acmMap[String(r.buildium_id)];
+      r.next_touch_due = a ? a.next_touch_due : null;
+      r.acm_watched = a ? !!a.watched : false;
+    });
+  }
+  function acmTodayMs(){ var t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime(); }
+  // Whole days from today (the device's local date: Edmonton on his phone and laptop) to yyyy-mm-dd.
+  function acmDays(ymd){
+    var p = String(ymd || '').split('-');
+    if (p.length !== 3) return null;
+    return Math.round((new Date(+p[0], +p[1] - 1, +p[2]).getTime() - acmTodayMs()) / 86400000);
+  }
+  function acmWhen(d){
+    if (d == null) return '';
+    if (d < -1) return (-d) + ' days overdue';
+    if (d === -1) return '1 day overdue';
+    if (d === 0) return 'due today';
+    if (d === 1) return 'due tomorrow';
+    return 'due in ' + d + ' days';
+  }
+  function acmPass(r){
+    if (acmFilter === 'watched') return !!r.acm_watched;
+    if (acmFilter === 'due'){ var d = acmDays(r.next_touch_due); return d != null && d <= 7; }
+    return true;
+  }
+  function acmNextHtml(a){
+    if (!a || !a.next_touch_due) return (a && a.rhythm === 'inactive') ? 'No touch point (inactive owner)' : '';
+    var d = acmDays(a.next_touch_due);
+    var cls = d < 0 ? 'acmover' : (d <= 7 ? 'acmdue' : '');
+    return esc(a.next_touch_kind || 'Touch point') + ' &middot; <span class="' + cls + '">' + esc(acmWhen(d)) + '</span>';
+  }
+  function acmLastWord(a){
+    if (!a || !a.last_touch_at) return 'No contact on record';
+    var c = a.last_touch_channel;
+    var how = c === 'text' ? 'Text' : c === 'call' ? 'Call' : c === 'email' ? 'Email' : c === 'meeting' ? 'Meeting' : 'Contact';
+    var who = a.last_touch_by === 'you' ? ' logged by you' : (a.last_touch_by ? ' with ' + a.last_touch_by : '');
+    return how + who + ', ' + new Date(a.last_touch_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function acmStatsHtml(a){
+    var parts = [esc(fmtNum(a.unit_count) + (a.unit_count === 1 ? ' unit' : ' units'))];
+    if (a.occupancy_pct != null) parts.push(esc(a.occupancy_pct + '% occupied'));
+    if (Number(a.balances_owed) > 0) parts.push(esc(fmtMoney(a.balances_owed) + ' owed'));
+    return parts.join(' &middot; ');
+  }
+  function acmStarHtml(a){
+    return '<button type="button" class="acmstar' + (a.watched ? ' on' : '') + '" data-acmstar="' + esc(String(a.owner_id)) +
+      '" aria-pressed="' + (a.watched ? 'true' : 'false') + '" aria-label="Watch ' + esc(a.display_name || 'this owner') +
+      '" title="Watch: weekly public research on this owner">&#9733;</button>';
+  }
+  function acmCellTd(r){
+    var a = acmOn ? acmMap[String(r.buildium_id)] : null;
+    if (!a) return '<td class="acm-col"></td>';
+    return '<td class="acm-col"><div style="display:flex;gap:4px;align-items:flex-start">' + acmStarHtml(a) +
+      '<div class="acmline">' + acmStatsHtml(a) + ((a.next_touch_due || a.rhythm === 'inactive') ? '<br>' + acmNextHtml(a) : '') + '</div></div></td>';
+  }
+  function acmTile(label, val){
+    return '<div class="acmtile"><span class="acml">' + label + '</span><span class="acmv">' + esc(val) + '</span></div>';
+  }
+  function acmRenderBar(){
+    var bar = el('o-acmbar'); if (!bar) return;
+    if (!acmOn || !acmRows){ bar.innerHTML = ''; return; }
+    var nW = 0, nD = 0;
+    acmRows.forEach(function(a){ if (a.watched) nW++; var d = acmDays(a.next_touch_due); if (d != null && d <= 7) nD++; });
+    var chip = function(k, label){ return '<button type="button" class="chip-mini' + (acmFilter === k ? ' on' : '') + '" data-acmfilter="' + k + '">' + label + '</button>'; };
+    bar.innerHTML = chip('all', 'All owners') + chip('watched', 'Watched ' + nW) + chip('due', 'Due this week ' + nD) +
+      '<button type="button" class="tdact" data-acmalerts="1" style="margin-left:auto">Alerts</button>';
+  }
+  function acmRowHtml(a, subHtml, actHtml){
+    return '<div class="acmrow"><span class="acmdot"></span><div style="flex:1;min-width:0">' +
+      '<button type="button" class="acmname" data-acmowner="' + esc(String(a.owner_id)) + '">' + esc(a.display_name || 'Owner') + '</button>' +
+      '<div class="acmline">' + (subHtml || '') + '</div></div>' + (actHtml || '') + '</div>';
+  }
+  function acmNumbersHtml(){
+    var d = acmStats;
+    if (!d || !d.vacancy) return '<div class="note">The numbers arrive with the Ledger&rsquo;s next load.</div>';
+    var v = d.vacancy, m = d.money || {};
+    return '<div class="acmtiles">' +
+      acmTile('Vacant units', fmtNum(v.vacant_total)) +
+      acmTile('Operational vacancy', pct(v.op_vacancy_rate)) +
+      acmTile('Upcoming move-ins', fmtNum(v.upcoming_move_ins != null ? v.upcoming_move_ins : v.pre_leased)) +
+      acmTile('Balances owed', fmtMoney(m.outstanding_balances)) + '</div>';
+  }
+  // Today: "Your brief" — owners to reach, owner calls to return, the numbers, watched owners.
+  // Its own block (#td-acm) above every role's workspace, so it never touches a role's render.
+  function acmRenderBrief(){
+    var box = el('td-acm'); if (!box) return;
+    if (!acmOn || !acmRows){ box.style.display = 'none'; box.innerHTML = ''; return; }
+    var due = acmRows.filter(function(a){ var d = acmDays(a.next_touch_due); return d != null && d <= 7; })
+      .sort(function(x, y){ var p = String(x.next_touch_due), q = String(y.next_touch_due); return p < q ? -1 : (p > q ? 1 : 0); });
+    var missed = acmRows.filter(function(a){ return a.missed_call_at && (Date.now() - Date.parse(a.missed_call_at)) < 14 * 86400000; })
+      .sort(function(x, y){ return Date.parse(y.missed_call_at) - Date.parse(x.missed_call_at); });
+    var watched = acmRows.filter(function(a){ return a.watched; });
+    var nm = (authIdent && authIdent.display_name) ? String(authIdent.display_name).split(/\s+/)[0] : '';
+    var h = '<section class="panel tdq"><h3>' + (nm ? 'Your brief, ' + esc(nm) : 'Your brief') +
+      ' <span class="qn2">' + esc(new Date().toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })) + '</span>' +
+      '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="tdact" data-acmalerts="1">Alerts</button>' +
+      '<button type="button" class="tdact" data-acmgo="all">All owners &rarr;</button></span></h3><div class="acmgrid"><div>';
+    h += '<div class="sect">Owners to reach &middot; ' + due.length + '</div>';
+    if (!due.length) h += '<div class="note">Nobody is due this week.</div>';
+    due.slice(0, 8).forEach(function(a){ h += acmRowHtml(a, acmNextHtml(a) + '<br>' + esc(acmLastWord(a))); });
+    if (due.length > 8) h += '<div style="padding-top:8px"><button type="button" class="tdact" data-acmgo="due">All ' + due.length + ' due &rarr;</button></div>';
+    h += '<div class="sect">Owner calls to return &middot; ' + missed.length + '</div>';
+    if (!missed.length) h += '<div class="note">No missed owner calls in the last two weeks.</div>';
+    missed.slice(0, 6).forEach(function(a){
+      var t = new Date(a.missed_call_at);
+      var tel = String(a.phone || '').replace(/[^0-9+]/g, '');
+      h += acmRowHtml(a, 'Missed call ' + esc(t.toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + ', no call-back yet',
+        tel ? '<a class="tdact" href="' + rcCall(esc(tel)) + '">Call</a>' : '');
+    });
+    h += '</div><div>';
+    h += '<div class="sect">Numbers &middot; ' + (scopeActive() ? 'your sidebar scope' : 'company-wide') + '</div>' + acmNumbersHtml();
+    h += '<div class="sect">Watched owners &middot; ' + watched.length + '</div>';
+    if (!watched.length) h += '<div class="note">Star an owner in the Owners tab to watch them.</div>';
+    watched.slice(0, 8).forEach(function(a){ h += acmRowHtml(a, acmStatsHtml(a)); });
+    h += '</div></div></section>';
+    box.innerHTML = h;
+    box.style.display = '';
+  }
+  // The owner modal's Account section (painted by omOpen for every owner, hidden when off).
+  function acmPaintOwner(r){
+    var box = el('om-acm'); if (!box) return;
+    var a = (acmOn && r) ? acmMap[String(r.buildium_id)] : null;
+    if (!a){ box.innerHTML = ''; return; }
+    var rh = a.rhythm === 'large' ? 'Larger owner: a monthly update and a quarterly review call'
+      : a.rhythm === 'small' ? 'A quarterly touch point' : 'Inactive: no touch point';
+    var note = acmTouchNote; acmTouchNote = '';
+    box.innerHTML = '<div class="sect">Account</div>' +
+      '<div style="display:flex;align-items:center;gap:6px"><div class="acmline" style="flex:1">' + esc(rh) + '</div>' + acmStarHtml(a) + '</div>' +
+      '<div class="acmtiles">' +
+        acmTile('Units', fmtNum(a.unit_count)) +
+        acmTile('Occupied', a.occupancy_pct != null ? a.occupancy_pct + '%' : '–') +
+        acmTile('Vacant', fmtNum(a.vacant_units) + (a.vacant_units && a.avg_days_vacant != null ? ' · ' + a.avg_days_vacant + 'd avg' : '')) +
+        acmTile('Leases ending, 120 days', fmtNum(a.leases_ending_120)) +
+      '</div>' +
+      '<div class="acmrow"><span class="acmdot" style="background:var(--clay)"></span><div style="flex:1"><b>Next touch point</b><div class="acmline">' + (acmNextHtml(a) || 'None') + '</div></div></div>' +
+      '<div class="acmrow"><span class="acmdot"></span><div style="flex:1"><b>Last contact</b><div class="acmline">' + esc(acmLastWord(a)) + '</div></div></div>' +
+      '<div class="acmrow" style="align-items:center;flex-wrap:wrap"><div class="acmline" style="flex:1">Log a touch</div><span class="acmseg" data-acmtouch-owner="' + esc(String(a.owner_id)) + '">' +
+        ['call', 'text', 'email', 'meeting'].map(function(c){ return '<button type="button" data-acmtouch="' + c + '">' + c.charAt(0).toUpperCase() + c.slice(1) + '</button>'; }).join('') +
+      '</span></div><div class="acmline" id="acm-touch-msg">' + esc(note) + '</div>';
+  }
+  function acmApplyWatch(a, on){
+    a.watched = on;
+    acmMerge();
+    Array.prototype.forEach.call(document.querySelectorAll('[data-acmstar="' + String(a.owner_id) + '"]'), function(b){
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    acmRenderBar();
+    acmRenderBrief();
+    if (acmFilter === 'watched' && ownersAll !== null) drawOwners();
+  }
+  function acmToggleWatch(oid){
+    var a = acmMap[String(oid)]; if (!a || !acmOn) return;
+    var next = !a.watched;
+    acmApplyWatch(a, next);
+    postJSON('/me/watch', { owner_id: Number(oid), watched: next }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('me/watch failed', e);
+      acmApplyWatch(a, !next);   // put the star back: the server did not save it
+    });
+  }
+  function acmLogTouch(oid, channel, btn){
+    if (btn) btn.disabled = true;
+    postJSON('/me/touch', { owner_id: Number(oid), channel: channel }).then(function(){
+      acmTouchNote = 'Logged a ' + channel + '. The next touch point has moved on.';
+      acmProbe();   // last contact and the next touch point are recomputed server-side
+    }).catch(function(e){
+      if (btn) btn.disabled = false;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('me/touch failed', e);
+      var msg = el('acm-touch-msg'); if (msg) msg.textContent = 'Could not log that. Try again.';
+    });
+  }
+  function acmOpenAlerts(){
+    var box = el('acm-alerts-body'); if (!box) return;
+    box.innerHTML = '<div class="note">Loading&hellip;</div>';
+    openModal('acmmodal');
+    authFetch('/me/alerts').then(function(j){ acmPrefs = j || {}; acmPaintAlerts(''); }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('me/alerts failed', e);
+      var b2 = el('acm-alerts-body'); if (b2) b2.innerHTML = '<div class="note">Could not load your alerts.</div>';
+    });
+  }
+  function acmPushable(){ return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window); }
+  function acmPaintAlerts(note){
+    var box = el('acm-alerts-body'); if (!box) return;
+    var j = acmPrefs || {}, p = j.prefs || {}, n = j.devices || 0;
+    // Labels carry a floor width so a control that does not fit beside them wraps onto its own
+    // line on a phone instead of squeezing the label word-by-word (seen at 375px in the preview).
+    var h = '<div class="acmrow" style="align-items:center;flex-wrap:wrap"><div style="flex:1 1 170px;min-width:170px"><b>Phone notifications</b><div class="acmline" id="acm-push-state">' +
+      esc(note || (n ? n + (n === 1 ? ' device is on.' : ' devices are on.') : 'Off on every device.')) + '</div></div>' +
+      (acmPushable() ? '<button type="button" class="btn rmact" id="acm-push-on">Turn on here</button>' : '<span class="acmline">This browser can&rsquo;t show alerts.</span>') + '</div>';
+    if (n) h += '<div class="acmrow" style="align-items:center;flex-wrap:wrap"><div class="acmline" style="flex:1 1 170px;min-width:170px">Check that it reaches your phone</div><button type="button" class="btn rmact" id="acm-push-test">Send a test</button></div>';
+    h += '<div class="sect">When something happens in an owner&rsquo;s portfolio</div>';
+    (j.kinds || []).forEach(function(k){
+      var cur = p[k] || 'brief';
+      h += '<div class="acmrow" style="align-items:center;flex-wrap:wrap"><div style="flex:1 1 150px;min-width:150px">' + esc(ACM_KINDS[k] || k) + '</div><span class="acmseg" data-acmkind="' + esc(k) + '">' +
+        [['phone', 'Phone now'], ['brief', 'Brief'], ['off', 'Off']].map(function(o){
+          return '<button type="button" data-acmdel="' + o[0] + '"' + (cur === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>';
+        }).join('') + '</span></div>';
+    });
+    h += '<div class="sect">Touch-point rhythm</div><div class="acmline">1 to 3 properties: a quarterly touch point. 4 or more: a monthly update and a quarterly review call. Every new owner: a check-in at 90 days.</div>' +
+      '<div class="note" style="margin-top:12px">Portfolio alerts start when the nightly check is switched on. Your choices here are saved now.</div>';
+    box.innerHTML = h;
+  }
+  function acmSetDelivery(kseg, btn){
+    var k = kseg.getAttribute('data-acmkind'), v = btn.getAttribute('data-acmdel');
+    var prev = (acmPrefs && acmPrefs.prefs && acmPrefs.prefs[k]) || 'brief';
+    if (v === prev) return;
+    var paint = function(val){
+      Array.prototype.forEach.call(kseg.querySelectorAll('[data-acmdel]'), function(b){ b.classList.toggle('on', b.getAttribute('data-acmdel') === val); });
+    };
+    paint(v);
+    if (acmPrefs && acmPrefs.prefs) acmPrefs.prefs[k] = v;
+    var body = { prefs: {} }; body.prefs[k] = v;
+    postJSON('/me/alerts', body).catch(function(e){
+      paint(prev);
+      if (acmPrefs && acmPrefs.prefs) acmPrefs.prefs[k] = prev;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('me/alerts save failed', e);
+    });
+  }
+  function acmB64(s){
+    var t = String(s || '').replace(/-/g, '+').replace(/_/g, '/');
+    t += '==='.slice((t.length + 3) % 4);
+    var bin = atob(t), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  // Web Push: permission, then the service worker (sw.js beside the page on GitHub Pages; it only
+  // shows notifications, it has no fetch handler), then the subscription goes to /me/push.
+  function acmPushOn(){
+    var st = el('acm-push-state');
+    var key = acmPrefs && acmPrefs.vapid_key;
+    if (!key){ if (st) st.textContent = 'Alerts are not set up on the server yet.'; return; }
+    if (!acmPushable()){ if (st) st.textContent = 'This browser can’t show alerts.'; return; }
+    if (st) st.textContent = 'Asking this browser…';
+    Notification.requestPermission().then(function(perm){
+      if (perm !== 'granted') throw new Error('PERM');
+      return navigator.serviceWorker.register('sw.js');
+    }).then(function(reg){
+      return navigator.serviceWorker.ready.then(function(){ return reg.pushManager.getSubscription(); }).then(function(s){
+        return s || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: acmB64(key) });
+      });
+    }).then(function(sub){
+      return postJSON('/me/push', { action: 'subscribe', subscription: sub.toJSON() });
+    }).then(function(){
+      return authFetch('/me/alerts');
+    }).then(function(j){
+      acmPrefs = j || acmPrefs;
+      acmPaintAlerts('On for this device. Send a test to check it.');
+    }).catch(function(e){
+      var m = String(e && e.message);
+      if (m === 'AUTH') return;
+      if (m !== 'PERM') console.error('push subscribe failed', e);
+      var s2 = el('acm-push-state');
+      if (s2) s2.textContent = m === 'PERM' ? 'Notifications are blocked for this site. Allow them in the browser’s site settings, then try again.' : 'Could not turn alerts on here.';
+    });
+  }
+  function acmPushTest(){
+    var st = el('acm-push-state');
+    if (st) st.textContent = 'Sending…';
+    postJSON('/me/push-test', {}).then(function(j){
+      var s2 = el('acm-push-state');
+      if (s2) s2.textContent = (j && j.sent) ? 'Sent to ' + j.sent + (j.sent === 1 ? ' device' : ' devices') + '. It should appear within seconds.' : 'Nothing was delivered. Turn alerts on again on this device.';
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('push test failed', e);
+      var s3 = el('acm-push-state'); if (s3) s3.textContent = 'The test did not go out.';
+    });
+  }
+  // One delegated listener for the whole layer, bound once at boot: stars (table, modal, brief),
+  // owner names in the brief, the Owners filter chips, Alerts, the touch log and delivery toggles.
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var s = t.closest('[data-acmstar]');
+    if (s){ e.preventDefault(); acmToggleWatch(s.getAttribute('data-acmstar')); return; }
+    if (!acmOn) return;
+    var o = t.closest('[data-acmowner]');
+    if (o){ var a = acmMap[o.getAttribute('data-acmowner')]; if (a) omOpen(a); return; }
+    var f = t.closest('[data-acmfilter]');
+    if (f){ acmFilter = f.getAttribute('data-acmfilter'); acmRenderBar(); if (ownersAll !== null) drawOwners(); return; }
+    var g = t.closest('[data-acmgo]');
+    if (g){ acmFilter = g.getAttribute('data-acmgo'); acmRenderBar(); showTab('owners'); if (ownersAll !== null) drawOwners(); return; }
+    if (t.closest('[data-acmalerts]')){ acmOpenAlerts(); return; }
+    var tc = t.closest('[data-acmtouch]');
+    if (tc){ var seg = tc.closest('[data-acmtouch-owner]'); if (seg) acmLogTouch(seg.getAttribute('data-acmtouch-owner'), tc.getAttribute('data-acmtouch'), tc); return; }
+    var dl = t.closest('[data-acmdel]');
+    if (dl){ var kseg = dl.closest('[data-acmkind]'); if (kseg) acmSetDelivery(kseg, dl); return; }
+    if (t.closest('#acm-push-on')){ acmPushOn(); return; }
+    if (t.closest('#acm-push-test')){ acmPushTest(); return; }
+  });
+
   /* ── Owners directory ─────────────────────── */
   function loadOwners(){
     el('veil').classList.remove('hide');
     authFetch('/owners')
       .then(function(j){
         ownersAll = j.owners || [];
+        acmMerge();   // account-manager fields ride on the rows so the column sort/filter see them
         drawOwners();
         el('veil').classList.add('hide');
       })
@@ -11018,6 +11409,7 @@ window.addEventListener('error', function(e){
     var rows = ownersAll.filter(function(r){
       if (!colfPass('otable', r)) return false;
       if (!scopeTestOwner(r, ow, pr)) return false;
+      if (acmOn && !acmPass(r)) return false;
       if (!q) return true;
       return ((r.display_name||'') + ' ' + (r.email||'') + ' ' + ((r.property_names||[]).join(' '))).toLowerCase().indexOf(q) >= 0;
     });
@@ -11031,7 +11423,7 @@ window.addEventListener('error', function(e){
         '<td>' + esc(r.phone || '–') + '</td>' +
         '<td class="rt">' + fmtNum(r.property_count) + '</td>' +
         '<td>' + esc(r.management_agreement_start_date || '–') + '</td>' +
-        '<td>' + esc(r.management_agreement_end_date || '–') + '</td></tr>';
+        '<td>' + esc(r.management_agreement_end_date || '–') + '</td>' + acmCellTd(r) + '</tr>';
     });
     el('otable').querySelector('tbody').innerHTML = html || emptyRow('otable', 'Nothing matches');
     el('o-count').textContent = rows.length + ' of ' + ownersAll.length + ' owners';
@@ -11044,12 +11436,18 @@ window.addEventListener('error', function(e){
   });
   var curOwner = null;
   el('otable').addEventListener('click', function(e){
+    if (e.target.closest('.acmstar')) return;   // the watch star toggles itself; it never opens the owner
     var tr2 = e.target.closest('tr[data-oid]');
     if (!tr2) return;
     var oid = tr2.getAttribute('data-oid');
     var r = null;
     (ownersAll || []).forEach(function(x){ if (String(x.buildium_id) === String(oid)) r = x; });
     if (!r) return;
+    omOpen(r);
+  });
+  // Paints and opens the owner modal for one owner row. /owners rows and the account manager's
+  // /me/owners rows carry the same fields, so the Today brief opens this same modal.
+  function omOpen(r){
     curOwner = r;
     el('om-title').textContent = r.display_name || '';
     el('om-sub').innerHTML = (r.is_company ? 'Company' : 'Individual') + (r.is_active === false ? ' &middot; INACTIVE' : '');
@@ -11086,7 +11484,8 @@ window.addEventListener('error', function(e){
         if (leasesAll === null) loadLeases(go); else go();
       })(r);
     }
-  });
+    acmPaintOwner(r);
+  }
   el('om-viewunits').addEventListener('click', function(){
     closeModal('omodal');
     if (curOwner) gotoUnitsWithSearch(curOwner.display_name || '');

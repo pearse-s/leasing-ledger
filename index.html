@@ -566,6 +566,10 @@ window.addEventListener('error', function(e){
   .fbassign:hover{background:var(--plum-soft);color:var(--plum);border-color:var(--plum)}
   .fbpend{border-style:solid;border-color:rgba(230,182,92,.5);color:var(--amber);background:var(--amber-soft)}
   .fbpend:hover{background:rgba(230,182,92,.28);color:var(--amber);border-color:var(--amber)}
+  /* "No longer posted" x beside the FB chip: small glyph, 40px hit area via negative margins so the row height doesn't grow */
+  .fbx{font:700 .8rem/1 var(--sans);color:var(--ink-soft);background:transparent;border:0;cursor:pointer;
+    min-width:40px;min-height:40px;margin:-12px -10px -12px -8px;padding:0;vertical-align:middle;border-radius:50%}
+  .fbx:hover,.fbx:focus-visible{color:var(--clay)}
   .fb-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .fb-controls .fbsel{font-family:var(--sans);max-width:160px;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:5px 7px}
   .fb-controls .fbinput{font-family:var(--sans);flex:1 1 180px;min-width:150px;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:6px 9px;font-size:.8rem}
@@ -2536,7 +2540,7 @@ window.addEventListener('error', function(e){
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">Current renewal cycle from Buildium &mdash; <b>Pending</b> = offer sent, awaiting signature; <b>Signed</b> = fully signed; <b>Cancelled</b> = offer cancelled. Scope filters apply. Click a row to open the unit.</div>
+      <div class="note" style="margin-top:10px">Current renewal cycle from Buildium &mdash; <b>Undecided</b> = lease ends in the next 90 days with no renewal started (<b>Offer sent</b> = offered in Buildium, not yet drafted); <b>Pending</b> = offer sent, awaiting signature; <b>Signed</b> = fully signed; <b>Cancelled</b> = offer cancelled. Scope filters apply. Click a row to open the unit.</div>
     </div>
   </div>
 
@@ -3393,6 +3397,7 @@ window.addEventListener('error', function(e){
   var dlBusy = false;
   var appsAll = null, aSort = { k:'submitted_at', d:-1 }, aSel = {};
   var renewalsAll = null, rnSort = { k:'lease_from_date', d:1 }, renewalsLoading = false, rnByUnit = {};
+  var rnUndecided = [];   // Renewals TAB only: leases ending <=90d with no renewal record (see rnTabRows)
   var aWin = { mode:'global', from:null, to:null };
   var toursAll = null, rSort = { k:'start_time', d:-1 }, rSortUser = false;
   var rView = 'cal', rcal = null, rmap = null, rmapLayer = null, rmapSig = '', rLastRows = [], curTour = null, tourPickMode = 'listing';
@@ -3434,6 +3439,36 @@ window.addEventListener('error', function(e){
   };
   function appChip(s){
     return '<span class="chip ' + (APP_CHIP_CLS[s] || 'c-cold') + '">' + esc(APP_NICE[s] || s || '–') + '</span>';
+  }
+  // Applicant history (Pearse 2026-09-28) — r.history comes from /applications, merged
+  // server-side from dashboard.v_applicant_history (same email or phone AND same first or last
+  // name; earlier SUBMITTED applications only). was_tenant = an earlier application reached
+  // AddedToLease. null history = nothing earlier on file, so render nothing.
+  function appHistLine(p){
+    return esc(String(p.at || '').slice(0, 10)) + ' · ' + esc([p.property_name, p.unit_number].filter(Boolean).join(' · ') || 'unit unknown') +
+      ' — ' + esc(APP_NICE[p.status] || p.status || 'unknown');
+  }
+  function appHistChip(r){
+    var h = r.history; if (!h) return '';
+    var lines = (h.prior_apps || []).map(appHistLine);
+    var tip = 'Earlier applications by this person:\n' + lines.join('\n');
+    if (h.was_tenant){
+      var cur = h.tenant && h.tenant.status === 'Active';
+      return ' <span class="chip c-ok" title="' + esc(tip) + '">' + (cur ? 'current tenant' : 'past tenant') + '</span>';
+    }
+    var st = h.last_prior_status;
+    return ' <span class="chip ' + (st === 'Rejected' ? 'c-hot' : 'c-cold') + '" title="' + esc(tip) + '">applied before &middot; ' +
+      esc((APP_NICE[st] || st || '?').toLowerCase()) + (h.prior_count > 1 ? ' +' + (h.prior_count - 1) : '') + '</span>';
+  }
+  function appHistHtml(r){
+    var h = r.history; if (!h) return null;
+    var t = h.tenant, out = '';
+    if (h.was_tenant) out += '<div><b>' + (t && t.status === 'Active' ? 'Current tenant' : 'Past tenant') + '</b>' +
+      (t ? ' &middot; ' + esc([t.property_name, t.unit_number].filter(Boolean).join(' · ')) +
+        (t.from ? ' &middot; ' + esc(String(t.from).slice(0, 10)) + ' &rarr; ' + esc(String(t.to || '').slice(0, 10) || 'open') : '') +
+        (t.status ? ' (' + esc(t.status) + ')' : '') : '') + '</div>';
+    out += (h.prior_apps || []).map(function(p){ return '<div>' + appHistLine(p) + '</div>'; }).join('');
+    return out;
   }
 
   /* ── amenity helpers (from active listings) ── */
@@ -5737,7 +5772,9 @@ window.addEventListener('error', function(e){
       var old60 = (ag.d61_90 || 0) + (ag.d90 || 0);
       // A-15 family: this read v.op_rate_pct — a key get_stats never returned — so the "(x%)"
       // parenthetical silently never rendered. The real key is vacancy.op_vacancy_rate.
-      L.push({ k: 'ledger', t: 'Op vacancy ' + (v.op_vacant != null ? v.op_vacant : '–') + (v.op_vacancy_rate != null ? ' (' + v.op_vacancy_rate + '%)' : '') + (old60 ? ' — ' + old60 + ' vacant 60+ days' : '') });
+      // Pearse 2026-09-28: TOTAL vacancy here (vacant_total = op_vacant + never_leased, and
+      // total_vacancy_rate), not the operational figure — the Ledger still carries op vacancy.
+      L.push({ k: 'ledger', t: 'Vacancy ' + (v.vacant_total != null ? v.vacant_total : '–') + (v.total_vacancy_rate != null ? ' (' + v.total_vacancy_rate + '%)' : '') + (old60 ? ' — ' + old60 + ' vacant 60+ days' : '') });
     }
     // "All clear" is a CLAIM, and every line above it is gated on its source having loaded —
     // so with all six sources null (a 500 storm, or a render that got no data) the brief used
@@ -5763,15 +5800,19 @@ window.addEventListener('error', function(e){
     // manager-scoped week-over-week op-rate move here that the Ledger ribbon chip shows, so
     // Today and the Ledger tell one story. (op-vacant gets no delta — kpis_scoped tracks
     // vacant_total = op_vacant + never_leased, a different definition; never mix the two.)
-    var ks = m.stats.kpis_scoped, oprD = '';
-    if (ks && ks.op_vacancy && ks.op_vacancy.delta != null && ks.op_vacancy.delta !== 0){
-      var dd = ks.op_vacancy.delta;
-      oprD = ' <span style="color:var(' + (dd < 0 ? '--moss' : '--clay') + ')">' + (dd > 0 ? '&#9650;' : '&#9660;') + Math.abs(dd).toFixed(1) + '</span>';
+    // Pearse 2026-09-28: the pulse shows TOTAL vacancy (vacant_total / total_vacancy_rate), so the
+    // delta now rides kpis_scoped.vacant_units — which tracks vacant_total, the SAME definition.
+    // kpis_scoped has no total-RATE series, so the rate chip carries no delta (never borrow the
+    // op-rate delta for it — two definitions on one chip is the A-14 lesson).
+    var ks = m.stats.kpis_scoped, vacD = '';
+    if (ks && ks.vacant_units && ks.vacant_units.delta != null && ks.vacant_units.delta !== 0){
+      var dd = ks.vacant_units.delta;
+      vacD = ' <span style="color:var(' + (dd < 0 ? '--moss' : '--clay') + ')">' + (dd > 0 ? '&#9650;' : '&#9660;') + Math.abs(dd) + '</span>';
     }
     // Pearse 2026-07-24: a chip that has a matching CARD on this page scrolls to it instead of
     // leaving Today (5th arg). data-goto stays on every chip as the fallback — tdMgrCardGo
     // returns false when the card is absent and the tab jump takes over. Only three chips have
-    // a real counterpart: op vacant / op rate / rent at risk / signed MTD have no card whose
+    // a real counterpart: vacant / vacancy rate / rent at risk / signed MTD have no card whose
     // population matches them, so they keep their tab jump (never point a chip at a card that
     // counts something else — the A-14 lesson).
     function chip(label, val, go, tip, card){
@@ -5780,8 +5821,9 @@ window.addEventListener('error', function(e){
         '><span class="tdp-v">' + val + '</span><span class="tdp-l">' + esc(label) + '</span></button>';
     }
     box.innerHTML =
-      chip('op vacant', v.op_vacant != null ? fmtNum(v.op_vacant) : '–', 'units') +
-      chip('op rate', v.op_vacancy_rate != null ? v.op_vacancy_rate + '%' + oprD : '–', 'ledger', oprD ? 'vs last week — manager-scoped' : '') +
+      chip('vacant', v.vacant_total != null ? fmtNum(v.vacant_total) + vacD : '–', 'units',
+        'Total vacant units: operationally vacant + never leased' + (vacD ? ' — arrow = vs last week, manager-scoped' : '')) +
+      chip('vacancy rate', v.total_vacancy_rate != null ? v.total_vacancy_rate + '%' : '–', 'ledger', 'Total vacancy rate: all vacant units ÷ all units') +
       chip('rent at risk', mo.rent_at_risk != null ? fmtMoney(mo.rent_at_risk) : '–', 'units') +
       chip('expiring 90d', p.expiring_90d != null ? fmtNum(p.expiring_90d) : '–', 'renewals',
         'Leases ending in the next 90 days — jumps to the Renewals worklist below', 'ren') +
@@ -8296,14 +8338,15 @@ window.addEventListener('error', function(e){
   });
 
   // ── Facebook Marketplace panel (unit popup) ──────────────────────────────
-  // Assign a leasing agent + save the Marketplace URL (/unit/fb-link), or email the agent
-  // asking them to post/refresh the ad (/unit/fb-request → returns a mailto: we open).
+  // Assign a leasing agent + save the Marketplace URL (/unit/fb-link), email the agent asking
+  // them to post/refresh the ad (/unit/fb-request — SENT server-side since 2026-09-28), or clear
+  // a stale posting (/unit/fb-remove).
   // Roster for the FB picker = active tour_agents (emails resolve server-side) + a fixed set of
   // other posters (mostly PMs/staff, not tour agents) + any name already assigned on a unit (so
   // shared custom names show for everyone once /units loads) + this browser's added customs
   // (localStorage, the actorExtra() pattern) + the current value. Deduped case-insensitively.
-  // NOTE: only names present in tour_agents resolve to an email in /unit/fb-request (Sarah does);
-  // the rest degrade to a recipient-less mailto (Phase 1 — the coordinator fills the recipient in).
+  // NOTE: /unit/fb-request resolves the recipient from tour_agents, then active team_members (by
+  // display name); a name with neither returns a 422 the panel shows — nothing is sent.
   var FB_EXTRA = ['Ben', 'Cheryl', 'Jeannine', 'Kevin', 'Sarah'];
   var FB_CUSTOM_KEY = 'ledger_fb_agents_v1';
   var fbAgents = null;   // cached active tour-agent display names ([] once settled, even on failure)
@@ -8414,12 +8457,13 @@ window.addEventListener('error', function(e){
         '<input type="text" class="fbinput" id="fb-url-in" placeholder="Marketplace URL (optional)" value="' + esc(r.fb_url || '') + '">' +
         '<button type="button" class="listbtn" id="fb-save">Save</button>' +
         '<button type="button" class="btn" id="fb-email">Email to post</button>' +
+        ((r.fb_url || cur || r.fb_requested_at) ? '<button type="button" class="btn" id="fb-remove" title="The ad is down or no longer needed: clear the link and the agent">No longer posted</button>' : '') +
       '</div>' +
       // Honest failed state: the panel renders either way, but if /tour-agents never landed the
       // picker is missing the active tour agents — say so instead of looking complete. Transient
       // status (Saving… / errors) overwrites this on the first action, which is fine.
       '<div class="lmphnote" id="fb-hint" style="margin-top:6px">' +
-        (fbAgentsErr ? 'Agent list unavailable right now — pick from the saved names or add one.' : '') +
+        (r.__fbSent ? 'Email sent to ' + esc(r.__fbSent) + '.' : (fbAgentsErr ? 'Agent list unavailable right now — pick from the saved names or add one.' : '')) +
       '</div>';
     var selEl = box.querySelector('#fb-agent-sel');
     var urlEl = box.querySelector('#fb-url-in');
@@ -8448,16 +8492,38 @@ window.addEventListener('error', function(e){
       if (!ag){ hintEl.textContent = 'Pick an agent first.'; return; }
       var actor = getActor();
       if (!actor){ hintEl.textContent = 'Pick your name first (on the sign-in screen).'; return; }
-      hintEl.textContent = 'Preparing email…';
+      // Since 2026-09-28 the server SENDS the email (Gmail API) — no mail client opens. The
+      // button locks while in flight so a double-click can't send it twice.
+      emailBtn.disabled = true;
+      hintEl.textContent = 'Sending email to ' + ag + '…';
       postJSON('/unit/fb-request', { unit_id: Number(r.unit_id), property_id: Number(r.property_id), assigned_agent: ag, actor: actor })
         .then(function(j){
           fbApply(r, j.fb);
-          hintEl.textContent = j.to ? ('Opening your email to ' + ag + '…') : ('No email on file for ' + ag + ' — opening a blank draft to add the recipient.');
-          if (j.mailto_url) window.location.href = j.mailto_url;
+          r.__fbSent = ag;   // survives the remount below so the confirmation stays on screen
           mountFbPanel(box, r); drawUnits();
         })
-        .catch(function(e){ if (String(e && e.message) === 'AUTH') return; hintEl.textContent = 'Could not prepare email: ' + (e && e.message ? e.message : 'error'); });
+        .catch(function(e){
+          emailBtn.disabled = false;
+          if (String(e && e.message) === 'AUTH') return;
+          hintEl.textContent = 'Email not sent: ' + (e && e.message ? e.message : 'error');
+        });
     });
+    var rmBtn = box.querySelector('#fb-remove');
+    if (rmBtn) rmBtn.addEventListener('click', function(){
+      fbRemove(r, function(msg){ hintEl.textContent = msg; }, function(){ mountFbPanel(box, r); drawUnits(); });
+    });
+  }
+  // "No longer posted" (Pearse 2026-09-28): clears the URL, the agent and the request time in
+  // one call (/unit/fb-remove), so neither the blue posted chip nor the amber pending chip
+  // survives. Shared by the unit-panel button and the x on the Units-board chip.
+  function fbRemove(r, say, done){
+    var actor = getActor();
+    if (!actor){ say('Pick your name first (on the sign-in screen).'); return; }
+    if (!confirm('Remove the Facebook Marketplace listing for ' + [r.property_name, r.unit_number].filter(Boolean).join(' · ') + '? This clears the link and the assigned agent.')) return;
+    say('Removing…');
+    postJSON('/unit/fb-remove', { unit_id: Number(r.unit_id), property_id: Number(r.property_id), actor: actor })
+      .then(function(j){ fbApply(r, j.fb); r.fb_requested_at = null; r.__fbSent = null; done(); })
+      .catch(function(e){ if (String(e && e.message) === 'AUTH') return; console.error('fb-remove failed', e); say('Could not remove: ' + (e && e.message ? e.message : 'error')); });
   }
 
   var COLF_DEF = {
@@ -8484,7 +8550,7 @@ window.addEventListener('error', function(e){
       agent:{ t:'enum', label:'Agent' },
       status:{ t:'enum', label:'Status', disp:cf_cap }
     }},
-    rntable: { rows:function(){ return renewalsAll || []; }, redraw:function(){ drawRnChips(); drawRenewals(); }, cols:{
+    rntable: { rows:function(){ return rnTabRows(); }, redraw:function(){ drawRnChips(); drawRenewals(); }, cols:{
       renewal_state:{ t:'enum', label:'State' },
       lease_from_date:{ t:'date', label:'New term', get:function(r){ return (r.lease_from_date||'').slice(0,10); } },
       lease_to_date:{ t:'date', label:'Ends', get:function(r){ return (r.lease_to_date||'').slice(0,10); } },
@@ -9598,34 +9664,73 @@ window.addEventListener('error', function(e){
     for (var i = 0; i < keys.length; i++){ if (qfTest(r, keys[i])) return true; }
     return false;
   }
-  function drawChips(){
+  // Faceted chip counts (Pearse 2026-09-28): every chip counts the rows it would show GIVEN every
+  // other active filter — search, scope, column filters, rent, amenities, Nookbook facets, days
+  // vacant and the other two chip groups. A group never filters its own counts (faceting), or
+  // picking "Vacant" would zero out "Occupied" instead of saying how many occupied units match.
+  // uFilterCtx + uPass are THE row filter: drawUnits and the chip counts both read them, so a
+  // chip number can never disagree with the table it produces.
+  function uFilterCtx(){
+    return { q: (el('u-search').value || '').toLowerCase(), rmax: parseFloat(el('u-rmax').value),
+      rmin: parseFloat(el('u-rmin').value), amenSel: msIds('u_amen'),
+      mg: msIds('managers'), ow: msIds('owners'), pr: msIds('properties'),
+      nbf: { bt: cgArr('nb-bt'), park: msIds('nb_park'), appl: cgArr('nb-appl'), notready: el('nb-notready').checked } };
+  }
+  // skip = 'chips' | 'occ' | 'mkt' leaves that group's own test out (for its counts);
+  // showOtb counts take-backs as if their chip were on (the Take-backs chip's own count)
+  function uPass(r, c, skip, showOtb){
+    if (r.is_owner_takeback && !uSel['otb'] && !showOtb) return false;   // take-backs hidden unless the chip is on
+    if (r.is_not_ready && !c.nbf.notready) return false;     // not-ready hidden unless "not ready only" is on
+    if (!colfPass('utable', r)) return false;
+    if (!scopeTestUnit(r, c.mg, c.ow, c.pr)) return false;
+    if (skip !== 'chips' && !uChipPass(r)) return false;
+    if (skip !== 'occ' && !occTest(r)) return false;
+    if (skip !== 'mkt' && !mktTest(r)) return false;
+    if (!dvTest(r)) return false;
+    if (!nbTest(r, c.nbf)) return false;
+    if (!isNaN(c.rmax) || !isNaN(c.rmin)) {
+      var rent = rentBasis(r);
+      if (!isNaN(c.rmax) && (rent == null || rent > c.rmax)) return false;
+      if (!isNaN(c.rmin) && (rent == null || rent < c.rmin)) return false;
+    }
+    if (!amenMatchMulti(uAmenOf(r), c.amenSel)) return false;
+    if (!c.q) return true;
+    return ((r.property_name||'') + ' ' + (r.unit_number||'') + ' ' + (r.tenant_names||'') + ' ' +
+            (r.primary_owner_name||'') + ' ' + (r.address_line1||'') + ' ' + (r.property_manager_name||'') + ' ' +
+            (r.nb_building_type||'') + ' ' + (r.nb_parking||'') + ' ' + (r.property_type||'')).toLowerCase().indexOf(c.q) >= 0;
+  }
+  function drawChips(c){
+    if (unitsAll === null || !el('u-chips')) return;
+    c = c || uFilterCtx();
     var html = '', empty = Object.keys(uSel).length === 0;
+    // every row that passes everything EXCEPT the flag chips; take-backs counted separately
+    // (the Take-backs chip is how they become visible, so its count must not require it on)
+    var base = unitsAll.filter(function(r){ return uPass(r, c, 'chips'); });
+    var otbBase = unitsAll.filter(function(r){ return r.is_owner_takeback && uPass(r, c, 'chips', true); });
     QFILTERS.forEach(function(f){
-      var n = (unitsAll || []).filter(function(r){
-        if (f.k === 'otb') return !!r.is_owner_takeback;
-        if (r.is_owner_takeback || r.is_not_ready) return false;  // hidden by default → don't count elsewhere
-        return qfTest(r, f.k);
-      }).length;
+      var n = f.k === 'otb' ? otbBase.length
+        : base.filter(function(r){ return !r.is_owner_takeback && qfTest(r, f.k); }).length;
       var on = f.k === 'all' ? empty : !!uSel[f.k];
       html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + f.k + '"' +
         (f.title ? ' title="' + esc(f.title) + '"' : '') + '>' +
         esc(f.label) + ' <span class="qn">' + n + '</span></button>';
     });
     el('u-chips').innerHTML = html;
-    drawAxes();
+    drawAxes(c);
   }
-  function drawAxes(){
-    var oc = unitsAll || [];
-    function grp(arr, sel, container, matchFn){
+  function drawAxes(c){
+    c = c || uFilterCtx();
+    function grp(arr, sel, container, matchFn, skip){
       var h = '';
+      var base = (unitsAll || []).filter(function(r){ return uPass(r, c, skip); });
       arr.forEach(function(f){
-        var n = oc.filter(function(r){ if (r.is_owner_takeback || r.is_not_ready) return false; return matchFn(f.k, r); }).length;
+        var n = base.filter(function(r){ return matchFn(f.k, r); }).length;
         h += '<button type="button" class="qchip' + (sel === f.k ? ' on' : '') + '" data-q="' + f.k + '">' + esc(f.label) + ' <span class="qn">' + n + '</span></button>';
       });
       el(container).innerHTML = h;
     }
-    grp(OCC, uOcc, 'u-occ', occMatch);
-    grp(MKT, uMkt, 'u-mkt', mktMatch);
+    grp(OCC, uOcc, 'u-occ', occMatch, 'occ');
+    grp(MKT, uMkt, 'u-mkt', mktMatch, 'mkt');
   }
   el('u-occ').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return; uOcc = b.getAttribute('data-q'); ['vacant','pre','occ','mi','exp60','exp90'].forEach(function(k){ delete uSel[k]; }); drawChips(); drawUnits(); });
   el('u-mkt').addEventListener('click', function(e){ var b = e.target.closest('.qchip'); if (!b) return; uMkt = b.getAttribute('data-q'); delete uSel['listed']; drawChips(); drawUnits(); });
@@ -9766,40 +9871,19 @@ window.addEventListener('error', function(e){
   // FB" prompt. Not listed → nothing. Both button variants open the unit modal (its Facebook
   // Marketplace panel) via the row-click fall-through — no dedicated handler needed.
   function fbChip(r){
-    if (r.fb_url) return ' <a class="chip c-fb" target="_blank" rel="noopener" href="' + esc(r.fb_url) + '" title="Open Facebook Marketplace listing' + (r.fb_agent ? ' — ' + esc(r.fb_agent) : '') + '">' + esc(r.fb_agent || 'FB') + ' &#8599;</a>';
-    if (r.fb_agent || r.fb_requested_at) return ' <button type="button" class="fbassign fbpend" data-fbuid="' + r.unit_id + '" title="' + esc((r.fb_agent || 'Agent') + ' assigned — awaiting the Marketplace URL. Click to add it.') + '">' + esc(r.fb_agent || 'FB') + ' &middot; pending</button>';
+    // x = "no longer posted" (Pearse 2026-09-28) → fbRemove; the utable click handler routes it
+    var x = ' <button type="button" class="fbx" data-fbrm="' + r.unit_id + '" title="No longer posted — remove the Facebook listing" aria-label="Remove Facebook listing">&times;</button>';
+    if (r.fb_url) return ' <a class="chip c-fb" target="_blank" rel="noopener" href="' + esc(r.fb_url) + '" title="Open Facebook Marketplace listing' + (r.fb_agent ? ' — ' + esc(r.fb_agent) : '') + '">' + esc(r.fb_agent || 'FB') + ' &#8599;</a>' + x;
+    if (r.fb_agent || r.fb_requested_at) return ' <button type="button" class="fbassign fbpend" data-fbuid="' + r.unit_id + '" title="' + esc((r.fb_agent || 'Agent') + ' assigned — awaiting the Marketplace URL. Click to add it.') + '">' + esc(r.fb_agent || 'FB') + ' &middot; pending</button>' + x;
     if (r.is_listed) return ' <button type="button" class="fbassign" data-fbuid="' + r.unit_id + '" title="Assign an agent to post this on Facebook Marketplace">+ assign FB</button>';
     return '';
   }
   function drawUnits(){
     if (unitsAll === null) return;
-    var q = (el('u-search').value || '').toLowerCase();
-    var rmax = parseFloat(el('u-rmax').value);
-    var amenSel = msIds('u_amen');
-    var mg = msIds('managers'), ow = msIds('owners'), pr = msIds('properties');
-    var nbf = { bt: cgArr('nb-bt'), park: msIds('nb_park'), appl: cgArr('nb-appl'), notready: el('nb-notready').checked };
-    var rmin = parseFloat(el('u-rmin').value);
-    var rows = unitsAll.filter(function(r){
-      if (r.is_owner_takeback && !uSel['otb']) return false;   // take-backs hidden unless the chip is on
-      if (r.is_not_ready && !nbf.notready) return false;       // not-ready hidden unless "not ready only" is on
-      if (!colfPass('utable', r)) return false;
-      if (!scopeTestUnit(r, mg, ow, pr)) return false;
-      if (!uChipPass(r)) return false;
-      if (!occTest(r)) return false;
-      if (!mktTest(r)) return false;
-      if (!dvTest(r)) return false;
-      if (!nbTest(r, nbf)) return false;
-      if (!isNaN(rmax) || !isNaN(rmin)) {
-        var rent = rentBasis(r);
-        if (!isNaN(rmax) && (rent == null || rent > rmax)) return false;
-        if (!isNaN(rmin) && (rent == null || rent < rmin)) return false;
-      }
-      if (!amenMatchMulti(uAmenOf(r), amenSel)) return false;
-      if (!q) return true;
-      return ((r.property_name||'') + ' ' + (r.unit_number||'') + ' ' + (r.tenant_names||'') + ' ' +
-              (r.primary_owner_name||'') + ' ' + (r.address_line1||'') + ' ' + (r.property_manager_name||'') + ' ' +
-              (r.nb_building_type||'') + ' ' + (r.nb_parking||'') + ' ' + (r.property_type||'')).toLowerCase().indexOf(q) >= 0;
-    });
+    var c = uFilterCtx();
+    var q = c.q, amenSel = c.amenSel, mg = c.mg, ow = c.ow, pr = c.pr, nbf = c.nbf;
+    var rows = unitsAll.filter(function(r){ return uPass(r, c); });
+    drawChips(c);   // every filter change re-counts the chips against the new result set
     rows.sort(cmpRows(uSort.k, uSort.d));
     uRowsCur = rows;   // export reads this — every matching row, not just the rendered page
     // reset to page 1 whenever the filter/sort/scope changes (but not on paging)
@@ -10238,6 +10322,12 @@ window.addEventListener('error', function(e){
     var lb = e.target.closest && e.target.closest('.listbtn');
     if (lb){ openListing(lb.getAttribute('data-uid')); return; }
     if (e.target.closest && e.target.closest('.c-fb')) return;   // blue FB chip: let the anchor open the listing, don't open the unit modal
+    var fx = e.target.closest && e.target.closest('[data-fbrm]');
+    if (fx){
+      var fu = (unitsAll || []).filter(function(u){ return String(u.unit_id) === fx.getAttribute('data-fbrm'); })[0];
+      if (fu) fbRemove(fu, function(msg){ if (/^Could not|^Pick/.test(msg)) alert(msg); }, drawUnits);
+      return;
+    }
     var tr2 = e.target.closest('tr[data-uid]');
     if (tr2) openUnit(tr2.getAttribute('data-uid'));
   });
@@ -11951,7 +12041,7 @@ window.addEventListener('error', function(e){
     rows.forEach(function(r){
       html += '<tr class="rowlink" data-aid="' + r.application_id + '">' +
         '<td>' + esc((r.submitted_at||'').slice(0,10)) + '</td>' +
-        '<td><b>' + esc(r.applicant_name || '–') + '</b>' + (r.toured ? ' <span class="chip c-ok" title="This applicant toured with us">toured</span>' : '') + '</td>' +
+        '<td><b>' + esc(r.applicant_name || '–') + '</b>' + (r.toured ? ' <span class="chip c-ok" title="This applicant toured with us">toured</span>' : '') + appHistChip(r) + '</td>' +
         '<td>' + esc(r.property_name || '–') + '</td>' +
         '<td>' + esc(r.unit_number || '–') + '</td>' +
         '<td>' + appChip(r.application_status) + '</td>' +
@@ -11977,7 +12067,7 @@ window.addEventListener('error', function(e){
     (appsAll || []).forEach(function(x){ if (String(x.application_id) === String(aid)) r = x; });
     if (!r) return;
     el('am-title').textContent = r.applicant_name || 'Application';
-    el('am-sub').innerHTML = appChip(r.application_status) + ' &middot; submitted ' + esc((r.submitted_at||'').slice(0,10));
+    el('am-sub').innerHTML = appChip(r.application_status) + ' &middot; submitted ' + esc((r.submitted_at||'').slice(0,10)) + appHistChip(r);
     // Contact (email/phone) is NOT in the /applications list any more (PII-on-click, health
     // audit 2026-07-23 finding 2.1) — it arrives via /application-detail on modal open, the
     // /lease-detail pattern. paintContact renders the contact-dependent chrome twice: once
@@ -12009,6 +12099,7 @@ window.addEventListener('error', function(e){
       f += fitem('Unit', esc(r.unit_number));
       f += fitem('Email', em ? '<a href="mailto:' + esc(em) + '" style="color:var(--clay)">' + esc(em) + '</a>' : null);
       f += fitem('Phone', ph ? esc(ph) : null);
+      f += fitem('History', appHistHtml(r));
       f += fitem('Days to decision', r.approx_decision_days != null ? r.approx_decision_days + 'd (approx)' : null);
       f += fitem('Manager', esc(r.property_manager_name));
       f += fitem('Owner', esc(r.primary_owner_name));
@@ -12149,9 +12240,9 @@ window.addEventListener('error', function(e){
   });
 
   /* ════════════ Lease renewals ════════════ */
-  var RN_ORDER = ['Pending','Signed','Cancelling','Cancelled','Sent','Not sent','Processing','Failed','Unknown'];
+  var RN_ORDER = ['Undecided','Offer sent','Pending','Signed','Cancelling','Cancelled','Sent','Not sent','Processing','Failed','Unknown'];
   function rnChip(s){
-    var c = s === 'Signed' ? 'c-ok' : s === 'Pending' ? 'c-warm' : (s === 'Cancelled' || s === 'Failed') ? 'c-bad' : 'c-cold';
+    var c = s === 'Signed' ? 'c-ok' : (s === 'Pending' || s === 'Offer sent') ? 'c-warm' : (s === 'Cancelled' || s === 'Failed') ? 'c-bad' : 'c-cold';
     return '<span class="chip ' + c + '">' + esc(s || '–') + '</span>';
   }
   function renderMiniRenewals(box, list){
@@ -12175,6 +12266,7 @@ window.addEventListener('error', function(e){
     authFetch('/renewals?' + p.toString())
       .then(function(j){
         renewalsAll = j.renewals || [];
+        rnUndecided = (j.undecided || []).map(rnFromWorklist);
         renewalsLoading = false;
         buildRnByUnit();
         updateRenewalTile(); drawRnChips(); drawRenewals();
@@ -12185,6 +12277,21 @@ window.addEventListener('error', function(e){
         var t = el('rntable'); if (t) t.querySelector('tbody').innerHTML = emptyRow('rntable', 'Could not load renewals.');
       });
   }
+  // Undecided (Pearse 2026-09-28). /renewals returns them under a SEPARATE key (undecided) from
+  // dashboard.v_renewal_worklist: leases ending in the next 90 days with no renewal record yet,
+  // split Undecided / Offer sent exactly like the Manager Today renewals card. They join the
+  // Renewals TAB only (rnTabRows) — renewalsAll stays records-only because the renewals tile,
+  // the Units "renewal:" chips (rnByUnit) and the unit popup all read it as "has a renewal".
+  function rnFromWorklist(r){
+    return { renewal_id: null, lease_id: r.lease_id, is_undecided: true,
+      renewal_state: r.stage === 'offer_sent' ? 'Offer sent' : 'Undecided', esignature_status: null,
+      lease_from_date: null, lease_to_date: null, rent: null, last_updated_date_time: null,
+      current_lease_end: r.term_end, current_rent: r.current_rent, tenant_names: r.tenant_names,
+      unit_id: r.unit_id, unit_number: r.unit_number, property_id: r.property_id, property_name: r.property_name,
+      property_manager_id: r.property_manager_id, property_manager_name: r.property_manager_name,
+      primary_owner_id: r.primary_owner_id, primary_owner_name: r.primary_owner_name };
+  }
+  function rnTabRows(){ return renewalsAll === null ? [] : renewalsAll.concat(rnUndecided); }
   function updateRenewalTile(){
     var rows = renewalsAll || [], pend = 0, sign = 0;
     rows.forEach(function(r){ if (r.renewal_state === 'Pending') pend++; else if (r.renewal_state === 'Signed') sign++; });
@@ -12200,9 +12307,10 @@ window.addEventListener('error', function(e){
     items.sort(function(a, b){ var ia = RN_ORDER.indexOf(a.raw), ib = RN_ORDER.indexOf(b.raw); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
     var sel = colfState('rntable', 'renewal_state').sel;
     var empty = Object.keys(sel).length === 0;
-    var html = '<button type="button" class="qchip' + (empty ? ' on' : '') + '" data-q="all">All <span class="qn">' + renewalsAll.length + '</span></button>';
+    var all = rnTabRows();
+    var html = '<button type="button" class="qchip' + (empty ? ' on' : '') + '" data-q="all">All <span class="qn">' + all.length + '</span></button>';
     items.forEach(function(it){
-      var n = renewalsAll.filter(function(r){ return colKeyOf(r.renewal_state) === it.k; }).length;
+      var n = all.filter(function(r){ return colKeyOf(r.renewal_state) === it.k; }).length;
       html += '<button type="button" class="qchip' + (sel[it.k] ? ' on' : '') + '" data-q="' + esc(it.k) + '">' + esc(it.label) + ' <span class="qn">' + n + '</span></button>';
     });
     el('rn-chips').innerHTML = html;
@@ -12210,7 +12318,8 @@ window.addEventListener('error', function(e){
   function drawRenewals(){
     if (renewalsAll === null) return;
     var q = (el('rn-search').value || '').toLowerCase();
-    var rows = renewalsAll.filter(function(r){
+    var all = rnTabRows();
+    var rows = all.filter(function(r){
       if (!colfPass('rntable', r)) return false;
       if (!q) return true;
       return ((r.tenant_names || '') + ' ' + (r.property_name || '') + ' ' + (r.unit_number || '') + ' ' +
@@ -12226,14 +12335,16 @@ window.addEventListener('error', function(e){
         '<td>' + esc(r.property_name || '–') + '</td>' +
         '<td>' + esc(r.unit_number || '–') + '</td>' +
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
-        '<td>' + (esc((r.lease_from_date || '').slice(0, 10)) || '–') + '</td>' +
-        '<td>' + (esc((r.lease_to_date || '').slice(0, 10)) || '–') + '</td>' +
-        '<td class="rt">' + (r.rent != null ? fmtMoney(r.rent) : '–') + '</td>' +
+        '<td>' + (r.is_undecided ? '<span class="qn">no offer yet</span>' : (esc((r.lease_from_date || '').slice(0, 10)) || '–')) + '</td>' +
+        // undecided rows have no new term: show the CURRENT lease end and rent, labelled, so
+        // neither can be read as a renewal date or an offered rent
+        '<td>' + (r.is_undecided ? esc((r.current_lease_end || '').slice(0, 10)) + ' <span class="qn">current</span>' : (esc((r.lease_to_date || '').slice(0, 10)) || '–')) + '</td>' +
+        '<td class="rt">' + (r.rent != null ? fmtMoney(r.rent) : (r.is_undecided && r.current_rent != null ? fmtMoney(r.current_rent) + ' <span class="qn">current</span>' : '–')) + '</td>' +
         '<td>' + esc(r.property_manager_name || '–') + '</td>' +
         '<td>' + (esc((r.last_updated_date_time || '').slice(0, 10)) || '–') + '</td></tr>';
     });
     el('rntable').querySelector('tbody').innerHTML = html || emptyRow('rntable', 'Nothing matches');
-    el('rn-count').textContent = rows.length + ' of ' + renewalsAll.length + ' renewals';
+    el('rn-count').textContent = rows.length + ' of ' + all.length + ' renewals' + (rnUndecided.length ? ' (incl. ' + rnUndecided.length + ' undecided)' : '');
   }
   el('rn-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return;

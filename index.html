@@ -570,6 +570,13 @@ window.addEventListener('error', function(e){
   .fbx{font:700 .8rem/1 var(--sans);color:var(--ink-soft);background:transparent;border:0;cursor:pointer;
     min-width:40px;min-height:40px;margin:-12px -10px -12px -8px;padding:0;vertical-align:middle;border-radius:50%}
   .fbx:hover,.fbx:focus-visible{color:var(--clay)}
+  /* XLSX column picker (#xlmodal) — 2 columns, 1 on phones; labels wrap, 40px rows for touch */
+  .xlbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:10px}
+  .xlgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;max-height:52vh;overflow-y:auto;
+    border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);padding:4px 2px}
+  .xlgrid label{display:flex;align-items:center;gap:9px;min-height:40px;font-size:.9rem;color:var(--ink);cursor:pointer}
+  .xlgrid input{width:18px;height:18px;flex:none;accent-color:var(--clay)}
+  @media (max-width:600px){ .xlgrid{grid-template-columns:1fr} }
   .fb-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .fb-controls .fbsel{font-family:var(--sans);max-width:160px;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:5px 7px}
   .fb-controls .fbinput{font-family:var(--sans);flex:1 1 180px;min-width:150px;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:6px 9px;font-size:.8rem}
@@ -2924,6 +2931,30 @@ window.addEventListener('error', function(e){
         <button type="button" class="btn primary rmact" id="sl-ed-save">Save move-in</button>
         <button type="button" class="btn rmact" id="sl-ed-reset">Reset to lease start</button>
         <button type="button" class="btn rmact" data-close="slmodal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- XLSX column picker (Pearse 2026-09-28): shared by every Export XLSX button (xlPickOpen) -->
+<div class="lmodal" id="xlmodal">
+  <div class="lmback" data-close="xlmodal"></div>
+  <div class="lmcard" style="max-width:560px">
+    <button type="button" class="lmclose" data-close="xlmodal">&times;</button>
+    <div class="lmhead">
+      <h3>Choose columns to export</h3>
+      <div class="lmsub" id="xl-sub"></div>
+    </div>
+    <div class="lmbody">
+      <div class="xlbar">
+        <button type="button" class="tdact" data-xlall="1">Select all</button>
+        <button type="button" class="tdact" data-xlall="0">Clear all</button>
+        <span class="note" id="xl-n"></span>
+      </div>
+      <div class="xlgrid" id="xl-grid"></div>
+      <div class="rm-actrow" style="margin-top:16px">
+        <button type="button" class="btn primary rmact" id="xl-go">&#8681; Download XLSX</button>
+        <button type="button" class="btn rmact" data-close="xlmodal">Cancel</button>
       </div>
     </div>
   </div>
@@ -5352,7 +5383,7 @@ window.addEventListener('error', function(e){
     var bits = tdMvFilterBits(), today = dstr(new Date());
     var note = rows.length + ' moves · exported ' + today + ' · ' + bits.join(' · ');
     var slug = bits.slice(0, 2).join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-    xlsxDownload('moves-' + today + (slug ? '-' + slug : '') + '.xlsx',
+    xlPickOpen('moves', 'moves-' + today + (slug ? '-' + slug : '') + '.xlsx',
       { sheet:'Moves', note: note, cols: MV_XL_COLS, rows: rows });
   }
   // ── the move drawer ───────────────────────────────────────────────────────
@@ -10107,6 +10138,60 @@ window.addEventListener('error', function(e){
     document.body.appendChild(a); a.click();
     setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
   }
+  /* ── Column picker (Pearse 2026-09-28) ─────────────────────────────────────
+     Every Export XLSX button goes through xlPickOpen(key, fname, o) instead of calling
+     xlsxDownload directly: a popup lists o.cols as checkboxes, the download writes only the
+     ticked ones (in the export's own column order), and the choice is remembered per export
+     in localStorage ledger_xlcols_v1 = { <key>: { on:[labels], known:[labels] } }. Labels, not
+     indexes, so adding a column later never shifts someone's saved pick; a new column starts
+     ticked (it is absent from "known"). */
+  var XL_PICK_KEY = 'ledger_xlcols_v1';
+  var xlPick = null;   // { key, fname, o, on: { label: true } } for the open popup
+  function xlPickSaved(){ try { return JSON.parse(localStorage.getItem(XL_PICK_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function xlPickOpen(key, fname, o){
+    var saved = xlPickSaved()[key], on = {};
+    var known = (saved && saved.known) || [];
+    o.cols.forEach(function(c){
+      on[c.label] = !saved || (saved.on || []).indexOf(c.label) >= 0 || known.indexOf(c.label) < 0;
+    });
+    xlPick = { key: key, fname: fname, o: o, on: on };
+    el('xl-sub').textContent = (o.sheet || 'Export') + ' · ' + o.rows.length + ' row' + (o.rows.length === 1 ? '' : 's') + ' match the current filters';
+    el('xl-grid').innerHTML = o.cols.map(function(c, i){
+      return '<label><input type="checkbox" data-xli="' + i + '"' + (on[c.label] ? ' checked' : '') + '>' + esc(c.label) + '</label>';
+    }).join('');
+    xlPickCount();
+    openModal('xlmodal');
+  }
+  function xlPickCount(){
+    if (!xlPick) return;
+    var n = xlPick.o.cols.filter(function(c){ return xlPick.on[c.label]; }).length;
+    el('xl-n').textContent = n + ' of ' + xlPick.o.cols.length + ' columns';
+    el('xl-go').disabled = !n;
+  }
+  if (el('xlmodal')){
+    el('xl-grid').addEventListener('change', function(e){
+      var cb = e.target.closest('[data-xli]'); if (!cb || !xlPick) return;
+      xlPick.on[xlPick.o.cols[+cb.getAttribute('data-xli')].label] = cb.checked;
+      xlPickCount();
+    });
+    el('xlmodal').addEventListener('click', function(e){
+      var b = e.target.closest('[data-xlall]'); if (!b || !xlPick) return;
+      var v = b.getAttribute('data-xlall') === '1';
+      xlPick.o.cols.forEach(function(c){ xlPick.on[c.label] = v; });
+      Array.prototype.forEach.call(el('xl-grid').querySelectorAll('[data-xli]'), function(cb){ cb.checked = v; });
+      xlPickCount();
+    });
+    el('xl-go').addEventListener('click', function(){
+      if (!xlPick) return;
+      var p = xlPick, cols = p.o.cols.filter(function(c){ return p.on[c.label]; });
+      if (!cols.length) return;
+      var all = xlPickSaved();
+      all[p.key] = { on: cols.map(function(c){ return c.label; }), known: p.o.cols.map(function(c){ return c.label; }) };
+      try { localStorage.setItem(XL_PICK_KEY, JSON.stringify(all)); } catch (e) {}
+      closeModal('xlmodal');
+      xlsxDownload(p.fname, { sheet: p.o.sheet, note: p.o.note, cols: cols, rows: p.o.rows });
+    });
+  }
 
   /* ── Units board export ────────────────────────────────────────────────
      Writes uRowsCur — the SAME filtered + sorted set drawUnits() renders, every
@@ -10222,7 +10307,7 @@ window.addEventListener('error', function(e){
     var note = rows.length + ' of ' + unitsAll.length + ' units · exported ' + today + ' · ' +
       (bits.length ? bits.join(' · ') : 'no filters applied');
     var slug = bits.slice(0, 2).join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-    xlsxDownload('units-' + today + (slug ? '-' + slug : '') + '.xlsx',
+    xlPickOpen('units', 'units-' + today + (slug ? '-' + slug : '') + '.xlsx',
       { sheet:'Units', note: note, cols: U_XL_COLS, rows: rows });
   }
   if (el('u-export')) el('u-export').addEventListener('click', unitsExport);
@@ -14550,7 +14635,7 @@ window.addEventListener('error', function(e){
     var today = dstr(new Date()), bits = slFilterBits();
     var note = rows.length + ' of ' + slRows().length + ' signed leases · exported ' + today + ' · ' + bits.join(' · ');
     var slug = (hubTeamLeasesAgent || hubTeamLeasesRange || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
-    xlsxDownload('signed-leases-' + today + (slug ? '-' + slug : '') + '.xlsx',
+    xlPickOpen('signed', 'signed-leases-' + today + (slug ? '-' + slug : '') + '.xlsx',
       { sheet:'Signed leases', note: note, cols: SL_XL_COLS, rows: rows });
   }
   if (el('sl-export')) el('sl-export').addEventListener('click', slExport);

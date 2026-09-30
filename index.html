@@ -630,6 +630,14 @@ window.addEventListener('error', function(e){
   .colfpop .cfnum input{width:100%;font-family:var(--sans);font-size:.82rem;padding:6px 8px;
     border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background:rgba(0,0,0,.28);color:var(--ink)}
   .colfpop .cfnum input::placeholder{color:var(--ink-soft)}
+  .colfpop .cfnum input{min-width:0;box-sizing:border-box}
+  .colfpop .cfdate{flex-direction:column}
+  /* unit popup: "this unit or the whole complex?" mini confirm for the Not ready checkbox */
+  .nrask{margin-top:8px;padding:10px 12px;border:1px solid var(--clay);border-radius:var(--r-sm);background:var(--clay-soft)}
+  .nrask .nrq{font-size:.82rem;font-weight:600;margin-bottom:8px}
+  .nrask .nrbtns{display:flex;gap:6px;flex-wrap:wrap}
+  .nrask .nrbtns .listbtn{min-height:40px}
+  .colfpop .cfdate label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:600;color:var(--ink-soft)}
   .colfpop .cfmeta{padding:9px 12px;font-size:.74rem;color:var(--ink-soft);font-style:italic}
   .colfpop .cffoot{display:flex;justify-content:space-between;border-top:1px solid var(--hairline);padding:7px 11px}
   .colfpop .cffoot button{font-family:var(--sans);font-size:.74rem;font-weight:700;border:none;background:none;cursor:pointer;color:var(--clay)}
@@ -2085,6 +2093,7 @@ window.addEventListener('error', function(e){
         <button type="button" class="chip-mini" data-role="agent">Agent</button>
         <button type="button" class="chip-mini" data-role="manager">Manager</button>
         <button type="button" class="chip-mini adminonly" data-role="admin">Admin</button>
+        <button type="button" class="chip-mini" data-role="me" style="display:none" title="Your brief — owners to reach, owner calls to return, watched owners">Me</button>
       </div>
     </div>
     <div id="td-acm" style="display:none"></div>
@@ -2501,7 +2510,6 @@ window.addEventListener('error', function(e){
           <button type="button" class="chip-mini" data-v="Yes">Yes</button>
           <button type="button" class="chip-mini" data-v="No">No</button>
         </span>
-        <label class="toggle"><input type="checkbox" id="nb-notready"> not ready only</label>
       </div>
       <div id="umap"></div>
       <div class="scrolly tallscroll" id="u-listwrap">
@@ -2523,7 +2531,7 @@ window.addEventListener('error', function(e){
         </table>
       </div>
       <div class="pager" id="u-pager"></div>
-      <div class="note" style="margin-top:10px">Owner take-backs and Nookbook &ldquo;not ready&rdquo; (construction) units are hidden by default and excluded from all Ledger stats &mdash; turn on the <b>Take-backs</b> flag or the <b>not ready only</b> toggle to reveal them (dimmed). The Nookbook chip reveals building-type / parking / appliance filters; appliance state is tracked by install date &mdash; set or clear it in the unit popup&rsquo;s Appliances field (Jan&nbsp;1&nbsp;2026 = installed historically). Click any row for full detail, Buildium links, tenant contacts and photos.</div>
+      <div class="note" style="margin-top:10px">Owner take-backs and &ldquo;not ready&rdquo; units (new buildings, Nookbook construction) are hidden by default and excluded from all Ledger stats &mdash; turn on the <b>Take-backs</b> or <b>Not ready</b> flag to reveal them (dimmed). Admins and managers mark a unit or its whole complex not ready in the unit popup&rsquo;s details; the flag clears itself when the unit is listed. The Nookbook chip reveals building-type / parking / appliance filters; appliance state is tracked by install date &mdash; set or clear it in the unit popup&rsquo;s Appliances field (Jan&nbsp;1&nbsp;2026 = installed historically). Click any row for full detail, Buildium links, tenant contacts and photos.</div>
     </div>
   </div>
 
@@ -4246,6 +4254,11 @@ window.addEventListener('error', function(e){
     // personas TD_ROLE_ALLOW lists. Admins are never locked.
     var r = '';
     try { r = localStorage.getItem(TD_ROLE_KEY) || ''; } catch (e) {}
+    // "Me" (Pearse 2026-09-30): the account-manager brief as its own persona, offered only
+    // while /me/owners answers for this sign-in (acmOn). A saved "me" read before that probe
+    // settles falls through to the normal persona below WITHOUT touching storage, so acmSet's
+    // re-render lands back on Me once the probe answers.
+    if (r === 'me') { if (acmOn) return 'me'; r = ''; }
     if (idLock && idLock.role) {
       // honour a saved chip only when this persona is allowed to use it; anything else
       // (stale storage, a role they no longer hold) falls back to the pinned persona.
@@ -4265,6 +4278,8 @@ window.addEventListener('error', function(e){
     box.querySelectorAll('.chip-mini').forEach(function(b){
       var r = b.getAttribute('data-role');
       b.classList.toggle('on', r === cur);
+      // "Me" shows only while the personal brief is switched on for this sign-in
+      if (r === 'me'){ b.style.display = acmOn ? '' : 'none'; return; }
       // WS-M M4: a locked identity sees only the persona chips TD_ROLE_ALLOW grants it
       // (one for managers/coordinators; agent + coordinator for leasing agents).
       b.style.display = (ok && ok.indexOf(r) < 0) ? 'none' : '';
@@ -4303,6 +4318,14 @@ window.addEventListener('error', function(e){
     // its listeners and mid-flow state must survive role flips.
     var co = el('td-coord'), isCo = role === 'coordinator';
     if (co) co.style.display = isCo ? 'block' : 'none';
+    // Me = the personal brief ALONE; every other persona hides it (acmRenderBrief reads tdRole)
+    acmRenderBrief();
+    if (role === 'me'){
+      var ph0 = el('page-hub'); if (ph0) ph0.style.display = 'none';
+      g.style.display = 'none'; g.innerHTML = '';
+      tdSub('Me — owners to reach, owner calls to return, your numbers and watched owners.');
+      return;
+    }
     // the merged Hub block (#page-hub lives INSIDE Today since 2026-07-17, same
     // toggle-never-rebuild contract as #td-coord — its listeners bind once at boot):
     // agent role = my-view, admin role = team overview, hidden otherwise.
@@ -8642,11 +8665,13 @@ window.addEventListener('error', function(e){
   var COLF_DEF = {
     utable: { rows:function(){ return unitsAll || []; }, redraw:function(){ drawUnits(); }, cols:{
       unit_bedrooms:{ t:'enum', label:'Beds' },
-      occupancy_status:{ t:'enum', label:'Status', disp:function(v){ return CF_OCC[v] || v; } },
-      unit_event:{ t:'enum', label:'Event', multi:true,
-        vals:function(r){ var out = []; if (r.unit_event) out.push(r.unit_event);
-          var rn = rnByUnit[r.unit_id]; if (rn && rn.renewal_state) out.push('renewal:' + rn.renewal_state); return out; },
-        disp:function(v){ return v.indexOf('renewal:') === 0 ? 'Renewal: ' + v.slice(8).toLowerCase() : v; } },
+      // Status + Event list EVERY chip their cells can show (Pearse 2026-09-30), not just the raw
+      // column value — uStatusTags / uEventTags mirror the cell renderers in drawUnits. Picking
+      // several values ORs them, like Excel. Add a tag here whenever a chip is added to a cell.
+      occupancy_status:{ t:'enum', label:'Status', multi:true, vals:uStatusTags,
+        disp:function(v){ return CF_OCC[v] || U_TAG_LABEL[v] || v; } },
+      unit_event:{ t:'enum', label:'Event', multi:true, vals:uEventTags,
+        disp:function(v){ return v.indexOf('renewal:') === 0 ? 'Renewal: ' + v.slice(8) : (U_TAG_LABEL[v] || v); } },
       move_in_disp:{ t:'date', label:'Move-in' },
       lease_to_date:{ t:'date', label:'Lease end' },
       monthly_rent:{ t:'num', label:'Rent', get:rentBasis },
@@ -8825,8 +8850,10 @@ window.addEventListener('error', function(e){
       h += '<div class="cfnum"><input type="number" id="cf-min" placeholder="Min" value="' + (s.min != null ? s.min : '') + '">' +
            '<input type="number" id="cf-max" placeholder="Max" value="' + (s.max != null ? s.max : '') + '"></div>';
     } else {
-      h += '<div class="cfnum"><input type="date" id="cf-min" value="' + (s.min || '') + '">' +
-           '<input type="date" id="cf-max" value="' + (s.max || '') + '"></div>';
+      // stacked, not side by side: two native date inputs (with their picker icons) cannot fit
+      // across the 244px popover, which clipped the "to" field (Pearse 2026-09-30)
+      h += '<div class="cfnum cfdate"><label>From<input type="date" id="cf-min" value="' + (s.min || '') + '"></label>' +
+           '<label>To<input type="date" id="cf-max" value="' + (s.max || '') + '"></label></div>';
     }
     h += '<div class="cffoot"><button type="button" id="cf-clear">Clear</button><button type="button" class="cfdone" id="cf-done">Done</button></div>';
     colfPop.innerHTML = h;
@@ -9714,8 +9741,15 @@ window.addEventListener('error', function(e){
     { k:'mo',       label:'Move-outs this month' },
     { k:'eviction', label:'Evictions' },
     { k:'balance',  label:'Has balance' },
-    { k:'otb',      label:'Take-backs' }
+    // Lease-end bands (Pearse 2026-09-30): SEPARATE, non-overlapping bands on the active lease's
+    // end date. A signed renewal still counts — the chip is about when the current lease ends.
+    { k:'le30',     label:'Lease ends ≤30d',   title:'Active lease ends in the next 0–30 days (renewed or not)' },
+    { k:'le60',     label:'Lease ends 31–60d', title:'Active lease ends in 31–60 days (renewed or not)' },
+    { k:'le90',     label:'Lease ends 61–90d', title:'Active lease ends in 61–90 days (renewed or not)' },
+    { k:'otb',      label:'Take-backs' },
+    { k:'notready', label:'Not ready', title:'Units marked not ready to lease (new buildings, NookBook construction). Hidden everywhere else and left out of the vacancy numbers.' }
   ];
+  function leBand(r, lo, hi){ return r.lease_source === 'Active' && r.days_remaining != null && r.days_remaining >= lo && r.days_remaining <= hi; }
   var OCC = [{ k:'all', label:'All' }, { k:'occupied', label:'Occupied' }, { k:'vacant', label:'Vacant' }, { k:'upcoming', label:'Upcoming move-in' }];
   var MKT = [{ k:'all', label:'All' }, { k:'marketed', label:'Marketed' }, { k:'unlisted', label:'Unlisted vacant' }, { k:'onfb', label:'Posted to FB' }, { k:'pendfb', label:'Pending FB' }];
   function occMatch(k, r){ if (k === 'occupied') return r.occupancy_status === 'occupied'; if (k === 'vacant') return r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased'; if (k === 'upcoming') return !!r.has_upcoming_move_in || r.occupancy_status === 'pre_leased'; return true; }
@@ -9753,11 +9787,15 @@ window.addEventListener('error', function(e){
     if (k === 'listed') return !!r.is_listed;
     if (k === 'nookbook') return !!r.is_nookbook;
     if (k === 'otb') return !!r.is_owner_takeback;
+    if (k === 'notready') return !!r.is_not_ready;
+    if (k === 'le30') return leBand(r, 0, 30);
+    if (k === 'le60') return leBand(r, 31, 60);
+    if (k === 'le90') return leBand(r, 61, 90);
     return true;
   }
   function nbTest(r, nbf){
     if (!nbf) return true;
-    var anyNb = nbf.bt.length || nbf.park.length || nbf.appl.length || nbf.notready;
+    var anyNb = nbf.bt.length || nbf.park.length || nbf.appl.length;
     if (!anyNb) return true;          // no nookbook facet selected → no constraint
     if (!r.is_nookbook) return false; // a nookbook facet is active → only nookbook units can match
     if (nbf.bt.length){
@@ -9767,7 +9805,6 @@ window.addEventListener('error', function(e){
     }
     if (nbf.park.length && nbf.park.indexOf(r.nb_parking || '') < 0) return false;
     if (nbf.appl.length && nbf.appl.indexOf(r.nb_appliances || '') < 0) return false;
-    if (nbf.notready && !r.is_not_ready) return false;
     return true;
   }
   // Units quick-chip multi-select: a row passes if it matches ANY selected chip (empty = all)
@@ -9787,13 +9824,17 @@ window.addEventListener('error', function(e){
     return { q: (el('u-search').value || '').toLowerCase(), rmax: parseFloat(el('u-rmax').value),
       rmin: parseFloat(el('u-rmin').value), amenSel: msIds('u_amen'),
       mg: msIds('managers'), ow: msIds('owners'), pr: msIds('properties'),
-      nbf: { bt: cgArr('nb-bt'), park: msIds('nb_park'), appl: cgArr('nb-appl'), notready: el('nb-notready').checked } };
+      nbf: { bt: cgArr('nb-bt'), park: msIds('nb_park'), appl: cgArr('nb-appl') } };
   }
   // skip = 'chips' | 'occ' | 'mkt' leaves that group's own test out (for its counts);
-  // showOtb counts take-backs as if their chip were on (the Take-backs chip's own count)
-  function uPass(r, c, skip, showOtb){
-    if (r.is_owner_takeback && !uSel['otb'] && !showOtb) return false;   // take-backs hidden unless the chip is on
-    if (r.is_not_ready && !c.nbf.notready) return false;     // not-ready hidden unless "not ready only" is on
+  // reveal = 'otb' | 'notready' counts that hidden group as if its chip were on (the
+  // Take-backs / Not ready chips' own counts)
+  function uPass(r, c, skip, reveal){
+    // picking Take-back / Not ready in the Status column filter reveals them just like the chip,
+    // or choosing those values there would always produce an empty table
+    var stSel = (COLF['utable'] && COLF['utable'].occupancy_status && COLF['utable'].occupancy_status.sel) || {};
+    if (r.is_owner_takeback && !uSel['otb'] && !stSel['t:otb'] && reveal !== 'otb') return false;                 // take-backs hidden unless the chip is on
+    if (r.is_not_ready && !uSel['notready'] && !stSel['t:notready'] && reveal !== 'notready') return false;       // not-ready hidden unless its chip is on
     if (!colfPass('utable', r)) return false;
     if (!scopeTestUnit(r, c.mg, c.ow, c.pr)) return false;
     if (skip !== 'chips' && !uChipPass(r)) return false;
@@ -9819,10 +9860,11 @@ window.addEventListener('error', function(e){
     // every row that passes everything EXCEPT the flag chips; take-backs counted separately
     // (the Take-backs chip is how they become visible, so its count must not require it on)
     var base = unitsAll.filter(function(r){ return uPass(r, c, 'chips'); });
-    var otbBase = unitsAll.filter(function(r){ return r.is_owner_takeback && uPass(r, c, 'chips', true); });
+    var otbBase = unitsAll.filter(function(r){ return r.is_owner_takeback && uPass(r, c, 'chips', 'otb'); });
+    var nrBase = unitsAll.filter(function(r){ return r.is_not_ready && uPass(r, c, 'chips', 'notready'); });
     QFILTERS.forEach(function(f){
-      var n = f.k === 'otb' ? otbBase.length
-        : base.filter(function(r){ return !r.is_owner_takeback && qfTest(r, f.k); }).length;
+      var n = f.k === 'otb' ? otbBase.length : f.k === 'notready' ? nrBase.length
+        : base.filter(function(r){ return !r.is_owner_takeback && !r.is_not_ready && qfTest(r, f.k); }).length;
       var on = f.k === 'all' ? empty : !!uSel[f.k];
       html += '<button type="button" class="qchip' + (on ? ' on' : '') + '" data-q="' + f.k + '"' +
         (f.title ? ' title="' + esc(f.title) + '"' : '') + '>' +
@@ -9856,18 +9898,18 @@ window.addEventListener('error', function(e){
     else if (uSel[k]) { delete uSel[k]; }
     else {
       uSel[k] = 1;
-      if (k === 'exp60' || k === 'exp90') uSort = { k:'days_remaining', d:1 };
+      if (k === 'exp60' || k === 'exp90' || k === 'le30' || k === 'le60' || k === 'le90') uSort = { k:'days_remaining', d:1 };
       if (k === 'balance') uSort = { k:'total_balance', d:-1 };
     }
     drawChips(); drawUnits();
   });
   // nb-bt / nb-appl are chip groups (CG_ONCHANGE), nb-park is a popover (MS.cb) — they wire themselves
-  el('nb-notready').addEventListener('change', drawUnits);
   function loadUnits(after){
     el('veil').classList.remove('hide');
     authFetch('/units')
       .then(function(j){
         unitsAll = j.units || [];
+        nrRows = j.not_ready || [];
         unitsAll.forEach(function(u){
           miDerive(u);
           // Balance blend: Active-lease total_balance (outstanding-balances mirror) wins;
@@ -9905,11 +9947,26 @@ window.addEventListener('error', function(e){
       if (!cur || rank(r.renewal_state) < rank(cur.renewal_state)) rnByUnit[r.unit_id] = r;
     });
   }
-  function rnUnitChip(uid){
-    var r = rnByUnit[uid]; if (!r) return '';
-    var st = r.renewal_state || '';
-    var c = st === 'Signed' ? 'c-ok' : st === 'Pending' ? 'c-warm' : (st === 'Cancelled' || st === 'Failed') ? 'c-bad' : 'c-cold';
-    return '<span class="chip ' + c + '" title="Lease renewal">renewal: ' + esc(st.toLowerCase()) + '</span>';
+  // Renewal stage chip (Pearse 2026-09-30). r.renewal_stage is stamped onto every /units row
+  // server-side from dashboard.v_renewal_worklist — the SAME source as the Renewals board and the
+  // Manager Today card — for leases whose term ends in the next 90 days: undecided (no renewal
+  // started) → offer_sent → pending_esign → signed, or not_renewing (tenant gave notice, or the
+  // renewal was cancelled — a denied renewal). A signed renewal keeps its chip until the old lease
+  // ends; the view's 90-day window drops it on its own after that.
+  var RN_STAGE = {
+    undecided:     { label:'Undecided',    cls:'c-cold', tip:'Lease ends within 90 days and no renewal has been started in Buildium' },
+    offer_sent:    { label:'Offer sent',   cls:'c-warm', tip:'Renewal offer sent in Buildium, not yet drafted' },
+    pending_esign: { label:'Pending',      cls:'c-warm', tip:'Renewal sent for signature, awaiting signatures' },
+    signed:        { label:'Signed',       cls:'c-ok',   tip:'Renewal fully signed — shown until the current lease ends' },
+    not_renewing:  { label:'Not renewing', cls:'c-bad',  tip:'Not renewing — the tenant gave notice or the renewal was cancelled' }
+  };
+  function rnStageLabel(r){
+    var s = RN_STAGE[r.renewal_stage]; if (!s) return '';
+    return r.renewal_stage === 'not_renewing' && r.renewal_notice ? 'Not renewing (notice)' : s.label;
+  }
+  function rnUnitChip(r){
+    var s = r && RN_STAGE[r.renewal_stage]; if (!s) return '';
+    return ' <span class="chip ' + s.cls + '" title="Lease renewal · ' + esc(r.renewal_notice && r.renewal_stage === 'not_renewing' ? 'the tenant gave notice to vacate' : s.tip) + '">renewal: ' + esc(rnStageLabel(r).toLowerCase()) + '</span>';
   }
   function rnForUnit(uid){
     return (renewalsAll || []).filter(function(r){ return String(r.unit_id) === String(uid); });
@@ -9953,11 +10010,17 @@ window.addEventListener('error', function(e){
   // from buildium.lease_deposits — the future lease's LEDGER, refreshed by the daily sync —
   // because the outstanding-balances mirror has NO row for future leases whether paid or
   // never charged. NULL sd_paid therefore means UNKNOWN: render no chip, never guess "due".
-  function sdChip(r){
+  // 'paid' | 'due' | '' — the ONE decision sdChip renders and the Status column filter lists
+  function sdState(r){
     if (r.occupancy_status !== 'pre_leased' || r.sd_paid == null) return '';
     var req = (r.security_deposit != null && r.security_deposit > 0) ? r.security_deposit : (r.sd_charged || 0);
     if (!(req > 0)) return '';
-    var paid = r.sd_paid >= req - 0.005;
+    return r.sd_paid >= req - 0.005 ? 'paid' : 'due';
+  }
+  function sdChip(r){
+    var st = sdState(r); if (!st) return '';
+    var req = (r.security_deposit != null && r.security_deposit > 0) ? r.security_deposit : (r.sd_charged || 0);
+    var paid = st === 'paid';
     return ' <span class="chip ' + (paid ? 'c-ok' : 'c-warm') + '" title="SD ' + esc(fmtMoney(r.sd_paid)) + ' of ' + esc(fmtMoney(req)) + ' received">' + (paid ? 'Paid SD' : 'SD due') + '</span>';
   }
   // Pending-application chip (Pearse 2026-07-21). Shows a unit's pending Approved /
@@ -9969,10 +10032,45 @@ window.addEventListener('error', function(e){
   // flips (current tenant still in place, unit marketed, incoming applicant). The is_listed
   // gate on occupied rows excludes renewal drafts (unlisted occupied) so only flips show.
   // Colours match the Applications tab (APP_CHIP_CLS): draft lease = c-warm, approved = c-ok.
-  function appStageChip(r){
+  // 'draft_lease' | 'approved' | '' — the ONE gate appStageChip renders and the Status filter lists
+  function appStageState(r){
     var vac  = (r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased');
     var flip = (r.occupancy_status === 'occupied' && r.is_listed);
     if (!vac && !flip) return '';
+    return (r.pending_app_stage === 'draft_lease' || r.pending_app_stage === 'approved') ? r.pending_app_stage : '';
+  }
+  // Column-filter tags for the Units Status + Event cells (see COLF_DEF.utable). Keys are
+  // prefixed so they can never collide with a raw occupancy_status / unit_event value.
+  var U_TAG_LABEL = {
+    't:notready':'Not ready', 't:otb':'Take-back', 't:uso_pre':'Expected move-in (override)', 't:uso_vac':'Forced vacant (override)',
+    't:sd_paid':'Paid SD', 't:sd_due':'SD due', 't:app_draft_lease':'Draft lease', 't:app_approved':'Approved app',
+    't:listed':'Listed', 't:fb_posted':'Posted to FB', 't:fb_pending':'FB pending', 't:fb_none':'Listed, FB not assigned'
+  };
+  function uStatusTags(r){
+    var out = [];
+    if (r.is_not_ready) out.push('t:notready');
+    if (r.occupancy_status) out.push(r.occupancy_status);
+    if (r.is_owner_takeback) out.push('t:otb');
+    if (r.status_override_mode === 'pre_leased') out.push('t:uso_pre');
+    if (r.status_override_mode === 'vacant') out.push('t:uso_vac');
+    var sd = sdState(r); if (sd) out.push('t:sd_' + sd);
+    var ap = appStageState(r); if (ap) out.push('t:app_' + ap);
+    return out;
+  }
+  function uEventTags(r){
+    var out = [];
+    if (r.unit_event) out.push(r.unit_event);
+    var rl = rnStageLabel(r); if (rl) out.push('renewal:' + rl);
+    if (r.is_listed) out.push('t:listed');
+    if (r.fb_url) out.push('t:fb_posted');
+    else if (r.fb_agent || r.fb_requested_at) out.push('t:fb_pending');
+    else if (r.is_listed) out.push('t:fb_none');
+    return out;
+  }
+  function appStageChip(r){
+    var vac  = (r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased');
+    var flip = (r.occupancy_status === 'occupied' && r.is_listed);
+    if (!appStageState(r)) return '';
     if (r.pending_app_stage === 'draft_lease') return ' <span class="chip c-warm" title="' + (vac ? 'Applicant added to a draft lease — still counts as vacant until the lease activates' : 'Listed flip — an incoming applicant is on a draft lease (current tenant still in place)') + '">draft lease</span>';
     if (r.pending_app_stage === 'approved')    return ' <span class="chip c-ok" title="' + (vac ? 'Application approved — still counts as vacant until a lease is signed' : 'Listed flip — an application here is approved (current tenant still in place)') + '">approved app</span>';
     return '';
@@ -10026,7 +10124,7 @@ window.addEventListener('error', function(e){
         '<td>' + esc(r.unit_number) + furnChip(r) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
         '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + usoChip(r) + sdChip(r) + appStageChip(r) + '</td>' +
-        '<td>' + evChip(r.unit_event) + rnUnitChip(r.unit_id) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + fbChip(r) + '</td>' +
+        '<td>' + evChip(r.unit_event) + rnUnitChip(r) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + fbChip(r) + '</td>' +
         '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + ' <span class="qn">' + miSrcTag(r.move_in_src) + '</span>' : '–') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
@@ -10317,7 +10415,7 @@ window.addEventListener('error', function(e){
     { label:'Lease rent',      key:'monthly_rent', type:'money', w:13 },
     { label:'Market rent',     key:'market_rent', type:'money', w:13 },
     { label:'Event',           key:'unit_event', w:16 },
-    { label:'Renewal',         w:12, get:function(r){ var n = rnByUnit[r.unit_id]; return n ? n.renewal_state : ''; } },
+    { label:'Renewal',         w:12, get:function(r){ return rnStageLabel(r); } },
     { label:'Pending app',     w:13, get:function(r){ return r.pending_app_stage === 'draft_lease' ? 'Draft lease' : r.pending_app_stage === 'approved' ? 'Approved' : ''; } },
     { label:'Move-in',         key:'move_in_disp', w:12 },
     { label:'Move-in source',  w:13, get:function(r){ return r.move_in_src === 'appt' ? 'Appointment' : r.move_in_src === 'lease' ? 'Lease start' : r.move_in_src === 'expected' ? 'Expected (manual)' : r.move_in_src === 'manual' ? 'Actual (manual)' : ''; } },
@@ -10362,7 +10460,6 @@ window.addEventListener('error', function(e){
     if (bt.length) bits.push('Building type: ' + bt.join(', '));
     if (park.length) bits.push('Parking: ' + park.join(', '));
     if (appl.length) bits.push('Appliances: ' + appl.join(', '));
-    if (el('nb-notready').checked) bits.push('Not-ready units only');
     if (uSel['otb']) bits.push('Owner take-backs shown');
     ['managers', 'owners', 'properties', 'ptypes'].forEach(function(key){
       var names = msLabels(key);
@@ -10576,6 +10673,106 @@ window.addEventListener('error', function(e){
         (r.status_override_actor ? ' &middot; set by ' + esc(r.status_override_actor) : '') + '</span>';
     }
     return '<span class="qn">Following Buildium.</span>';
+  }
+  // ── Not ready (Pearse 2026-09-30) ─────────────────────────────────────────
+  // Admins and managers mark a unit — or its whole complex — not ready to lease (new buildings
+  // sit in Buildium long before they can be posted; Grove Drive was the first). Written through
+  // POST /unit/not-ready into dashboard.not_ready_units, which v_unit_status folds into
+  // is_not_ready: the unit leaves the vacancy numbers and hides on the board behind the Not
+  // ready chip. It clears ITSELF when the unit is listed (the view ignores the flag while a
+  // listing exists; retire_listed_not_ready() makes that permanent). A complex-wide flag loses
+  // only the listed unit. The NookBook construction flag comes from the client sheet and is
+  // read-only here.
+  var nrRows = [];   // stored flags from /units: { scope, buildium_id, released_unit_ids }
+  function nrSource(r){
+    var own = false, bldg = null;
+    (nrRows || []).forEach(function(x){
+      if (x.scope === 'unit' && String(x.buildium_id) === String(r.unit_id)) own = true;
+      if (x.scope === 'property' && String(x.buildium_id) === String(r.property_id) &&
+          (x.released_unit_ids || []).map(String).indexOf(String(r.unit_id)) < 0) bldg = x;
+    });
+    if (r.is_listed) return { kind: 'listed' };
+    if (own) return { kind: 'unit' };
+    if (bldg) return { kind: 'property', row: bldg };
+    if (r.is_not_ready) return { kind: 'sheet' };
+    return { kind: 'none' };
+  }
+  // UI gate only — the route re-checks (admin password, or a VERIFIED admin/manager sign-in)
+  function nrCan(){ return !!IS_ADMIN || !!(authIdent && (authIdent.role === 'admin' || authIdent.role === 'manager')); }
+  function nrSiblings(r){ return (unitsAll || []).filter(function(x){ return String(x.property_id) === String(r.property_id); }).length; }
+  function nrValueHtml(r){
+    var s = nrSource(r), h = '';
+    if (s.kind === 'sheet'){
+      return '<span class="chip c-otb">not ready</span> <span class="qn">NookBook construction flag &mdash; set on the client sheet, not here.</span>';
+    }
+    if (s.kind === 'listed'){
+      return '<span class="qn">Listed, so it counts as ready. Take the listing down in Buildium to mark it not ready.</span>';
+    }
+    var on = s.kind === 'unit' || s.kind === 'property';
+    var why = s.kind === 'unit' ? 'This unit is marked not ready.'
+      : s.kind === 'property' ? 'The whole complex is marked not ready' + (s.row && s.row.actor ? ' (by ' + esc(s.row.actor) + ')' : '') + '.'
+      : 'Ready to lease.';
+    if (!nrCan()){
+      return (on ? '<span class="chip c-otb">not ready</span> ' : '') + '<span class="qn">' + why + ' Admins and managers can change this when signed in.</span>';
+    }
+    h += '<label class="toggle"><input type="checkbox" id="um-nr-cb"' + (on ? ' checked' : '') + '> Not ready to lease</label>';
+    h += ' <span class="qn" id="um-nr-why">' + why + '</span>';
+    h += '<div class="nrask" id="um-nr-ask" style="display:none"></div>';
+    if (!on) h += '<div class="qn" style="margin-top:4px">For units in Buildium that are not ready to post yet. Hides them from the board and the vacancy numbers; clears itself when the unit is listed.</div>';
+    h += '<div class="lmphnote" id="um-nr-hint"></div>';
+    return h;
+  }
+  function nrBind(r){
+    var cb = el('um-nr-cb'); if (!cb) return;
+    var uid = String(r.unit_id);
+    var wrap = el('um-fields'); if (wrap) wrap.setAttribute('data-nr-uid', uid);
+    function mine(){ var w = el('um-fields'); return !!w && w.getAttribute('data-nr-uid') === uid; }
+    function repaint(){
+      if (!mine()) return;
+      var host = el('um-nr-host'); if (host){ host.innerHTML = nrValueHtml(r); nrBind(r); }
+    }
+    function save(on, scope){
+      var hint = el('um-nr-hint'), actor = getActor();
+      if (!actor){ if (hint) hint.textContent = 'Pick your name first (on the sign-in screen).'; repaint(); return; }
+      if (hint) hint.textContent = 'Saving…';
+      postJSON('/unit/not-ready', { unit_id: Number(r.unit_id), property_id: Number(r.property_id), on: on, scope: scope, actor: actor })
+        .then(function(j){
+          // repaint from the SERVER's derived flags for the whole building — the listing rule
+          // lives in the view, so only the server knows which units actually flipped
+          nrRows = (j && j.not_ready) || [];
+          var by = {};
+          ((j && j.units) || []).forEach(function(x){ by[String(x.unit_id)] = !!x.is_not_ready; });
+          (unitsAll || []).forEach(function(x){ if (String(x.unit_id) in by) x.is_not_ready = by[String(x.unit_id)]; });
+          drawChips(); drawUnits();
+          repaint();
+          var h2 = el('um-nr-hint'); if (h2 && mine()) h2.textContent = 'Saved. The vacancy numbers update on the next refresh.';
+        })
+        .catch(function(e){
+          if (String(e && e.message) === 'AUTH') return;
+          console.error('not-ready save failed', e);
+          repaint();
+          var h2 = el('um-nr-hint'); if (h2 && mine()) h2.textContent = 'Could not save: ' + (e && e.message ? e.message : 'error');
+        });
+    }
+    cb.addEventListener('change', function(){
+      var on = cb.checked, s = nrSource(r), ask = el('um-nr-ask');
+      // clearing a unit-only flag has nothing to choose — do it
+      if (!on && s.kind === 'unit'){ save(false, 'unit'); return; }
+      var n = nrSiblings(r);
+      if (!ask){ save(on, 'unit'); return; }
+      ask.innerHTML = '<div class="nrq">' + (on ? 'Mark not ready for&hellip;' : 'Mark ready for&hellip;') + '</div>' +
+        '<div class="nrbtns"><button type="button" class="listbtn" data-nr="unit">Just this unit</button>' +
+        '<button type="button" class="listbtn" data-nr="property">The whole complex' + (n > 1 ? ' (' + n + ' units)' : '') + '</button>' +
+        '<button type="button" class="listbtn" data-nr="cancel">Cancel</button></div>';
+      ask.style.display = '';
+      ask.onclick = function(e){
+        var b = e.target.closest('[data-nr]'); if (!b) return;
+        var k = b.getAttribute('data-nr');
+        ask.style.display = 'none'; ask.innerHTML = '';
+        if (k === 'cancel'){ cb.checked = !on; return; }
+        save(on, k);
+      };
+    });
   }
   function usoValueHtml(r){
     var on = !!r.status_override_mode;
@@ -11049,7 +11246,7 @@ window.addEventListener('error', function(e){
     el('um-contact').innerHTML = '';
     // collapsed details — fields
     var f = '';
-    f += fitem('Unit event', (evChip(r.unit_event) + rnUnitChip(r.unit_id)) || '–');
+    f += fitem('Unit event', (evChip(r.unit_event) + rnUnitChip(r)) || '–');
     f += fitem('Owner', esc(r.primary_owner_name));
     f += fitem('Property type', esc(r.property_type));
     f += fitem('Furnished', furnValueHtml(r));
@@ -11080,6 +11277,7 @@ window.addEventListener('error', function(e){
     // Future lease it has not retracted, both happen portfolio-wide. The host div is
     // what usoBind re-renders into after a save, since which buttons apply changes
     // with the state.
+    f += fitem('Not ready', '<div id="um-nr-host">' + nrValueHtml(r) + '</div>', false, 'fspan');
     f += fitem('Status override', '<div id="um-uso-host">' + usoValueHtml(r) + '</div>', false, 'fspan');
     // The two date overrides sit WITH the status override: all three are the same thing —
     // a human correcting what Buildium can see. Each says whether the date on show was
@@ -11087,6 +11285,7 @@ window.addEventListener('error', function(e){
     f += fitem('Move-in date',  '<div id="um-mvo-in-host">'  + mvoValueHtml(r, 'in')  + '</div>', false, 'fspan');
     f += fitem('Move-out date', '<div id="um-mvo-out-host">' + mvoValueHtml(r, 'out') + '</div>', false, 'fspan');
     el('um-fields').innerHTML = f;
+    nrBind(r);
     usoBind(r);
     mvoBind(r);
     if (r.is_nookbook) { nbaBind(r); nbtBind(r); nbnBind(r); }   // listeners bind to the freshly rendered editor nodes
@@ -11340,7 +11539,13 @@ window.addEventListener('error', function(e){
     });
   }
   function acmSet(on, rows){
+    var roleBefore = tdRole();
     acmOn = !!on; acmRows = acmOn ? rows : null; acmMap = {};
+    // The Me chip appears/disappears with acmOn, and a saved "me" role only resolves once it is
+    // on — so repaint the chips, and re-render Today only when the EFFECTIVE persona moved
+    // (every probe calls this; an unconditional tdRender would refetch the manager grid).
+    tdSyncRoles();
+    if (tdRole() !== roleBefore && todayLoaded !== null && el('page-today') && el('page-today').style.display === 'block') tdRender();
     (acmRows || []).forEach(function(r){ acmMap[String(r.owner_id)] = r; });
     document.body.classList.toggle('acm-on', acmOn);
     acmMerge();
@@ -11434,10 +11639,11 @@ window.addEventListener('error', function(e){
       acmTile('Balances owed', fmtMoney(m.outstanding_balances)) + '</div>';
   }
   // Today: "Your brief" — owners to reach, owner calls to return, the numbers, watched owners.
-  // Its own block (#td-acm) above every role's workspace, so it never touches a role's render.
+  // Its own block (#td-acm), shown ONLY under the "Me" persona chip (Pearse 2026-09-30 — it used
+  // to sit above every role's workspace). It never touches another role's render.
   function acmRenderBrief(){
     var box = el('td-acm'); if (!box) return;
-    if (!acmOn || !acmRows){ box.style.display = 'none'; box.innerHTML = ''; return; }
+    if (!acmOn || !acmRows || tdRole() !== 'me'){ box.style.display = 'none'; box.innerHTML = ''; return; }
     var due = acmRows.filter(function(a){ var d = acmDays(a.next_touch_due); return d != null && d <= 7; })
       .sort(function(x, y){ var p = String(x.next_touch_due), q = String(y.next_touch_due); return p < q ? -1 : (p > q ? 1 : 0); });
     var missed = acmRows.filter(function(a){ return a.missed_call_at && (Date.now() - Date.parse(a.missed_call_at)) < 14 * 86400000; })

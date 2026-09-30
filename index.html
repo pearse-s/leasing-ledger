@@ -1713,10 +1713,10 @@ window.addEventListener('error', function(e){
         <div class="num" id="k-needs">&ndash;</div>
         <div class="sub">toured &middot; no contact in 7 days</div>
       </div>
-      <div class="kpi alert" id="kpi-missed" title="Inbound calls not answered, last 7 days">
-        <div class="lbl">Missed calls</div>
-        <div class="num" id="k-missed">&ndash;</div>
-        <div class="sub">inbound, last 7 days</div>
+      <div class="kpi alert click" id="kpi-reached" title="Callers who reached a person live or heard back (call or text) — 24h for leasing, 1 business day for everyone else — last 7 days. Click for the Phones panel.">
+        <div class="lbl">Callers reached &le; 24h</div>
+        <div class="num" id="k-reached">&ndash;</div>
+        <div class="sub" id="k-reached-sub">live or called / texted back &middot; 7 days</div>
       </div>
     </div>
 
@@ -1879,7 +1879,7 @@ window.addEventListener('error', function(e){
 
     <section class="panel">
       <details class="pnl" id="pnl-phones">
-      <summary class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span><h2>Phones &middot; RingCentral</h2><span class="ph-count"><b id="phc-phones">&ndash;</b> missed calls</span><span class="ph-sub">answer rates, queues &amp; texts</span><span class="ph-chev">&#9656;</span></summary>
+      <summary class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span><h2>Phones &middot; RingCentral</h2><span class="ph-count"><b id="phc-phones">&ndash;</b> never heard back &middot; 7d</span><span class="ph-sub">who picks up, who calls back</span><span class="ph-chev">&#9656;</span></summary>
   <div id="page-phones">
     <style>
     #page-phones .ph-attr{margin:12px 0 0;font-size:.84rem;color:var(--ink-soft);line-height:1.6}
@@ -1899,33 +1899,85 @@ window.addEventListener('error', function(e){
     #ph-heat .hr{font-size:.66rem;color:var(--ink-soft);display:flex;align-items:center;height:20px}
     #ph-heat .hc{height:20px;border-radius:3px;background:var(--glass)}
     #page-phones td .acts a{text-decoration:none;font-size:1rem;margin-right:4px}
+    /* phone responsiveness (2026-09-30): route aging bars, leaderboard, owned call-back list */
+    #page-phones .phr-row{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr) 88px;gap:12px;align-items:center;padding:7px 0;font-size:.84rem}
+    #page-phones .phr-row .lbl2{line-height:1.3}
+    #page-phones .phr-row .pct{text-align:right;font-weight:700}
+    #page-phones .phr-row .pct small{display:block;font-weight:400;font-size:.7rem;color:var(--ink-soft)}
+    #page-phones .phr-row.menu{color:var(--ink-soft);border-top:1px solid var(--hairline);margin-top:6px;padding-top:12px}
+    #page-phones .phbar{display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--glass);min-width:60px}
+    #page-phones .phbar span{display:block;height:100%}
+    #page-phones .phbar .live{background:var(--moss)} #page-phones .phbar .b1{background:var(--plum)}
+    #page-phones .phbar .b2{background:var(--amber)} #page-phones .phbar .b3{background:#E8956A}
+    #page-phones .phbar .never{background:#C5603A} #page-phones .phbar .waiting{background:var(--hairline-dark)}
+    #page-phones .phlg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.72rem;color:var(--ink-soft);margin-top:10px}
+    #page-phones .phlg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+    #ph-lb th{white-space:normal;vertical-align:bottom}   /* 11 columns: two-line headers fit the panel from 1280 up; narrower widths scroll inside the card */
+    #ph-lb th[data-k]{cursor:pointer;user-select:none}
+    #ph-lb th[data-k].on{color:var(--clay)}
+    #ph-lb td.bar{min-width:130px}
+    #ph-lb tr.grp td{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);padding-top:16px;border-bottom:1px solid var(--hairline)}
+    #ph-lb tr.pr{cursor:pointer}
+    #ph-lb tr.pr:hover td{background:var(--paper-deep)}
+    #ph-lb tr.unranked td{color:var(--ink-soft)}
+    #page-phones .phk{display:inline-block;font-size:.7rem;font-weight:700;padding:1px 8px;border-radius:999px;margin-left:6px;vertical-align:middle;background:var(--glass-2);color:var(--ink-soft)}
+    #page-phones .phk.tenant{background:var(--plum-soft);color:var(--plum)} #page-phones .phk.owner{background:var(--amber-soft);color:var(--amber)}
+    #page-phones .phk.prospect{background:var(--moss-soft);color:var(--moss)}
+    #page-phones .phcbf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 12px}
+    #page-phones .phcbf select{min-height:40px;max-width:100%;font-family:var(--sans);font-size:.8rem;color:var(--ink);background-color:var(--glass-2);
+      border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:8px 30px 8px 12px;cursor:pointer;
+      appearance:none;-webkit-appearance:none;-moz-appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23E8B43E' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 10px center;background-size:11px}
+    #page-phones .phcbf select:hover,#page-phones .phcbf select:focus{border-color:var(--clay);outline:none}
+    #page-phones .phcbf select option{background:var(--paper);color:var(--ink)}
+    #page-phones a.phlink{color:var(--ink);text-decoration:underline;text-decoration-color:var(--hairline-dark);cursor:pointer}
+    #page-phones .phwait.late{color:#E8956A;font-weight:700}
+    @media (max-width:560px){ #page-phones .phr-row{grid-template-columns:minmax(0,1fr) 76px} #page-phones .phr-row .phbar{grid-column:1 / -1;grid-row:2} }
     </style>
 
     <section class="panel">
       <div class="panel-head"><span class="ph-ic"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span><h2>Phone performance</h2><span class="ph-sub">calls &amp; texts &middot; RingCentral &middot; window follows the sidebar dates</span></div>
       <div class="panel-kpis pk-3">
         <div class="kpi"><div class="lbl">Inbound calls</div><div class="num" id="ph-k-inbound">&ndash;</div><div class="sub" id="ph-k-inbound-sub">received</div></div>
-        <div class="kpi"><div class="lbl">Answer rate</div><div class="num" id="ph-k-answer">&ndash;</div><div class="sub" id="ph-k-answer-sub">answered vs missed</div></div>
-        <div class="kpi"><div class="lbl">Missed calls</div><div class="num" id="ph-k-missed">&ndash;</div><div class="sub" id="ph-k-missed-sub">incl. voicemail</div></div>
-        <div class="kpi"><div class="lbl">Voicemail call-back rate</div><div class="num" id="ph-k-return">&ndash;</div><div class="sub" id="ph-k-return-sub">missed we got back to &middot; 7d</div></div>
+        <div class="kpi"><div class="lbl">Answered live</div><div class="num" id="ph-k-live">&ndash;</div><div class="sub" id="ph-k-live-sub">a person picked up</div></div>
+        <div class="kpi"><div class="lbl">Reached in window</div><div class="num" id="ph-k-reached">&ndash;</div><div class="sub" id="ph-k-reached-sub">live or called / texted back</div></div>
+        <div class="kpi alert"><div class="lbl">Never heard back</div><div class="num" id="ph-k-never">&ndash;</div><div class="sub" id="ph-k-never-sub">no call, text or pickup in 48h / 2 business days</div></div>
         <div class="kpi"><div class="lbl">Outbound calls</div><div class="num" id="ph-k-outbound">&ndash;</div><div class="sub" id="ph-k-outbound-sub">made</div></div>
         <div class="kpi"><div class="lbl">Texts</div><div class="num" id="ph-k-texts">&ndash;</div><div class="sub" id="ph-k-texts-sub">in &middot; out</div></div>
       </div>
       <div class="ph-attr" id="ph-attr"></div>
-      <div class="grid g2" style="margin-top:16px">
-        <div class="card">
-          <h2>Call volume</h2>
-          <div class="note">inbound &middot; missed &middot; outbound per day &middot; Mountain time</div>
-          <div class="chartbox tall"><canvas id="ch-ph-trend"></canvas></div>
-        </div>
-        <div class="card">
-          <h2>Voicemail &amp; missed-call follow-up</h2>
-          <div class="note">of every missed/voicemail call, did we get back to them within 7 days?</div>
-          <div class="vmfunnel" id="ph-vmfunnel"></div>
-          <div class="note" style="margin-top:12px" id="ph-vmnote"></div>
-        </div>
-      </div>
     </section>
+
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar"><h2>Did callers reach us?</h2><span class="count-note">answered live, or called / texted back &middot; by where the call came in</span></div>
+      <div id="ph-routes"></div>
+      <div class="phlg"><span><i style="background:var(--moss)"></i>Answered live</span><span><i style="background:var(--plum)"></i>&le; 12h &middot; same business day</span><span><i style="background:var(--amber)"></i>&le; 24h &middot; next business day</span><span><i style="background:#E8956A"></i>&le; 48h &middot; 2nd business day</span><span><i style="background:#C5603A"></i>Never</span><span><i style="background:var(--hairline-dark)"></i>Still inside the window</span></div>
+      <div class="note" style="margin-top:8px">Leasing (queue, the 780-900-7420 line and leasing agents&rsquo; own lines) is timed in clock hours; everyone else in business days (9&ndash;5 Mon&ndash;Fri, Alberta stat holidays off). A caller who gets through on a later call counts as reached.</div>
+    </div>
+
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar"><h2>Phone leaderboard</h2><span class="count-note">ranked by callers reached on their own line &middot; click a person for their unreturned callers</span></div>
+      <div class="scrolly"><table id="ph-lb"><thead><tr>
+        <th>#</th><th data-k="display_name">Person</th><th class="rt" data-k="direct_calls">Callers</th><th data-k="reached_pct">Their direct line</th><th class="rt" data-k="reached_pct">Reached</th><th class="rt" data-k="queue_answered">Queue answered</th><th class="rt" data-k="called_back">Called back</th><th class="rt" data-k="texted_back">Texted back</th><th class="rt" data-k="calls_in">Calls in&nbsp;/&nbsp;out</th><th class="rt" data-k="texts_out">Texts in&nbsp;/&nbsp;out</th><th class="rt" data-k="avg_call_secs">Avg call</th>
+      </tr></thead><tbody></tbody></table></div>
+      <div class="note" style="margin-top:8px">Callers = calls that rang their own line (queue calls and the shared leasing line are counted under Queue answered). Ranked only with 20+ callers in the window. Called / texted back = the first response to a caller nobody picked up. Avg call = talk time of calls they answered or placed that connected.</div>
+    </div>
+
+    <div class="card tablecard" style="margin-top:18px">
+      <div class="tablebar"><h2>Needs a call back</h2><span class="count-note" id="ph-cb-count">every caller still waiting &middot; last 90 days</span></div>
+      <div class="phcbf" id="ph-cb-filters"></div>
+      <div class="scrolly tallscroll"><table id="ph-callbacks"><thead><tr>
+        <th>Caller</th><th>Unit &middot; where they called</th><th class="rt">Waiting</th><th>Responsible</th><th></th>
+      </tr></thead><tbody></tbody></table></div>
+      <div class="note" style="margin-top:8px">A caller leaves this list on their own once anyone calls or texts them back, or picks up their next call. Responsible: tenants &rarr; their property manager; owners &rarr; the line they called (main line &rarr; Pearse); prospects &rarr; their tour agent, else the line they called, else Danai; known callers &rarr; whoever last talked to them; new callers &rarr; the line they called, or the queue&rsquo;s shared pile.</div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h2>Call volume</h2>
+      <div class="note">inbound &middot; missed &middot; outbound per day &middot; Mountain time</div>
+      <div class="chartbox tall"><canvas id="ch-ph-trend"></canvas></div>
+    </div>
 
     <div class="card tablecard" style="margin-top:18px">
       <div class="tablebar"><h2>When it comes in</h2><span class="count-note">inbound calls or texts by hour &amp; weekday &middot; Mountain time</span>
@@ -1943,26 +1995,10 @@ window.addEventListener('error', function(e){
     </div>
 
     <div class="card tablecard" style="margin-top:18px">
-      <div class="tablebar"><h2>Agent scorecard</h2><span class="count-note">calls &amp; texts by agent &middot; selected window</span></div>
-      <div class="scrolly"><table id="ph-agents"><thead><tr>
-        <th>Agent</th><th class="rt">Calls out</th><th class="rt">Calls in</th><th class="rt">Answered</th><th class="rt">Missed</th><th class="rt">Answer&nbsp;%</th><th class="rt">Avg call</th><th class="rt">Texts out</th><th class="rt">Texts in</th><th class="rt">Call-back&nbsp;%</th>
+      <div class="tablebar"><h2>Who's calling the most</h2><span class="count-note">top inbound numbers</span></div>
+      <div class="scrolly tallscroll"><table id="ph-callers"><thead><tr>
+        <th>Caller</th><th class="rt">Calls</th><th class="rt">Ans</th><th class="rt">Missed</th><th>Last call</th><th>Reached back?</th><th></th>
       </tr></thead><tbody></tbody></table></div>
-      <div class="note" style="margin-top:8px">Answered/missed reflect calls that reached each agent's line. Call-back&nbsp;% = their missed/voicemail calls that got a call or text back within 7 days.</div>
-    </div>
-
-    <div class="grid g2" style="margin-top:18px">
-      <div class="card tablecard">
-        <div class="tablebar"><h2>Who's calling the most</h2><span class="count-note">top inbound numbers</span></div>
-        <div class="scrolly tallscroll"><table id="ph-callers"><thead><tr>
-          <th>Caller</th><th class="rt">Calls</th><th class="rt">Ans</th><th class="rt">Missed</th><th>Last call</th><th>Reached back?</th><th></th>
-        </tr></thead><tbody></tbody></table></div>
-      </div>
-      <div class="card tablecard">
-        <div class="tablebar"><h2>Needs a call back</h2><span class="count-note">last contact was a missed/VM, no reply since</span></div>
-        <div class="scrolly tallscroll"><table id="ph-followups"><thead><tr>
-          <th>Caller</th><th>Last missed</th><th class="rt">Calls</th><th></th>
-        </tr></thead><tbody></tbody></table></div>
-      </div>
     </div>
   </div>
       </details>
@@ -3832,7 +3868,9 @@ window.addEventListener('error', function(e){
   function renderAsOf(d){
     var totHost = el('k-totrate') ? el('k-totrate').closest('.kpi') : null;
     var riskHost = el('k-risk') ? el('k-risk').closest('.kpi') : null;
-    var idHosts = ['kpi-oprate','kpi-vacant','kpi-pre','kpi-tasks','kpi-needs','kpi-missed'];
+    // kpi-reached is in the strip list but never gets an as-of line: callers-reached is a
+    // live 7-day read of the phone mirror, not a snapshot (it replaced missed calls 2026-09-30).
+    var idHosts = ['kpi-oprate','kpi-vacant','kpi-pre','kpi-tasks','kpi-needs','kpi-reached'];
     var a = d && d.kpis_asof;
     // only overlay when looking at a historical end date; otherwise strip any prior lines
     if (!a || !(state.to < winToday())){
@@ -3852,8 +3890,51 @@ window.addEventListener('error', function(e){
       + asofRow(a.overdue_tasks, cur(k.overdue_tasks), fmtNum, false, 'down',
                 'overdue, as of ' + fmtAsofWhen(a.overdue_tasks && a.overdue_tasks.as_of)));
     setKpiAsof(el('kpi-needs'),  asofRow(a.needs_followup, cur(k.needs_followup), fmtNum, false, 'down'));
-    setKpiAsof(el('kpi-missed'), asofRow(a.missed_calls, cur(k.missed_calls), fmtNum, false, 'down',
-                '7 days to ' + fmtAsofWhen(a.missed_calls && a.missed_calls.as_of)));
+    setKpiAsof(el('kpi-reached'), '');
+  }
+  // ── Phone responsiveness, 7-day team read (2026-09-30) ───────────────────────
+  // ONE coalesced /phone-responsiveness fetch (6 days back + today, like the other 7-day
+  // tiles) shared by the ribbon tile, the Phones panel header count and the Today team
+  // strip; cached 5 min because renderKpiExtras runs on every 30 s /stats poll. In-flight
+  // callers queue and are drained in ONE place (state, then flag, then the queue).
+  var phReach7 = null, phReach7At = 0, phReach7Loading = false, phReach7Queue = [];
+  function phReach7Get(cb){
+    if (phReach7 && Date.now() - phReach7At < 300000){ cb(phReach7); return; }
+    phReach7Queue.push(cb);
+    if (phReach7Loading) return;
+    phReach7Loading = true;
+    var to = dstr(new Date()), from = dstr(new Date(Date.now() - 6 * 86400000));
+    authFetch('/phone-responsiveness?from=' + from + '&to=' + to).then(function(j){
+      phReach7Settle(j && !j.error ? j : null);
+    }).catch(function(e){
+      phReach7Settle(null);
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('phone responsiveness (7d) failed:', e);
+    });
+  }
+  function phReach7Settle(j){
+    if (j){ phReach7 = j; phReach7At = Date.now(); }
+    phReach7Loading = false;
+    var q = phReach7Queue; phReach7Queue = [];
+    q.forEach(function(f){ try { f(j); } catch (e) { console.error('phone responsiveness callback failed:', e); } });
+  }
+  function phPct(n, d){ return d > 0 ? Math.round(100 * n / d) : null; }
+  function phRenderReachTile(){
+    phReach7Get(function(j){
+      var t = j && j.team; if (!t) return;
+      var den = (t.calls || 0) - (t.waiting || 0), pr = phPct(t.reached || 0, den), pn = phPct(t.never || 0, den);
+      var k = el('k-reached'); if (k) k.textContent = pr == null ? '–' : pr + '%';
+      var s = el('k-reached-sub'); if (s) s.innerHTML = (pn == null ? '' : '<b style="color:var(--clay)">' + pn + '%</b> never heard back &middot; ') + '7 days';
+      var hc = el('phc-phones'); if (hc) hc.textContent = fmtNum(t.never || 0);
+    });
+  }
+  // Ribbon tile + Today strip drill: open the Ledger phones fold-out (loads on first open)
+  function phOpenPanel(){
+    showTab('ledger');
+    setTimeout(function(){
+      var p = el('pnl-phones');
+      if (p){ p.open = true; if (phonesData === null) loadPhones(); try { p.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) {} }
+    }, 450);
   }
   function renderKpiExtras(k, ks){
     if (!k) return;
@@ -3879,7 +3960,7 @@ window.addEventListener('error', function(e){
     if (k.tour_confirmation_rate){ var tcv = el('k-tourconf'); if (tcv) tcv.textContent = (k.tour_confirmation_rate.cur == null ? '—' : k.tour_confirmation_rate.cur + '%');
       setKpiExtra(el('kpi-tourconf'), deltaChip(k.tour_confirmation_rate, true) + sparkSVG(k.tour_confirmation_rate.series, GOLD)); }
     if (k.needs_followup){ countUp('k-needs', k.needs_followup.cur == null ? 0 : k.needs_followup.cur, fmtNum); setKpiExtra(el('kpi-needs'), deltaChip(k.needs_followup, false) + sparkSVG(k.needs_followup.series, GOLD)); }
-    if (k.missed_calls){ countUp('k-missed', k.missed_calls.cur == null ? 0 : k.missed_calls.cur, fmtNum); setKpiExtra(el('kpi-missed'), deltaChip(k.missed_calls, false) + sparkSVG(k.missed_calls.series, GOLD)); }
+    phRenderReachTile();   // callers reached ≤ 24h (replaced missed calls 2026-09-30); cached 5 min
     if (k.outreach){ countUp('k-outreach', k.outreach.cur == null ? 0 : k.outreach.cur, fmtNum);
       var ous = el('k-outreach-sub'); if (ous) ous.innerHTML = fmtNum(k.outreach.calls) + ' calls &middot; ' + fmtNum(k.outreach.texts) + ' texts';
       setKpiExtra(el('kpi-outreach'), deltaChip(k.outreach, false) + sparkSVG(k.outreach.series, GOLD)); }
@@ -3891,6 +3972,7 @@ window.addEventListener('error', function(e){
     if (el('kpi-needs'))      el('kpi-needs').addEventListener('click', goHub);
     if (el('kpi-conv'))       el('kpi-conv').addEventListener('click', function(){ showTab('applications'); });
     if (el('kpi-tourconf'))   el('kpi-tourconf').addEventListener('click', function(){ showTab('tours'); });
+    if (el('kpi-reached'))    el('kpi-reached').addEventListener('click', phOpenPanel);
   })();
 
   /* ── tabs ─────────────────────────────────── */
@@ -9210,7 +9292,7 @@ window.addEventListener('error', function(e){
   function syncPanelCounts(){
     try{
       [['k-risk','phc-occ'],['k-tourconf','phc-funnel'],['k-renewals','phc-renew'],['k-retention','phc-reten'],
-       ['k-tasks','phc-tasks'],['k-overdue','phc-overdue'],['k-outreach','phc-outreach'],['k-missed','phc-phones']].forEach(function(p){
+       ['k-tasks','phc-tasks'],['k-overdue','phc-overdue'],['k-outreach','phc-outreach']].forEach(function(p){   // phc-phones is set by phRenderReachTile
         var src = el(p[0]), dst = el(p[1]); if (!src || !dst) return;
         dst.textContent = src.textContent;
       });
@@ -14216,31 +14298,25 @@ window.addEventListener('error', function(e){
     });
   }
   // D3 — phones pulse: FIXED 7-day window (A-19: 6 days back + today = 7 days, matching the
-  // Ledger tile), reading get_phone_stats' totals keys exactly as the phones panel does.
+  // Ledger tile). Reads the SAME coalesced 7-day payload as the ribbon's callers-reached tile
+  // (phReach7Get) — the old answer-rate / missed chips were retired with that tile 2026-09-30.
   var hubTeamPhonesReq = 0;
   function loadHubTeamPhones(){
     var box = el('hub-team-phones'); if (!box) return;
     var q = ++hubTeamPhonesReq;
-    var to = dstr(new Date()), from = dstr(new Date(Date.now() - 6 * 86400000));
-    authFetch('/phone-stats?from=' + from + '&to=' + to).then(function(j){
+    phReach7Get(function(j){
       if (q !== hubTeamPhonesReq) return;
-      var t = (j && j.totals) || {};
+      var t = j && j.team; if (!t) return;
+      var den = (t.calls || 0) - (t.waiting || 0), pr = phPct(t.reached || 0, den);
       box.innerHTML =
-        '<button type="button" class="qchip" data-ph="1" title="Open the Ledger phones panel">Answer rate <span class="qn">' + (t.answer_rate == null ? '–' : t.answer_rate + '%') + '</span> &middot; 7d</button>' +
-        '<button type="button" class="qchip" data-ph="1" title="Open the Ledger phones panel">Missed <span class="qn">' + fmtNum(t.missed || 0) + '</span> &middot; 7d</button>';
-    }).catch(function(e){
-      if (String(e && e.message) === 'AUTH') return;
-      console.error('phones pulse failed', e);
+        '<button type="button" class="qchip" data-ph="1" title="Callers who reached a person or heard back — open the Ledger phones panel">Reached &le; 24h <span class="qn">' + (pr == null ? '–' : pr + '%') + '</span> &middot; 7d</button>' +
+        '<button type="button" class="qchip" data-ph="1" title="Callers nobody called, texted or picked up for — open the Ledger phones panel">Never heard back <span class="qn">' + fmtNum(t.never || 0) + '</span> &middot; 7d</button>';
     });
   }
   // D3 drill — same flip the legacy #phones hash does: Ledger tab + open the fold-out
   if (el('hub-team-phones')) el('hub-team-phones').addEventListener('click', function(e){
     if (!e.target.closest('[data-ph]')) return;
-    showTab('ledger');
-    setTimeout(function(){
-      var p = el('pnl-phones');
-      if (p){ p.open = true; if (phonesData === null) loadPhones(); try { p.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) {} }
-    }, 450);
+    phOpenPanel();
   });
   function hubRenderTeam(){ hubRenderTeamHealth(); hubRenderTeamTable(); hubRenderTeamLeases(); hubRenderTeamMoves(); }
   // WS-G M5 admin strip — the manager Today panel's data, across every PM (no scope applied).
@@ -15795,6 +15871,8 @@ window.addEventListener('error', function(e){
 
   /* ── Phones tab (RingCentral analysis) ─────────────────────────────────── */
   var phonesData = null, phHeatMode = 'calls';
+  // phone responsiveness (2026-09-30): window payload, call-back list, filters, leaderboard sort
+  var phResp = null, phReq = 0, phCb = null, phCbReq = 0, phCbFilter = { kind: 'all', who: 'all' }, phLbSort = null;
   function phFmtPhone(l10){ var d = String(l10 || '').replace(/\D/g, '');
     if (d.length === 11 && d[0] === '1') d = d.slice(1);
     if (d.length === 10) return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6);
@@ -15804,22 +15882,40 @@ window.addEventListener('error', function(e){
   function phDur(s){ s = Math.round(s || 0); var m = Math.floor(s/60), ss = s%60; return m ? (m + 'm' + (ss<10?'0':'') + ss + 's') : (ss + 's'); }
   function phActs(phone, name){ var tel = String(phone || '').replace(/[^0-9]/g, ''); if (!tel) return '';
     return '<span class="acts"><a href="' + rcCall(esc(tel)) + '" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" title="Text">&#128172;</a>' + threadIcon(tel, name) + '</span>'; }
+  // Three independent reads, each generation-guarded (a window change re-runs this): phone-stats
+  // (volume, heatmap, weekend, top callers), phone-responsiveness (outcomes + leaderboard for the
+  // same window) and phone-callbacks (everyone still waiting — its own 90-day lookback).
   function loadPhones(){
     if (!el('page-phones')) return;
     phonesData = 1;
-    var w = windowDates();
+    var w = windowDates(), q = ++phReq;
     authFetch('/phone-stats?from=' + w.from + '&to=' + w.to).then(function(j){
+      if (q !== phReq) return;
       phonesData = j; phRender(j);
-    }).catch(function(){
+    }).catch(function(e){
+      if (q !== phReq) return;
       phonesData = null;
-      var a = el('ph-agents'); if (a) a.querySelector('tbody').innerHTML = emptyRow('ph-agents', 'Could not load phone data.');
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('phone stats failed:', e);
+      var c = el('ph-callers'); if (c) c.querySelector('tbody').innerHTML = emptyRow('ph-callers', 'Could not load phone data.');
     });
+    authFetch('/phone-responsiveness?from=' + w.from + '&to=' + w.to).then(function(j){
+      if (q !== phReq || !j || j.error) return;
+      phResp = j; phRenderResp(j);
+    }).catch(function(e){
+      if (q !== phReq) return;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('phone responsiveness failed:', e);
+      var b = el('ph-routes'); if (b) b.innerHTML = '<div class="note">Could not load call outcomes.</div>';
+    });
+    phLoadCallbacks();
   }
   function phRender(j){
     if (!j || !j.totals) return;
-    phRenderKpis(j); phRenderAttr(j); phRenderTrend(j); phRenderFunnel(j);
-    phRenderHeat(j); phRenderInquiry(j); phRenderAgents(j); phRenderCallers(j); phRenderFollowups(j);
+    phRenderKpis(j); phRenderAttr(j); phRenderTrend(j);
+    phRenderHeat(j); phRenderInquiry(j); phRenderCallers(j);
   }
+  function phRenderResp(j){ phRenderRespKpis(j); phRenderRoutes(j); phRenderLb(j); }
   function phRenderInquiry(j){
     var w = j.weekend_inquiry; if (!w) return;
     if (el('ph-inq-top')) el('ph-inq-top').innerHTML =
@@ -15836,18 +15932,24 @@ window.addEventListener('error', function(e){
     if (el('ph-inq-note')) el('ph-inq-note').innerHTML = 'Scheduling &amp; inquiry = the coordinator (' + esc(w.coordinator) + ')&rsquo;s inbound texts &amp; calls + leasing-queue calls (people reaching out to book / ask). Follow-up = agents&rsquo; inbound texts (mid-tour conversations). Texts land on individual lines; the leasing queue routes calls.';
   }
   function phRenderKpis(j){
-    var t = j.totals || {}, vf = j.voicemail_funnel || {};
+    var t = j.totals || {};
     countUp('ph-k-inbound', t.inbound || 0, fmtNum);
-    countUp('ph-k-missed', t.missed || 0, fmtNum);
     countUp('ph-k-outbound', t.outbound || 0, fmtNum);
-    if (el('ph-k-answer')) el('ph-k-answer').textContent = (t.answer_rate == null ? '–' : t.answer_rate + '%');
-    if (el('ph-k-answer-sub')) el('ph-k-answer-sub').innerHTML = fmtNum(t.answered || 0) + ' answered &middot; ' + fmtNum(t.missed || 0) + ' missed';
-    if (el('ph-k-missed-sub')) el('ph-k-missed-sub').innerHTML = fmtNum(t.voicemail || 0) + ' to voicemail';
     if (el('ph-k-outbound-sub')) el('ph-k-outbound-sub').innerHTML = fmtNum(t.outbound_connected || 0) + ' connected';
     if (el('ph-k-texts')) el('ph-k-texts').textContent = fmtNum((t.texts_in || 0) + (t.texts_out || 0));
     if (el('ph-k-texts-sub')) el('ph-k-texts-sub').innerHTML = fmtNum(t.texts_in || 0) + ' in &middot; ' + fmtNum(t.texts_out || 0) + ' out';
-    if (el('ph-k-return')) el('ph-k-return').textContent = (vf.return_rate == null ? '–' : vf.return_rate + '%');
-    if (el('ph-k-return-sub')) el('ph-k-return-sub').innerHTML = fmtNum(vf.called_back || 0) + ' of ' + fmtNum(vf.missed_events || 0) + ' called back';
+  }
+  // Outcome tiles — waiting callers (still inside their window) are left out of every rate
+  function phRenderRespKpis(j){
+    var t = j.team || {}, den = (t.calls || 0) - (t.waiting || 0);
+    var pl = phPct(t.live || 0, t.calls || 0), pr = phPct(t.reached || 0, den), pn = phPct(t.never || 0, den);
+    if (el('ph-k-live')) el('ph-k-live').textContent = pl == null ? '–' : pl + '%';
+    if (el('ph-k-live-sub')) el('ph-k-live-sub').innerHTML = fmtNum(t.live || 0) + ' of ' + fmtNum(t.calls || 0) + ' callers &middot; a person picked up';
+    if (el('ph-k-reached')) el('ph-k-reached').textContent = pr == null ? '–' : pr + '%';
+    if (el('ph-k-reached-sub')) el('ph-k-reached-sub').innerHTML = 'live or called / texted back &le; 24h (leasing) &middot; &le; 1 business day'
+      + (t.waiting ? ' &middot; ' + fmtNum(t.waiting) + ' still waiting' : '');
+    countUp('ph-k-never', t.never || 0, fmtNum);
+    if (el('ph-k-never-sub')) el('ph-k-never-sub').innerHTML = (pn == null ? '' : pn + '% of callers &middot; ') + 'no call, text or pickup in 48h / 2 business days';
   }
   function phRenderAttr(j){
     var a = j.attribution || {}, nv = j.new_vs_returning || {};
@@ -15871,17 +15973,74 @@ window.addEventListener('error', function(e){
                  y:{ beginAtZero:true, grid:{ color:COL.hairline } } } }
     });
   }
-  function phRenderFunnel(j){
-    var vf = j.voicemail_funnel || {};
-    var h = ''
-      + '<div class="vmf"><span class="v">' + fmtNum(vf.missed_events || 0) + '</span><span class="l">missed / voicemail</span></div>'
-      + '<div class="vmf"><span class="v good">' + fmtNum(vf.called_back || 0) + '</span><span class="l">called back</span></div>'
-      + '<div class="vmf"><span class="v">' + fmtNum(vf.texted_back || 0) + '</span><span class="l">texted back</span></div>'
-      + '<div class="vmf"><span class="v bad">' + fmtNum(vf.no_followup || 0) + '</span><span class="l">no follow-up</span></div>'
-      + '<div class="vmf"><span class="v">' + (vf.return_rate == null ? '–' : vf.return_rate + '%') + '</span><span class="l">call-back rate</span></div>';
-    if (el('ph-vmfunnel')) el('ph-vmfunnel').innerHTML = h;
-    if (el('ph-vmnote')) el('ph-vmnote').innerHTML = vf.median_hours_to_callback != null
-      ? ('When we do call back, the median wait is <b>' + vf.median_hours_to_callback + ' hours</b>.') : '';
+  // One stacked bar for a bucket set {live,b1,b2,b3,never,waiting} — route rows AND leaderboard rows
+  function phBarHtml(b, total){
+    if (!total) return '<div class="phbar"></div>';
+    var h = '';
+    [['live','live'],['b1','b1'],['b2','b2'],['b3','b3'],['never','never'],['waiting','waiting']].forEach(function(p){
+      var v = b[p[0]] || 0; if (!v) return;
+      h += '<span class="' + p[1] + '" style="width:' + (100 * v / total).toFixed(2) + '%" title="' + fmtNum(v) + '"></span>';
+    });
+    return '<div class="phbar">' + h + '</div>';
+  }
+  function phRenderRoutes(j){
+    var box = el('ph-routes'); if (!box) return;
+    var h = '';
+    (j.routes || []).forEach(function(r){
+      var den = (r.calls || 0) - (r.waiting || 0), pr = phPct((r.live || 0) + (r.b1 || 0) + (r.b2 || 0), den);
+      var menu = r.route === 'menu';
+      var sub = menu ? 'hung up before reaching anyone &middot; not assigned' : (r.clock === 'clock' ? 'clock hours' : 'business days');
+      h += '<div class="phr-row' + (menu ? ' menu' : '') + '"><div class="lbl2">' + esc(menu ? 'Hung up in the phone menu' : r.label)
+        + '<div class="ph-sub2">' + sub + '</div></div>' + phBarHtml(r, r.calls || 0)
+        + '<div class="pct">' + (pr == null ? '–' : pr + '%') + '<small>' + fmtNum(r.calls || 0) + ' callers</small></div></div>';
+    });
+    box.innerHTML = h || '<div class="note">No inbound calls in this window.</div>';
+  }
+  // Leaderboard: two groups (different clocks = not comparable), ranked by % of their OWN
+  // line's callers reached (20+ callers to be ranked); queue pickups are their own column.
+  function phLbRows(people, leasing){
+    var rows = people.filter(function(p){ return !!p.is_leasing === leasing; }).map(function(p){
+      var den = (p.direct_calls || 0) - (p.d_waiting || 0);
+      var o = {}; for (var k in p) o[k] = p[k];
+      o.reached_pct = phPct((p.d_live || 0) + (p.d_b1 || 0) + (p.d_b2 || 0), den);
+      o.ranked = den >= 20;
+      return o;
+    });
+    if (phLbSort) rows.sort(cmpRows(phLbSort.key, phLbSort.dir));
+    else rows.sort(function(a, b){
+      if (a.ranked !== b.ranked) return a.ranked ? -1 : 1;
+      if (a.ranked) return (b.reached_pct - a.reached_pct) || (b.direct_calls - a.direct_calls);
+      return ((b.queue_answered || 0) + (b.calls_in || 0)) - ((a.queue_answered || 0) + (a.calls_in || 0));
+    });
+    return rows;
+  }
+  function phRenderLb(j){
+    var t = el('ph-lb'); if (!t) return;
+    var people = j.people || [], h = '';
+    [['Leasing', true, 'clock hours'], ['Property management &amp; office', false, 'business days']].forEach(function(g){
+      var rows = phLbRows(people, g[1]); if (!rows.length) return;
+      var topQ = 0; rows.forEach(function(r){ if ((r.queue_answered || 0) > topQ) topQ = r.queue_answered; });
+      h += '<tr class="grp"><td colspan="11">' + g[0] + ' &middot; ' + g[2] + '</td></tr>';
+      var rank = 0;
+      rows.forEach(function(r){
+        var txt = r.texts_synced;
+        var qa = fmtNum(r.queue_answered || 0) + (topQ > 0 && r.queue_answered === topQ ? ' <span class="badge moss">top</span>' : '');
+        h += '<tr class="pr' + (r.ranked ? '' : ' unranked') + '" data-ext="' + esc(String(r.ext)) + '" title="Show ' + esc(r.display_name) + '&rsquo;s unreturned callers">'
+          + '<td>' + (r.ranked && !phLbSort ? (++rank) : '–') + '</td>'
+          + '<td>' + esc(r.display_name) + '</td>'
+          + '<td class="rt">' + fmtNum(r.direct_calls || 0) + '</td>'
+          + '<td class="bar">' + phBarHtml({ live: r.d_live, b1: r.d_b1, b2: r.d_b2, b3: r.d_b3, never: r.d_never, waiting: r.d_waiting }, r.direct_calls || 0) + '</td>'
+          + '<td class="rt">' + (r.reached_pct == null ? '–' : r.reached_pct + '%') + '</td>'
+          + '<td class="rt">' + qa + '</td>'
+          + '<td class="rt">' + fmtNum(r.called_back || 0) + '</td>'
+          + '<td class="rt">' + (txt ? fmtNum(r.texted_back || 0) : '–') + '</td>'
+          + '<td class="rt">' + fmtNum(r.calls_in || 0) + '&nbsp;/&nbsp;' + fmtNum(r.calls_out || 0) + '</td>'
+          + '<td class="rt">' + (txt ? fmtNum(r.texts_in || 0) + '&nbsp;/&nbsp;' + fmtNum(r.texts_out || 0) : '–') + '</td>'
+          + '<td class="rt">' + (r.avg_call_secs ? phDur(r.avg_call_secs) : '–') + '</td></tr>';
+      });
+    });
+    t.querySelector('tbody').innerHTML = h || emptyRow('ph-lb', 'No phone activity in this window.');
+    t.querySelectorAll('th[data-k]').forEach(function(th){ th.classList.toggle('on', !!(phLbSort && phLbSort.key === th.getAttribute('data-k'))); });
   }
   function phRenderHeat(j){
     var box = el('ph-heat'); if (!box) return;
@@ -15906,19 +16065,91 @@ window.addEventListener('error', function(e){
     }
     box.innerHTML = h;
   }
-  function phRenderAgents(j){
-    var t = el('ph-agents'); if (!t) return;
-    var h = '';
-    (j.agents || []).forEach(function(r){
-      h += '<tr><td>' + esc(r.agent) + '</td>'
-        + '<td class="rt">' + fmtNum(r.calls_out) + '</td><td class="rt">' + fmtNum(r.calls_in) + '</td>'
-        + '<td class="rt">' + fmtNum(r.answered) + '</td><td class="rt">' + fmtNum(r.missed) + '</td>'
-        + '<td class="rt">' + (r.answer_rate == null ? '–' : r.answer_rate + '%') + '</td>'
-        + '<td class="rt">' + (r.avg_duration ? phDur(r.avg_duration) : '–') + '</td>'
-        + '<td class="rt">' + fmtNum(r.texts_out) + '</td><td class="rt">' + fmtNum(r.texts_in) + '</td>'
-        + '<td class="rt">' + (r.callback_rate == null ? '–' : r.callback_rate + '%') + '</td></tr>';
+  // ── Needs a call back: owned list (GET /phone-callbacks, 90-day lookback) ──
+  function phLoadCallbacks(){
+    var t = el('ph-callbacks'); if (!t) return;
+    var q = ++phCbReq;
+    t.querySelector('tbody').innerHTML = emptyRow('ph-callbacks', 'Loading…');
+    authFetch('/phone-callbacks?days=90').then(function(j){
+      if (q !== phCbReq) return;
+      phCb = (j && j.rows) || [];
+      phRenderCbFilters(); phRenderCallbacks();
+    }).catch(function(e){
+      if (q !== phCbReq) return;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('phone callbacks failed:', e);
+      t.querySelector('tbody').innerHTML = emptyRow('ph-callbacks', 'Could not load the call-back list.');
     });
-    t.querySelector('tbody').innerHTML = h || emptyRow('ph-agents', 'No agent activity in this window.');
+  }
+  var PH_KINDS = [['all','All'],['tenant','Tenants'],['owner','Owners'],['prospect','Prospects'],['known','Talked before'],['new','New callers']];
+  function phCbWho(r){ return r.responsible_ext_id ? ('p:' + r.responsible_ext_id) : (r.pile ? ('pile:' + r.pile) : (r.responsible_name ? ('n:' + r.responsible_name) : 'none')); }
+  function phRenderCbFilters(){
+    var box = el('ph-cb-filters'); if (!box || !phCb) return;
+    var kc = { all: phCb.length }, who = {};
+    phCb.forEach(function(r){
+      kc[r.kind] = (kc[r.kind] || 0) + 1;
+      var k = phCbWho(r);
+      if (!who[k]) who[k] = { key: k, label: r.responsible_name || (r.pile ? r.pile + ' pile' : 'Unassigned'), n: 0, pile: !r.responsible_name };
+      who[k].n++;
+    });
+    var h = '';
+    PH_KINDS.forEach(function(p){
+      if (p[0] !== 'all' && !kc[p[0]]) return;
+      h += '<button type="button" class="chip-mini' + (phCbFilter.kind === p[0] ? ' on' : '') + '" data-kind="' + p[0] + '">' + p[1] + ' ' + fmtNum(kc[p[0]] || 0) + '</button>';
+    });
+    var opts = Object.keys(who).map(function(k){ return who[k]; })
+      .sort(function(a, b){ return (a.pile - b.pile) || (b.n - a.n) || (a.label < b.label ? -1 : 1); });
+    if (phCbFilter.who !== 'all' && !who[phCbFilter.who]) opts.push({ key: phCbFilter.who, label: 'Nobody waiting on this person', n: 0 });
+    h += '<select id="ph-cb-who" aria-label="Responsible"><option value="all">Everyone responsible</option>'
+      + opts.map(function(o){ return '<option value="' + esc(o.key) + '"' + (phCbFilter.who === o.key ? ' selected' : '') + '>' + esc(o.label) + ' (' + fmtNum(o.n) + ')</option>'; }).join('')
+      + '</select>';
+    box.innerHTML = h;
+  }
+  function phAge(s){
+    var ms = Date.now() - new Date(s).getTime(); if (!(ms >= 0)) return { txt: '–', late: false };
+    var hr = ms / 3600000;
+    return { txt: hr < 1 ? '<1h' : (hr < 48 ? Math.floor(hr) + 'h' : Math.floor(hr / 24) + 'd'), late: hr >= 48 };
+  }
+  function phRenderCallbacks(){
+    var t = el('ph-callbacks'); if (!t || !phCb) return;
+    var rows = phCb.filter(function(r){
+      return (phCbFilter.kind === 'all' || r.kind === phCbFilter.kind) && (phCbFilter.who === 'all' || phCbWho(r) === phCbFilter.who);
+    });
+    var KL = { tenant: 'Tenant', owner: 'Owner', prospect: 'Prospect', known: 'Talked before', new: 'New' };
+    var h = '';
+    rows.forEach(function(r){
+      var nm = r.name || phFmtPhone(r.phone_last10);
+      var nameHtml = (r.kind === 'tenant' && r.lease_id) ? '<a class="phlink" data-lease="' + esc(String(r.lease_id)) + '">' + esc(nm) + '</a>'
+        : (r.kind === 'owner' && r.owner_id) ? '<a class="phlink" data-owner="' + esc(String(r.owner_id)) + '">' + esc(nm) + '</a>'
+        : esc(nm);
+      var where = r.route === 'queue' ? esc(r.queue_name || 'Queue') : (r.route === 'direct' ? 'Direct &middot; ' + esc(r.line_name || 'their line') : 'Main line menu');
+      var unit = (r.kind === 'tenant' && r.unit_number) ? (r.unit_id ? '<a class="phlink" data-unit="' + esc(String(r.unit_id)) + '">' + esc(r.unit_number) + '</a>' : esc(r.unit_number)) + '<div class="ph-sub2">' + where + '</div>' : where;
+      var age = phAge(r.first_missed);
+      var resp = r.responsible_name ? esc(r.responsible_name) : (r.pile ? esc(r.pile) + ' pile' : 'Unassigned');
+      h += '<tr><td>' + nameHtml + '<span class="phk ' + esc(r.kind) + '">' + (KL[r.kind] || '') + '</span>'
+        + '<div class="ph-sub2">' + esc(phFmtPhone(r.phone_last10)) + ' &middot; ' + fmtNum(r.calls) + (r.calls === 1 ? ' call' : ' calls') + ' since ' + phWhen(r.first_missed) + '</div></td>'
+        + '<td>' + unit + '</td>'
+        + '<td class="rt"><span class="phwait' + (age.late ? ' late' : '') + '">' + age.txt + '</span></td>'
+        + '<td>' + resp + '<div class="ph-sub2">' + esc(r.why || '') + '</div></td>'
+        + '<td>' + phActs(r.phone_last10, nm) + '</td></tr>';
+    });
+    t.querySelector('tbody').innerHTML = h || emptyRow('ph-callbacks', phCb.length ? 'Nobody in this filter is waiting.' : 'Nobody is waiting on a call back.');
+    var c = el('ph-cb-count'); if (c) c.textContent = fmtNum(rows.length) + ' of ' + fmtNum(phCb.length) + ' callers still waiting · last 90 days';
+  }
+  // Owner link: reuse the owner modal without touching ownersAll (loadOwners also redraws the
+  // Owners tab and merges account-manager fields — a partial cache here would skip that merge).
+  function phOpenOwner(id){
+    var hit = null;
+    (ownersAll || []).forEach(function(x){ if (String(x.buildium_id) === String(id)) hit = x; });
+    if (hit) { omOpen(hit); return; }
+    authFetch('/owners').then(function(j){
+      var r = null;
+      ((j && j.owners) || []).forEach(function(x){ if (String(x.buildium_id) === String(id)) r = x; });
+      if (r) omOpen(r);
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('owner open failed:', e);
+    });
   }
   function phRenderCallers(j){
     var t = el('ph-callers'); if (!t) return;
@@ -15933,19 +16164,6 @@ window.addEventListener('error', function(e){
     });
     t.querySelector('tbody').innerHTML = h || emptyRow('ph-callers', 'No inbound callers in this window.');
   }
-  function phRenderFollowups(j){
-    var t = el('ph-followups'); if (!t) return;
-    var h = '';
-    (j.followups || []).forEach(function(r){
-      var nm = r.name || phFmtPhone(r.phone);
-      var badge = r.is_prospect ? ' <span class="badge moss">prospect</span>' : '';
-      var vm = r.last_result === 'Voicemail' ? ' <span class="badge">VM</span>' : '';
-      h += '<tr><td>' + esc(nm) + badge + '<div class="ph-sub2">' + esc(phFmtPhone(r.phone)) + '</div></td>'
-        + '<td>' + phWhen(r.last_inbound_at) + vm + '</td><td class="rt">' + fmtNum(r.inbound_total) + '</td>'
-        + '<td>' + phActs(r.phone, nm) + '</td></tr>';
-    });
-    t.querySelector('tbody').innerHTML = h || emptyRow('ph-followups', 'Nobody is waiting on a call back. 🎉');
-  }
   function phSetHeat(mode){
     phHeatMode = mode;
     ['calls','missed','texts'].forEach(function(m){ var b = el('ph-heat-' + m); if (b) b.classList.toggle('on', m === mode); });
@@ -15953,6 +16171,42 @@ window.addEventListener('error', function(e){
   }
   (function(){
     ['calls','missed','texts'].forEach(function(m){ var b = el('ph-heat-' + m); if (b) b.addEventListener('click', function(){ phSetHeat(m); }); });
+    // leaderboard: header sort (click again flips; third click returns to the ranking), row → that person's call-backs
+    var lb = el('ph-lb');
+    if (lb) lb.addEventListener('click', function(e){
+      var th = e.target.closest('th[data-k]');
+      if (th){
+        var k = th.getAttribute('data-k');
+        if (!phLbSort || phLbSort.key !== k) phLbSort = { key: k, dir: k === 'display_name' ? 1 : -1 };
+        else if (phLbSort.dir === (k === 'display_name' ? 1 : -1)) phLbSort = { key: k, dir: -phLbSort.dir };
+        else phLbSort = null;
+        if (phResp) phRenderLb(phResp);
+        return;
+      }
+      var tr = e.target.closest('tr.pr'); if (!tr) return;
+      phCbFilter = { kind: 'all', who: 'p:' + tr.getAttribute('data-ext') };
+      phRenderCbFilters(); phRenderCallbacks();
+      var cb = el('ph-callbacks'); if (cb) { try { cb.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) {} }
+    });
+    var cbf = el('ph-cb-filters');
+    if (cbf){
+      cbf.addEventListener('click', function(e){
+        var b = e.target.closest('[data-kind]'); if (!b) return;
+        phCbFilter.kind = b.getAttribute('data-kind'); phRenderCbFilters(); phRenderCallbacks();
+      });
+      cbf.addEventListener('change', function(e){
+        if (e.target.id !== 'ph-cb-who') return;
+        phCbFilter.who = e.target.value; phRenderCallbacks();
+      });
+    }
+    var cbt = el('ph-callbacks');
+    if (cbt) cbt.addEventListener('click', function(e){
+      var a = e.target.closest('a.phlink'); if (!a) return;
+      e.preventDefault();
+      if (a.hasAttribute('data-lease')) openLeaseEnsure(a.getAttribute('data-lease'));
+      else if (a.hasAttribute('data-owner')) phOpenOwner(a.getAttribute('data-owner'));
+      else if (a.hasAttribute('data-unit')) openUnitEnsure(a.getAttribute('data-unit'));
+    });
   })();
 
   window.__llBooted = true;   // synchronous init finished without throwing — disarms the boot-crash guard

@@ -1961,7 +1961,7 @@ window.addEventListener('error', function(e){
       <div class="scrolly"><table id="ph-lb"><thead><tr>
         <th>#</th><th data-k="display_name">Person</th><th class="rt" data-k="direct_calls">Callers</th><th data-k="reached_pct">Their direct line</th><th class="rt" data-k="reached_pct">Reached</th><th class="rt" data-k="queue_answered">Queue answered</th><th class="rt" data-k="called_back">Called back</th><th class="rt" data-k="texted_back">Texted back</th><th class="rt" data-k="calls_in">Calls in&nbsp;/&nbsp;out</th><th class="rt" data-k="texts_out">Texts in&nbsp;/&nbsp;out</th><th class="rt" data-k="avg_call_secs">Avg call</th>
       </tr></thead><tbody></tbody></table></div>
-      <div class="note" style="margin-top:8px">Callers = calls that rang their own line (queue calls and the shared leasing line are counted under Queue answered). Ranked only with 20+ callers in the window. Called / texted back = the first response to a caller nobody picked up. Avg call = talk time of calls they answered or placed that connected.</div>
+      <div class="note" style="margin-top:8px">Callers = calls that rang their own line (queue calls and the shared leasing line are counted under Queue answered). Ranked only with <span id="ph-lb-min">20</span>+ callers in the window (20 per 30 days). Called / texted back = the first response to a caller nobody picked up. Avg call = talk time of calls they answered or placed that connected.</div>
     </div>
 
     <div class="card tablecard" style="margin-top:18px">
@@ -15997,13 +15997,19 @@ window.addEventListener('error', function(e){
     box.innerHTML = h || '<div class="note">No inbound calls in this window.</div>';
   }
   // Leaderboard: two groups (different clocks = not comparable), ranked by % of their OWN
-  // line's callers reached (20+ callers to be ranked); queue pickups are their own column.
-  function phLbRows(people, leasing){
+  // line's callers reached; queue pickups are their own column. The ranking floor scales with
+  // the window (20 callers per 30 days, never below 5) — a fixed 20 left nobody ranked on the
+  // default 7-day window (live check 2026-09-30).
+  function phLbMin(j){
+    var d = (Date.parse(j && j.to) - Date.parse(j && j.from)) / 86400000 + 1;
+    return isFinite(d) && d > 0 ? Math.max(5, Math.round(20 * d / 30)) : 20;
+  }
+  function phLbRows(people, leasing, minCallers){
     var rows = people.filter(function(p){ return !!p.is_leasing === leasing; }).map(function(p){
       var den = (p.direct_calls || 0) - (p.d_waiting || 0);
       var o = {}; for (var k in p) o[k] = p[k];
       o.reached_pct = phPct((p.d_live || 0) + (p.d_b1 || 0) + (p.d_b2 || 0), den);
-      o.ranked = den >= 20;
+      o.ranked = den >= minCallers;
       return o;
     });
     if (phLbSort) rows.sort(cmpRows(phLbSort.key, phLbSort.dir));
@@ -16016,9 +16022,10 @@ window.addEventListener('error', function(e){
   }
   function phRenderLb(j){
     var t = el('ph-lb'); if (!t) return;
-    var people = j.people || [], h = '';
+    var people = j.people || [], h = '', minC = phLbMin(j);
+    var mn = el('ph-lb-min'); if (mn) mn.textContent = minC;
     [['Leasing', true, 'clock hours'], ['Property management &amp; office', false, 'business days']].forEach(function(g){
-      var rows = phLbRows(people, g[1]); if (!rows.length) return;
+      var rows = phLbRows(people, g[1], minC); if (!rows.length) return;
       var topQ = 0; rows.forEach(function(r){ if ((r.queue_answered || 0) > topQ) topQ = r.queue_answered; });
       h += '<tr class="grp"><td colspan="11">' + g[0] + ' &middot; ' + g[2] + '</td></tr>';
       var rank = 0;

@@ -3830,13 +3830,16 @@ window.addEventListener('error', function(e){
     var sc = scopeActive() && !scoped;
     var tip = sc ? ' title="Company-wide — the weekly trend snapshots have no dimension for this scope, so this delta ignores the sidebar filter"'
                  : (scoped ? ' title="Scoped to the selected manager(s) — weekly deltas from the manager vacancy snapshots"' : '');
-    if (!o || o.delta == null) return '<span class="kdelta kflat"' + tip + '>vs last wk: tracking</span>';
+    // o.vs (from get_kpis) names the comparison when it isn't the weekly one, e.g.
+    // signed_month's 'same day last mo' (audit D4); every other KPI omits it.
+    var vs = 'vs ' + esc((o && o.vs) || 'last wk');
+    if (!o || o.delta == null) return '<span class="kdelta kflat"' + tip + '>' + vs + ': tracking</span>';
     var improving = (o.good === 'down') ? (o.delta < 0) : (o.delta > 0);
     var cls = (o.delta === 0) ? 'kflat' : (improving ? 'kgood' : 'kbad');
     var arrow = (o.delta === 0) ? '' : (o.delta > 0 ? '&#9650; ' : '&#9660; ');
     var mag = Math.abs(o.delta);
     var txt = isPct ? (mag.toFixed(1) + ' pts') : fmtNum(mag);
-    return '<span class="kdelta ' + cls + '"' + tip + '>' + arrow + txt + ' vs last wk' + (sc ? ' · company' : '') + '</span>';
+    return '<span class="kdelta ' + cls + '"' + tip + '>' + arrow + txt + ' ' + vs + (sc ? ' · company' : '') + '</span>';
   }
   function setKpiExtra(host, html){
     if (!host) return;

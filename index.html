@@ -715,8 +715,9 @@ window.addEventListener('error', function(e){
     background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:11px 12px;outline:none;margin-bottom:12px;
   }
   .loginbox input:focus{border-color:var(--clay)}
-  .loginbox select{width:100%;font-family:var(--sans);font-size:.92rem;text-align:center;color:var(--ink);background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:10px 12px;outline:none;margin-bottom:12px;cursor:pointer}
-  .loginbox select:focus{border-color:var(--clay)}
+  .lglink{display:inline-block;margin-top:12px;font-size:.78rem;color:var(--ink-soft);text-decoration:underline;min-height:40px;line-height:40px}
+  #lg-qr img{display:block;width:180px;height:180px;margin:0 auto 10px;background:#fff;padding:8px;border-radius:8px}
+  .lgsecret{font-family:var(--mono,monospace);font-size:.74rem;color:var(--ink-soft);word-break:break-all;margin-bottom:12px;user-select:all;-webkit-user-select:all}
   .loginbtn{
     width:100%;font-family:var(--sans);font-size:.85rem;font-weight:700;letter-spacing:.04em;cursor:pointer;
     background:var(--accent-grad);color:var(--on-accent);border:none;border-radius:var(--r-sm);padding:11px;box-shadow:var(--accent-glow);transition:filter .2s ease;
@@ -1571,13 +1572,30 @@ window.addEventListener('error', function(e){
 <div id="veil"><div class="vspin"></div><div class="vtxt">Opening the ledger&hellip;</div><div class="vrule"></div></div>
 
 <div class="login" id="login">
-  <form class="loginbox" id="loginform">
+  <!-- Personal sign-in (2026-10-01): email code → authenticator code. No shared password, no
+       name picker — the actor on every write is the signed-in person. The three steps are
+       sibling divs; loginStep() shows exactly one. -->
+  <form class="loginbox" id="loginform" autocomplete="off">
     <div class="eyebrow">Live Furnished &middot; Portfolio Operations</div>
     <h1>The Leasing <em>Ledger</em></h1>
-    <div class="loginhint">Enter the team password, and pick your name (used for the key log).</div>
-    <input type="password" id="loginpw" placeholder="Password" autocomplete="current-password">
-    <select id="actorsel" title="Your name — attached to every key action you log"></select>
-    <button type="submit" class="loginbtn">Open dashboard &rarr;</button>
+    <div id="lg-email" class="lgstep">
+      <div class="loginhint">Sign in with your work email. We&rsquo;ll email you an 8-digit code.</div>
+      <input type="email" id="loginemail" placeholder="you@livefurnished.ca" autocomplete="email" inputmode="email" spellcheck="false">
+      <button type="submit" class="loginbtn">Email me a code &rarr;</button>
+    </div>
+    <div id="lg-code" class="lgstep" style="display:none">
+      <div class="loginhint">Enter the 8-digit code from the email (it expires in 10 minutes) &mdash; or tap the link in the email.</div>
+      <input type="text" id="logincode" placeholder="8-digit code" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+      <button type="submit" class="loginbtn">Verify code &rarr;</button>
+      <a href="#" class="lglink" id="lg-back">Use a different email</a>
+    </div>
+    <div id="lg-mfa" class="lgstep" style="display:none">
+      <div class="loginhint" id="lg-mfa-hint">Enter the 6-digit code from your authenticator app.</div>
+      <div id="lg-qr" style="display:none"><img id="lg-qr-img" alt="Scan this QR code with your authenticator app"><div class="lgsecret" id="lg-secret"></div></div>
+      <input type="text" id="loginmfa" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+      <button type="submit" class="loginbtn">Continue &rarr;</button>
+      <a href="#" class="lglink" id="lg-signout">Sign out</a>
+    </div>
     <div class="loginerr" id="loginerr"></div>
   </form>
 </div>
@@ -2420,7 +2438,7 @@ window.addEventListener('error', function(e){
            sign-in management lives ON the admin Today view. Ids tm-* kept — the module's
            listeners bind to these exact ids. .adminonly hides it from password-tier users. -->
       <div class="card adminonly" style="margin-top:18px" id="hub-team-roster">
-        <div class="tablebar"><h2>Team &amp; sign-ins</h2><span class="count-note">who can sign in &middot; adding a person creates their account (magic-link email) &middot; livefurnished.ca and liogroup.ca are the same inbox</span></div>
+        <div class="tablebar"><h2>Team &amp; sign-ins</h2><span class="count-note">who can sign in &middot; adding a person creates their sign-in (emailed code; they'll set up an authenticator app on first sign-in) &middot; livefurnished.ca and liogroup.ca are the same inbox</span></div>
         <div id="tm-add" style="margin:10px 0 14px">
           <b style="font-size:13px">Add a person</b>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
@@ -2431,6 +2449,10 @@ window.addEventListener('error', function(e){
             <button type="button" class="syncbtn" id="tm-create" style="width:auto;min-height:40px">Add</button>
           </div>
           <div id="tm-add-note" class="count-note"></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">
+            <button type="button" class="syncbtn" id="tm-provision" style="width:auto;min-height:40px">Provision sign-ins</button>
+            <span class="count-note">creates the sign-in account for anyone on the list who still lacks one &middot; <b>Reset MFA</b> on a row = they set up their authenticator app again (lost phone)</span>
+          </div>
         </div>
         <div id="tm-list"><span class="count-note">Loading&hellip;</span></div>
       </div>
@@ -2722,7 +2744,7 @@ window.addEventListener('error', function(e){
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">Migrated from the Monday Key Ledger &mdash; this is now the system of record. Click a key to check it out / in, change status, or add a note; every action is logged in <b>History</b>. Sidebar owner and property filters apply to matched keys &mdash; the ledger always lists every key, even when your sign-in scopes the rest of the dashboard to your own portfolio. Every action is logged under the name you picked on the sign-in screen &mdash; sign out and back in to change it.</div>
+      <div class="note" style="margin-top:10px">Migrated from the Monday Key Ledger &mdash; this is now the system of record. Click a key to check it out / in, change status, or add a note; every action is logged in <b>History</b>. Sidebar owner and property filters apply to matched keys &mdash; the ledger always lists every key, even when your sign-in scopes the rest of the dashboard to your own portfolio. Every action is logged under your sign-in.</div>
     </div>
   </div>
 
@@ -3316,22 +3338,20 @@ window.addEventListener('error', function(e){
   var API = 'https://yplsskzukmnvdnkzlygt.supabase.co/functions/v1/dashboard';
   var BMGR = 'https://livefurnished.managebuilding.com/manager/app';
   var qs = new URLSearchParams(window.location.search);
-  var STORE_KEY = 'ledger_token_v1';
-  var urlToken = qs.get('token');           // legacy ?token= links still work
+  // The shared-password era is over (2026-10-01): forget what earlier builds stored — the
+  // team password and the name picker. Identity now lives in the Supabase session only.
+  try { ['ledger_token_v1', 'ledger_actor_v1', 'ledger_actors_v1'].forEach(function(k){ localStorage.removeItem(k); }); } catch (e) {}
   // Aptly Leads-board deep link → open Schedule tab pre-filled. Two forms:
   //   ?lead=<cardId>       (single-card lookup) and
   //   ?lead_email=<email>  (Contact-Email lookup — the form a self-populating Aptly
   //                         calculation column CAN produce; cardId can't be rendered there).
-  // Captured BEFORE the ?token= strip; consumed after auth in startApp().
+  // Captured BEFORE the URL is tidied at boot; consumed after sign-in in startApp().
   var pendingLeadCard = '', pendingLeadEmail = '';
   try { var _lc = qs.get('lead'); if (_lc && /^[A-Za-z0-9]{6,40}$/.test(_lc)) pendingLeadCard = _lc; } catch (e) {}
   // Parse email from the RAW query so a literal '+' in the address survives (URLSearchParams
   // would turn '+' into a space).
   try { var _em = /[?&]lead_email=([^&#]*)/.exec(window.location.search); if (_em) { var _e = decodeURIComponent(_em[1]); if (_e.indexOf('@') > 0 && _e.length <= 160) pendingLeadEmail = _e.trim(); } } catch (e) {}
-  var TOKEN = '';
-  try { TOKEN = localStorage.getItem(STORE_KEY) || ''; } catch (e) {}
-  if (!TOKEN && urlToken) TOKEN = urlToken;
-  var IS_ADMIN = false;          // set from /check role; gates key edit/delete/link controls
+  var IS_ADMIN = false;          // from the /user/hello roster role; gates key edit/delete/link controls
   function applyRole(role){ IS_ADMIN = (role === 'admin'); try { document.body.classList.toggle('isadmin', IS_ADMIN); } catch (e) {} }
   var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -3757,28 +3777,44 @@ window.addEventListener('error', function(e){
       return (x < y ? -1 : x > y ? 1 : 0) * dir;
     };
   }
-  // Both wrappers attach X-User-JWT when an email session exists (WS-U identity).
-  // sbJwt is declared later in this IIFE (function hoisting makes it callable here);
-  // it resolves '' instantly when the auth module is off, so the password-only path
-  // costs nothing extra.
-  function authFetch(path){
-    return sbJwt().then(function(jwt){
-      var h = { 'Authorization': 'Bearer ' + TOKEN };
-      if (jwt) h['X-User-JWT'] = jwt;
-      return fetch(API + path, { headers: h });
-    }).then(function(r){
-        if (r.status === 401) { onAuthFail(); throw new Error('AUTH'); }
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
+  // Every request carries the personal session token as the bearer (2026-10-01). sbJwt() is
+  // getSession(), which refreshes an expired access token by itself (declared later in this
+  // IIFE; hoisted). A 401 is retried ONCE after an explicit refresh before it counts as signed
+  // out: a throttled background tab wakes with a stale token and its 30 s poll fires before
+  // the library has refreshed — that is not a sign-out, and bouncing people to the
+  // authenticator screen for it would read as "the dashboard keeps logging me out".
+  // A 401 that names a terminal code (NOT_ON_TEAM, SESSION_EXPIRED, PASSWORD_LOGIN,
+  // MFA_REQUIRED) is never retried — the server has already said what the next step is.
+  function withBearer(h){
+    h = h || {};
+    return sbJwt().then(function(jwt){ h['Authorization'] = 'Bearer ' + jwt; return h; });
+  }
+  function apiFetch(path, opts){
+    opts = opts || {};
+    var send = function(){ return withBearer(opts.headers).then(function(h){ opts.headers = h; return fetch(API + path, opts); }); };
+    return send().then(function(r){
+      if (r.status !== 401) return r;
+      return r.clone().json().catch(function(){ return {}; }).then(function(j){
+        var code = (j && j.code) || '';
+        if ((code && code !== 'INVALID_JWT' && code !== 'NO_JWT') || !SB) { onAuthFail(code); throw new Error('AUTH'); }
+        return SB.auth.refreshSession().then(function(rr){
+          if (!rr || rr.error || !rr.data || !rr.data.session) { onAuthFail(code); throw new Error('AUTH'); }
+          return send();
+        }).then(function(r2){
+          if (r2.status === 401) { onAuthFail(code); throw new Error('AUTH'); }
+          return r2;
+        });
       });
+    });
+  }
+  function authFetch(path){
+    return apiFetch(path, {}).then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
   }
   function postJSON(path, body){
-    return sbJwt().then(function(jwt){
-      var h = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
-      if (jwt) h['X-User-JWT'] = jwt;
-      return fetch(API + path, { method: 'POST', headers: h, body: JSON.stringify(body) });
-    }).then(function(r){
-      if (r.status === 401) { onAuthFail(); throw new Error('AUTH'); }
+    return apiFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function(r){
       return r.json().then(function(j){
         if (!r.ok) throw new Error(j && j.error ? j.error : ('HTTP ' + r.status));
         return j;
@@ -4059,7 +4095,7 @@ window.addEventListener('error', function(e){
   el('mobscrim').addEventListener('click', function(){ document.body.classList.remove('moreopen'); });
   (function(){ var sc = el('sheetclose'); if (sc) sc.addEventListener('click', function(){ document.body.classList.remove('moreopen'); }); })();
   // honour back/forward and manual hash edits while signed in
-  window.addEventListener('hashchange', function(){ if (!TOKEN) return; var t = tabFromHash(); if (t) showTab(t); });
+  window.addEventListener('hashchange', function(){ if (!authIdent) return; var t = tabFromHash(); if (t) showTab(t); });
   function gotoUnitsWithSearch(q){
     showTab('units');
     var go = function(){ el('u-search').value = q || ''; uSel = {}; drawChips(); drawUnits(); };
@@ -4119,7 +4155,7 @@ window.addEventListener('error', function(e){
     var my = ++leadReq;
     var w = windowDates();
     var body = { from: w.from, to: w.to, match_keys: (d && d.meta && d.meta.lead_match_keys) || null };
-    fetch(API + '/leads', { method:'POST', headers:{ 'Authorization':'Bearer ' + TOKEN, 'Content-Type':'application/json' }, body: JSON.stringify(body) })
+    apiFetch('/leads', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(res){ if (my !== leadReq) return; paintLeads(res ? res.leads : null); })
       .catch(function(){ if (my !== leadReq) return; paintLeads(null); });
@@ -4147,7 +4183,7 @@ window.addEventListener('error', function(e){
     statsLoading = true;
     appsAll = null; toursAll = null; // entity filters / window changed → lazy-reload those tabs
     el('veil').classList.remove('hide');
-    fetch(API + '/stats?' + buildQuery().toString(), { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    apiFetch('/stats?' + buildQuery().toString())
       .then(function(r){
         if (r.status === 401) throw new Error('AUTH');
         if (!r.ok) return r.json().then(function(b){ throw new Error(b.error || ('HTTP ' + r.status)); });
@@ -4288,10 +4324,10 @@ window.addEventListener('error', function(e){
       b.style.display = (ok && ok.indexOf(r) < 0) ? 'none' : '';
     });
   }
-  // the !TOKEN guard sits ABOVE todayLoaded = 1 deliberately: marking Today "loaded" from a
+  // the !authIdent guard sits ABOVE todayLoaded = 1 deliberately: marking Today "loaded" from a
   // signed-out call would make the next authenticated showTab('today') skip loadToday entirely
   // (2147 only loads when todayLoaded === null), leaving the tab blank for the rest of the session.
-  function loadToday(){ if (!TOKEN) return; todayLoaded = 1; tdSyncRoles(); tdRender(); }
+  function loadToday(){ if (!authIdent) return; todayLoaded = 1; tdSyncRoles(); tdRender(); }
   function tdPanel(id, title, gotoTab, gotoLabel, wide){
     return '<section class="panel tdq' + (wide ? ' tdwide' : '') + '">' +
       '<h3>' + title + ' <span class="qn2" id="' + id + '-n"></span></h3>' +
@@ -4312,8 +4348,8 @@ window.addEventListener('error', function(e){
     // Signed out there is nothing to render and nothing that could load: every panel would
     // fire an unauthenticated request, each 401 would re-enter onAuthFail, and the brief would
     // print "All clear" off zero data. Mirrors the guard the hashchange router already has.
-    // No-op for anyone signed in — TOKEN is only ever falsy behind the login veil.
-    if (!TOKEN) return;
+    // No-op for anyone signed in — authIdent is only ever null behind the login veil.
+    if (!authIdent) return;
     tdReq++;   // anything still in flight from the previous render/role is now stale
     var role = tdRole();
     // coordinator = the scheduling workspace (moved Schedule page + team calendar);
@@ -4354,10 +4390,10 @@ window.addEventListener('error', function(e){
       // above the g.innerHTML below. The wq/tdReq generation guard cannot catch this: each
       // frame captures the counter it just bumped, so every level's check passes. A generation
       // defends against a STALE ASYNC resolve; only a PROGRESS predicate defends against
-      // synchronous re-entry — hence tmRoster !== null. (Do NOT also require TOKEN in the
+      // synchronous re-entry — hence tmRoster !== null. (Do NOT also require authIdent in the
       // callback: a roster request sent with a still-good token can legitimately land after a
       // 401 cleared it, and skipping that repaint loses the admin "working as" strip.)
-      if (tmRoster === null && TOKEN){
+      if (tmRoster === null && authIdent){
         var wq = tdReq;
         idRosterLoad(function(){ if (wq === tdReq && tmRoster !== null && tdRole() === 'manager') tdRender(); });
       }
@@ -6750,58 +6786,23 @@ window.addEventListener('error', function(e){
     return '<span class="chip ' + c + '">' + esc(l) + '</span>';
   }
 
-  /* staff picker — self-attested actor, persisted per browser */
-  // 'SarahM' = Sarah MacEachern (2026-08-18), deliberately distinct from 'Sarah' (Sarah
-  // Countryman): every agent surface matches through tdFt(), which compares only the FIRST
-  // whitespace token, so "Sarah M." here would resolve to Countryman. Same string as her
-  // tour_agents.display_name / gcal_calendars.person_name / rc_agent_map.agent_name.
-  // Deactivated people stay in this picker on purpose (Noor and now Tristan/Sarah) — it is
-  // the self-attested actor list for writes, not the bookable roster.
-  var STAFF_BASE = ['Connor','Pearse','Sarah','SarahM','Danai','Miranda','Tristan','Jashan','Noor','Adam'];
-  var ACT_KEY = 'ledger_actor_v1', ACTLIST_KEY = 'ledger_actors_v1';
-  function actorExtra(){ try { return JSON.parse(localStorage.getItem(ACTLIST_KEY) || '[]') || []; } catch (e) { return []; } }
-  function actorList(){
-    var seen = {}, out = [];
-    STAFF_BASE.concat(actorExtra()).forEach(function(n){ n = (n || '').trim();
-      if (n && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; out.push(n); } });
-    return out;
-  }
+  /* actor = the signed-in person (2026-10-01). The self-attested name picker is gone: the
+     server stamps every write with the roster display_name of the session, and ignores
+     body.actor from a signed-in caller — getActor() is kept only so the ~30 call sites and
+     their "logged to you" copy stay as they are. */
   function getActor(){
-    // WS-U: a verified email sign-in beats the self-asserted picker. authIdent is a
-    // var in this shared IIFE scope (declared below, hoisted) — undefined until the
-    // auth module initializes, so the picker path is the natural fallback.
-    if (authIdent && authIdent.display_name) return authIdent.display_name;
-    var v = el('actorsel');
-    if (v && v.value && v.value !== '__add__') return v.value;
-    try { return localStorage.getItem(ACT_KEY) || ''; } catch (e) { return ''; }
+    return (authIdent && authIdent.display_name) || '';
   }
-  function buildActorSel(){
-    if (!el('actorsel')) return;
-    var cur = ''; try { cur = localStorage.getItem(ACT_KEY) || ''; } catch (e) {}
-    var h = '<option value="">— pick name —</option>';
-    actorList().forEach(function(n){ h += '<option' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>'; });
-    h += '<option value="__add__">+ Add name…</option>';
-    el('actorsel').innerHTML = h;
-  }
-  if (el('actorsel')) {
-    buildActorSel();
-    el('actorsel').addEventListener('change', function(){
-      if (this.value === '__add__') {
-        var nm = (prompt('Add your name for the key log:') || '').trim();
-        if (nm) { var ex = actorExtra(); ex.push(nm);
-          try { localStorage.setItem(ACTLIST_KEY, JSON.stringify(ex)); localStorage.setItem(ACT_KEY, nm); } catch (e) {} }
-        buildActorSel(); return;
-      }
-      try { localStorage.setItem(ACT_KEY, this.value); } catch (e) {}
-      idRosterLoad(idRecompute);   // WS-M M4: a new name may tailor the view (D12)
-    });
+  // Display names the page knows (the /team-roster cache), for pickers that need a roster
+  // fallback (hubReassignRoster) — no hard-coded staff list any more.
+  function actorList(){
+    return (tmRoster || []).map(function(r){ return String(r.display_name || '').trim(); }).filter(Boolean);
   }
 
   /* ── WS-M M4: identity-driven scoping (D11/D12) ───────────────────────
-     Effective identity, in precedence order:
-       1. verified sign-in (authIdent — /user/hello carries property_manager_id since v255)
-       2. the sidebar name picker under the shared password, matched against the no-PII
-          GET /team-roster (exact display_name, else UNIQUE first name; ambiguous → none)
+     Effective identity = the verified sign-in (authIdent — /user/hello carries role and
+     property_manager_id). Since 2026-10-01 there is no other kind: the name picker and the
+     password tier are gone, so idRosterMatch is used only by the admin "working as" chips.
      Non-admin identity ⇒ idLock: persona pinned (tdRole), other role chips hidden
      (tdSyncRoles). The ROLE is still a lock; the manager SCOPE is not — as of 2026-08-25 a
      manager with a Buildium link merely DEFAULTS to their own portfolio (idSeedMgrScope
@@ -6809,14 +6810,12 @@ window.addEventListener('error', function(e){
      manager, or team-wide, from the Today strip or the sidebar picker. msIds() stays the one
      seam every scoped consumer reads; it just no longer overrides the selection. Note this
      was never a permission boundary — no route scopes by caller identity — so the change is
-     about where a manager LANDS, not what they can reach. Admins are NEVER locked; verified
-     admins also clear the server's ADMIN_ROUTES gate via JWT (D12) — the name picker
-     never does, so picking "Pearse" under the team password tailors layout only. */
+     about where a manager LANDS, not what they can reach. Admins are NEVER locked; the
+     server's ADMIN_ROUTES gate reads the same roster role from the session (D12). */
   var idLock = null;      // { role, pmId|null, name, verified } while a non-admin identity is active
   var tmRoster = null;    // /team-roster cache: null = not loaded, [] = failed (no tailoring)
-  var pwTierRole = 'user';   // the /check password tier — restored when a verified admin signs out
   function idApplyAdmin(){
-    applyRole((authIdent && authIdent.role === 'admin') ? 'admin' : pwTierRole);
+    applyRole((authIdent && authIdent.role === 'admin') ? 'admin' : 'user');
   }
   // In-flight dedup. The tmRoster === null guard below stays true for the WHOLE flight, so
   // concurrent callers each used to send their own /team-roster: on a normal signed-in manager
@@ -6831,7 +6830,7 @@ window.addEventListener('error', function(e){
   var tmRosterLoading = false, tmRosterQ = [];
   function idRosterLoad(cb){
     if (tmRoster !== null){ if (cb) cb(); return; }
-    if (!TOKEN){ if (cb) cb(); return; }   // pre-login: nothing to fetch yet
+    if (!authIdent){ if (cb) cb(); return; }   // pre-login: nothing to fetch yet
     if (cb) tmRosterQ.push(cb);
     if (tmRosterLoading) return;           // a flight is already up — its settle serves this cb
     tmRosterLoading = true;
@@ -6867,12 +6866,7 @@ window.addEventListener('error', function(e){
   function idRecompute(){
     var prev = idLock ? (idLock.role + ':' + idLock.pmId + ':' + idLock.name) : '';
     var next = null;
-    if (authIdent){
-      if (authIdent.role !== 'admin') next = { role: authIdent.role, pmId: authIdent.property_manager_id || null, name: authIdent.display_name, verified: true };
-    } else {
-      var row = idRosterMatch(getActor());
-      if (row && row.role !== 'admin') next = { role: row.role, pmId: row.property_manager_id != null ? Number(row.property_manager_id) : null, name: row.display_name, verified: false };
-    }
+    if (authIdent && authIdent.role !== 'admin') next = { role: authIdent.role, pmId: authIdent.property_manager_id || null, name: authIdent.display_name, verified: true };
     idLock = next;
     idApplyAdmin();
     var now = idLock ? (idLock.role + ':' + idLock.pmId + ':' + idLock.name) : '';
@@ -6941,12 +6935,12 @@ window.addEventListener('error', function(e){
     return h + '</span></div>';
   }
 
-  /* ── WS-U identity (Phase A: optional email sign-in) ─────────────────── */
-  // supabase-js UMD ships a global named "supabase" (loaded in <head> like the
-  // other vendors). EVERYTHING here is null-guarded: CDN failure or AUTH_ON=false means
-  // the page behaves exactly as before (picker-only) — no boot-path dependency.
-  // Session lives in localStorage ledger_sbauth_v1; sign-in is once per device.
-  var AUTH_ON = true;   // kill switch: false + redeploy = module inert, picker-only
+  /* ── Identity: the personal sign-in IS the gate (2026-10-01) ────────── */
+  // supabase-js UMD ships a global named "supabase" (loaded in <head> like the other
+  // vendors). SB stays null-guarded: if the CDN fails, the login screen says so instead of
+  // the boot path throwing. Session lives in localStorage ledger_sbauth_v1 (7-day cap
+  // server-side); the authenticator step is required on every device.
+  var AUTH_ON = true;   // kill switch is historical: with no password tier, false = nobody can sign in
   var SB = null;
   if (AUTH_ON && typeof supabase !== 'undefined' && supabase.createClient) {
     try {
@@ -6964,120 +6958,145 @@ window.addEventListener('error', function(e){
       return (r && r.data && r.data.session) ? (r.data.session.access_token || '') : '';
     }).catch(function(){ return ''; });
   }
-  // Ask the server who this session is (also logs the login). Generation-guarded:
-  // a sign-out or newer hello superseding this one must win the render.
-  function authHello(){
-    if (!SB || !TOKEN) return;
-    var gen = ++authGen;
-    sbJwt().then(function(jwt){
-      if (!jwt){ if (gen === authGen){ authIdent = null; renderAuthBlk(); idRosterLoad(idRecompute); acmProbe(); } return; }
-      return postJSON('/user/hello', {}).then(function(j){
-        if (gen !== authGen) return;
-        if (j && j.ok){
-          authIdent = { email: j.email, display_name: j.display_name, role: j.role, agent_name: j.agent_name || null,
-            property_manager_id: j.property_manager_id != null ? Number(j.property_manager_id) : null };
-        } else {
-          authIdent = null;
-          if (j && j.code === 'NOT_ON_TEAM'){
-            try { SB.auth.signOut(); } catch (e) {}
-            // LOUD on purpose — Cheryl hit this silently on 2026-07-20 (signed in with an
-            // address that wasn't her roster row) and it read as "sign-in broken".
-            var blk = el('authblk');
-            if (blk) blk.innerHTML =
-              '<div style="font-size:12px;line-height:1.5;padding:8px;border:1px solid #c0392b;border-radius:8px;margin:4px 0;color:#c0392b;background:rgba(192,57,43,.06)">' +
-              '<b>' + esc(j.email || 'That email') + ' isn&rsquo;t on the team list.</b><br>' +
-              'An admin needs to add you first (Today &rarr; Team &amp; sign-ins), then sign in again. ' +
-              'livefurnished.ca and liogroup.ca addresses both work once you&rsquo;re added.' +
-              '<div style="margin-top:6px"><a href="#" id="auth-retry" style="text-decoration:underline;color:inherit">Try a different email</a></div></div>';
-            var rt = el('auth-retry');
-            if (rt) rt.addEventListener('click', function(ev){ ev.preventDefault(); renderAuthBlk(); });
-            idRecompute();   // WS-M M4: identity gone → drop any lock
-            acmProbe();      // account manager off with it
-            return;
-          }
-        }
-        renderAuthBlk();
-        idRecompute();   // WS-M M4: verified identity (or its loss) re-tailors role + scope
-        acmProbe();      // account manager: on only if the server accepts this sign-in
-      });
-    }).catch(function(e){
-      if (String(e && e.message) === 'AUTH') return;
-      console.error('authHello failed', e);
+
+  // ── Sign-in flow (2026-10-01): email code → authenticator code → /user/hello → startApp.
+  // Driven by explicit promise chains, never by auth events: supabase-js holds its auth lock
+  // while dispatching onAuthStateChange, and calling getSession() inside that callback
+  // DEADLOCKS — the one handler below defers out of the lock with setTimeout 0, per the docs.
+  var lgEmail = '', lgFactorId = '', lgChallengeId = '';
+  var PAGE_URL = 'https://pearse-s.github.io/leasing-ledger/';
+  // livefurnished.ca and liogroup.ca are ONE inbox; sign in under one address so the
+  // authenticator factor lives on one account (an alias sign-in would be asked to enrol again).
+  function canonEmail(em){ return String(em || '').trim().toLowerCase().replace(/@liogroup\.ca$/, '@livefurnished.ca'); }
+  function lgErr(msg){ var e = el('loginerr'); if (e) e.textContent = msg || ''; }
+  function loginStep(step){
+    ['email', 'code', 'mfa'].forEach(function(st){ var d = el('lg-' + st); if (d) d.style.display = (st === step ? '' : 'none'); });
+    lgErr('');
+    setTimeout(function(){ try { el(step === 'email' ? 'loginemail' : step === 'code' ? 'logincode' : 'loginmfa').focus(); } catch (e) {} }, 60);
+  }
+  function lgBusy(on){ var f = el('loginform'); if (!f) return; var bs = f.querySelectorAll('button'); for (var i = 0; i < bs.length; i++) bs[i].disabled = !!on; }
+  function lgSend(){
+    var em = canonEmail(el('loginemail') && el('loginemail').value);
+    if (!em || em.indexOf('@') < 1){ lgErr('Enter your work email first.'); return; }
+    lgEmail = em; lgBusy(true); lgErr('Sending\u2026');
+    SB.auth.signInWithOtp({ email: em, options: { emailRedirectTo: PAGE_URL, shouldCreateUser: false } }).then(function(r){
+      lgBusy(false);
+      if (r && r.error){
+        var m = String(r.error.message || '');
+        lgErr(/signup|not allowed|not found/i.test(m)
+          ? em + ' isn\u2019t set up yet \u2014 ask an admin to add you (Today \u2192 Team & sign-ins).'
+          : 'Could not send the code: ' + m);
+        return;
+      }
+      loginStep('code');
+    }).catch(function(e){ lgBusy(false); lgErr('Could not send the code: ' + String(e && e.message || e)); });
+  }
+  function lgVerifyCode(){
+    var code = String(el('logincode') && el('logincode').value || '').replace(/\D/g, '');
+    if (code.length < 6){ lgErr('Enter the 8-digit code from the email.'); return; }
+    lgBusy(true); lgErr('Checking\u2026');
+    SB.auth.verifyOtp({ email: lgEmail, token: code, type: 'email' }).then(function(r){
+      if (r && r.error) throw r.error;
+      return lgAfterSession();
+    }).catch(function(e){ lgBusy(false); lgErr('That code didn\u2019t verify \u2014 ' + String(e && e.message || e) + '. Request a new one if it has expired.'); });
+  }
+  // With a session in hand, the MFA level decides the next step.
+  function lgAfterSession(){
+    return SB.auth.mfa.getAuthenticatorAssuranceLevel().then(function(r){
+      var lvl = r && r.data;
+      if (lvl && lvl.currentLevel === 'aal2') return lgHello();
+      return lgMfaStart();
     });
   }
+  function lgMfaStart(){
+    showLogin(); loginStep('mfa'); lgBusy(true);
+    var qr = el('lg-qr'); if (qr) qr.style.display = 'none';
+    return SB.auth.mfa.listFactors().then(function(r){
+      if (r && r.error) throw r.error;
+      var d = (r && r.data) || {};
+      var verified = (d.totp || []).filter(function(f){ return f.status === 'verified'; });
+      if (verified.length){
+        lgFactorId = verified[0].id;
+        var h = el('lg-mfa-hint'); if (h) h.textContent = 'Enter the 6-digit code from your authenticator app.';
+        return SB.auth.mfa.challenge({ factorId: lgFactorId });
+      }
+      // First time: a half-finished earlier enrolment would block a new one — clear it first.
+      var stale = (d.all || []).filter(function(f){ return f.status !== 'verified'; });
+      return Promise.all(stale.map(function(f){ return SB.auth.mfa.unenroll({ factorId: f.id }); })).then(function(){
+        return SB.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'ledger-' + Date.now() });
+      }).then(function(e){
+        if (e && e.error) throw e.error;
+        lgFactorId = e.data.id;
+        var h2 = el('lg-mfa-hint'); if (h2) h2.textContent = 'First time here: scan this with Google Authenticator (or any authenticator app), then enter the 6-digit code it shows.';
+        var img = el('lg-qr-img'); if (img) img.src = e.data.totp.qr_code;
+        var sec = el('lg-secret'); if (sec) sec.textContent = 'Can\u2019t scan? Enter this key by hand: ' + e.data.totp.secret;
+        if (qr) qr.style.display = '';
+        return SB.auth.mfa.challenge({ factorId: lgFactorId });
+      });
+    }).then(function(c){
+      if (c && c.error) throw c.error;
+      lgChallengeId = c.data.id; lgBusy(false);
+    }).catch(function(e){ lgBusy(false); lgErr('Could not start the authenticator step: ' + String(e && e.message || e)); });
+  }
+  function lgMfaVerify(){
+    var code = String(el('loginmfa') && el('loginmfa').value || '').replace(/\D/g, '');
+    if (code.length !== 6){ lgErr('Enter the 6-digit code from your authenticator app.'); return; }
+    if (!lgFactorId || !lgChallengeId){ lgErr('Start again \u2014 the authenticator step did not initialise.'); return; }
+    lgBusy(true); lgErr('Checking\u2026');
+    SB.auth.mfa.verify({ factorId: lgFactorId, challengeId: lgChallengeId, code: code }).then(function(r){
+      if (r && r.error) throw r.error;
+      return lgHello();
+    }).catch(function(e){
+      lgBusy(false);
+      lgErr('That code didn\u2019t verify \u2014 ' + String(e && e.message || e) + '. Codes change every 30 seconds; try the current one.');
+      // a used challenge cannot be retried: open a fresh one for the next attempt
+      SB.auth.mfa.challenge({ factorId: lgFactorId }).then(function(c){ if (c && c.data) lgChallengeId = c.data.id; });
+    });
+  }
+  // The handshake: 200 {ok:false, code} names the next step; ok = in.
+  function lgHello(){
+    return postJSON('/user/hello', {}).then(function(j){
+      lgBusy(false); lgErr('');
+      if (j && j.ok){
+        authIdent = { email: j.email, display_name: j.display_name, role: j.role, agent_name: j.agent_name || null,
+          property_manager_id: j.property_manager_id != null ? Number(j.property_manager_id) : null };
+        idApplyAdmin();
+        startApp();
+        return;
+      }
+      var code = (j && j.code) || '';
+      if (code === 'MFA_REQUIRED') return lgMfaStart();
+      lgSignOutLocal();
+      showLogin(); loginStep('email');
+      // LOUD on purpose — Cheryl hit the not-on-team case silently on 2026-07-20 and it read
+      // as "sign-in broken".
+      if (code === 'NOT_ON_TEAM') lgErr(String(j.email || 'That email') + ' isn\u2019t on the team list \u2014 an admin needs to add you first (Today \u2192 Team & sign-ins).');
+      else if (code === 'SESSION_EXPIRED') lgErr('Your session reached its 7-day limit \u2014 sign in again.');
+      else if (code === 'PASSWORD_LOGIN') lgErr('Password sign-ins aren\u2019t accepted \u2014 use the emailed code.');
+      else lgErr('Please sign in again.');
+    }).catch(function(e){
+      lgBusy(false);
+      if (String(e && e.message) === 'AUTH') return;   // onAuthFail has already routed
+      lgErr('Could not reach the dashboard: ' + String(e && e.message || e));
+    });
+  }
+  function lgSignOutLocal(){
+    authGen++; authIdent = null; idApplyAdmin();
+    try { if (SB) SB.auth.signOut({ scope: 'local' }); } catch (e) {}
+  }
+  // Sidebar identity chip (the sidebar is also the mobile sheet). Sign-out is #signout below it.
   function renderAuthBlk(){
     var blk = el('authblk');
     if (!blk) return;
-    if (!SB){ blk.innerHTML = ''; return; }
-    if (authIdent){
-      blk.innerHTML =
-        '<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0 6px">' +
-        '<span style="color:var(--ink-soft)">&#10003; Signed in as</span> <b>' + esc(authIdent.display_name) + '</b>' +
-        '<a href="#" id="auth-switch" style="margin-left:auto;font-size:11px;color:var(--ink-soft);text-decoration:underline">switch</a></div>';
-      var sw = el('auth-switch');
-      if (sw) sw.addEventListener('click', function(ev){
-        ev.preventDefault();
-        authGen++; authIdent = null;
-        try { SB.auth.signOut(); } catch (e) {}
-        renderAuthBlk();
-        idRecompute();   // WS-M M4: back to the picker identity (or none)
-        acmProbe();      // account manager off with the sign-in
-      });
-      return;
-    }
-    blk.innerHTML =
-      '<div style="padding:2px 0 6px"><a href="#" id="auth-open" style="font-size:12px;text-decoration:underline">Sign in as you &rarr;</a>' +
-      '<div id="auth-card" style="display:none;padding-top:6px">' +
-      '<input type="email" id="auth-email" placeholder="you@livefurnished.ca" autocomplete="email" style="width:100%;font-size:12px;padding:6px 8px;margin-bottom:4px">' +
-      '<button type="button" id="auth-send" class="syncbtn" style="width:100%">Email me a sign-in link</button>' +
-      '<div id="auth-code-row" style="display:none;padding-top:4px">' +
-      '<input type="text" id="auth-code" inputmode="numeric" placeholder="6-digit code from the email" style="width:100%;font-size:12px;padding:6px 8px;margin-bottom:4px">' +
-      '<button type="button" id="auth-verify" class="syncbtn" style="width:100%">Verify code</button></div>' +
-      '<div id="auth-status" style="font-size:11.5px;color:var(--ink-soft);padding-top:4px"></div>' +
-      '</div></div>';
-    var open = el('auth-open');
-    if (open) open.addEventListener('click', function(ev){
-      ev.preventDefault();
-      var c = el('auth-card');
-      if (c) c.style.display = (c.style.display === 'none' ? 'block' : 'none');
-    });
-    var send = el('auth-send');
-    if (send) send.addEventListener('click', function(){
-      var em = (el('auth-email') && el('auth-email').value || '').trim().toLowerCase();
-      var st = el('auth-status');
-      if (!em || em.indexOf('@') < 1){ if (st) st.textContent = 'Enter your work email first.'; return; }
-      if (st) st.textContent = 'Sending…';
-      SB.auth.signInWithOtp({ email: em, options: { emailRedirectTo: 'https://pearse-s.github.io/leasing-ledger/' } })
-        .then(function(r){
-          if (st) st.textContent = r && r.error ? ('Could not send: ' + r.error.message) : 'Sent — tap the link in the email, or enter the 6-digit code here.';
-          if (!(r && r.error)){ var cr = el('auth-code-row'); if (cr) cr.style.display = 'block'; }
-        });
-    });
-    var ver = el('auth-verify');
-    if (ver) ver.addEventListener('click', function(){
-      var em = (el('auth-email') && el('auth-email').value || '').trim().toLowerCase();
-      var code = (el('auth-code') && el('auth-code').value || '').trim();
-      var st = el('auth-status');
-      if (!em || !code){ if (st) st.textContent = 'Email and code both needed.'; return; }
-      if (st) st.textContent = 'Verifying…';
-      SB.auth.verifyOtp({ email: em, token: code, type: 'email' }).then(function(r){
-        if (r && r.error){ if (st) st.textContent = 'Code didn’t verify: ' + r.error.message; return; }
-        if (st) st.textContent = 'Signed in ✓ — loading your name…';   // immediate feedback; the chip replaces this when hello returns
-        authHello();
-      });
-    });
+    blk.innerHTML = authIdent
+      ? '<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0 6px">' +
+        '<span style="color:var(--ink-soft)">&#10003; Signed in as</span> <b>' + esc(authIdent.display_name) + '</b></div>'
+      : '';
   }
-  // Session events: magic-link landing fires SIGNED_IN (pre- or post-password);
-  // hello only runs once the password gate has been passed (TOKEN set).
-  // ⚠ supabase-js holds its auth lock while dispatching this callback — calling
-  // getSession() (inside authHello → sbJwt) synchronously here can DEADLOCK, and the
-  // chip never flips to "Signed in as …" even though the session stored fine. Defer
-  // out of the lock (setTimeout 0), per the supabase-js docs.
   if (SB) {
     try {
       SB.auth.onAuthStateChange(function(ev){
         setTimeout(function(){
-          if (ev === 'SIGNED_IN' && TOKEN) authHello();
           if (ev === 'SIGNED_OUT'){ authIdent = null; renderAuthBlk(); idRecompute(); }
         }, 0);
       });
@@ -7225,6 +7244,7 @@ window.addEventListener('error', function(e){
           }).join('') + '</select></td>' +
         '<td style="padding:6px 8px;vertical-align:top;white-space:normal">' + esc(tmFmtSeen(u.last_seen)) + '</td>' +
         '<td style="padding:6px 8px;vertical-align:top;text-align:right">' +
+          (u.active ? '<button type="button" class="syncbtn" data-tm-mfa="1" style="width:auto;min-height:40px;margin-right:6px">Reset MFA</button>' : '') +
           '<button type="button" class="syncbtn" data-tm-active="' + (u.active ? '0' : '1') + '" style="width:auto;min-height:40px">' + (u.active ? 'Deactivate' : 'Reactivate') + '</button></td>' +
         '</tr>';
     });
@@ -7249,11 +7269,32 @@ window.addEventListener('error', function(e){
         tmUpdate(row.getAttribute('data-tm-email'), { role: sel.value });
       });
       list.addEventListener('click', function(ev){
-        var b = ev.target.closest('[data-tm-active]'); if (!b) return;
         var row = ev.target.closest('[data-tm-email]'); if (!row) return;
-        tmUpdate(row.getAttribute('data-tm-email'), { active: b.getAttribute('data-tm-active') === '1' });
+        var em = row.getAttribute('data-tm-email');
+        var m = ev.target.closest('[data-tm-mfa]');
+        if (m){
+          if (!window.confirm('Reset the authenticator for ' + em + '? They will set it up again at their next sign-in, and any open session they have ends now.')) return;
+          var note = el('tm-add-note'); if (note) note.textContent = 'Resetting\u2026';
+          postJSON('/user/mfa-reset', { email: em }).then(function(j){
+            if (note) note.textContent = 'Authenticator reset for ' + em + ' (' + ((j && j.factors_removed) || 0) + ' factor(s) removed, ' + ((j && j.sessions_ended) || 0) + ' session(s) ended).';
+          }).catch(function(e){ if (String(e && e.message) === 'AUTH') return; if (note) note.textContent = 'Reset failed: ' + String(e && e.message || 'error'); });
+          return;
+        }
+        var b = ev.target.closest('[data-tm-active]'); if (!b) return;
+        var on = b.getAttribute('data-tm-active') === '1';
+        if (!on && !window.confirm('Deactivate ' + em + '? Their sign-in is removed immediately.')) return;
+        tmUpdate(em, { active: on });
       });
     }
+    var prov = el('tm-provision');
+    if (prov) prov.addEventListener('click', function(){
+      var note = el('tm-add-note'); if (note) note.textContent = 'Provisioning\u2026';
+      postJSON('/user/provision', {}).then(function(j){
+        var c = (j && j.created) || [], f = (j && j.failed) || [];
+        if (note) note.textContent = (c.length ? 'Created sign-ins for: ' + c.join(', ') : 'Everyone already has a sign-in.') + (f.length ? ' Failed: ' + f.join(', ') : '');
+        tmLoad();
+      }).catch(function(e){ if (String(e && e.message) === 'AUTH') return; if (note) note.textContent = 'Provisioning failed: ' + String(e && e.message || 'error'); });
+    });
     var create = el('tm-create');
     if (create) create.addEventListener('click', function(){
       var name = (el('tm-name') && el('tm-name').value || '').trim();
@@ -7831,9 +7872,8 @@ window.addEventListener('error', function(e){
   }
   function submitKeyUnlink(){
     var r = kCur; if (!r) return;
-    var actor = getActor() || (window.prompt('Your name (for the key log):') || '').trim();
+    var actor = getActor();
     if (!actor) return;
-    try { localStorage.setItem(ACT_KEY, actor); } catch (e) {}
     if (!window.confirm('Unlink this key from its unit?')) return;
     var note = ((el('kf-note') && el('kf-note').value) || '').trim() || null;
     postJSON('/key/unlink', { key_id: r.key_id, actor: actor, note: note }).then(applyKeyUpdate)
@@ -7842,11 +7882,7 @@ window.addEventListener('error', function(e){
   function submitKey(kind){
     var errEl = el('kf-err');
     var actor = getActor();
-    if (!actor) {
-      actor = (window.prompt('Your name (for the key log):') || '').trim();
-      if (!actor) { if (errEl) errEl.textContent = 'A name is required to log this action.'; return; }
-      try { localStorage.setItem(ACT_KEY, actor); } catch (e) {}
-    }
+    if (!actor) { if (errEl) errEl.textContent = 'Sign in first — every key action is logged to your sign-in.'; return; }
     var note = ((el('kf-note') && el('kf-note').value) || '').trim() || null;
     var btn = el('km-form').querySelector('[data-ksubmit]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     var fail = function(err){ if (errEl) errEl.textContent = (err && err.message) || 'Save failed.'; if (btn) { btn.disabled = false; btn.textContent = 'Save'; } };
@@ -7960,7 +7996,7 @@ window.addEventListener('error', function(e){
   function kQuickNote(){
     var r = kCur; if (!r) return;
     var actor = getActor();
-    if (!actor) { actor = (window.prompt('Your name (for the key log):') || '').trim(); if (!actor) return; try { localStorage.setItem(ACT_KEY, actor); } catch (e) {} }
+    if (!actor) return;
     var ta = el('km-noteinput'), send = el('km-noteadd');
     var txt = (ta && ta.value || '').trim(); if (!txt) { if (ta) ta.focus(); return; }
     if (ta) ta.disabled = true; if (send) send.disabled = true;
@@ -8093,8 +8129,7 @@ window.addEventListener('error', function(e){
     if (!a) return;
     ev.preventDefault();
     var fid = a.getAttribute('data-fileid'), nm = a.getAttribute('data-fname') || ('file-' + fid);
-    fetch(API + '/file-dl?file_id=' + encodeURIComponent(fid) + '&proxy=1&name=' + encodeURIComponent(nm),
-          { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    apiFetch('/file-dl?file_id=' + encodeURIComponent(fid) + '&proxy=1&name=' + encodeURIComponent(nm))
       .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
       .then(function(b){ var u = URL.createObjectURL(b); var x = document.createElement('a'); x.href = u; x.download = nm; x.style.display = 'none'; document.body.appendChild(x); x.click(); setTimeout(function(){ URL.revokeObjectURL(u); if (x.parentNode) x.parentNode.removeChild(x); }, 5000); })
       .catch(function(){ alert('Could not download this file.'); });
@@ -8110,8 +8145,7 @@ window.addEventListener('error', function(e){
     var fid = a.getAttribute('data-fileid'), ftype = a.getAttribute('data-ftype') || '';
     var w = window.open('', '_blank');
     try { if (w && w.document) w.document.write('<title>Loading preview…</title><body style="font:14px sans-serif;padding:24px;color:#333">Loading preview…</body>'); } catch (e) {}
-    fetch(API + '/file-dl?file_id=' + encodeURIComponent(fid) + '&proxy=1',
-          { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    apiFetch('/file-dl?file_id=' + encodeURIComponent(fid) + '&proxy=1')
       .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
       .then(function(b){
         var blob = ftype ? b.slice(0, b.size, ftype) : b;   // force inline-renderable MIME
@@ -8483,7 +8517,7 @@ window.addEventListener('error', function(e){
   // Roster for the FB picker = active tour_agents (emails resolve server-side) + a fixed set of
   // other posters (mostly PMs/staff, not tour agents) + any name already assigned on a unit (so
   // shared custom names show for everyone once /units loads) + this browser's added customs
-  // (localStorage, the actorExtra() pattern) + the current value. Deduped case-insensitively.
+  // (localStorage) + the current value. Deduped case-insensitively.
   // NOTE: /unit/fb-request resolves the recipient from tour_agents, then active team_members (by
   // display name); a name with neither returns a 422 the panel shows — nothing is sent.
   var FB_EXTRA = ['Ben', 'Cheryl', 'Jeannine', 'Kevin', 'Sarah'];
@@ -9369,8 +9403,7 @@ window.addEventListener('error', function(e){
     // Fetch with the Bearer header (NOT a ?token= URL — tokens in URLs leak via
     // history/referer/logs/screenshots) → blob → temporary object-URL anchor → revoke.
     // proxy=1 streams the bytes with Content-Disposition: attachment.
-    return fetch(API + '/photo-dl?scope=' + encodeURIComponent(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id + '&proxy=1',
-          { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    return apiFetch('/photo-dl?scope=' + encodeURIComponent(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id + '&proxy=1')
       .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
       .then(function(blob){
         var u = URL.createObjectURL(blob);
@@ -9407,8 +9440,7 @@ window.addEventListener('error', function(e){
     Array.prototype.forEach.call(proxies, function(img){
       var p = photos[+img.getAttribute('data-proxy')];
       if (!p || p.image_id == null) return;
-      fetch(API + '/photo-dl?scope=' + encodeURIComponent(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id + '&proxy=1',
-            { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+      apiFetch('/photo-dl?scope=' + encodeURIComponent(p.scope) + '&entity_id=' + p.entity_id + '&image_id=' + p.image_id + '&proxy=1')
         .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function(b){ img.src = URL.createObjectURL(b); })
         .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('photo proxy failed', e); });
@@ -11529,7 +11561,7 @@ window.addEventListener('error', function(e){
   // Generation-guarded: a sign-out or a newer probe superseding this one must win.
   function acmProbe(){
     var gen = ++acmReq;
-    if (!authIdent || !TOKEN){ acmSet(false, null); return; }
+    if (!authIdent){ acmSet(false, null); return; }
     authFetch('/me/owners').then(function(j){
       if (gen !== acmReq) return;
       acmSet(true, (j && j.owners) || []);
@@ -12036,7 +12068,7 @@ window.addEventListener('error', function(e){
       + '&ren_status=' + encodeURIComponent((cfg.rstat || []).join(','))
       + '&hl_opts=' + encodeURIComponent((cfg.hl || []).join(','))
       + '&sleases_cols=' + encodeURIComponent(sleasesCols.join(','));
-    fetch(API + '/owner-report' + qp, { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    apiFetch('/owner-report' + qp)
       .then(function(r){
         if (r.status === 401) { onAuthFail(); throw new Error('AUTH'); }
         if (!r.ok) return r.text().then(function(t){ throw new Error('HTTP ' + r.status + ': ' + t.slice(0, 200)); });
@@ -12570,7 +12602,7 @@ window.addEventListener('error', function(e){
   function amAddNote(){
     if (!amCurAid) return;
     var actor = (getActor() || '').trim();
-    if (!actor) { alert('Pick your name on the sign-in screen first (sign out, then sign back in with your name selected).'); return; }
+    if (!actor) { alert('Sign in first — your name comes from your sign-in.'); return; }
     var ta = el('am-noteinput'), send = el('am-noteadd');
     var txt = (ta && ta.value || '').trim(); if (!txt) { if (ta) ta.focus(); return; }
     if (ta) ta.disabled = true; if (send) send.disabled = true;
@@ -13340,7 +13372,7 @@ window.addEventListener('error', function(e){
     var r = curTour; if (!r) return;
     var actor = (getActor() || '').trim();
     var ta = el('rm-noteinput'), send = el('rm-noteadd');
-    if (!actor) { alert('Pick your name on the sign-in screen first (sign out, then sign back in with your name selected).'); return; }
+    if (!actor) { alert('Sign in first — your name comes from your sign-in.'); return; }
     var txt = (ta && ta.value || '').trim();
     if (!txt) { if (ta) ta.focus(); return; }
     if (ta) ta.disabled = true; if (send) send.disabled = true;
@@ -13360,7 +13392,7 @@ window.addEventListener('error', function(e){
   function tourNoShowWrite(r, btn, after){
     if (!r || !r.invitee_uri) return;
     var actor = (getActor() || '').trim();
-    if (!actor) { alert('Pick your name on the sign-in screen first (sign out, then sign back in with your name selected).'); return; }
+    if (!actor) { alert('Sign in first — your name comes from your sign-in.'); return; }
     var undo = !!r.is_no_show;
     if (!undo && !confirm('Mark ' + (r.invitee_name || 'this prospect') + ' as a no-show? This writes the no-show back to Calendly.')) return;
     var lbl = btn ? btn.innerHTML : '';
@@ -13376,7 +13408,7 @@ window.addEventListener('error', function(e){
   function cancelTour(){
     var r = curTour; if (!r) return;
     var actor = (getActor() || '').trim();
-    if (!actor) { alert('Pick your name on the sign-in screen first (sign out, then sign back in with your name selected).'); return; }
+    if (!actor) { alert('Sign in first — your name comes from your sign-in.'); return; }
     var heads = (r.attendee_count || r.attendee_total || 1);
     var multi = heads > 1;
     var who = multi ? ('the whole open house for all ' + heads + ' attendees')
@@ -13496,7 +13528,7 @@ window.addEventListener('error', function(e){
   function saveTourLink(pid, uid){
     var r = curTour; if (!r) return;
     var actor = (getActor() || '').trim();
-    if (!actor) { el('rm-linkres').innerHTML = '<span class="count-note">Pick your name on the sign-in screen first.</span>'; return; }
+    if (!actor) { el('rm-linkres').innerHTML = '<span class="count-note">Sign in first.</span>'; return; }
     var uri = r.uri;
     el('rm-linkres').innerHTML = '<span class="count-note">Saving…</span>';
     postJSON('/tour/link', { event_uri: uri, property_id: Number(pid), unit_id: uid ? Number(uid) : null, actor: actor })
@@ -13618,7 +13650,7 @@ window.addEventListener('error', function(e){
   });
   el('r-mine').addEventListener('click', function(){
     var me = (getActor() || '').trim();
-    if (!me) { calNote('Pick your name on the sign-in screen first'); return; }
+    if (!me) { calNote('Sign in first'); return; }
     var on = el('r-mine').classList.toggle('on');
     rAgents = {};
     if (on) {
@@ -13710,7 +13742,7 @@ window.addEventListener('error', function(e){
   }
   function checkFresh(baselineB){
     if (Date.now() - pollStart > 15 * 60 * 1000) { syncDone('Timed out — refresh in a minute'); return; }
-    fetch(API + '/stats?' + buildQuery().toString(), { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    apiFetch('/stats?' + buildQuery().toString())
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(d){
         if (!d || !d.ops) return;
@@ -13723,7 +13755,7 @@ window.addEventListener('error', function(e){
     syncBtn.disabled = true;
     syncBtn.innerHTML = '<span class="whirl">&#8635;</span> Starting&hellip;';
     var baselineB = lastBuildiumSync;
-    fetch(API + '/sync', { method: 'POST', headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    apiFetch('/sync', { method: 'POST' })
       .then(function(r){ return r.json(); })
       .then(function(res){
         var bad = (res.buildium || '').indexOf('error') === 0 && (res.calendly || '').indexOf('error') === 0;
@@ -13826,19 +13858,23 @@ window.addEventListener('error', function(e){
     el('page-tasks').style.display = 'none';
     todayLoaded = null;
     ACTIVE_TAB = 'ledger';   // clean slate so the next login (or deep link) lands deterministically
-    el('login').style.display = 'flex';
-    setTimeout(function(){ try { el('loginpw').focus(); } catch (e) {} }, 60);
+    el('login').style.display = 'flex';   // loginStep() focuses the right field
   }
-  function onAuthFail(){
-    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
-    TOKEN = ''; pwTierRole = 'user'; idApplyAdmin();
-    showLogin();
+
+  // A request came back 401 after a refresh attempt (or with a terminal code). MFA_REQUIRED
+  // keeps the session — only the second factor is missing; everything else is a sign-out.
+  function onAuthFail(code){
+    if (code === 'MFA_REQUIRED' && SB){ lgMfaStart(); return; }
+    lgSignOutLocal();
+    showLogin(); loginStep('email');
+    if (code === 'SESSION_EXPIRED') lgErr('Your session reached its 7-day limit \u2014 sign in again.');
+    else if (code === 'NOT_ON_TEAM') lgErr('Your sign-in is no longer on the team list.');
   }
   function startApp(){
     el('login').style.display = 'none';
     scopeRestore();   // A-13: restore BEFORE load() so the very first /stats is already scoped
     load();
-    try { authHello(); renderAuthBlk(); } catch (e) {}   // WS-U identity chip / sign-in card (never boot-fatal)
+    try { renderAuthBlk(); acmProbe(); } catch (e) {}   // identity chip + account-manager probe (never boot-fatal)
     try { idRosterLoad(idRecompute); } catch (e) {}      // WS-M M4: name-pick tailoring needs the roster (never boot-fatal)
     // Deep link: if the URL names a tab (e.g. #keys), open it. Otherwise the DEFAULT LANDING
     // is Today (WS1-D3 / Deploy 3): every persona sees their role's work queues first; the
@@ -13871,47 +13907,44 @@ window.addEventListener('error', function(e){
       if (typeof schBkPickProspect === 'function') schBkPickProspect(schedProspect);   // straight into the book flow, prospect done
     }).catch(function(e){ if (String(e.message) !== 'AUTH' && sub) sub.innerHTML = '<div class="note">Could not load that lead.</div>'; });
   }
-  function checkToken(tok){
-    return fetch(API + '/check', { headers: { 'Authorization': 'Bearer ' + tok } })
-      .then(function(r){ return r.ok ? r.json().then(function(j){ return { ok:true, role:(j && j.role) || 'user' }; }) : { ok:false }; })
-      .catch(function(){ return { ok:false }; });
-  }
-  el('loginform').addEventListener('submit', function(ev){
-    ev.preventDefault();
-    var pw = el('loginpw').value || '';
-    if (!pw) return;
-    el('loginerr').textContent = 'Checking…';
-    checkToken(pw).then(function(res){
-      if (res.ok) {
-        TOKEN = pw; pwTierRole = res.role; idApplyAdmin();
-        try { localStorage.setItem(STORE_KEY, pw); } catch (e) {}
-        var an = el('actorsel'); if (an && an.value && an.value !== '__add__') { try { localStorage.setItem(ACT_KEY, an.value); } catch (e) {} }
-        el('loginerr').textContent = '';
-        el('loginpw').value = '';
-        startApp();
-      } else {
-        el('loginerr').textContent = 'Incorrect password — try again.';
-      }
+
+  (function(){
+    var form = el('loginform');
+    if (form) form.addEventListener('submit', function(ev){
+      ev.preventDefault();
+      if (!SB){ lgErr('Sign-in is unavailable: the auth library did not load. Reload the page.'); return; }
+      var mfa = el('lg-mfa'), code = el('lg-code');
+      var step = (mfa && mfa.style.display !== 'none') ? 'mfa' : (code && code.style.display !== 'none') ? 'code' : 'email';
+      if (step === 'email') lgSend(); else if (step === 'code') lgVerifyCode(); else lgMfaVerify();
     });
-  });
+    var back = el('lg-back'); if (back) back.addEventListener('click', function(ev){ ev.preventDefault(); loginStep('email'); });
+    var so = el('lg-signout'); if (so) so.addEventListener('click', function(ev){ ev.preventDefault(); lgSignOutLocal(); loginStep('email'); });
+  })();
   el('signout').addEventListener('click', function(){
-    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
-    TOKEN = ''; pwTierRole = 'user'; idApplyAdmin();
-    showLogin();
+    lgSignOutLocal();
+    showLogin(); loginStep('email');
   });
 
   setupFX();
 
-  // boot: strip any ?token= / ?lead= / ?lead_email= from the URL bar (keep the hash; showTab
-  // re-sets #schedule for a lead deep link), then verify what we have
-  if (urlToken || pendingLeadCard || pendingLeadEmail) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {} }
-  if (TOKEN) {
-    checkToken(TOKEN).then(function(res){
-      if (res.ok) { pwTierRole = res.role; idApplyAdmin(); try { localStorage.setItem(STORE_KEY, TOKEN); } catch (e) {} startApp(); }
-      else { onAuthFail(); }
-    });
+  // boot: tidy the URL (drop ?lead= / ?lead_email=; a magic-link #access_token hash goes once
+  // the library has consumed it, which getSession() waits for), then resume the session if
+  // there is one. No session → the login screen; aal1 → the authenticator step.
+  if (pendingLeadCard || pendingLeadEmail) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {} }
+  if (!SB) {
+    showLogin(); loginStep('email');
+    lgErr('Sign-in is unavailable: the auth library did not load. Reload the page.');
   } else {
-    showLogin();
+    SB.auth.getSession().then(function(r){
+      if (/access_token=|refresh_token=|type=magiclink|error=/.test(location.hash || '')) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
+      var sess = r && r.data && r.data.session;
+      if (!sess){ showLogin(); loginStep('email'); return; }
+      lgEmail = (sess.user && sess.user.email) || '';
+      return lgAfterSession();
+    }).catch(function(e){
+      console.error('boot: session check failed', e);
+      showLogin(); loginStep('email');
+    });
   }
   /* ── Agent Hub ─────────────────────────────────────────── */
   var hubLoaded = null, hubScore = null, hubAgent = '',
@@ -14719,12 +14752,12 @@ window.addEventListener('error', function(e){
     c.innerHTML = chip('all', 'All', all.length) + chip('pending', 'Unconfirmed', all.length - conf) + chip('confirmed', 'Confirmed', conf);
   }
   // F4: reassign roster. The authoritative population for lease ATTRIBUTION is the agents the
-  // scorecard already knows (what hubMatchAgent and the Hub agent picker use) — not STAFF_BASE,
-  // which is the key-log actor list and includes admins/managers. Fall back to the actor roster
-  // only if the scorecard hasn't loaded, so the control is never empty.
+  // scorecard already knows (what hubMatchAgent and the Hub agent picker use) — not the team
+  // roster, which includes admins/managers. Fall back to the roster names only if the
+  // scorecard hasn't loaded, so the control is never empty.
   function hubReassignRoster(){
     var names = (hubScore || []).map(function(r){ return r.agent; }).filter(Boolean);
-    if (!names.length) names = actorList();
+    if (!names.length) names = actorList();   // roster display names (tmRoster), not a fixed list
     var seen = {}, out = [];
     names.forEach(function(n){ n = String(n || '').trim(); if (n && !seen[n.toLowerCase()]){ seen[n.toLowerCase()] = 1; out.push(n); } });
     return out.sort();
@@ -15116,7 +15149,7 @@ window.addEventListener('error', function(e){
   function lstFail(e){
     var forbidden = String(e && e.message) === 'HTTP 403';
     var msg = forbidden
-      ? 'Signed-in admin access required. This view includes tenant contact details and every call and text, so the shared admin password is not enough — sign in with your work email from the sidebar, then reopen this lease.'
+      ? 'Admin access required. This view includes tenant contact details and every call and text, so it is limited to admin sign-ins.'
       : 'Could not load this lease story.';
     if (el('lst-sub')) el('lst-sub').textContent = '';
     if (el('lst-body')) el('lst-body').innerHTML = '<div class="note" style="padding:18px;text-align:center;line-height:1.5">' + esc(msg) + '</div>';
@@ -15768,7 +15801,7 @@ window.addEventListener('error', function(e){
     var inputs = (el('sch-bk-stops') || document).querySelectorAll('.schstop-loc');
     [].slice.call(inputs).forEach(function(inp){ var st = inp.getAttribute('data-st'); var s = schBkStops.filter(function(x){ return x.start_time === st; })[0]; if (s) s.location = inp.value; });
     var actor = getActor(), rb = el('sch-bk-multi-result');
-    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Pick your name on the sign-in screen first (so the bookings are logged to you).</div>'; } return; }
+    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Sign in first (so the bookings are logged to you).</div>'; } return; }
     var stops = schBkStops.slice().sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
     var btn = el('sch-bk-book-all'), orig = btn.textContent; btn.textContent = 'Booking…'; btn.disabled = true;
     if (rb){ rb.style.display = 'block'; rb.innerHTML = ''; }
@@ -15853,7 +15886,7 @@ window.addEventListener('error', function(e){
   function schBkOfferGo(){
     if (!schedBook.agentId || !schedBook.eventType || !schBkOffers.length) return;   // prospect NOT required
     var actor = getActor(), rb = el('sch-bk-offer-result');
-    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Pick your name on the sign-in screen first (so the link is logged to you).</div>'; } return; }
+    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Sign in first (so the link is logged to you).</div>'; } return; }
     var p = schedBook.applicant;   // may be null → bare shareable link
     var loc = ((el('sch-bk-offer-loc') && el('sch-bk-offer-loc').value) || '').trim();
     var btn = el('sch-bk-offer-go'), orig = btn.textContent; btn.textContent = 'Creating…'; btn.disabled = true;
@@ -15928,7 +15961,7 @@ window.addEventListener('error', function(e){
   function schBkGo(){
     var p = schedBook.applicant; if (!p || !schedBook.agentId || !schedBook.chosen) return;
     var actor = getActor(), rb = el('sch-bk-result');
-    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Pick your name on the sign-in screen first (so the booking is logged to you).</div>'; } return; }
+    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Sign in first (so the booking is logged to you).</div>'; } return; }
     var loc = schedBook.isGroup ? (schedBook.ohLocation || '') : (((el('sch-bk-loc') && el('sch-bk-loc').value) || '').trim());   // open houses book at their own fixed location (server matches the kind)
     var btn = el('sch-bk-go'), orig = btn.textContent; btn.textContent = schedBook.isGroup ? 'Adding…' : 'Booking…'; btn.disabled = true;
     postJSON('/tour-book', {

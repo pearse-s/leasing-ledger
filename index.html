@@ -14104,7 +14104,14 @@ window.addEventListener('error', function(e){
     authFetch('/sync-status')
       .then(function(d){
         if (!d || pollTimer === null) return;
-        var freshB = (d.last_buildium_sync || null) !== baselineB;
+        // Compare INSTANTS, never strings: /stats renders this timestamp from get_stats, which is
+        // pinned to America/Edmonton ("…T12:25:37-06:00"), while /sync-status comes straight from
+        // PostgREST in UTC ("…T18:25:37+00:00"). Same moment, different text — the string compare
+        // read "fresh" on the FIRST poll of every Sync and reloaded before the sync had landed
+        // (v333-v335; found live 2026-10-02).
+        var tNew = d.last_buildium_sync ? Date.parse(d.last_buildium_sync) : null;
+        var tOld = baselineB ? Date.parse(baselineB) : null;
+        var freshB = tNew !== tOld;
         // settling = the main run landed but the chained Property Status (take-back) re-read
         // hasn't yet — hold the ONE reload until it does (the server caps the wait at 5 min)
         if (freshB && d.settling) { syncBtn.innerHTML = '<span class="whirl">&#8635;</span> Updating take-backs&hellip;'; return; }

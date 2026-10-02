@@ -944,6 +944,16 @@ window.addEventListener('error', function(e){
      the whole row at every breakpoint (1/-1 works for any column count, so no media query
      and no orphan tile). Used by the two Nookbook note boxes. */
   .fitem.fspan{grid-column:1/-1}
+  /* Leasing status (Buildium unit field, 2026-10-02): free text WRAPS, never clips (house
+     rule); the in-cell editor (.lsed) reuses the key-form input look. Both the board cell
+     and the popup field render the text through .lstxt so newlines survive. */
+  #utable td.lscell{min-width:200px;max-width:320px;vertical-align:top;font-size:.8rem;line-height:1.35}
+  .lstxt{white-space:pre-wrap;overflow-wrap:anywhere}
+  .lsedit{margin-left:6px;vertical-align:middle}
+  .lsed textarea,#um-ls-ta{width:100%;min-width:200px;box-sizing:border-box;font-family:var(--sans);font-size:.82rem;color:var(--ink);
+    background:var(--paper-deep);border:1px solid var(--hairline-dark);border-radius:var(--r-sm);padding:7px 9px;outline:none;min-height:60px;resize:vertical}
+  .lsed textarea:focus,#um-ls-ta:focus{border-color:var(--clay)}
+  .lsed .lsbtns{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px}
   .trow{display:flex;gap:14px;flex-wrap:wrap;align-items:baseline;padding:7px 0;border-bottom:1px dotted var(--hairline-dark);font-size:.82rem}
   .trow:last-child{border-bottom:none}
   .trow .tn{font-weight:700;min-width:160px}
@@ -2568,6 +2578,7 @@ window.addEventListener('error', function(e){
             <th data-k="balance_disp" class="rt">Balance</th>
             <th data-k="tenant_names">Tenant</th>
             <th data-k="property_manager_name">Manager</th>
+            <th data-k="leasing_status" title="Buildium unit field &ldquo;Leasing Status&rdquo; &mdash; edit in place; every change is kept in the unit&rsquo;s activity feed">Leasing status</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -8818,7 +8829,9 @@ window.addEventListener('error', function(e){
       lease_to_date:{ t:'date', label:'Lease end' },
       monthly_rent:{ t:'num', label:'Rent', get:rentBasis },
       balance_disp:{ t:'num', label:'Balance' },
-      is_listed:{ t:'enum', label:'Listed', disp:cf_yesno }
+      is_listed:{ t:'enum', label:'Listed', disp:cf_yesno },
+      // free text: the enum list is every distinct note (short-labelled) + blank; "contains" search covers the rest
+      leasing_status:{ t:'enum', label:'Leasing status', disp:function(v){ v = v == null ? '' : String(v); return v.length > 48 ? v.slice(0, 48) + '…' : v; } }
     }},
     atable: { rows:function(){ return appsAll || []; }, redraw:function(){ drawApps(); }, cols:{
       submitted_at:{ t:'date', label:'Submitted', get:function(r){ return (r.submitted_at||'').slice(0,10); } },
@@ -10286,7 +10299,8 @@ window.addEventListener('error', function(e){
         '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>'
           : (r.balance_src === 'pre' ? fmtMoney(r.balance_disp) + ' <span class="qn">pre</span>' : '–')) + '</td>' +
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
-        '<td>' + esc(r.property_manager_name || '–') + '</td></tr>';
+        '<td>' + esc(r.property_manager_name || '–') + '</td>' +
+        '<td class="lscell">' + lsCellHtml(r) + '</td></tr>';
     });
     el('utable').querySelector('tbody').innerHTML = html || emptyRow('utable', 'Nothing matches');
     var note = rows.length + ' of ' + unitsAll.length + ' units';
@@ -10587,6 +10601,7 @@ window.addEventListener('error', function(e){
     { label:'Tenant',          key:'tenant_names', w:26 },
     { label:'Owner',           key:'primary_owner_name', w:22 },
     { label:'Manager',         key:'property_manager_name', w:18 },
+    { label:'Leasing status',  key:'leasing_status', w:40 },
     { label:'Nookbook',        w:10, get:function(r){ return xlYN(r.is_nookbook); } },
     { label:'Building type',   key:'nb_building_type', w:16 },
     { label:'Parking',         key:'nb_parking', w:14 },
@@ -10738,6 +10753,9 @@ window.addEventListener('error', function(e){
     openCol('utable', k, th);
   });
   el('utable').addEventListener('click', function(e){
+    // Leasing status cell (2026-10-02) FIRST: its edit / Save / Cancel buttons are .listbtn too,
+    // and the generic .listbtn rule below would otherwise swallow them as "open the listing".
+    if (lsCellClick(e)) return;
     var lb = e.target.closest && e.target.closest('.listbtn');
     if (lb){ openListing(lb.getAttribute('data-uid')); return; }
     if (e.target.closest && e.target.closest('.c-fb')) return;   // blue FB chip: let the anchor open the listing, don't open the unit modal
@@ -10927,6 +10945,141 @@ window.addEventListener('error', function(e){
         if (k === 'cancel'){ cb.checked = !on; return; }
         save(on, k);
       };
+    });
+  }
+  // ── Leasing status (Pearse 2026-10-02) ────────────────────────────────────
+  // Buildium's unit custom field "Leasing Status" (345, LongText) — free-text leasing notes.
+  // Read from the mirror (/units → v_unit_attributes.leasing_status), written by ANYONE signed in
+  // through POST /unit/leasing-status: Buildium first, read back, then that unit's mirror row,
+  // so the text shown is what Buildium holds. History = dashboard.leasing_status_events, shown
+  // in the unit popup's activity feed ("Leasing status" chip). Two sibling surfaces share one
+  // save path (lsSave): the Units board cell (in-cell editor) and the unit popup field.
+  function lsText(v){ return v == null ? '' : String(v); }
+  // UI gate only (the route demands a verified sign-in regardless of role).
+  function lsCan(){ return !!getActor(); }
+  function lsCellHtml(r){
+    var t = lsText(r.leasing_status);
+    var h = t ? '<span class="lstxt">' + esc(t) + '</span>' : '<span class="qn">–</span>';
+    if (lsCan()) h += ' <button type="button" class="listbtn lsedit" data-lsuid="' + r.unit_id + '" title="' + (t ? 'Edit the leasing status (saves to Buildium)' : 'Add a leasing status (saves to Buildium)') + '">' + (t ? 'edit' : '+ add') + '</button>';
+    return h;
+  }
+  function lsEditorHtml(r){
+    return '<div class="lsed" data-lsuid="' + r.unit_id + '">' +
+      '<textarea rows="3" maxlength="4000" aria-label="Leasing status">' + esc(lsText(r.leasing_status)) + '</textarea>' +
+      '<div class="lsbtns"><button type="button" class="listbtn" data-ls="save">Save</button>' +
+      '<button type="button" class="listbtn" data-ls="cancel">Cancel</button>' +
+      '<span class="lmphnote" data-ls="hint">Ctrl+Enter saves &middot; Esc cancels</span></div></div>';
+  }
+  function lsUnit(uid){
+    var r = null;
+    (unitsAll || []).forEach(function(x){ if (String(x.unit_id) === String(uid)) r = x; });
+    return r;
+  }
+  // Returns true when the click belonged to the leasing-status cell (handled here).
+  function lsCellClick(e){
+    var ed = e.target.closest && e.target.closest('.lsed');
+    if (ed){
+      var b = e.target.closest('[data-ls]'), k = b ? b.getAttribute('data-ls') : '';
+      var r = lsUnit(ed.getAttribute('data-lsuid')), td = ed.closest('td');
+      if (!r || !td) return true;
+      if (k === 'cancel'){ td.innerHTML = lsCellHtml(r); return true; }
+      if (k === 'save') lsCellSave(ed, r, td);
+      return true;   // clicks inside the editor (textarea, hint) never open the popup
+    }
+    var btn = e.target.closest && e.target.closest('.lsedit');
+    if (!btn) return false;
+    var r2 = lsUnit(btn.getAttribute('data-lsuid')), td2 = btn.closest('td');
+    if (!r2 || !td2) return true;
+    td2.innerHTML = lsEditorHtml(r2);
+    var ta = td2.querySelector('textarea');
+    if (ta){
+      ta.focus();
+      ta.addEventListener('keydown', function(ev){
+        if (ev.key === 'Escape'){ ev.preventDefault(); td2.innerHTML = lsCellHtml(r2); }
+        else if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)){ ev.preventDefault(); var ed2 = td2.querySelector('.lsed'); if (ed2) lsCellSave(ed2, r2, td2); }
+      });
+    }
+    return true;
+  }
+  function lsCellSave(ed, r, td){
+    var ta = ed.querySelector('textarea'), hint = ed.querySelector('[data-ls="hint"]');
+    if (!ta) return;
+    ed.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+    lsSave(r, ta.value || '', function(msg){
+      if (hint) hint.textContent = msg;
+      if (!/^Saving/.test(msg)) ed.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+    }, function(){
+      // the row may have been redrawn meanwhile — repaint whichever cell now shows this unit
+      if (td.isConnected) td.innerHTML = lsCellHtml(r); else drawUnits();
+    });
+  }
+  // ONE save path for both surfaces. say(msg) reports progress; done(j) runs after a successful save.
+  function lsSave(r, text, say, done){
+    var actor = getActor();
+    if (!actor){ say('Sign in first.'); return; }
+    text = String(text || '');
+    // mirrors the route's 400 — say so before the round trip
+    if (text.length > 4000){ say('Too long (' + text.length + ' characters, max 4000).'); return; }
+    say('Saving to Buildium…');
+    postJSON('/unit/leasing-status', { unit_id: Number(r.unit_id), property_id: Number(r.property_id), text: text, actor: actor })
+      .then(function(j){
+        lsApply(r.unit_id, j);
+        say(j && j.unchanged ? 'No change.' : 'Saved in Buildium.');
+        done(j);
+      })
+      .catch(function(e){
+        if (String(e && e.message) === 'AUTH') return;
+        console.error('leasing-status save failed', e);
+        say('Could not save: ' + (e && e.message ? e.message : 'error'));
+      });
+  }
+  // Fold the server's answer into the one row every surface reads, and into the open popup's feed.
+  function lsApply(uid, j){
+    (unitsAll || []).forEach(function(x){
+      if (String(x.unit_id) !== String(uid)) return;
+      x.leasing_status = (j && j.leasing_status != null) ? j.leasing_status : null;
+      if (j && j.leasing_status_synced_at) x.leasing_status_synced_at = j.leasing_status_synced_at;
+    });
+    if (j && j.event && umFeed && umFeed.r && String(umFeed.r.unit_id) === String(uid)){
+      umFeed.lstatus = [j.event].concat(umFeed.lstatus || []);
+      renderUnitFeed();
+      lsPaintMeta();
+    }
+  }
+  // Unit popup field (sibling of the board cell).
+  function lsValueHtml(r){
+    var t = lsText(r.leasing_status);
+    var meta = '<div class="qn" id="um-ls-meta">' + (t ? 'Buildium&rsquo;s Leasing Status field' : 'Blank in Buildium') +
+      (r.leasing_status_synced_at ? ' &middot; read ' + esc(String(r.leasing_status_synced_at).slice(0, 10)) : '') + '</div>';
+    if (!lsCan()) return meta + (t ? '<div class="lstxt">' + esc(t) + '</div>' : '<span class="qn">–</span>') + '<div class="qn">Sign in to edit.</div>';
+    return meta + '<textarea id="um-ls-ta" rows="3" maxlength="4000" style="width:100%;box-sizing:border-box;margin-top:4px" aria-label="Leasing status">' + esc(t) + '</textarea>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px">' +
+        '<button type="button" class="listbtn" id="um-ls-save">Save</button>' +
+        '<span class="qn">Saves straight to Buildium; every change is kept in the activity feed below.</span>' +
+      '</div>' +
+      '<div class="lmphnote" id="um-ls-hint"></div>';
+  }
+  // "Last saved by X · date" once the popup's history leg has loaded (or after a save).
+  function lsPaintMeta(){
+    var m = el('um-ls-meta'); if (!m || !umFeed || !umFeed.lstatus || !umFeed.lstatus.length) return;
+    var L = umFeed.lstatus[0], when = Date.parse(L.created_at);
+    m.textContent = 'Last saved by ' + (L.actor || 'someone') + (isNaN(when) ? '' : ' · ' + new Date(when).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }));
+  }
+  function lsBind(r){
+    var btn = el('um-ls-save'); if (!btn) return;
+    var uid = String(r.unit_id);
+    var wrap = el('um-fields'); if (wrap) wrap.setAttribute('data-ls-uid', uid);
+    function mine(){ var w = el('um-fields'); return !!w && w.getAttribute('data-ls-uid') === uid; }
+    btn.addEventListener('click', function(){
+      var ta = el('um-ls-ta'); if (!ta) return;
+      btn.disabled = true;
+      lsSave(r, ta.value || '', function(msg){
+        if (!mine()) return;
+        var h = el('um-ls-hint'); if (h) h.textContent = msg;
+        if (!/^Saving/.test(msg)) btn.disabled = false;
+      }, function(){
+        drawUnits();   // the board cell is a sibling of this field
+      });
     });
   }
   // ── Owner take-back (Pearse 2026-10-02) ───────────────────────────────────
@@ -11545,6 +11698,7 @@ window.addEventListener('error', function(e){
     // with the state.
     f += fitem('Not ready', '<div id="um-nr-host">' + nrValueHtml(r) + '</div>', false, 'fspan');
     f += fitem('Owner take-back', '<div id="um-tb-host">' + tbValueHtml(r) + '</div>', false, 'fspan');
+    f += fitem('Leasing status', '<div id="um-ls-host">' + lsValueHtml(r) + '</div>', false, 'fspan');
     f += fitem('Status override', '<div id="um-uso-host">' + usoValueHtml(r) + '</div>', false, 'fspan');
     // The two date overrides sit WITH the status override: all three are the same thing —
     // a human correcting what Buildium can see. Each says whether the date on show was
@@ -11554,6 +11708,7 @@ window.addEventListener('error', function(e){
     el('um-fields').innerHTML = f;
     nrBind(r);
     tbBind(r);
+    lsBind(r);
     usoBind(r);
     mvoBind(r);
     if (r.is_nookbook) { nbaBind(r); nbtBind(r); nbnBind(r); }   // listeners bind to the freshly rendered editor nodes
@@ -11668,7 +11823,7 @@ window.addEventListener('error', function(e){
       authFetch('/applications?unit_id=' + encodeURIComponent(uid)).catch(feedLegFail('unit applications'))
     ]).then(function(res){
       if (uOpen !== umOpenReq) return;   // F1: a newer unit modal owns the feed
-      umFeed = { showings: (res[0] && res[0].showings) || [], keyEvents: (res[0] && res[0].key_events) || [], apps: (res[1] && res[1].applications) || [], renewals: (renewalsAll && rnForUnit(uid)) || [], r: r,
+      umFeed = { showings: (res[0] && res[0].showings) || [], keyEvents: (res[0] && res[0].key_events) || [], lstatus: (res[0] && res[0].leasing_status) || [], apps: (res[1] && res[1].applications) || [], renewals: (renewalsAll && rnForUnit(uid)) || [], r: r,
         err: !!((res[0] && res[0].error) || (res[1] && res[1].error)) };
       umFeedFilter = 'all';
       renderUnitFeed();
@@ -11695,6 +11850,7 @@ window.addEventListener('error', function(e){
     (d.showings || []).forEach(function(s){ items.push({ at: Date.parse(s.start_time), kind: 'tour', s: s }); });
     (d.keyEvents || []).forEach(function(k){ items.push({ at: Date.parse(k.created_at), kind: 'key', k: k }); });
     (d.renewals || []).forEach(function(rn){ items.push({ at: Date.parse(rn.last_updated_date_time || rn.lease_from_date), kind: 'renewal', rn: rn }); });
+    (d.lstatus || []).forEach(function(l){ items.push({ at: Date.parse(l.created_at), kind: 'lstatus', l: l }); });
     return items;
   }
   function umFeedRow(it){
@@ -11705,6 +11861,13 @@ window.addEventListener('error', function(e){
     }
     if (it.kind === 'renewal') {
       return listFeedItem('&#128260;', 'Renewal &middot; ' + esc(it.rn.renewal_state || ''), wd);
+    }
+    if (it.kind === 'lstatus') {
+      // Leasing Status change (Buildium unit field): newest text in the title, the previous text
+      // in the sub-line so the history reads as "was → now". Both user-supplied → esc().
+      var L = it.l;
+      return listFeedItem('&#128221;', L.after_text ? 'Leasing status &middot; ' + esc(L.after_text) : 'Leasing status cleared',
+        (L.actor ? esc(L.actor) + ' &middot; ' : '') + wd + (L.before_text ? ' &middot; was &ldquo;' + esc(L.before_text) + '&rdquo;' : ''));
     }
     if (it.kind === 'key') {
       var k = it.k, verb;
@@ -11728,9 +11891,9 @@ window.addEventListener('error', function(e){
     var box = el('um-feed'), chips = el('um-feedchips'); if (!box) return;
     if (!umFeed) { box.innerHTML = ''; if (chips) chips.innerHTML = ''; return; }
     var all = umFeedItems();
-    var counts = { all: all.length, app: 0, tour: 0, key: 0, renewal: 0 };
+    var counts = { all: all.length, app: 0, tour: 0, key: 0, renewal: 0, lstatus: 0 };
     all.forEach(function(it){ counts[it.kind]++; });
-    var defs = [['all', 'All'], ['app', 'Applications'], ['tour', 'Tours'], ['key', 'Keys'], ['renewal', 'Renewals']];
+    var defs = [['all', 'All'], ['app', 'Applications'], ['tour', 'Tours'], ['key', 'Keys'], ['renewal', 'Renewals'], ['lstatus', 'Leasing status']];
     if (chips) chips.innerHTML = defs.filter(function(d){ return d[0] === 'all' || counts[d[0]] > 0; }).map(function(d){
       return '<button type="button" class="qchip' + (umFeedFilter === d[0] ? ' on' : '') + '" data-uf="' + d[0] + '">' + d[1] + ' <span class="qn">' + counts[d[0]] + '</span></button>';
     }).join('');

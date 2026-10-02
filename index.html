@@ -2480,7 +2480,7 @@ window.addEventListener('error', function(e){
            "Take back" OR the Ledger's owner_takebacks list does. This card lists where the two
            sides disagree, so neither list drifts silently. Read-only; admin-only (/takeback-recon). -->
       <div class="card adminonly" style="margin-top:18px" id="hub-takebacks">
-        <div class="tablebar"><h2>Owner take-backs &middot; Buildium vs Ledger</h2><span class="count-note">a property counts as a take-back if either side flags it &middot; flag new ones in Buildium (Property Status = Take back)</span></div>
+        <div class="tablebar"><h2>Owner take-backs &middot; Buildium vs Ledger</h2><span class="count-note">a property counts as a take-back if either side flags it &middot; flag them in Buildium (Property Status = Take back) or from a unit&rsquo;s popup</span></div>
         <div id="tbr-list"><span class="count-note">Loading&hellip;</span></div>
       </div>
       <!-- WS-CF Phase 3 (2026-09-23): units where Buildium's Furnished field and the furnished
@@ -10061,6 +10061,7 @@ window.addEventListener('error', function(e){
       .then(function(j){
         unitsAll = j.units || [];
         nrRows = j.not_ready || [];
+        tbSrc = j.takebacks || { ledger: [], buildium_property_ids: [] };
         unitsAll.forEach(function(u){
           miDerive(u);
           // Balance blend: Active-lease total_balance (outstanding-balances mirror) wins;
@@ -10928,6 +10929,116 @@ window.addEventListener('error', function(e){
       };
     });
   }
+  // ── Owner take-back (Pearse 2026-10-02) ───────────────────────────────────
+  // A unit is a take-back if Buildium's Property Status says "Take back" for its property, OR the
+  // Ledger's owner_takebacks list flags its property or the unit itself (v_unit_status unions
+  // the three). Admins and managers toggle it here through POST /unit/takeback:
+  //   whole property: WRITES BUILDIUM (Property Status), then the server re-reads that property,
+  //     so the numbers move at once. Turning it off also clears the Ledger's own flags on that
+  //     property (property + unit rows), so the switch always does what it shows.
+  //   just this unit: Ledger only (Buildium's unit-level field is switched off).
+  var tbSrc = { ledger: [], buildium_property_ids: [] };   // stored sources from /units
+  function tbSource(r){
+    var pid = String(r.property_id), uid = String(r.unit_id), s = { bld: false, lprop: null, lunit: null, unitRows: 0 };
+    s.bld = (tbSrc.buildium_property_ids || []).map(String).indexOf(pid) >= 0;
+    var inProp = {};
+    (unitsAll || []).forEach(function(x){ if (String(x.property_id) === pid) inProp[String(x.unit_id)] = 1; });
+    (tbSrc.ledger || []).forEach(function(x){
+      if (x.scope === 'property' && String(x.buildium_id) === pid) s.lprop = x;
+      if (x.scope === 'unit' && String(x.buildium_id) === uid) s.lunit = x;
+      if (x.scope === 'unit' && inProp[String(x.buildium_id)]) s.unitRows++;
+    });
+    return s;
+  }
+  function tbValueHtml(r){
+    var s = tbSource(r), why = [];
+    if (s.bld) why.push('The whole property is marked &ldquo;Take back&rdquo; in Buildium (Property Status).');
+    if (s.lprop) why.push('The whole property is flagged in the Ledger' + (s.lprop.label ? ' (' + esc(s.lprop.label) + ')' : '') + '.');
+    if (s.lunit) why.push('This unit is flagged in the Ledger.');
+    var on = s.bld || !!s.lprop || !!s.lunit;
+    // the derived flag can be on with no stored source in view (stale lists) — never contradict it
+    if (!on && r.is_owner_takeback) { on = true; why.push('Counted as a take-back.'); }
+    var txt = why.length ? why.join(' ') : 'Not a take-back &mdash; counted in the vacancy numbers.';
+    if (!nrCan()){
+      return (on ? '<span class="chip c-otb">take-back</span> ' : '') + '<span class="qn">' + txt + ' Admins and managers can change this when signed in.</span>';
+    }
+    var h = '<label class="toggle"><input type="checkbox" id="um-tb-cb"' + (on ? ' checked' : '') + '> Owner take-back</label>';
+    h += ' <span class="qn">' + txt + '</span>';
+    h += '<div class="nrask" id="um-tb-ask" style="display:none"></div>';
+    if (!on) h += '<div class="qn" style="margin-top:4px">For units the owner has taken back. Hides them from the board and leaves them out of the vacancy numbers. The whole-property choice also updates Property Status in Buildium.</div>';
+    h += '<div class="lmphnote" id="um-tb-hint"></div>';
+    return h;
+  }
+  function tbBind(r){
+    var cb = el('um-tb-cb'); if (!cb) return;
+    var uid = String(r.unit_id);
+    var wrap = el('um-fields'); if (wrap) wrap.setAttribute('data-tb-uid', uid);
+    function mine(){ var w = el('um-fields'); return !!w && w.getAttribute('data-tb-uid') === uid; }
+    function repaint(){
+      if (!mine()) return;
+      var host = el('um-tb-host'); if (host){ host.innerHTML = tbValueHtml(r); tbBind(r); }
+    }
+    function save(on, scope){
+      var hint = el('um-tb-hint'), actor = getActor();
+      if (!actor){ if (hint) hint.textContent = 'Pick your name first (on the sign-in screen).'; repaint(); return; }
+      if (hint) hint.textContent = scope === 'property' ? 'Saving to Buildium…' : 'Saving…';
+      cb.disabled = true;
+      postJSON('/unit/takeback', { unit_id: Number(r.unit_id), property_id: Number(r.property_id), on: on, scope: scope, actor: actor })
+        .then(function(j){
+          // repaint from the SERVER's answer for the whole building — the union lives in the view
+          if (j && j.takebacks) tbSrc = j.takebacks;
+          var by = {};
+          ((j && j.units) || []).forEach(function(x){ by[String(x.unit_id)] = x; });
+          (unitsAll || []).forEach(function(x){
+            var y = by[String(x.unit_id)];
+            if (y){ x.is_owner_takeback = !!y.is_owner_takeback; if (y.occupancy_status) x.occupancy_status = y.occupancy_status; }
+          });
+          drawChips(); drawUnits();
+          repaint();
+          tbrLoad();   // admin take-back card (no-op when it isn't on the page)
+          load();      // the vacancy numbers moved server-side — reload /stats once
+          var h2 = el('um-tb-hint');
+          if (h2 && mine()) h2.textContent = scope === 'property'
+            ? 'Saved in Buildium and the Ledger.' + ((j && j.removed && j.removed.length) ? ' Cleared ' + j.removed.length + ' Ledger flag' + (j.removed.length === 1 ? '' : 's') + ' too.' : '')
+            : 'Saved.';
+        })
+        .catch(function(e){
+          if (String(e && e.message) === 'AUTH') return;
+          console.error('take-back save failed', e);
+          repaint();
+          var h2 = el('um-tb-hint'); if (h2 && mine()) h2.textContent = 'Could not save: ' + (e && e.message ? e.message : 'error');
+        });
+    }
+    cb.addEventListener('change', function(){
+      var on = cb.checked, s = tbSource(r), ask = el('um-tb-ask');
+      var propOn = s.bld || !!s.lprop;
+      if (!on && !propOn && s.lunit){ save(false, 'unit'); return; }   // a unit-only flag: nothing to choose
+      if (!ask){ cb.checked = !on; return; }
+      var n = nrSiblings(r), q, btns;
+      if (on){
+        q = 'Mark as an owner take-back&hellip;';
+        btns = '<button type="button" class="listbtn" data-tb="property">The whole property' + (n > 1 ? ' (' + n + ' units)' : '') + ' &middot; updates Buildium</button>' +
+          '<button type="button" class="listbtn" data-tb="unit">Just this unit &middot; Ledger only</button>';
+      } else {
+        var also = [];
+        if (s.lprop) also.push('the Ledger&rsquo;s property flag');
+        if (s.unitRows) also.push(s.unitRows + ' Ledger unit flag' + (s.unitRows === 1 ? '' : 's'));
+        q = 'Turn off for the whole property' + (n > 1 ? ' (' + n + ' units)' : '') + '? This sets Property Status to Active in Buildium' +
+          (also.length ? ' and clears ' + also.join(' and ') : '') + '. The units go back into the vacancy numbers.';
+        btns = '<button type="button" class="listbtn" data-tb="property">Turn off for the whole property</button>';
+      }
+      ask.innerHTML = '<div class="nrq">' + q + '</div><div class="nrbtns">' + btns +
+        '<button type="button" class="listbtn" data-tb="cancel">Cancel</button></div>';
+      ask.style.display = '';
+      ask.onclick = function(e){
+        var b = e.target.closest('[data-tb]'); if (!b) return;
+        var k = b.getAttribute('data-tb');
+        ask.style.display = 'none'; ask.innerHTML = '';
+        if (k === 'cancel'){ cb.checked = !on; return; }
+        save(on, k);
+      };
+    });
+  }
   function usoValueHtml(r){
     var on = !!r.status_override_mode;
     var h = '<span id="um-uso-stat">' + usoStatHtml(r) + '</span>';
@@ -11433,6 +11544,7 @@ window.addEventListener('error', function(e){
     // what usoBind re-renders into after a save, since which buttons apply changes
     // with the state.
     f += fitem('Not ready', '<div id="um-nr-host">' + nrValueHtml(r) + '</div>', false, 'fspan');
+    f += fitem('Owner take-back', '<div id="um-tb-host">' + tbValueHtml(r) + '</div>', false, 'fspan');
     f += fitem('Status override', '<div id="um-uso-host">' + usoValueHtml(r) + '</div>', false, 'fspan');
     // The two date overrides sit WITH the status override: all three are the same thing —
     // a human correcting what Buildium can see. Each says whether the date on show was
@@ -11441,6 +11553,7 @@ window.addEventListener('error', function(e){
     f += fitem('Move-out date', '<div id="um-mvo-out-host">' + mvoValueHtml(r, 'out') + '</div>', false, 'fspan');
     el('um-fields').innerHTML = f;
     nrBind(r);
+    tbBind(r);
     usoBind(r);
     mvoBind(r);
     if (r.is_nookbook) { nbaBind(r); nbtBind(r); nbnBind(r); }   // listeners bind to the freshly rendered editor nodes
@@ -13992,6 +14105,9 @@ window.addEventListener('error', function(e){
       .then(function(d){
         if (!d || pollTimer === null) return;
         var freshB = (d.last_buildium_sync || null) !== baselineB;
+        // settling = the main run landed but the chained Property Status (take-back) re-read
+        // hasn't yet — hold the ONE reload until it does (the server caps the wait at 5 min)
+        if (freshB && d.settling) { syncBtn.innerHTML = '<span class="whirl">&#8635;</span> Updating take-backs&hellip;'; return; }
         if (freshB) { unitsAll = null; ownersAll = null; appsAll = null; toursAll = null; syncDone('Fresh data loaded ✓'); load(); }
       })
       .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.warn('sync-status poll failed (will retry)', e); });

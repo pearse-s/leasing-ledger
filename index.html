@@ -817,6 +817,16 @@ window.addEventListener('error', function(e){
   .mvtable .tdurow:hover{color:var(--clay)}
   tr.mvrisk td{background:rgba(232,180,62,.06)}
   tr.mvrisk td:first-child{box-shadow:inset 3px 0 0 var(--clay)}
+  /* Today · Rent owing table (2026-10-02): 7-8 columns, so it does not need .mvtable's 1010px floor */
+  .mvtable.rtable{min-width:680px}
+  .mvtable tr.tdrentrow{cursor:pointer}
+  .mvtable tr.tdrentrow:hover td{background:rgba(244,236,225,.04)}
+  .mvtable tr.tdrentrow:focus-visible td{outline:none;background:rgba(244,236,225,.07)}
+  /* Current/Past switch = the Moves card's .mvtgl pill, at full touch height (labels stay short so it never needs to wrap) */
+  .mvtgl.rentwho{margin:0 0 8px;width:max-content;max-width:100%;align-self:flex-start}
+  .mvtgl.rentwho button{min-height:40px;padding:0 16px;font-size:.78rem}
+  /* phones: the four ageing columns go (the row's drawer carries the full breakdown) so Unit / Tenant / Balance fit without sideways scrolling */
+  @media (max-width:640px){ .mvtable.rtable{min-width:0} .mvtable.rtable .rtb{display:none} }
   .mvtick{font-weight:700;white-space:nowrap}
   .mvtick.ok{color:var(--moss)}
   .mvtick.man{color:var(--ink)}
@@ -5860,7 +5870,7 @@ window.addEventListener('error', function(e){
     });
   }
   function tdMgrAssemble(){
-    var m = { stats: null, tasks: null, renewals: null, units: null, moves: null, trends: null, trackIn: null, trackOut: null, apps: null }, done = 0, q = tdReq;
+    var m = { stats: null, tasks: null, renewals: null, units: null, rent: null, moves: null, trends: null, trackIn: null, trackOut: null, apps: null }, done = 0, q = tdReq;
     // mirror of the agent guard: a manager assembly that finishes after a flip to Agent must not
     // paint (its targets are null-guarded today, but that is luck, not a contract).
     // Option C: ONE /manager-brief read replaces the three list fetches (server-scoped by the
@@ -5890,6 +5900,9 @@ window.addEventListener('error', function(e){
       m.tasks = (j.tasks || []).filter(tdMgrOpenTask);   // server pre-filters open; belt for parity
       m.renewals = j.renewals || [];   // WS-M M5: full 5-stage worklist (v_renewal_worklist) — no longer Pending-only
       m.units = j.units || [];
+      // 2026-10-02: lease-keyed rent list with a current/past flag (migration 20261002090000).
+      // null when the RPC predates it — tdRentList() then derives from m.units.
+      m.rent = Array.isArray(j.rent_owing) ? j.rent_owing : null;
       // 2026-07-28: applications awaiting a DECISION (New + Undecided), server-scoped and
       // PII-free. NOT a new fetch — it rides the brief, so the counter above is unchanged.
       // Absent on the legacy path (/tasks+/renewals+/units has no application source), which
@@ -5985,11 +5998,13 @@ window.addEventListener('error', function(e){
       if (mi) L.push({ k: 'units', t: mi + ' move-in' + (mi === 1 ? '' : 's') + ' landing in the next two weeks' });
       // M2 — balance watch: in-scope tenants with money owing, one line, drills to Units
       // sorted by balance (the existing 'balance' flag + sort pathway)
-      // tdRentOwing is the ONE definition, shared with the Rent-owing card below, so this
-      // line and that card's header can never disagree (the chip-vs-number trap)
+      // tdRentList is the ONE definition, shared with the Rent-owing card below, so this
+      // line and that card's header can never disagree (the chip-vs-number trap). Since
+      // 2026-10-02 it counts CURRENT tenants only — the card's default view — and the click
+      // lands the card on that view; moved-out balances live behind the card's Past switch.
       var owed = 0, oweN = 0;
-      m.units.filter(tdRentOwing).forEach(function(u){ owed += Number(u.total_balance) || 0; oweN++; });
-      if (oweN) L.push({ k: 'balance', t: oweN + (oweN === 1 ? ' tenant owes ' : ' tenants owe ') + fmtMoney(owed) });
+      tdRentList(m).filter(function(r){ return r.is_current; }).forEach(function(r){ owed += Number(r.total_balance) || 0; oweN++; });
+      if (oweN) L.push({ k: 'balance', t: oweN + (oweN === 1 ? ' current tenant owes ' : ' current tenants owe ') + fmtMoney(owed) });
     }
     // WS-M M3 (D8): tracker-driven at-risk lines — click lands on the Moves card in
     // tracker view, pre-filtered to the At-risk chip
@@ -6509,24 +6524,50 @@ window.addEventListener('error', function(e){
     d61_90: { label: '61–90d', test: function(u){ return Number(u.balance_61_90_days) > 0; } },
     d90:    { label: '90d+',      test: function(u){ return Number(u.balance_over_90_days) > 0; } }
   };
+  // 2026-10-02 (Pearse): a TABLE, defaulting to tenants still living in the suite, with a
+  // switch to past tenants. The list is now LEASE-keyed (get_manager_brief.rent_owing,
+  // migration 20261002090000): the old unit-keyed list mixed moved-out tenants on vacant
+  // units in with current ones, and dropped a past tenant's balance once the unit re-leased.
+  // is_current = lease Active; past = lease Past (archived leases excluded server-side).
   var tdRentF = '';
+  var tdRentWho = 'current';   // 'current' | 'past' — deliberately NOT persisted: every visit opens on current
   var tdRentLast = null;
-  var tdRentRows = {};   // unit_id -> the units row (the drawer reads address/tenant/buckets here)
-  // the ONE definition of "owing", shared by the card and the brief line
-  function tdRentOwing(u){ return (Number(u.total_balance) || 0) > 0; }
+  var tdRentRows = {};   // lease_id -> the rent row (the drawer reads address/tenant/buckets here)
+  // the ONE definition of the rent list, shared by the card and the brief line. Falls back to
+  // the unit-keyed units payload (pre-migration RPC / legacy assembly): occupied = current.
+  function tdRentList(m){
+    if (m.rent) return m.rent.filter(function(r){ return (Number(r.total_balance) || 0) > 0; });
+    if (!m.units) return [];
+    return m.units.filter(function(u){ return (Number(u.total_balance) || 0) > 0 && u.lease_id != null; })
+      .map(function(u){
+        var r = {}; for (var k in u) r[k] = u[k];
+        r.is_current = u.occupancy_status === 'occupied';
+        r.move_out_date = r.is_current ? null : (u.next_move_out || null);
+        return r;
+      });
+  }
   function tdMgrRenderRent(m){
     var box = el('td-mgr-rent'); if (!box) return;
-    if (m.units === null){ tdRentLast = null; tdFail('td-mgr-rent', 'balances'); return; }
-    var rows = m.units.filter(tdRentOwing)
+    if (m.rent === null && m.units === null){ tdRentLast = null; tdFail('td-mgr-rent', 'balances'); return; }
+    var rows = tdRentList(m)
       .sort(function(a, b){ return (Number(b.total_balance) || 0) - (Number(a.total_balance) || 0); });
     tdRentLast = rows;
     tdRentRows = {};
-    rows.forEach(function(u){ tdRentRows[u.unit_id] = u; });
+    rows.forEach(function(r){ tdRentRows[r.lease_id] = r; });
     tdRentPaint();
   }
+  function tdRentSum(rows){ var t = 0; rows.forEach(function(r){ t += Number(r.total_balance) || 0; }); return t; }
   function tdRentPaint(){
     var box = el('td-mgr-rent'); if (!box || tdRentLast === null) return;
-    var rows = tdRentLast;
+    var past = tdRentWho === 'past';
+    var cur = tdRentLast.filter(function(r){ return r.is_current; });
+    var gone = tdRentLast.filter(function(r){ return !r.is_current; });
+    var rows = past ? gone : cur;
+    // labels stay SHORT (count only): .mvtgl is a nowrap pill, and the $ total for the
+    // selected side is in the card header (#td-mgr-rent-n); each button's title carries the other
+    var who = '<span class="mvtgl rentwho" role="group" aria-label="Which tenants">' +
+      '<button type="button"' + (past ? '' : ' class="on"') + ' data-rent-who="current" aria-pressed="' + !past + '" title="Lease active — living in the suite · ' + fmtMoney(tdRentSum(cur)) + ' owing">Current tenants &middot; ' + cur.length + '</button>' +
+      '<button type="button"' + (past ? ' class="on"' : '') + ' data-rent-who="past" aria-pressed="' + past + '" title="Lease ended — moved out · ' + fmtMoney(tdRentSum(gone)) + ' owing">Past tenants &middot; ' + gone.length + '</button></span>';
     // a chip with nothing behind it is noise — hide it rather than offer an empty filter
     var chips = TD_RENT_ORDER.map(function(k){
       var n = rows.filter(TD_RENT_META[k].test).length;
@@ -6535,28 +6576,36 @@ window.addEventListener('error', function(e){
         TD_RENT_META[k].label + ' ' + n + '</button>';
     }).join('');
     chips = chips ? '<div class="mvchips">' + chips + '</div>' : '';
-    var vis = tdRentF ? rows.filter(TD_RENT_META[tdRentF].test) : rows;
-    var h = tdMoreSlice('rent', vis).map(function(u){
-      var bal = Number(u.total_balance) || 0;
-      var aged = (Number(u.balance_31_60_days) || 0) + (Number(u.balance_61_90_days) || 0) + (Number(u.balance_over_90_days) || 0);
-      return '<div class="schoffer tdrentrow" data-rentuid="' + esc(String(u.unit_id)) + '" role="button" tabindex="0">' +
-        '<div class="schoffer-main"><b>' + esc([u.property_name, u.unit_number].filter(Boolean).join(' · ')) + '</b>' +
-        '<div class="schoffer-sub">' + esc(u.tenant_names || '–') + '</div></div>' +
-        '<span class="chip ' + (aged > 0 ? 'c-hot' : 'c-warm') + '">' + fmtMoney(bal) + '</span></div>';
+    var vis = (tdRentF && TD_RENT_META[tdRentF]) ? rows.filter(TD_RENT_META[tdRentF].test) : rows;
+    var money = function(v){ v = Number(v) || 0; return v > 0 ? fmtMoney(v) : '<span class="qn">&ndash;</span>'; };
+    var th = '<tr><th>Unit</th><th>Tenant</th>' + (past ? '<th>Moved out</th>' : '') +
+      '<th class="rt rtb">0&ndash;30d</th><th class="rt rtb">31&ndash;60d</th><th class="rt rtb">61&ndash;90d</th><th class="rt rtb">90d+</th><th class="rt">Balance</th></tr>';
+    var body = tdMoreSlice('rent', vis).map(function(r){
+      var bal = Number(r.total_balance) || 0;
+      var aged = (Number(r.balance_31_60_days) || 0) + (Number(r.balance_61_90_days) || 0) + (Number(r.balance_over_90_days) || 0);
+      return '<tr class="tdrentrow' + (aged > 0 ? ' mvrisk' : '') + '" data-rentlid="' + esc(String(r.lease_id)) + '" role="button" tabindex="0">' +
+        '<td data-label="Unit"><b>' + esc([r.property_name, r.unit_number].filter(Boolean).join(' · ')) + '</b></td>' +
+        '<td data-label="Tenant">' + esc(r.tenant_names || '–') + '</td>' +
+        (past ? '<td data-label="Moved out">' + (r.move_out_date ? esc(tdRwDateShort(r.move_out_date)) + ' <small>' + esc(String(r.move_out_date).slice(0, 4)) + '</small>' : '–') + '</td>' : '') +
+        '<td class="rt rtb" data-label="0–30d">' + money(r.balance_0_30_days) + '</td>' +
+        '<td class="rt rtb" data-label="31–60d">' + money(r.balance_31_60_days) + '</td>' +
+        '<td class="rt rtb" data-label="61–90d">' + money(r.balance_61_90_days) + '</td>' +
+        '<td class="rt rtb" data-label="90d+">' + money(r.balance_over_90_days) + '</td>' +
+        '<td class="rt" data-label="Balance"><span class="chip ' + (aged > 0 ? 'c-hot' : 'c-warm') + '">' + fmtMoney(bal) + '</span></td></tr>';
     }).join('');
-    box.innerHTML = chips + (h ? h + tdMoreBtn('rent', vis.length)
-      : '<div class="note">' + (tdRentF ? 'Nothing in this band.' : 'No outstanding balances in scope.') + '</div>');
+    var empty = tdRentF ? 'Nothing in this band.'
+      : (past ? 'No past tenants owing in scope.' : 'No current tenants owing in scope.');
+    box.innerHTML = who + chips + (body
+      ? '<div class="scrollx"><table class="mvtable rtable"><thead>' + th + '</thead><tbody>' + body + '</tbody></table></div>' + tdMoreBtn('rent', vis.length)
+      : '<div class="note">' + empty + '</div>');
     var n2 = el('td-mgr-rent-n');
-    if (n2){
-      var tot = 0; rows.forEach(function(u){ tot += Number(u.total_balance) || 0; });
-      n2.textContent = rows.length ? rows.length + ' owing · ' + fmtMoney(tot) : '';
-    }
+    if (n2) n2.textContent = rows.length ? rows.length + ' owing · ' + fmtMoney(tdRentSum(rows)) : '';
   }
   // Drawer: ageing breakdown + the lease in Buildium + the two reminder actions. Contact is
   // NOT in the list payload — it arrives here on click via the existing /lease-detail, sharing
   // tdRwLeaseCache with the renewal chase (same endpoint, same key, one cache).
-  function tdRentOpen(unitId){
-    var u = tdRentRows[unitId];
+  function tdRentOpen(leaseId){
+    var u = tdRentRows[leaseId];
     var mm = el('rentmodal'), body = el('rent-d-body');
     if (!u || !mm || !body) return;
     body.innerHTML = tdRentDrawerBody(u);
@@ -6592,7 +6641,8 @@ window.addEventListener('error', function(e){
       { l: 'Over 90 days',    v: Number(u.balance_over_90_days) || 0 }
     ].filter(function(x){ return x.v > 0; });
     var h = '<h3 style="margin:0 0 2px">' + esc([u.property_name, u.unit_number].filter(Boolean).join(' · ')) + '</h3>' +
-      '<div class="note" style="margin-bottom:12px">' + esc(u.tenant_names || 'No tenant name on file') + '</div>' +
+      '<div class="note" style="margin-bottom:12px">' + esc(u.tenant_names || 'No tenant name on file') +
+        (u.is_current === false ? ' &middot; past tenant' + (u.move_out_date ? ', moved out ' + esc(tdRwDateShort(u.move_out_date)) + ' ' + esc(String(u.move_out_date).slice(0, 4)) : '') : '') + '</div>' +
       '<div class="tdp-v" style="font-size:1.5rem">' + fmtMoney(Number(u.total_balance) || 0) + '</div>' +
       '<div class="note" style="margin-bottom:12px">outstanding balance</div>';
     // NOT .mvtable — that class carries min-width:840px for the wide scrollx data tables, and
@@ -6613,7 +6663,7 @@ window.addEventListener('error', function(e){
     return h;
   }
   function tdRentRemind(leaseId, unitId, channel){
-    var u = tdRentRows[unitId]; if (!u) return;
+    var u = tdRentRows[leaseId]; if (!u) return;
     var go = function(det){
       var t0 = (det && det.tenants && det.tenants[0]) || {};
       var first = String((t0.name || u.tenant_names || '').trim().split(/\s+/)[0] || 'there').trim() || 'there';
@@ -6653,13 +6703,13 @@ window.addEventListener('error', function(e){
   function tdMgrBriefGo(k){
     if (k === 'ledger'){ showTab('ledger'); return; }
     // 2026-07-28: this used to jump to the Units tab sorted by balance. There is a card on
-    // this page now whose population is the SAME filter (tdRentOwing), so stay here. Clear
+    // this page now whose population is the SAME list (tdRentList, current tenants), so stay here. Clear
     // the band filter first — the brief line counts every owing tenant, and landing a line
     // reading 49 on a filtered list of 11 is the A-14 chip-vs-number trap.
     if (k === 'balance'){
       var rb = el('td-mgr-rent');
       if (rb){
-        tdRentF = ''; tdRentPaint();
+        tdRentF = ''; tdRentWho = 'current'; tdRentPaint();
         (rb.closest('section.panel') || rb).scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
@@ -6687,6 +6737,11 @@ window.addEventListener('error', function(e){
       tdSyncRoles(); tdRender();
     });
     var tg = el('td-grid');
+    if (tg) tg.addEventListener('keydown', function(e){
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var kr = e.target.closest('.tdrentrow'); if (!kr || e.target !== kr) return;
+      e.preventDefault(); tdRentOpen(kr.getAttribute('data-rentlid'));
+    });
     if (tg) tg.addEventListener('click', function(e){
       var c = e.target.closest('.schoffer-copy');
       if (c){
@@ -6758,6 +6813,8 @@ window.addEventListener('error', function(e){
       if (apk){ var av = apk.getAttribute('data-ap-kind'); tdApF = (tdApF === av ? '' : av); tdApPaint(); return; }
       var rf = e.target.closest('[data-rent-f]');
       if (rf){ var rv2 = rf.getAttribute('data-rent-f'); tdRentF = (tdRentF === rv2 ? '' : rv2); tdRentPaint(); return; }
+      var rw = e.target.closest('[data-rent-who]');
+      if (rw){ var wv = rw.getAttribute('data-rent-who'); if (wv !== tdRentWho){ tdRentWho = wv; tdRentF = ''; tdMoreOpen.rent = false; tdRentPaint(); } return; }
       // NOTE: the rent drawer's reminder buttons are NOT handled here — #rentmodal lives
       // outside #td-grid, so they get their own boot delegate (see the mvmodal precedent).
       var mo = e.target.closest('[data-tdmore]');
@@ -6771,7 +6828,7 @@ window.addEventListener('error', function(e){
         return;
       }
       var rrow = e.target.closest('.tdrentrow');
-      if (rrow){ tdRentOpen(rrow.getAttribute('data-rentuid')); return; }
+      if (rrow){ tdRentOpen(rrow.getAttribute('data-rentlid')); return; }
       var arow = e.target.closest('.tdaprow');
       if (arow){ openAppEnsure(arow.getAttribute('data-apid')); return; }
       var ur = e.target.closest('.tdurow');

@@ -12322,9 +12322,21 @@ window.addEventListener('error', function(e){
         '<div style="font-size:12px;font-weight:600">' + label + '</div>' +
         (detail ? '<div class="count-note" style="white-space:normal">' + detail + '</div>' : '') + '</div>';
     };
-    var months = (s.late_month_list || []).map(function(m){ return esc(m); }).join(', ');
+    // "Late" = rent fully paid after the first business day on/after it was due (server-side,
+    // from payment dates — not late fees). Newest 6 shown with days late; the rest summarised.
+    var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var monLbl = function(ym){ var p = String(ym || '').split('-'); var mi = Number(p[1]) - 1; return (MON[mi] || p[1] || '') + ' ' + (p[0] || ''); };
+    var list = (s.late_month_list || []).filter(function(x){ return x && typeof x === 'object'; });
+    var recent = list.slice(-6).reverse().map(function(x){ return esc(monLbl(x.month)) + ' (' + (Number(x.days) || 0) + 'd)'; }).join(', ');
+    var older = list.length - Math.min(list.length, 6);
+    var rentM = Number(s.rent_months) || 0;
+    var lateDetail = late ? recent + (older ? ' &middot; +' + older + ' earlier' : '') + (rentM ? ' &middot; ' + late + ' of ' + rentM + ' months' : '')
+      : (rentM ? 'all ' + rentM + ' months paid on time' : 'no rent history yet');
+    var unpaid = (s.unpaid_months || []);
     var h = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">' +
-      chip(late, late === 1 ? 'month paid late' : 'months paid late', late ? 'late fee charged: ' + months : 'no late fees on record') +
+      chip(late, late === 1 ? 'month paid late' : 'months paid late', lateDetail) +
+      (unpaid.length ? chip(unpaid.length, unpaid.length === 1 ? 'month not paid yet' : 'months not paid yet',
+        unpaid.slice(-6).map(function(m){ return esc(monLbl(m)); }).join(', ') + (unpaid.length > 6 ? ' &middot; +' + (unpaid.length - 6) + ' earlier' : '')) : '') +
       chip(nsf, nsf === 1 ? 'NSF payment' : 'NSF payments', nsf ? 'last ' + esc(s.last_nsf || '') + (oth ? ' &middot; +' + oth + ' other returned' : '') : (oth ? oth + ' other returned payment' + (oth === 1 ? '' : 's') : 'none returned')) +
       '</div>';
     return h;

@@ -2975,6 +2975,8 @@ window.addEventListener('error', function(e){
       <div class="sect">Recurring transactions</div>
       <div id="ls-recur" class="lmphnote">&nbsp;</div>
       <div class="sect">Ledger &middot; live from Buildium</div>
+      <div id="ls-ledsum" class="lmphnote"></div>
+      <div id="ls-ledaccts"></div>
       <div class="lm-feedchips" id="ls-ledchips"></div>
       <div id="ls-ledger" class="lmphnote">&nbsp;</div>
     </div>
@@ -12235,6 +12237,7 @@ window.addEventListener('error', function(e){
     el('ls-detwrap').open = true;
     el('ls-recur').textContent = 'Loading…';
     el('ls-ledchips').innerHTML = '';
+    lsPaintLedgerHead(null);
     el('ls-ledger').textContent = 'Loading ledger from Buildium…';
     lsLedRows = null; lsLedFilter = 'all';
     openModal('lsmodal');
@@ -12277,16 +12280,47 @@ window.addEventListener('error', function(e){
     if (v === 'Payment' || v === 'ElectronicFundsTransfer' || v === 'CreditCardPayment') return 'Payment';
     return 'other';
   }
+  // Ledger header: payment-history summary (late months / NSF) + amount owed per GL account.
+  // j = the /lease-ledger payload, or null to clear while loading.
+  function lsPaintLedgerHead(j){
+    var sumEl = el('ls-ledsum'), acctEl = el('ls-ledaccts');
+    if (!sumEl || !acctEl) return;
+    if (!j || !j.summary) { sumEl.innerHTML = ''; acctEl.innerHTML = ''; return; }
+    var s = j.summary, late = Number(s.late_months) || 0, nsf = Number(s.nsf) || 0, oth = Number(s.returned_other) || 0;
+    var chip = function(n, label, detail){
+      return '<div style="flex:1 1 140px;min-width:0;padding:8px 10px;border:1px solid var(--hairline);border-radius:8px">' +
+        '<div style="font-size:20px;font-weight:800;line-height:1.1;' + (n > 0 ? 'color:var(--amber)' : '') + '">' + n + '</div>' +
+        '<div style="font-size:12px;font-weight:600">' + label + '</div>' +
+        (detail ? '<div class="count-note" style="white-space:normal">' + detail + '</div>' : '') + '</div>';
+    };
+    var months = (s.late_month_list || []).map(function(m){ return esc(m); }).join(', ');
+    var h = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">' +
+      chip(late, late === 1 ? 'month paid late' : 'months paid late', late ? 'late fee charged: ' + months : 'no late fees on record') +
+      chip(nsf, nsf === 1 ? 'NSF payment' : 'NSF payments', nsf ? 'last ' + esc(s.last_nsf || '') + (oth ? ' &middot; +' + oth + ' other returned' : '') : (oth ? oth + ' other returned payment' + (oth === 1 ? '' : 's') : 'none returned')) +
+      '</div>';
+    sumEl.innerHTML = h;
+    var ac = (j.accounts || []).filter(function(a){ return a.balance > 0; });
+    if (!ac.length) { acctEl.innerHTML = '<div class="count-note" style="padding:2px 0 8px">Nothing owed on any account.</div>'; return; }
+    var a = '<div class="count-note" style="padding:2px 0">Owed by account</div>';
+    ac.forEach(function(x){
+      a += '<div style="display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--hairline)">' +
+        '<span style="flex:1 1 auto;min-width:0">' + esc(x.name) + '</span>' +
+        '<span style="flex:0 0 auto;font-weight:700">' + fmtMoney2(x.balance) + '</span></div>';
+    });
+    acctEl.innerHTML = a + '<div style="height:8px"></div>';
+  }
   function lsLoadLedger(leaseId, q){
     authFetch('/lease-ledger?lease_id=' + encodeURIComponent(leaseId))
       .then(function(j){
         if (q !== lsReq) return;
         lsLedRows = (j && j.transactions) || [];
+        lsPaintLedgerHead(j);
         lsRenderLedger();
       })
       .catch(function(e){
         if (q !== lsReq || String(e && e.message) === 'AUTH') return;
         el('ls-ledchips').innerHTML = '';
+        lsPaintLedgerHead(null);
         el('ls-ledger').innerHTML = 'Buildium didn&rsquo;t answer (' + esc(e && e.message ? e.message : 'error') + '). The balance figures above are from the daily mirror. ' +
           '<button type="button" class="lm-ghostlink" data-ls-retry="' + esc(String(leaseId)) + '">Retry</button>';
       });

@@ -3487,6 +3487,12 @@ window.addEventListener('error', function(e){
   var lsLedRows = null, lsLedFilter = 'all';  // live-ledger rows for the open lease modal + type chip filter
   var umLsReq = 0;                            // guard for the unit modal's aged-buckets append
   var umUnitReq = 0;                          // guard for the unit modal's /unit fetch (tenants + Nookbook notes)
+  var umOpenReq = 0;                          // F1: bumped on EVERY openUnit (umUnitReq only bumps for leased/Nookbook units) — guards photos + activity
+  var statsReq = 0, appsReq = 0, toursReq = 0; // F2: generation guards for the three main loaders (checked in .then AND .catch)
+  var appsAfterQ = [];                        // F2: loadApps(after) callbacks — drained by the NEWEST successful load, never dropped by a stale one
+  // F1: per-box generation stamp for the mounted side panels (keys / notes+docs / tasks). A box is
+  // a PERSISTENT node shared by every unit the modal opens; stamp on mount, check on resolve.
+  function boxGen(box){ box._gen = (box._gen || 0) + 1; return box._gen; }
   var uPage = 0, uSig = '', U_PER = 200;
   var uRowsCur = [];   // the FULL filtered+sorted Units set (every page) — what the XLSX export writes
   var uSel = {};   // Units flag chips multi-select (on-notice / move-out / eviction / balance / take-backs)
@@ -3701,8 +3707,19 @@ window.addEventListener('error', function(e){
   // Desktop "RingCentral app" = rcapp://  ·  mobile RingCentral app (ex-Glip) = glip://  (rcmobile:// is retired/dead).
   // Both use the same /r/ paths; only the scheme prefix differs. No tel:/sms: fallback (numbers go to RingCentral).
   var RC_SCHEME = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ? 'glip://' : 'rcapp://';
-  function rcCall(num){ return RC_SCHEME + 'r/call?number=' + num; }
-  function rcText(num, body){ return RC_SCHEME + 'r/sms?type=new&number=' + num + (body ? '&content=' + encodeURIComponent(body) : ''); }
+  // F10: numbers arrive in every shape ((780) 555-0100, +1 780…, +44…, esc()'d strings). Normalise
+  // to digits once, centrally: a leading +1 drops to the bare NANP number; any OTHER country code
+  // keeps its + but URL-encoded (a raw + decodes to a space and the deep link dies). & # ? in a
+  // value can no longer truncate the link or inject parameters.
+  function rcNum(num){
+    var s = String(num == null ? '' : num).trim();
+    var plus = s.charAt(0) === '+';
+    var d = s.replace(/\D/g, '');
+    if (plus && d.length === 11 && d.charAt(0) === '1') return d.slice(1);
+    return (plus && d.length > 10 ? '%2B' : '') + d;
+  }
+  function rcCall(num){ return RC_SCHEME + 'r/call?number=' + rcNum(num); }
+  function rcText(num, body){ return RC_SCHEME + 'r/sms?type=new&number=' + rcNum(num) + (body ? '&content=' + encodeURIComponent(body) : ''); }
   function dstr(d){ return d.toISOString().slice(0,10); }
   function msIds(key){
     // WS-M M4 (D11) used to PIN a manager identity's manager scope here, shadowing the stored
@@ -4001,7 +4018,10 @@ window.addEventListener('error', function(e){
     if (k.move_ins){ var mi = el('tile-mi'); setKpiExtra(mi, deltaChip(k.move_ins, false) + sparkSVG(k.move_ins.series, GOLD)); }
     // task tiles are KPI-sourced (get_stats has no task counts), so set the number here too
     if (k.open_tasks){ countUp('k-tasks', k.open_tasks.cur == null ? 0 : k.open_tasks.cur, fmtNum); setKpiExtra(el('kpi-tasks'), deltaChip(k.open_tasks, false) + sparkSVG(k.open_tasks.series, GOLD)); }
-    if (k.overdue_tasks){ countUp('k-overdue', k.overdue_tasks.cur == null ? 0 : k.overdue_tasks.cur, fmtNum); setKpiExtra(el('kpi-overdue'), deltaChip(k.overdue_tasks, false) + sparkSVG(k.overdue_tasks.series, GOLD)); }
+    // F11: the overdue count rides the Open-tasks tile (#k-overdue sub-line). There is no #kpi-overdue
+    // tile, so its delta chip + sparkline never had a home — dropped rather than repointed (a second
+    // setKpiExtra on #kpi-tasks would overwrite the open-tasks sparkline).
+    if (k.overdue_tasks){ countUp('k-overdue', k.overdue_tasks.cur == null ? 0 : k.overdue_tasks.cur, fmtNum); }
     if (k.signed_month){ countUp('k-signed-mtd', k.signed_month.cur == null ? 0 : k.signed_month.cur, fmtNum);
       var sms = el('k-signed-mtd-sub'); if (sms) sms.innerHTML = '$' + fmtNum(k.signed_month.rent) + ' new rent this month';
       setKpiExtra(el('kpi-signed-mtd'), deltaChip(k.signed_month, false) + sparkSVG(k.signed_month.series, GOLD)); }
@@ -4186,14 +4206,18 @@ window.addEventListener('error', function(e){
     statsLoading = true;
     appsAll = null; toursAll = null; // entity filters / window changed → lazy-reload those tabs
     el('veil').classList.remove('hide');
+    // F2: generation guard — a quick scope/window change fires two /stats; only the NEWEST may
+    // render (tiles) or clear the veil / show the error. Same class as A-14/A-15 (silent wrong numbers).
+    var q = ++statsReq;
     apiFetch('/stats?' + buildQuery().toString())
       .then(function(r){
         if (r.status === 401) throw new Error('AUTH');
         if (!r.ok) return r.json().then(function(b){ throw new Error(b.error || ('HTTP ' + r.status)); });
         return r.json();
       })
-      .then(render)
+      .then(function(d){ if (q !== statsReq) return; render(d); })
       .catch(function(e){
+        if (q !== statsReq) { if (String(e && e.message) !== 'AUTH') console.error('stale /stats load failed', e); return; }
         statsLoading = false;
         el('veil').classList.add('hide');
         if (e.message === 'AUTH') { onAuthFail(); return; }
@@ -4504,7 +4528,8 @@ window.addEventListener('error', function(e){
   // Prospect-facing mailto. Every param is URL-encoded (house rule for deep links); the
   // caller esc()s the whole href for the attribute.
   function tdMailto(email, subject, body){
-    return 'mailto:' + String(email || '').trim() +
+    // F10: encode the address — a stray ? or & in it would otherwise start the query string early.
+    return 'mailto:' + encodeURIComponent(String(email || '').trim()) +
       '?subject=' + encodeURIComponent(subject || '') +
       (body ? '&body=' + encodeURIComponent(body) : '');
   }
@@ -4516,7 +4541,7 @@ window.addEventListener('error', function(e){
     var tries = 0;
     (function arm(){
       if (schedAgents !== null){
-        schShowView('book'); renderBkAgents();
+        schShowView('book');
         if (aid !== null && aid !== '') schBkPickAgent(String(aid));
         return;
       }
@@ -8052,9 +8077,11 @@ window.addEventListener('error', function(e){
     if (!box) return;
     box.setAttribute('data-keypanel', '1');
     box._unitId = unitId; box._keys = []; box._unitLabel = label || box._unitLabel || null;
+    var g = boxGen(box);   // F1: a later mount (another unit) owns this box now
     if (!unitId) { box.innerHTML = '<span class="lmphnote">No linked unit — find this key on the Keys tab.</span>'; return; }
     box.textContent = 'Loading key…';
     authFetch('/keys?unit_id=' + encodeURIComponent(unitId)).then(function(j){
+      if (g !== box._gen) return;
       var keys = (j && j.keys) || []; box._keys = keys;
       var addBtn  = '<button type="button" class="listbtn" data-keyadd="1">+ Add key set</button>';
       var linkBtn = '<button type="button" class="listbtn" data-keylink="1">Link existing key</button>';
@@ -8079,7 +8106,11 @@ window.addEventListener('error', function(e){
           '<span>' + (meta.join(' &middot; ') || '&nbsp;') + '</span>' + act +
           '<button type="button" class="listbtn" data-keyfull="' + k.key_id + '">manage &#9656;</button></div>';
       }).join('') + addRow;
-    }).catch(function(){ box.textContent = 'Key status unavailable right now.'; });
+    }).catch(function(e){
+      if (g !== box._gen) return;
+      if (String(e && e.message) !== 'AUTH') console.error('key panel load failed', e);
+      box.textContent = 'Key status unavailable right now.';
+    });
   }
   document.addEventListener('click', function(e){
     var addb = e.target.closest('[data-keyadd]');
@@ -8123,25 +8154,33 @@ window.addEventListener('error', function(e){
   // on-demand passthrough); documents come from the buildium.files mirror (/files, non-image).
   function mountNotesDocs(box, scope, entityId){
     if (!box) return;
+    var g = boxGen(box);   // F1: a later mount (another unit / scope) owns this box now
     if (!entityId){ box.innerHTML = '<span class="lmphnote">No linked Buildium record.</span>'; return; }
     box.innerHTML = '<span class="lmphnote">Loading notes &amp; documents&hellip;</span>';
     var canFiles = (scope === 'unit' || scope === 'property' || scope === 'owner');
+    // F4: a failed leg resolves to an ERROR marker (not an empty list) so a Buildium outage
+    // never renders as "No notes in Buildium." / "No documents on file." AUTH stays quiet.
+    var legFail = function(what){ return function(e){ if (String(e && e.message) !== 'AUTH') console.error(what + ' load failed', e); return { error: true }; }; };
     Promise.all([
-      authFetch('/buildium-notes?scope=' + encodeURIComponent(scope) + '&entity_id=' + encodeURIComponent(entityId)).catch(function(){ return { notes: [] }; }),
-      canFiles ? authFetch('/files?scope=' + encodeURIComponent(scope) + '&entity_id=' + encodeURIComponent(entityId)).catch(function(){ return { files: [] }; }) : Promise.resolve({ files: [] })
+      authFetch('/buildium-notes?scope=' + encodeURIComponent(scope) + '&entity_id=' + encodeURIComponent(entityId)).catch(legFail('buildium notes')),
+      canFiles ? authFetch('/files?scope=' + encodeURIComponent(scope) + '&entity_id=' + encodeURIComponent(entityId)).catch(legFail('files')) : Promise.resolve({ files: [] })
     ]).then(function(res){
+      if (g !== box._gen) return;
+      var notesErr = !!(res[0] && res[0].error), filesErr = !!(res[1] && res[1].error);
       var notes = (res[0] && res[0].notes) || [];
       var files = (res[1] && res[1].files) || [];
       var h = '';
-      h += '<div class="ndsect">Buildium notes <span class="qn">' + notes.length + '</span></div>';
-      if (!notes.length) h += '<div class="lmphnote">No notes in Buildium.</div>';
+      h += '<div class="ndsect">Buildium notes <span class="qn">' + (notesErr ? '?' : notes.length) + '</span></div>';
+      if (notesErr) h += '<div class="lmphnote">Could not load notes from Buildium right now.</div>';
+      else if (!notes.length) h += '<div class="lmphnote">No notes in Buildium.</div>';
       else h += notes.map(function(n){
         return '<div class="ndnote"><div class="ndnote-b">' + esc(n.note || '').replace(/\n/g, '<br>') + '</div>' +
           '<div class="ndnote-m">' + (n.author ? esc(n.author) + ' &middot; ' : '') + esc(fmtNoteWhen(n.at)) + '</div></div>';
       }).join('');
       if (canFiles) {
-        h += '<div class="ndsect">Documents <span class="qn">' + files.length + '</span></div>';
-        if (!files.length) h += '<div class="lmphnote">No documents on file.</div>';
+        h += '<div class="ndsect">Documents <span class="qn">' + (filesErr ? '?' : files.length) + '</span></div>';
+        if (filesErr) h += '<div class="lmphnote">Could not load documents right now.</div>';
+        else if (!files.length) h += '<div class="lmphnote">No documents on file.</div>';
         else h += files.map(function(f){
           var meta = [f.category_name, fmtFileSize(f.size), (f.uploaded_at || '').slice(0,10)].filter(Boolean).map(esc).join(' &middot; ');
           var name = f.title || ('file-' + f.buildium_id);
@@ -8157,7 +8196,11 @@ window.addEventListener('error', function(e){
         }).join('');
       }
       box.innerHTML = h;
-    }).catch(function(){ box.innerHTML = '<span class="lmphnote">Notes &amp; documents unavailable right now.</span>'; });
+    }).catch(function(e){
+      if (g !== box._gen) return;
+      if (String(e && e.message) !== 'AUTH') console.error('notes/docs panel render failed', e);
+      box.innerHTML = '<span class="lmphnote">Notes &amp; documents unavailable right now.</span>';
+    });
   }
   // document download via authenticated blob (no token in URL), mirrors the photo "save" links
   document.addEventListener('click', function(ev){
@@ -8523,9 +8566,11 @@ window.addEventListener('error', function(e){
   function mountTaskPanel(box, unitId){
     if (!box) return;
     box.setAttribute('data-taskpanel', '1'); box._unitId = unitId;
+    var g = boxGen(box);   // F1
     if (!unitId) { box.innerHTML = '<span class="lmphnote">No linked unit.</span>'; return; }
     box.textContent = 'Loading tasks…';
     authFetch('/tasks?unit_id=' + encodeURIComponent(unitId)).then(function(j){
+      if (g !== box._gen) return;
       var all = (j && j.tasks) || [];
       var open = all.filter(function(t){ return t.task_status === 'New' || t.task_status === 'InProgress'; });
       if (!all.length) { box.innerHTML = '<span class="lmphnote">No tasks on file for this unit.</span>'; return; }
@@ -8540,7 +8585,11 @@ window.addEventListener('error', function(e){
             '<span style="min-width:0"><b>' + esc(t.title || '–') + '</b>' + (meta.length ? ' <span class="lmphnote">· ' + meta.join(' · ') + '</span>' : '') + '</span>' +
             '<button type="button" class="listbtn" data-taskfull="' + t.task_id + '">open &#9656;</button></div>';
         }).join('');
-    }).catch(function(){ box.textContent = 'Tasks unavailable right now.'; });
+    }).catch(function(e){
+      if (g !== box._gen) return;
+      if (String(e && e.message) !== 'AUTH') console.error('task panel load failed', e);
+      box.textContent = 'Tasks unavailable right now.';
+    });
   }
   document.addEventListener('click', function(e){
     var b = e.target.closest('[data-taskfull]'); if (!b) return; openTask(b.getAttribute('data-taskfull'));
@@ -9596,6 +9645,7 @@ window.addEventListener('error', function(e){
     mountNotesDocs(el('lm-notesdocs'), 'unit', uid);
     authFetch('/photos?unit_id=' + encodeURIComponent(uid))
       .then(function(j){
+        if (myDesc !== lmDescReq) return;   // F1: lmDescReq bumps on EVERY openListing — a newer listing owns the strip
         curPhotosLm = (j && j.photos) || [];
         renderPhotos(el('lm-photos'), el('lm-phnote'), el('lm-dlall'), curPhotosLm);
         el('lm-photos').classList.add('compact');
@@ -9603,21 +9653,30 @@ window.addEventListener('error', function(e){
         if (n > 2) { va.style.display = ''; va.setAttribute('data-exp', '0'); va.textContent = 'View all (' + n + ')'; }
         else { va.style.display = 'none'; }
       })
-      .catch(function(){ el('lm-phnote').textContent = 'Photos unavailable right now.'; });
+      .catch(function(e){
+        if (myDesc !== lmDescReq) return;
+        if (String(e && e.message) !== 'AUTH') console.error('listing photos load failed', e);
+        el('lm-phnote').textContent = 'Photos unavailable right now.';
+      });
     // activity feed — applications + tours/showings + key history, filterable. No notes (Buildium notes TBD).
     el('lm-feedlab').textContent = 'Activity · everything on this unit';
     el('lm-feedchips').innerHTML = '';
     el('lm-feed').innerHTML = '<span class="count-note">Loading…</span>';
     lmFeed = null; lmFeedFilter = 'all';
     Promise.all([
-      authFetch('/unit-activity?unit_id=' + encodeURIComponent(uid)).catch(function(){ return { showings: [], key_events: [] }; }),
-      authFetch('/applications?unit_id=' + encodeURIComponent(uid)).catch(function(){ return { applications: [] }; })
+      authFetch('/unit-activity?unit_id=' + encodeURIComponent(uid)).catch(feedLegFail('listing activity')),
+      authFetch('/applications?unit_id=' + encodeURIComponent(uid)).catch(feedLegFail('listing applications'))
     ]).then(function(res){
-      lmFeed = { showings: (res[0] && res[0].showings) || [], keyEvents: (res[0] && res[0].key_events) || [], apps: (res[1] && res[1].applications) || [], r: r };
+      if (myDesc !== lmDescReq) return;   // F1: a newer listing modal owns the feed
+      lmFeed = { showings: (res[0] && res[0].showings) || [], keyEvents: (res[0] && res[0].key_events) || [], apps: (res[1] && res[1].applications) || [], r: r,
+        err: !!((res[0] && res[0].error) || (res[1] && res[1].error)) };
       lmFeedFilter = 'all';
       renderListingFeed();
     });
   }
+  // F4: shared .catch for the activity-feed legs — logs (AUTH quiet) and resolves to an error
+  // marker so the renderer can say "could not load" instead of "no activity".
+  function feedLegFail(what){ return function(e){ if (String(e && e.message) !== 'AUTH') console.error(what + ' load failed', e); return { error: true }; }; }
   function listFeedItem(icon, title, sub){
     return '<div class="rmfi"><div class="rmfi-ic">' + icon + '</div><div class="rmfi-main"><div class="rmfi-t">' + title + '</div><div class="rmfi-s">' + (sub || '') + '</div></div></div>';
   }
@@ -9674,7 +9733,8 @@ window.addEventListener('error', function(e){
     if (lmFeedFilter === 'all' && (lmFeed.r.listing_url || lmFeed.r.available_date)) {
       rows.push(listFeedItem('&#127991;&#65039;', 'Listed for rent', lmFeed.r.available_date ? 'available ' + esc(lmFeed.r.available_date) : ''));
     }
-    box.innerHTML = rows.length ? rows.join('') : '<span class="count-note">Nothing here yet.</span>';
+    var errNote = lmFeed.err ? '<div class="count-note" style="margin-bottom:6px">Some activity could not be loaded right now — this list may be incomplete.</div>' : '';
+    box.innerHTML = errNote + (rows.length ? rows.join('') : '<span class="count-note">' + (lmFeed.err ? 'Activity unavailable right now.' : 'Nothing here yet.') + '</span>');
   }
   // (Marketed-units #vtable row-click handler removed in Phase 2b — the Units board has its own.)
 
@@ -11290,6 +11350,7 @@ window.addEventListener('error', function(e){
     var r = null;
     (unitsAll || []).forEach(function(x){ if (String(x.unit_id) === String(uid)) r = x; });
     if (!r) return;
+    var uOpen = ++umOpenReq;   // F1: photos + activity below belong to THIS open; a later openUnit outranks them
     el('um-title').textContent = (r.property_name || '') + ' — ' + (r.unit_number || '');
     var sub = [];
     var stat = STATUS_CHIP[r.occupancy_status] || '';
@@ -11448,6 +11509,7 @@ window.addEventListener('error', function(e){
     el('um-phnote').textContent = 'Loading photos…';
     authFetch('/photos?unit_id=' + encodeURIComponent(uid))
       .then(function(j){
+        if (uOpen !== umOpenReq) return;   // F1: a newer unit modal owns the photo strip
         curPhotosUm = (j && j.photos) || [];
         if (!curPhotosUm.length) { el('um-phbar').style.display = 'none'; el('um-photoacts').style.display = 'none'; return; }
         el('um-photoacts').style.display = 'flex';
@@ -11457,17 +11519,24 @@ window.addEventListener('error', function(e){
         if (n > 2) { va.style.display = ''; va.setAttribute('data-exp', '0'); va.textContent = 'View all (' + n + ')'; }
         else va.style.display = 'none';
       })
-      .catch(function(){ el('um-phbar').style.display = 'none'; el('um-photoacts').style.display = 'none'; });
+      .catch(function(e){
+        if (uOpen !== umOpenReq) return;
+        if (String(e && e.message) !== 'AUTH') console.error('unit photos load failed', e);
+        el('um-phbar').style.display = 'none'; el('um-photoacts').style.display = 'none';
+      });
     // activity feed — applications + tours + key history + renewals + lease
     el('um-feedlab').textContent = 'Activity · everything on this unit';
     el('um-feedchips').innerHTML = '';
     el('um-feed').innerHTML = '<span class="count-note">Loading…</span>';
     umFeed = null; umFeedFilter = 'all';
+    // F4: a failed leg is an ERROR (feed shows "could not load"), not an empty list that reads as "no activity".
     Promise.all([
-      authFetch('/unit-activity?unit_id=' + encodeURIComponent(uid)).catch(function(){ return { showings: [], key_events: [] }; }),
-      authFetch('/applications?unit_id=' + encodeURIComponent(uid)).catch(function(){ return { applications: [] }; })
+      authFetch('/unit-activity?unit_id=' + encodeURIComponent(uid)).catch(feedLegFail('unit activity')),
+      authFetch('/applications?unit_id=' + encodeURIComponent(uid)).catch(feedLegFail('unit applications'))
     ]).then(function(res){
-      umFeed = { showings: (res[0] && res[0].showings) || [], keyEvents: (res[0] && res[0].key_events) || [], apps: (res[1] && res[1].applications) || [], renewals: (renewalsAll && rnForUnit(uid)) || [], r: r };
+      if (uOpen !== umOpenReq) return;   // F1: a newer unit modal owns the feed
+      umFeed = { showings: (res[0] && res[0].showings) || [], keyEvents: (res[0] && res[0].key_events) || [], apps: (res[1] && res[1].applications) || [], renewals: (renewalsAll && rnForUnit(uid)) || [], r: r,
+        err: !!((res[0] && res[0].error) || (res[1] && res[1].error)) };
       umFeedFilter = 'all';
       renderUnitFeed();
     });
@@ -11538,7 +11607,8 @@ window.addEventListener('error', function(e){
     if (umFeedFilter === 'all' && umFeed.r.lease_from_date) {
       rows.push(listFeedItem('&#128196;', 'Lease' + (umFeed.r.lease_type ? ' &middot; ' + esc(umFeed.r.lease_type) : ''), esc(umFeed.r.lease_from_date) + (umFeed.r.lease_to_date ? ' &rarr; ' + esc(umFeed.r.lease_to_date) : '')));
     }
-    box.innerHTML = rows.length ? rows.join('') : '<span class="count-note">No activity on this unit yet.</span>';
+    var errNote = umFeed.err ? '<div class="count-note" style="margin-bottom:6px">Some activity could not be loaded right now — this list may be incomplete.</div>' : '';
+    box.innerHTML = errNote + (rows.length ? rows.join('') : '<span class="count-note">' + (umFeed.err ? 'Activity unavailable right now.' : 'No activity on this unit yet.') + '</span>');
   }
   el('um-feedchips').addEventListener('click', function(e){ var b = e.target.closest('[data-uf]'); if (!b) return; umFeedFilter = b.getAttribute('data-uf'); renderUnitFeed(); });
   el('um-viewall').addEventListener('click', function(){
@@ -12477,17 +12547,25 @@ window.addEventListener('error', function(e){
   // from a surface that never loaded the Applications tab (the manager Today card).
   function loadApps(after){
     el('veil').classList.remove('hide');
+    // F2: generation guard. The after-callbacks (openAppEnsure → "open this application") are QUEUED
+    // and drained by whichever load lands newest-and-successful — a stale load must not drop them.
+    if (after) appsAfterQ.push(after);
+    var q = ++appsReq;
     authFetch('/applications?' + appsQuery().toString())
       .then(function(j){
+        if (q !== appsReq) return;
         appsAll = j.applications || [];
         aServerCount = j.count != null ? j.count : appsAll.length;
         if (aPendingSearch !== null) { el('a-search').value = aPendingSearch; aPendingSearch = null; }
         syncAPresets();
         drawAppChips(); drawApps();
         el('veil').classList.add('hide');
-        if (after) after();
+        var cbs = appsAfterQ; appsAfterQ = [];
+        cbs.forEach(function(cb){ try { cb(); } catch (e) { console.error('loadApps after-callback failed', e); } });
       })
       .catch(function(e){
+        if (q !== appsReq) { if (String(e && e.message) !== 'AUTH') console.error('stale applications load failed', e); return; }
+        appsAfterQ = [];
         el('veil').classList.add('hide');
         el('atable').querySelector('tbody').innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center">Could not load applications.</td></tr>';
         if (String(e && e.message) !== 'AUTH') console.error('applications load failed', e);
@@ -13013,20 +13091,30 @@ window.addEventListener('error', function(e){
     });
     el('r-agents').innerHTML = h || '<span class="count-note">No tours in range</span>';
   }
+  // F2: generation-guarded. Shared by loadTours and the 5 post-write re-pulls (refresh / cancel /
+  // reschedule / no-show / notes). Resolves TRUE when this response was painted, FALSE when a
+  // newer fetch outran it (callers then leave the veil/view alone — the newer one owns them).
   function fetchTours(){
+    var q = ++toursReq;
     return authFetch('/tours?' + toursQuery().toString()).then(function(j){
+      if (q !== toursReq) return false;
       toursAll = j.tours || [];
       buildAgentColors();
       drawAgentLegend();
       drawTours();
+      return true;
+    }, function(e){
+      if (q !== toursReq) { if (String(e && e.message) !== 'AUTH') console.error('stale tours load failed', e); return false; }
+      throw e;
     });
   }
   function loadTours(){
     el('veil').classList.remove('hide');
     fetchTours()
-      .then(function(){ el('veil').classList.add('hide'); applyRView(); })
-      .catch(function(){
+      .then(function(painted){ if (!painted) return; el('veil').classList.add('hide'); applyRView(); })
+      .catch(function(e){
         el('veil').classList.add('hide');
+        if (String(e && e.message) !== 'AUTH') console.error('tours load failed', e);
         el('rtable').querySelector('tbody').innerHTML = emptyRow('rtable', 'Could not load tours.');
       });
   }
@@ -13874,16 +13962,19 @@ window.addEventListener('error', function(e){
     syncBtn.innerHTML = esc(label);
     setTimeout(function(){ syncBtn.disabled = false; syncBtn.innerHTML = '&#8635; Sync now'; }, 5000);
   }
+  // O1: poll the cheap /sync-status (one indexed MAX over sync_runs — the same value /stats puts
+  // in ops.last_buildium_sync) instead of the full ~1 s /stats every 30 s; reload /stats ONCE,
+  // through the guarded load(), when the timestamp moves. This is the only interval on the page.
   function checkFresh(baselineB){
     if (Date.now() - pollStart > 15 * 60 * 1000) { syncDone('Timed out — refresh in a minute'); return; }
-    apiFetch('/stats?' + buildQuery().toString())
-      .then(function(r){ return r.ok ? r.json() : null; })
+    if (pollTimer === null) return;   // syncDone already ran (a later tick raced the timeout)
+    authFetch('/sync-status')
       .then(function(d){
-        if (!d || !d.ops) return;
-        var freshB = (d.ops.last_buildium_sync || null) !== baselineB;
-        if (freshB) { render(d); unitsAll = null; ownersAll = null; appsAll = null; toursAll = null; syncDone('Fresh data loaded ✓'); }
+        if (!d || pollTimer === null) return;
+        var freshB = (d.last_buildium_sync || null) !== baselineB;
+        if (freshB) { unitsAll = null; ownersAll = null; appsAll = null; toursAll = null; syncDone('Fresh data loaded ✓'); load(); }
       })
-      .catch(function(){ /* transient; keep polling */ });
+      .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.warn('sync-status poll failed (will retry)', e); });
   }
   syncBtn.addEventListener('click', function(){
     syncBtn.disabled = true;
@@ -14008,8 +14099,11 @@ window.addEventListener('error', function(e){
     el('login').style.display = 'none';
     scopeRestore();   // A-13: restore BEFORE load() so the very first /stats is already scoped
     load();
-    try { renderAuthBlk(); acmProbe(); } catch (e) {}   // identity chip + account-manager probe (never boot-fatal)
-    try { idRosterLoad(idRecompute); } catch (e) {}      // WS-M M4: name-pick tailoring needs the roster (never boot-fatal)
+    // F4: both stay NON-FATAL to boot (one IIFE, a throw here = dead page behind the veil) but
+    // must leave a trace — a regression in the identity path (the v277 stack overflow class)
+    // used to vanish into an empty catch.
+    try { renderAuthBlk(); acmProbe(); } catch (e) { console.error('identity chip / AM probe failed at boot', e); }   // identity chip + account-manager probe
+    try { idRosterLoad(idRecompute); } catch (e) { console.error('roster load failed at boot', e); }                  // WS-M M4: name-pick tailoring needs the roster
     // Deep link: if the URL names a tab (e.g. #keys), open it. Otherwise the DEFAULT LANDING
     // is Today (WS1-D3 / Deploy 3): every persona sees their role's work queues first; the
     // Ledger stays one tap away and #ledger bookmarks still land on it directly. showTab runs
@@ -15464,7 +15558,7 @@ window.addEventListener('error', function(e){
   // applicant search -> agent -> live availability slot picker -> Calendly Share link.
   var schedAgents = null;
   function loadSchedule(){
-    authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; renderBkAgents(); })
+    authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; })
       .catch(function(e){ /* agents load failed; the book flow surfaces its own status */ });
     loadTourOffers();
   }
@@ -15556,23 +15650,18 @@ window.addEventListener('error', function(e){
     box.innerHTML = '<div class="schpicked"><div><b>' + esc(o.name || 'Prospect') + '</b><br><span>' + esc([o.email, o.phone].filter(Boolean).join(' · ')) + '</span></div><button type="button" class="schpx" id="sch-landing-clear" title="Clear">&times;</button></div><div class="note" style="margin-top:6px">Pre-filled from the lead &mdash; choose how to schedule.</div>';
     var c = el('sch-landing-clear'); if (c) c.addEventListener('click', function(){ schedProspect = null; renderLandingPicked(); });
   }
-  function renderBkAgents(){
-    var box = el('sch-bk-agent-chips'); if (!box) return;
-    if (!(schedAgents && schedAgents.length)){ box.innerHTML = '<span class="count-note">Loading agents…</span>'; return; }
-    var chip = function(a){ return '<button type="button" class="chip-mini' + (a.is_secondary ? ' chip-mini-sec' : '') + '" data-aid="' + esc(a.id) + '">' + esc(a.display_name) + '</button>'; };
-    var prim = schedAgents.filter(function(a){ return !a.is_secondary; });
-    var sec = schedAgents.filter(function(a){ return a.is_secondary; });
-    var h = prim.map(chip).join('');
-    if (sec.length) h += '<span class="chip-sep" title="Bookable when needed">Also bookable</span>' + sec.map(chip).join('');
-    box.innerHTML = h;
-  }
+  // (renderBkAgents — the "Also bookable" agent-chip strip — removed in Batch G/F11: its
+  // #sch-bk-agent-chips host left the markup long ago; the agent picker is the sidebar/list.)
+  var schBkSearchReq = 0;   // F5: request-order guard — a slow older search must not replace a newer result list (or the rows the pick handler reads)
   function schBkDoSearch(){
     var q = (el('sch-bk-app-search').value || '').trim(); var res = el('sch-bk-app-results');
+    var sq = ++schBkSearchReq;   // bumped on the early return too, so an in-flight search for the longer text is dropped
     if (q.length < 2){ res.innerHTML = ''; return; }
     Promise.all([
-      authFetch('/tour-applicant-search?q=' + encodeURIComponent(q)).catch(function(e){ if (String(e.message) === 'AUTH') throw e; return { results: [] }; }),
-      authFetch('/tour-lead-search?q=' + encodeURIComponent(q)).catch(function(){ return { results: [] }; })
+      authFetch('/tour-applicant-search?q=' + encodeURIComponent(q)).catch(function(e){ if (String(e.message) === 'AUTH') throw e; console.error('applicant search failed', e); return { results: [] }; }),
+      authFetch('/tour-lead-search?q=' + encodeURIComponent(q)).catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('lead search failed', e); return { results: [] }; })
     ]).then(function(parts){
+      if (sq !== schBkSearchReq) return;
       var apps = (parts[0] && parts[0].results) || []; schBkSearchRows = apps;
       var leads = (parts[1] && parts[1].results) || []; schBkLeadRows = leads;
       var ae = {}; apps.forEach(function(a){ var e = (a.applicant_email || '').toLowerCase(); if (e) ae[e] = 1; });
@@ -15590,7 +15679,7 @@ window.addEventListener('error', function(e){
         html += '<button type="button" class="schres" data-kind="lead" data-card="' + esc(r.card_id) + '"><b>' + esc(r.name || '(no name)') + '</b> <span class="schbadge schbadge-lead">Lead</span><span>' + esc(sub) + '</span>' + (ctx ? '<span>' + esc(ctx) + '</span>' : '') + '</button>';
       });
       res.innerHTML = html;
-    }).catch(function(e){ if (String(e.message) !== 'AUTH') res.innerHTML = '<span class="count-note">Search failed.</span>'; });
+    }).catch(function(e){ if (sq !== schBkSearchReq) return; if (String(e.message) !== 'AUTH') res.innerHTML = '<span class="count-note">Search failed.</span>'; });
   }
   function schBkPickProspect(o){
     schedBook.applicant = o;
@@ -15629,7 +15718,6 @@ window.addEventListener('error', function(e){
     var a = (schedAgents || []).filter(function(x){ return String(x.id) === String(aid); })[0]; if (!a) return;
     schedBook.agentId = a.id; schedBook.agentName = a.display_name; schedBook.eventType = null; schedBook.eventTypeName = '';
     schBkStops = []; schBkRenderStops(); schBkOffers = []; schBkRenderOffers();   // a different agent → start the run fresh
-    var box = el('sch-bk-agent-chips'); if (box) box.querySelectorAll('.chip-mini').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-aid') === String(aid)); });
     tdCalAgent = a.display_name; tdDrawCal();   // focus the team calendar on the agent being booked
     var evStep = el('sch-bk-step-event'); if (evStep) evStep.style.display = '';   // reveal the event-type picker above the calendar
     schBkCloseConfirm();
@@ -15695,19 +15783,38 @@ window.addEventListener('error', function(e){
     // (Google-calendar busy + booked showings) and paints the moment it lands; the slow
     // Calendly /agent-availability call fills open slots afterwards. The busy layer no
     // longer waits on Calendly at all.
-    authFetch('/agent-schedule?agent_id=' + aid + '&to=' + to).catch(function(){ return { showings: [], busy: [] }; })
+    // F3: each leg's failure is an ERROR, never "no busy blocks" / "no open times". A Calendly
+    // outage used to read as "this agent has no availability"; a schedule failure left the busy
+    // layer blank so Denai could book over a real block. AUTH stays quiet.
+    bkData.schedErr = false; bkData.availErr = false;
+    var legErr = function(what){ return function(e){ if (String(e && e.message) !== 'AUTH') console.error(what + ' load failed', e); return { error: true }; }; };
+    authFetch('/agent-schedule?agent_id=' + aid + '&to=' + to).catch(legErr('booking schedule'))
       .then(function(sched){
         if (gen !== schBkCalReq) return;
+        if (sched && sched.error) {
+          bkData.schedErr = true;
+          if (note) note.textContent = 'Could not load this agent’s schedule — busy times are NOT shown. Retry before booking.';
+          if (!tdBkFresh()) tdBkStatus('Could not load the schedule — busy times are not shown. Pick the agent again to retry.');
+          schBkRenderCal(false);
+          return;
+        }
         bkData.showings = (sched && sched.showings) || []; bkData.busy = (sched && sched.busy) || [];
         schBkRecomputeSlots();
         schBkRenderCal(false);
         if (note && bkData.slotsRaw === null && !tdBkFresh()) note.textContent = 'Schedule loaded — open times still loading…';
       })
       .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('booking schedule paint failed', e); });
-    authFetch('/agent-availability?agent_id=' + aid + (schedBook.eventType ? '&event_type=' + encodeURIComponent(schedBook.eventType) : '') + '&to=' + to).catch(function(){ return { slots: [] }; })
+    authFetch('/agent-availability?agent_id=' + aid + (schedBook.eventType ? '&event_type=' + encodeURIComponent(schedBook.eventType) : '') + '&to=' + to).catch(legErr('agent availability'))
       .then(function(avail){
         if (gen !== schBkCalReq) return;
         avail = avail || {};
+        if (avail.error) {
+          bkData.availErr = true; bkData.slotsRaw = []; bkData.slots = [];
+          if (note) note.textContent = 'Could not load open times from Calendly — this is NOT "no availability". Pick the agent again to retry.';
+          if (!tdBkFresh()) tdBkStatus('Could not load open times from Calendly. Pick the agent again to retry.');
+          schBkRenderCal(false);
+          return;
+        }
         bkData.slotsRaw = avail.slots || [];
         schedBook.duration = avail.duration_minutes || schedBook.duration || 15;
         // Open-house (group) context confirmed by the server.
@@ -15716,12 +15823,15 @@ window.addEventListener('error', function(e){
         schBkApplyMode();
         schBkRecomputeSlots();
         if (note && !tdBkFresh()){
-          if (schedBook.isGroup) note.textContent = bkData.slots.length + ' open-house time' + (bkData.slots.length === 1 ? '' : 's') + ' with room — tap one to add the prospect';
+          if (bkData.schedErr) note.textContent = 'Open times loaded, but this agent’s schedule did NOT — busy times are not shown. Pick the agent again before booking.';
+          else if (schedBook.isGroup) note.textContent = bkData.slots.length + ' open-house time' + (bkData.slots.length === 1 ? '' : 's') + ' with room — tap one to add the prospect';
           else note.textContent = bkData.showings.length + ' showing' + (bkData.showings.length === 1 ? '' : 's') + ' · ' + bkData.slots.length + ' open time' + (bkData.slots.length === 1 ? '' : 's') + ' — click any empty time to book';
         }
         schBkRenderCal(true);   // availability landed — jump the calendar to the first opening
         var tc = el('td-cal'); if (tc) tc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });   // slots are live — bring the calendar into view
-        if (!tdBkFresh()) tdBkStatus(bkData.slots.length ? schBkClickHint() : 'No open times in this window — widen it or pick another agent.');
+        // F3: a failed schedule leg (whichever order the two land in) keeps its warning — the busy
+        // layer is blank, so the open-times hint alone would invite a double-booking.
+        if (!tdBkFresh()) tdBkStatus(bkData.schedErr ? 'Could not load the schedule — busy times are not shown. Pick the agent again to retry.' : (bkData.slots.length ? schBkClickHint() : 'No open times in this window — widen it or pick another agent.'));
       })
       .catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });
   }
@@ -16159,10 +16269,9 @@ window.addEventListener('error', function(e){
       else window.prompt('Copy link:', v);
     });
     // Landing + view switching
-    var gOffer = el('sch-go-offer'); if (gOffer) gOffer.addEventListener('click', function(){ schShowView('book'); renderBkAgents(); if (schedProspect) schBkPickProspect(schedProspect); if (schBkModeGuard('offer')) schBkSetMode('offer'); });
+    var gOffer = el('sch-go-offer'); if (gOffer) gOffer.addEventListener('click', function(){ schShowView('book'); if (schedProspect) schBkPickProspect(schedProspect); if (schBkModeGuard('offer')) schBkSetMode('offer'); });
     var toOff = el('sch-to-offer'); if (toOff) toOff.addEventListener('click', function(){ schShowView('book'); if (schBkModeGuard('offer')) schBkSetMode('offer'); });
-    var gBook = el('sch-go-book'); if (gBook) gBook.addEventListener('click', function(){ schShowView('book'); renderBkAgents(); if (schedProspect) schBkPickProspect(schedProspect); });
-    var bBk = el('sch-back-book'); if (bBk) bBk.addEventListener('click', function(){ schShowView('landing'); });
+    var gBook = el('sch-go-book'); if (gBook) gBook.addEventListener('click', function(){ schShowView('book'); if (schedProspect) schBkPickProspect(schedProspect); });
     // Book flow
     var bsearch = el('sch-bk-app-search'); if (bsearch) bsearch.addEventListener('input', function(){ clearTimeout(schBkSearchT); schBkSearchT = setTimeout(schBkDoSearch, 260); });
     var bres = el('sch-bk-app-results');
@@ -16189,7 +16298,6 @@ window.addEventListener('error', function(e){
       if (!okEmail && !okPhone){ alert('Enter a valid email, or a phone number (10+ digits) for a phone-only lead.'); return; }
       schBkPickProspect({ application_id: null, name: nm, email: okEmail ? em : '', phone: ph, channel: okEmail ? 'email' : 'sms', lead_source: src || null, property: '', unit_number: '', unit_address: '' });
     });
-    var bac = el('sch-bk-agent-chips'); if (bac) bac.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickAgent(b.getAttribute('data-aid')); });
     var bet = el('sch-bk-ettype'); if (bet) bet.addEventListener('click', function(e){ var b = e.target.closest('.chip-mini'); if (b) schBkPickEventType(b.getAttribute('data-uri'), b.getAttribute('data-name'), b.getAttribute('data-dur'), b.getAttribute('data-kind')); });
     var brl = el('sch-bk-reload'); if (brl) brl.addEventListener('click', schBkLoadCalendar);
     var bso = el('sch-bk-showopen'); if (bso) bso.addEventListener('change', function(){ if (schedBook.agentId && schedBook.eventType) schBkRenderCal(); });

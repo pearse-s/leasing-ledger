@@ -10,6 +10,15 @@
 <meta http-equiv="Expires" content="0">
 <meta name="ll-build" content="2026-06-17-cool">
 <script>window.LL_BUILD='2026-06-23-units-event-filter';</script>
+<!-- CSP (audit Batch H / F6). Scripts may load ONLY from self + the two pinned CDNs below
+     (each also carries an SRI hash); fetch/XHR may reach ONLY the Supabase project; images
+     are open (listing photos come from Buildium CDN hosts, tiles from cartocdn, markers from
+     unpkg, QR + proxied photos as data:/blob:). 'unsafe-inline' is deliberate for BOTH scripts
+     and styles: the page is one inline IIFE plus this boot guard, thousands of style="" in
+     rendered strings, and Leaflet/Chart/GSAP write inline styles; hash-strict script-src was
+     weighed and parked (a stale hash would block the IIFE AND this guard - a silent dead page).
+     Adding a new script/CSS host or API origin? Add it HERE too or it is blocked at load. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://yplsskzukmnvdnkzlygt.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <script>
 /* BOOT-CRASH GUARD — do not remove. The app runs as one big IIFE under 'use strict'
    with no try/catch, so ANY uncaught error during init aborts the boot: the page is
@@ -35,14 +44,16 @@ window.addEventListener('error', function(e){
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/vanilla-tilt@1.8.1/dist/vanilla-tilt.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<!-- SRI (audit Batch H / F6): sha384 of the exact pinned CDN bytes, 2026-10-02. Bumping a
+     version = recompute: curl -sL <url> | openssl dgst -sha384 -binary | openssl base64 -A -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" integrity="sha384-g4NTh/Iv5PPU4xPyhEWqPcwtNXOvdaDI8LLnyYfyNZOjKJeYQyjzQ9X5275eBjpt" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js" integrity="sha384-Z3REaz79l2IaAZqJsSABtTbhjgOUYyV3p90XNnAPCSHg3EMTz1fouunq9WZRtj3d" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/vanilla-tilt@1.8.1/dist/vanilla-tilt.min.js" integrity="sha384-0k1dj5tm+KUH/4vkNk/i90XsjDA8Ltmt+ybcrFoH4t0dgv/WZsPpVBnkhcroX8UL" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js" integrity="sha384-B1OFx8Gy9GjPu8UbUyXbGQpzll9ubAUQ9agInFJ8NnD7nYG1u/CLR+Sqr5yifl4q" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" integrity="sha384-GFr3yTh5lJznCbZfpTtXnwboFsxqtTQoeTZCRHhE0579KrRmlCzen5AA8ohaB5ug" crossorigin="anonymous"></script>
 <style>
   :root{
     /* dark warm-glass surfaces */
@@ -88,11 +99,19 @@ window.addEventListener('error', function(e){
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   /* ── indigo giant-bokeh field — big soft masses, mixed drift + fade, no rotation ── */
-  .fx-aurora{position:fixed;inset:-20%;z-index:0;pointer-events:none;overflow:hidden;filter:blur(42px) saturate(118%)}
-  .fx-aurora i{position:absolute;display:block;border-radius:50%;mix-blend-mode:screen;will-change:transform,opacity;opacity:.5}
-  .fx-aurora .b1{width:80vw;height:80vw;left:-16%;top:-24%;background:radial-gradient(circle at 45% 45%, rgba(247,210,120,.5), rgba(247,210,120,0) 60%);animation:bk1 26s ease-in-out infinite, bkf1 17s ease-in-out infinite}
-  .fx-aurora .b2{width:72vw;height:72vw;left:40%;top:-8%;background:radial-gradient(circle at 50% 50%, rgba(80,140,240,.46), rgba(80,140,240,0) 60%);animation:bk2 33s ease-in-out infinite, bkf2 21s ease-in-out infinite}
-  .fx-aurora .b3{width:52vw;height:52vw;left:16%;top:42%;background:radial-gradient(circle at 50% 50%, rgba(200,222,255,.4), rgba(200,222,255,0) 62%);animation:bk3 29s ease-in-out infinite, bkf3 15s ease-in-out infinite}
+  /* Aurora (audit Batch H / F8): NO layer-level filter:blur — a full-viewport re-blur on every
+     animation frame was constant GPU/battery cost; the softness now comes from the gradients
+     themselves (wider fade-out). The drift/fade animations run TWICE (~1 min settle) then hold —
+     the house rule is one-shot, never infinite. At <=768px the blobs are static.
+     Transient-state loops that stay infinite ON PURPOSE (they exist only while the state does):
+     .skel::after (skeleton loading), .syncbtn .whirl (sync in flight), veilglow/rulegrow (boot veil). */
+  .fx-aurora{position:fixed;inset:-20%;z-index:0;pointer-events:none;overflow:hidden}
+  .fx-aurora i{position:absolute;display:block;border-radius:50%;mix-blend-mode:screen;will-change:transform,opacity;opacity:.5;animation-iteration-count:2}
+  .fx-aurora .b1{width:80vw;height:80vw;left:-16%;top:-24%;background:radial-gradient(circle at 45% 45%, rgba(247,210,120,.42), rgba(247,210,120,.18) 32%, rgba(247,210,120,0) 70%);animation:bk1 26s ease-in-out 2, bkf1 17s ease-in-out 2}
+  .fx-aurora .b2{width:72vw;height:72vw;left:40%;top:-8%;background:radial-gradient(circle at 50% 50%, rgba(80,140,240,.38), rgba(80,140,240,.16) 32%, rgba(80,140,240,0) 70%);animation:bk2 33s ease-in-out 2, bkf2 21s ease-in-out 2}
+  .fx-aurora .b3{width:52vw;height:52vw;left:16%;top:42%;background:radial-gradient(circle at 50% 50%, rgba(200,222,255,.34), rgba(200,222,255,.14) 34%, rgba(200,222,255,0) 72%);animation:bk3 29s ease-in-out 2, bkf3 15s ease-in-out 2}
+  /* per-blob selectors on purpose: ".fx-aurora i" (0,1,1) would lose to ".fx-aurora .b1" (0,2,0) above */
+  @media (max-width:768px){ .fx-aurora .b1,.fx-aurora .b2,.fx-aurora .b3{animation:none} }
   @keyframes bk1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(6vw,5vh,0) scale(1.08)}}
   @keyframes bk2{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-6vw,4vh,0) scale(1.1)}}
   @keyframes bk3{0%,100%{transform:translate3d(0,0,0) scale(1.04)}50%{transform:translate3d(5vw,-5vh,0) scale(1.12)}}
@@ -860,7 +879,7 @@ window.addEventListener('error', function(e){
   /* WS-M M4: the managers scope button while an identity lock owns it */
   .msbtn:disabled{opacity:.72;cursor:default;pointer-events:none;border-style:dashed}
   .lmcard::before{content:'';position:absolute;left:0;right:0;top:0;height:3px;z-index:4;pointer-events:none;
-    background:var(--accent-grad);background-size:220% 100%;animation:shimmer 5s linear infinite;
+    background:var(--accent-grad);background-size:220% 100%;animation:shimmer 5s linear 1;
     box-shadow:0 0 16px rgba(232,180,62,.45)}
   @keyframes modalin{from{opacity:0;transform:translate(-50%,-45%) scale(.92)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
   .lmhead{padding:18px 22px 12px;border-bottom:1px solid var(--hairline)}
@@ -1358,7 +1377,8 @@ window.addEventListener('error', function(e){
 
   /* ── liquid-glass polish: shimmer, press, focus, reveal ── */
   .loginbox::before{background:linear-gradient(90deg,#C9912A,#E8B43E,#F6D77E,#E8B43E,#C9912A);
-    background-size:220% 100%;animation:shimmer 5s linear infinite}
+    background-size:220% 100%;animation:shimmer 5s linear 1}
+  /* one pass on render (F8) — was infinite */
   @keyframes shimmer{to{background-position:220% 0}}
   .btn:active,.qchip:active,.syncbtn:active:not(:disabled),.listbtn:active,.loginbtn:active,
   .presets button:active,.mapopen:active,.bucketchip:active{transform:scale(.95)}

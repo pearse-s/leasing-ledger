@@ -2597,6 +2597,7 @@ window.addEventListener('error', function(e){
         <span class="count-note" id="rn-count"></span>
       </div>
       <div class="qchips" id="rn-chips"></div>
+      <div class="qchips" id="rn-horizon"></div>
       <div class="scrolly tallscroll">
         <table id="rntable">
           <thead><tr>
@@ -12794,13 +12795,48 @@ window.addEventListener('error', function(e){
     // 80/1500ms — so the #phc-renew header mirror held "–" until the next poll.
     syncPanelCounts();
   }
+  // Lease-end horizon (Pearse 2026-10-01): narrow the tab to leases whose CURRENT term ends within
+  // 1 / 2 / 3 months (30 / 60 / 90 days — the same cut-offs as get_stats.pipeline.by_horizon).
+  // Term end = the current lease end for no-record rows, the day before the new term starts for
+  // renewal records. Days are counted on local calendar dates (the team's browsers are on
+  // Edmonton time), so a lease ending today is 0 and stays in "1 month or less"; terms already
+  // ended (a renewal that has started) drop out of every bounded window. The state chips count
+  // within the chosen window; the horizon chips count across every state.
+  var RN_HORIZONS = [['all', 'Lease ends: any time'], ['30', '1 month or less'], ['60', '2 months or less'], ['90', '3 months or less']];
+  var rnHorizon = 'all';
+  try { rnHorizon = localStorage.getItem('ledger_rn_horizon_v1') || 'all'; } catch (e) {}
+  if (!RN_HORIZONS.some(function(h){ return h[0] === rnHorizon; })) rnHorizon = 'all';
+  function rnDaysToDate(s){   // whole local calendar days from today to an ISO date (parsed by parts, no tz shift)
+    var p = String(s || '').slice(0, 10).split('-');
+    if (p.length < 3 || !+p[0]) return null;
+    var n = new Date();
+    return Math.round((Date.UTC(+p[0], +p[1] - 1, +p[2]) - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000);
+  }
+  function rnDaysLeft(r){
+    if (!r.is_undecided && r.lease_from_date){ var d = rnDaysToDate(r.lease_from_date); return d == null ? null : d - 1; }
+    return rnDaysToDate(r.current_lease_end);
+  }
+  function rnInHorizon(r, h){
+    if (h === 'all') return true;
+    var d = rnDaysLeft(r);
+    return d != null && d >= 0 && d <= +h;
+  }
+  function drawRnHorizon(){
+    var box = el('rn-horizon'); if (!box) return;
+    var all = rnTabRows();
+    box.innerHTML = RN_HORIZONS.map(function(h){
+      var n = all.filter(function(r){ return rnInHorizon(r, h[0]); }).length;
+      return '<button type="button" class="qchip' + (rnHorizon === h[0] ? ' on' : '') + '" data-h="' + h[0] + '">' + esc(h[1]) + ' <span class="qn">' + n + '</span></button>';
+    }).join('');
+  }
   function drawRnChips(){
     if (renewalsAll === null) return;
+    drawRnHorizon();
     var items = colEnumItems('rntable', 'renewal_state');
     items.sort(function(a, b){ var ia = RN_ORDER.indexOf(a.raw), ib = RN_ORDER.indexOf(b.raw); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
     var sel = colfState('rntable', 'renewal_state').sel;
     var empty = Object.keys(sel).length === 0;
-    var all = rnTabRows();
+    var all = rnTabRows().filter(function(r){ return rnInHorizon(r, rnHorizon); });
     var html = '<button type="button" class="qchip' + (empty ? ' on' : '') + '" data-q="all">All <span class="qn">' + all.length + '</span></button>';
     items.forEach(function(it){
       var n = all.filter(function(r){ return colKeyOf(r.renewal_state) === it.k; }).length;
@@ -12813,6 +12849,7 @@ window.addEventListener('error', function(e){
     var q = (el('rn-search').value || '').toLowerCase();
     var all = rnTabRows();
     var rows = all.filter(function(r){
+      if (!rnInHorizon(r, rnHorizon)) return false;
       if (!colfPass('rntable', r)) return false;
       if (!q) return true;
       return ((r.tenant_names || '') + ' ' + (r.property_name || '') + ' ' + (r.unit_number || '') + ' ' +
@@ -12844,6 +12881,13 @@ window.addEventListener('error', function(e){
     var k = b.getAttribute('data-q'); var st = colfState('rntable', 'renewal_state');
     if (k === 'all') st.sel = {}; else if (st.sel[k]) delete st.sel[k]; else st.sel[k] = 1;
     refreshFunnels(); drawRnChips(); drawRenewals();
+  });
+  var rnHorizonBox = el('rn-horizon');
+  if (rnHorizonBox) rnHorizonBox.addEventListener('click', function(e){
+    var b = e.target.closest('.qchip'); if (!b) return;
+    rnHorizon = b.getAttribute('data-h') || 'all';
+    try { localStorage.setItem('ledger_rn_horizon_v1', rnHorizon); } catch (err) {}
+    drawRnChips(); drawRenewals();
   });
   el('rn-search').addEventListener('input', deb(drawRenewals));
   el('rntable').querySelector('thead').addEventListener('click', function(e){

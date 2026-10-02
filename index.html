@@ -6494,6 +6494,28 @@ window.addEventListener('error', function(e){
     if (!u || !mm || !body) return;
     body.innerHTML = tdRentDrawerBody(u);
     if (!mm.classList.contains('open')) openModal('rentmodal');
+    if (u.lease_id != null) tdRentLoadLedger(u.lease_id);
+  }
+  // Payment history + owed-by-account, from the same live /lease-ledger the lease modal uses
+  // (one Buildium call per lease per page load — cached). tdRentLedReq is the generation
+  // guard: opening a second tenant before the first answers must not paint the first's numbers.
+  var tdRentLedReq = 0, tdRentLedCache = {};
+  function tdRentLoadLedger(leaseId){
+    var q = ++tdRentLedReq;
+    var paint = function(j){
+      var box = el('rent-d-led'); if (!box || q !== tdRentLedReq) return;
+      box.className = '';
+      box.innerHTML = '<div class="count-note" style="padding:0 0 6px">Payment history &middot; live from Buildium</div>' +
+        ledSummaryHtml(j) + ledAcctsHtml(j);
+    };
+    if (tdRentLedCache[leaseId]) return paint(tdRentLedCache[leaseId]);
+    authFetch('/lease-ledger?lease_id=' + encodeURIComponent(leaseId)).then(function(j){
+      tdRentLedCache[leaseId] = j; paint(j);
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('lease-ledger (rent drawer) failed', e);
+      var box = el('rent-d-led'); if (box && q === tdRentLedReq) box.textContent = 'Buildium didn’t answer — payment history unavailable right now.';
+    });
   }
   function tdRentDrawerBody(u){
     var b = [
@@ -6513,6 +6535,7 @@ window.addEventListener('error', function(e){
       return '<tr><td style="padding:4px 0">' + x.l + '</td><td style="padding:4px 0;text-align:right">' + fmtMoney(x.v) + '</td></tr>';
     }).join('') + '</table>';
     else h += '<div class="note">No ageing breakdown on this account.</div>';
+    if (u.lease_id != null) h += '<div id="rent-d-led" class="note" style="margin-top:14px">Loading payment history from Buildium&hellip;</div>';
     h += '<div class="tdmore" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">';
     if (u.lease_id != null)
       h += '<a class="tdact" target="_blank" rel="noopener" href="' + esc(tdRwBuildium(u.lease_id)) + '">Open lease in Buildium &#8599;</a>';
@@ -12282,11 +12305,17 @@ window.addEventListener('error', function(e){
   }
   // Ledger header: payment-history summary (late months / NSF) + amount owed per GL account.
   // j = the /lease-ledger payload, or null to clear while loading.
+  // The two HTML builders are shared with the Today tab's rent-owing drawer (tdRentLoadLedger)
+  // so both surfaces always read the same numbers the same way.
   function lsPaintLedgerHead(j){
     var sumEl = el('ls-ledsum'), acctEl = el('ls-ledaccts');
     if (!sumEl || !acctEl) return;
     if (!j || !j.summary) { sumEl.innerHTML = ''; acctEl.innerHTML = ''; return; }
-    var s = j.summary, late = Number(s.late_months) || 0, nsf = Number(s.nsf) || 0, oth = Number(s.returned_other) || 0;
+    sumEl.innerHTML = ledSummaryHtml(j);
+    acctEl.innerHTML = ledAcctsHtml(j);
+  }
+  function ledSummaryHtml(j){
+    var s = j.summary || {}, late = Number(s.late_months) || 0, nsf = Number(s.nsf) || 0, oth = Number(s.returned_other) || 0;
     var chip = function(n, label, detail){
       return '<div style="flex:1 1 140px;min-width:0;padding:8px 10px;border:1px solid var(--hairline);border-radius:8px">' +
         '<div style="font-size:20px;font-weight:800;line-height:1.1;' + (n > 0 ? 'color:var(--amber)' : '') + '">' + n + '</div>' +
@@ -12298,16 +12327,18 @@ window.addEventListener('error', function(e){
       chip(late, late === 1 ? 'month paid late' : 'months paid late', late ? 'late fee charged: ' + months : 'no late fees on record') +
       chip(nsf, nsf === 1 ? 'NSF payment' : 'NSF payments', nsf ? 'last ' + esc(s.last_nsf || '') + (oth ? ' &middot; +' + oth + ' other returned' : '') : (oth ? oth + ' other returned payment' + (oth === 1 ? '' : 's') : 'none returned')) +
       '</div>';
-    sumEl.innerHTML = h;
+    return h;
+  }
+  function ledAcctsHtml(j){
     var ac = (j.accounts || []).filter(function(a){ return a.balance > 0; });
-    if (!ac.length) { acctEl.innerHTML = '<div class="count-note" style="padding:2px 0 8px">Nothing owed on any account.</div>'; return; }
+    if (!ac.length) return '<div class="count-note" style="padding:2px 0 8px">Nothing owed on any account.</div>';
     var a = '<div class="count-note" style="padding:2px 0">Owed by account</div>';
     ac.forEach(function(x){
       a += '<div style="display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--hairline)">' +
         '<span style="flex:1 1 auto;min-width:0">' + esc(x.name) + '</span>' +
         '<span style="flex:0 0 auto;font-weight:700">' + fmtMoney2(x.balance) + '</span></div>';
     });
-    acctEl.innerHTML = a + '<div style="height:8px"></div>';
+    return a + '<div style="height:8px"></div>';
   }
   function lsLoadLedger(leaseId, q){
     authFetch('/lease-ledger?lease_id=' + encodeURIComponent(leaseId))

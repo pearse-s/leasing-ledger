@@ -5914,7 +5914,7 @@ window.addEventListener('error', function(e){
     if (m.renewals){
       // WS-M M5: the worklist carries every stage now — the brief surfaces the ACTIONABLE ones
       // (not started / offer sent / declined / pending e-sign); signed + not-renewing are settled.
-      var tdRwAct = function(r){ var s = tdRwStage(r); return s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'pending_esign'; };
+      var tdRwAct = function(r){ var s = tdRwStage(r); return s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'not_sent' || s === 'pending_esign'; };
       var undecSoon = m.renewals.filter(function(r){ if (tdRwStage(r) !== 'undecided') return false; var d = tdMgrDays(r.term_end || r.current_lease_end || r.lease_to_date); return d != null && d <= 30; });
       var actionable = m.renewals.filter(tdRwAct);
       if (undecSoon.length) L.push({ k: 'renewals', t: undecSoon.length + ' renewal' + (undecSoon.length === 1 ? '' : 's') + ' not started inside 30 days' });
@@ -6112,14 +6112,17 @@ window.addEventListener('error', function(e){
   // click via the existing /lease-detail (keeps phone/email out of the list — the no-PII rule).
   // The 'undecided' KEY is kept everywhere (API + get_stats); only its LABEL reads "Not started",
   // Buildium's own name for a lease with no renewal offer.
-  var TD_RW_ORDER = ['undecided', 'offer_sent', 'declined', 'pending_esign', 'signed', 'not_renewing'];
+  // not_sent (2026-10-01) = a renewal drafted in Buildium but not yet sent for e-signature; it
+  // folds onto get_stats.renewal_pending alongside pending_esign.
+  var TD_RW_ORDER = ['undecided', 'offer_sent', 'declined', 'not_sent', 'pending_esign', 'signed', 'not_renewing'];
   var TD_RW_META = {
     undecided:     { label: 'Not started',    chip: 'c-cold', pri: 0 },
     offer_sent:    { label: 'Offer sent',     chip: 'c-warm', pri: 1 },
     declined:      { label: 'Declined',       chip: 'c-bad',  pri: 2 },
-    pending_esign: { label: 'Pending e-sign', chip: 'c-warm', pri: 3 },
-    signed:        { label: 'Signed',         chip: 'c-ok',   pri: 4 },
-    not_renewing:  { label: 'Not renewing',   chip: 'c-bad',  pri: 5 }
+    not_sent:      { label: 'Not sent',       chip: 'c-warm', pri: 3 },
+    pending_esign: { label: 'Pending e-sign', chip: 'c-warm', pri: 4 },
+    signed:        { label: 'Signed',         chip: 'c-ok',   pri: 5 },
+    not_renewing:  { label: 'Not renewing',   chip: 'c-bad',  pri: 6 }
   };
   function tdRwMeta(s){ return TD_RW_META[s] || TD_RW_META.undecided; }   // an unknown future stage must not kill the card
   var tdRwStageF = '';      // '' = all stages; else one of TD_RW_ORDER (chip filter)
@@ -6134,6 +6137,7 @@ window.addEventListener('error', function(e){
     if (s === 'Cancelled' || s === 'Cancelling') return 'not_renewing';
     if (s === 'Signed') return 'signed';
     if (s === 'Pending') return 'pending_esign';
+    if (s === 'Not sent') return 'not_sent';
     if (r.renewal_offer_status === 'Declined') return 'declined';
     if (r.renewal_offer_status === 'WaitingResponse') return 'offer_sent';
     return 'undecided';
@@ -6180,7 +6184,7 @@ window.addEventListener('error', function(e){
     return cur || (mkt != null ? '<span class="srctag">mkt ' + fmtMoney(mkt) + '</span>' : '&ndash;');
   }
   function tdRwActionCell(r, stage){
-    if (stage === 'undecided' || stage === 'offer_sent' || stage === 'declined')
+    if (stage === 'undecided' || stage === 'offer_sent' || stage === 'declined' || stage === 'not_sent')
       return '<a class="tdact" href="' + esc(tdRwBuildium(r.lease_id)) + '" target="_blank" rel="noopener">Open in Buildium &#8599;</a>';
     if (stage === 'pending_esign')
       return '<button type="button" class="tdact" data-rn-chase="email" data-rn-lease="' + esc(String(r.lease_id)) + '">Chase e-sign &#9993;</button> ' +
@@ -6209,7 +6213,7 @@ window.addEventListener('error', function(e){
     }).join('') + '</div>';
     var vis = all.filter(function(r){ return !tdRwStageF || tdRwStage(r) === tdRwStageF; })
       .map(function(r){ var s = tdRwStage(r); var d = tdMgrDays(r.term_end); return { r: r, s: s, d: d,
-        risk: (s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'pending_esign') && d != null && d <= 14 }; })
+        risk: (s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'not_sent' || s === 'pending_esign') && d != null && d <= 14 }; })
       .sort(function(a, b){
         var rd = (b.risk ? 1 : 0) - (a.risk ? 1 : 0); if (rd) return rd;
         var pd = tdRwMeta(a.s).pri - tdRwMeta(b.s).pri; if (pd) return pd;
@@ -6239,7 +6243,7 @@ window.addEventListener('error', function(e){
       (body ? '<div class="scrollx"><table class="mvtable"><thead>' + th + '</thead><tbody>' + body + '</tbody></table></div>'
             : '<div class="note">Nothing in this stage.</div>') + flow;
     var n = el('td-mgr-ren-n');
-    if (n){ var act = counts.undecided + counts.offer_sent + counts.declined + counts.pending_esign; n.textContent = act ? act + ' to work' : ''; }
+    if (n){ var act = counts.undecided + counts.offer_sent + counts.declined + counts.not_sent + counts.pending_esign; n.textContent = act ? act + ' to work' : ''; }
   }
   // Chase a pending e-signature: fetch tenant contact on click (the no-PII-in-list rule), then
   // open a prefilled RingCentral text / mailto. Tenant-facing copy is plain and factual, no URLs.
@@ -10025,6 +10029,7 @@ window.addEventListener('error', function(e){
     undecided:     { label:'Not started',  cls:'c-cold', tip:'Lease ends within 90 days and no renewal offer has been started in Buildium' },
     offer_sent:    { label:'Offer sent',   cls:'c-warm', tip:'Renewal offer sent in Buildium, waiting on the tenant' },
     declined:      { label:'Declined',     cls:'c-bad',  tip:'The tenant declined the renewal offer in Buildium — no move-out notice recorded on the lease yet' },
+    not_sent:      { label:'Not sent',     cls:'c-warm', tip:'Renewal drafted in Buildium but not yet sent for signature' },
     pending_esign: { label:'Pending',      cls:'c-warm', tip:'Renewal sent for signature, awaiting signatures' },
     signed:        { label:'Signed',       cls:'c-ok',   tip:'Renewal fully signed — shown until the current lease ends' },
     not_renewing:  { label:'Not renewing', cls:'c-bad',  tip:'Not renewing — the tenant gave notice or the renewal was cancelled' }
@@ -12736,7 +12741,7 @@ window.addEventListener('error', function(e){
   /* ════════════ Lease renewals ════════════ */
   var RN_ORDER = ['Not started','Offer sent','Declined','Pending','Signed','Cancelling','Cancelled','Sent','Not sent','Processing','Failed','Unknown'];
   function rnChip(s){
-    var c = s === 'Signed' ? 'c-ok' : (s === 'Pending' || s === 'Offer sent') ? 'c-warm' : (s === 'Cancelled' || s === 'Failed' || s === 'Declined') ? 'c-bad' : 'c-cold';
+    var c = s === 'Signed' ? 'c-ok' : (s === 'Pending' || s === 'Offer sent' || s === 'Not sent') ? 'c-warm' : (s === 'Cancelled' || s === 'Failed' || s === 'Declined') ? 'c-bad' : 'c-cold';
     return '<span class="chip ' + c + '">' + esc(s || '–') + '</span>';
   }
   function renderMiniRenewals(box, list){

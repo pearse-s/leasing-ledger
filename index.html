@@ -6535,8 +6535,13 @@ window.addEventListener('error', function(e){
   var tdRentRows = {};   // lease_id -> the rent row (the drawer reads address/tenant/buckets here)
   // the ONE definition of the rent list, shared by the card and the brief line. Falls back to
   // the unit-keyed units payload (pre-migration RPC / legacy assembly): occupied = current.
+  function tdRentNames(v){
+    if (Array.isArray(v)) return v.map(function(x){ return String(x || '').trim(); }).filter(Boolean).join(', ');
+    return String(v || '').trim();
+  }
   function tdRentList(m){
-    if (m.rent) return m.rent.filter(function(r){ return (Number(r.total_balance) || 0) > 0; });
+    if (m.rent) return m.rent.filter(function(r){ return (Number(r.total_balance) || 0) > 0; })
+      .map(function(r){ r.tenant_names = tdRentNames(r.tenant_names); return r; });
     if (!m.units) return [];
     return m.units.filter(function(u){ return (Number(u.total_balance) || 0) > 0 && u.lease_id != null; })
       .map(function(u){
@@ -6585,7 +6590,8 @@ window.addEventListener('error', function(e){
       var aged = (Number(r.balance_31_60_days) || 0) + (Number(r.balance_61_90_days) || 0) + (Number(r.balance_over_90_days) || 0);
       return '<tr class="tdrentrow' + (aged > 0 ? ' mvrisk' : '') + '" data-rentlid="' + esc(String(r.lease_id)) + '" role="button" tabindex="0">' +
         '<td data-label="Unit"><b>' + esc([r.property_name, r.unit_number].filter(Boolean).join(' · ')) + '</b></td>' +
-        '<td data-label="Tenant">' + esc(r.tenant_names || '–') + '</td>' +
+        '<td data-label="Tenant">' + (r.tenant_names ? esc(r.tenant_names)
+          : (r._nameTried ? '–' : '<span class="qn">Looking up&hellip;</span>')) + '</td>' +
         (past ? '<td data-label="Moved out">' + (r.move_out_date ? esc(tdRwDateShort(r.move_out_date)) + ' <small>' + esc(String(r.move_out_date).slice(0, 4)) + '</small>' : '–') + '</td>' : '') +
         '<td class="rt rtb" data-label="0–30d">' + money(r.balance_0_30_days) + '</td>' +
         '<td class="rt rtb" data-label="31–60d">' + money(r.balance_31_60_days) + '</td>' +
@@ -6600,6 +6606,46 @@ window.addEventListener('error', function(e){
       : '<div class="note">' + empty + '</div>');
     var n2 = el('td-mgr-rent-n');
     if (n2) n2.textContent = rows.length ? rows.length + ' owing · ' + fmtMoney(tdRentSum(rows)) : '';
+    tdRentFillNames(tdMoreSlice('rent', vis));
+  }
+  // Names for leases the mirror has none for. Buildium drops a tenant from CurrentTenants
+  // when the lease ends, and v_leases reads only CurrentTenants — so EVERY past tenant (23 of
+  // 23, 2026-10-02) arrived nameless. /lease-detail now resolves those ids live from Buildium
+  // (fn v339), so ask it for just the rows on screen, 3 at a time, sharing tdRwLeaseCache with
+  // the reminder buttons (one call per lease per page load). _nameTried is the progress
+  // predicate: a row is attempted ONCE, so the repaint this triggers cannot re-request it.
+  var tdRentNameQ = [], tdRentNameBusy = 0, tdRentOpenLid = null;
+  function tdRentFillNames(list){
+    list.forEach(function(r){
+      if (r.tenant_names || r._nameTried || r._nameQueued || r.lease_id == null) return;
+      r._nameQueued = true; tdRentNameQ.push(r);
+    });
+    while (tdRentNameBusy < 3 && tdRentNameQ.length) tdRentNameOne(tdRentNameQ.shift());
+  }
+  function tdRentNameOne(r){
+    var lid = r.lease_id;
+    var done = function(det){
+      r._nameTried = true;
+      var nm = det ? tdRentNames(((det.tenants) || []).map(function(t){ return t && t.name; })) : '';
+      if (nm) r.tenant_names = nm;
+      // repaint only when this row's cell is still on screen (a role flip or tab switch may
+      // have replaced the card); the drawer's name line updates in place if it is this lease
+      if (el('td-mgr-rent') && document.querySelector('[data-rentlid="' + String(lid) + '"]')) tdRentPaint();
+      var dn = el('rent-d-tn');
+      if (dn && tdRentOpenLid === String(lid)) dn.textContent = nm || 'No tenant name on file';
+    };
+    if (tdRwLeaseCache[lid]) return done(tdRwLeaseCache[lid]);
+    tdRentNameBusy++;
+    authFetch('/lease-detail?lease_id=' + encodeURIComponent(lid)).then(function(j){
+      tdRwLeaseCache[lid] = j; return j;
+    }, function(e){
+      if (String(e && e.message) !== 'AUTH') console.error('lease-detail (rent names) failed', lid, e);
+      return null;
+    }).then(function(j){
+      tdRentNameBusy--;
+      done(j);
+      tdRentFillNames([]);   // drain the queue
+    });
   }
   // Drawer: ageing breakdown + the lease in Buildium + the two reminder actions. Contact is
   // NOT in the list payload — it arrives here on click via the existing /lease-detail, sharing
@@ -6608,8 +6654,10 @@ window.addEventListener('error', function(e){
     var u = tdRentRows[leaseId];
     var mm = el('rentmodal'), body = el('rent-d-body');
     if (!u || !mm || !body) return;
+    tdRentOpenLid = String(leaseId);
     body.innerHTML = tdRentDrawerBody(u);
     if (!mm.classList.contains('open')) openModal('rentmodal');
+    tdRentFillNames([u]);
     if (u.lease_id != null) tdRentLoadLedger(u.lease_id);
   }
   // Payment history + owed-by-account, from the same live /lease-ledger the lease modal uses
@@ -6641,7 +6689,7 @@ window.addEventListener('error', function(e){
       { l: 'Over 90 days',    v: Number(u.balance_over_90_days) || 0 }
     ].filter(function(x){ return x.v > 0; });
     var h = '<h3 style="margin:0 0 2px">' + esc([u.property_name, u.unit_number].filter(Boolean).join(' · ')) + '</h3>' +
-      '<div class="note" style="margin-bottom:12px">' + esc(u.tenant_names || 'No tenant name on file') +
+      '<div class="note" style="margin-bottom:12px"><span id="rent-d-tn">' + (u.tenant_names ? esc(u.tenant_names) : (u._nameTried ? 'No tenant name on file' : 'Looking up the tenant&hellip;')) + '</span>' +
         (u.is_current === false ? ' &middot; past tenant' + (u.move_out_date ? ', moved out ' + esc(tdRwDateShort(u.move_out_date)) + ' ' + esc(String(u.move_out_date).slice(0, 4)) : '') : '') + '</div>' +
       '<div class="tdp-v" style="font-size:1.5rem">' + fmtMoney(Number(u.total_balance) || 0) + '</div>' +
       '<div class="note" style="margin-bottom:12px">outstanding balance</div>';

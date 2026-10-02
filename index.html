@@ -1858,7 +1858,7 @@ window.addEventListener('error', function(e){
           <div class="pair click" id="pair-rn-signed" title="Open signed renewals"><span class="pl">&#9989; Renewing &mdash; signed</span><span class="pv" id="te-signed">&ndash;</span></div>
           <div class="pair click" id="pair-rn-pending" title="Open pending renewals"><span class="pl">&#9203; Renewal pending</span><span class="pv" id="te-pending">&ndash;</span></div>
           <div class="pair click" id="pair-rn-ending" title="See leases with a notice to vacate"><span class="pl">&#128682; Not renewing <small>(notice / cancelled)</small></span><span class="pv" id="te-ending">&ndash;</span></div>
-          <div class="pair"><span class="pl">&#10067; Undecided</span><span class="pv" id="te-undecided">&ndash;</span></div>
+          <div class="pair"><span class="pl">&#10067; Not started</span><span class="pv" id="te-undecided">&ndash;</span></div>
           <div class="pair"><span class="pl">Expiring &le;90d (total)</span><span class="pv" id="te-total">&ndash;</span></div>
           <div class="note" id="te-foot" style="margin-top:6px">&nbsp;</div>
           <div class="sect">Past term-ends (window)</div>
@@ -2613,7 +2613,7 @@ window.addEventListener('error', function(e){
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">Current renewal cycle from Buildium &mdash; <b>Undecided</b> = lease ends in the next 90 days with no renewal started (<b>Offer sent</b> = offered in Buildium, not yet drafted); <b>Pending</b> = offer sent, awaiting signature; <b>Signed</b> = fully signed; <b>Cancelled</b> = offer cancelled. Scope filters apply. Click a row to open the unit.</div>
+      <div class="note" style="margin-top:10px">Current renewal cycle from Buildium &mdash; <b>Not started</b> = lease ends in the next 90 days and no renewal offer has been started; <b>Offer sent</b> = offer sent, waiting on the tenant; <b>Declined</b> = the tenant declined the offer; <b>Not sent</b> = renewal drafted, not yet sent for signature; <b>Pending</b> = awaiting signatures; <b>Signed</b> = fully signed; <b>Cancelled</b> = renewal cancelled. Scope filters apply. Click a row to open the unit.</div>
     </div>
   </div>
 
@@ -5912,11 +5912,11 @@ window.addEventListener('error', function(e){
     }
     if (m.renewals){
       // WS-M M5: the worklist carries every stage now — the brief surfaces the ACTIONABLE ones
-      // (undecided / offer sent / pending e-sign); signed + not-renewing are settled.
-      var tdRwAct = function(r){ var s = tdRwStage(r); return s === 'undecided' || s === 'offer_sent' || s === 'pending_esign'; };
+      // (not started / offer sent / declined / pending e-sign); signed + not-renewing are settled.
+      var tdRwAct = function(r){ var s = tdRwStage(r); return s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'pending_esign'; };
       var undecSoon = m.renewals.filter(function(r){ if (tdRwStage(r) !== 'undecided') return false; var d = tdMgrDays(r.term_end || r.current_lease_end || r.lease_to_date); return d != null && d <= 30; });
       var actionable = m.renewals.filter(tdRwAct);
-      if (undecSoon.length) L.push({ k: 'renewals', t: undecSoon.length + ' renewal' + (undecSoon.length === 1 ? '' : 's') + ' undecided inside 30 days' });
+      if (undecSoon.length) L.push({ k: 'renewals', t: undecSoon.length + ' renewal' + (undecSoon.length === 1 ? '' : 's') + ' not started inside 30 days' });
       else if (actionable.length) L.push({ k: 'renewals', t: actionable.length + ' renewal' + (actionable.length === 1 ? '' : 's') + ' need a nudge' });
     }
     if (m.units){
@@ -6004,10 +6004,10 @@ window.addEventListener('error', function(e){
       chip('rent at risk', mo.rent_at_risk != null ? fmtMoney(mo.rent_at_risk) : '–', 'units') +
       chip('expiring 90d', p.expiring_90d != null ? fmtNum(p.expiring_90d) : '–', 'renewals',
         'Leases ending in the next 90 days — jumps to the Renewals worklist below', 'ren') +
-      // the worklist SPLITS this number into Undecided + Offer sent, so the chip lands on the
+      // the worklist SPLITS this number into Not started + Offer sent, so the chip lands on the
       // unfiltered card (both chips visible) rather than on a narrower stage showing fewer rows
-      chip('undecided', p.undecided != null ? fmtNum(p.undecided) : '–', 'renewals',
-        'No renewal decision recorded yet — the worklist below splits these into Undecided and Offer sent', 'ren') +
+      chip('no renewal yet', p.undecided != null ? fmtNum(p.undecided) : '–', 'renewals',
+        'No renewal decision yet — the worklist below splits these into Not started and Offer sent', 'ren') +
       // signed MTD comes from get_kpis(), which takes NO arguments and is portfolio-wide by
       // design (see the /stats route comment). Under scope it's the only company-wide number in
       // the row, so label it — otherwise it reads as this manager's own (A-15's mixed row).
@@ -6020,7 +6020,7 @@ window.addEventListener('error', function(e){
   // the card is not in the DOM so the caller can fall back to the tab jump.
   // Sets ONLY the filter the chip's own label already implies — never a narrower one: a chip
   // reading 57 must not land on a list of 18 (get_stats.pipeline.undecided folds the worklist's
-  // Undecided + Offer sent together), so the renewals jump CLEARS the stage filter.
+  // Not started + Offer sent together), so the renewals jump CLEARS the stage filter.
   function tdMgrCardGo(card){
     var box = el(card === 'moves-in' ? 'td-mv-bar' : 'td-mgr-ren');
     if (!box) return false;
@@ -6104,18 +6104,23 @@ window.addEventListener('error', function(e){
   // Rows + counts come from get_manager_brief.renewals = dashboard.v_renewal_worklist, which is
   // the get_stats.pipeline term-end set (next 90d) VERBATIM. "stage" is a STRICT REFINEMENT of
   // the get_stats bucket — offer_sent is split from undecided by renewal_offer_status, so
-  // undecided + offer_sent always folds back onto get_stats.undecided; the other three map 1:1.
+  // undecided + offer_sent always folds back onto get_stats.undecided; declined (Buildium's
+  // Declined renewal offer, 2026-10-01) folds onto get_stats.not_renewing; the rest map 1:1.
   // Reconcile before any deploy: SELECT bucket, COUNT(*) FROM dashboard.v_renewal_worklist
   // GROUP BY 1 -- must equal get_stats.pipeline (spec section 11). NO new route: chase reads
   // click via the existing /lease-detail (keeps phone/email out of the list — the no-PII rule).
-  var TD_RW_ORDER = ['undecided', 'offer_sent', 'pending_esign', 'signed', 'not_renewing'];
+  // The 'undecided' KEY is kept everywhere (API + get_stats); only its LABEL reads "Not started",
+  // Buildium's own name for a lease with no renewal offer.
+  var TD_RW_ORDER = ['undecided', 'offer_sent', 'declined', 'pending_esign', 'signed', 'not_renewing'];
   var TD_RW_META = {
-    undecided:     { label: 'Undecided',      chip: 'c-cold', pri: 0 },
+    undecided:     { label: 'Not started',    chip: 'c-cold', pri: 0 },
     offer_sent:    { label: 'Offer sent',     chip: 'c-warm', pri: 1 },
-    pending_esign: { label: 'Pending e-sign', chip: 'c-warm', pri: 2 },
+    declined:      { label: 'Declined',       chip: 'c-bad',  pri: 2 },
+    pending_esign: { label: 'Pending e-sign', chip: 'c-warm', pri: 3 },
     signed:        { label: 'Signed',         chip: 'c-ok',   pri: 4 },
     not_renewing:  { label: 'Not renewing',   chip: 'c-bad',  pri: 5 }
   };
+  function tdRwMeta(s){ return TD_RW_META[s] || TD_RW_META.undecided; }   // an unknown future stage must not kill the card
   var tdRwStageF = '';      // '' = all stages; else one of TD_RW_ORDER (chip filter)
   var tdRwLast = null;      // the last rendered worklist array (chip toggles re-render from it)
   var tdRwRows = {};        // lease_id -> worklist row (the chase action reads addr/end/name here)
@@ -6128,6 +6133,7 @@ window.addEventListener('error', function(e){
     if (s === 'Cancelled' || s === 'Cancelling') return 'not_renewing';
     if (s === 'Signed') return 'signed';
     if (s === 'Pending') return 'pending_esign';
+    if (r.renewal_offer_status === 'Declined') return 'declined';
     if (r.renewal_offer_status === 'WaitingResponse') return 'offer_sent';
     return 'undecided';
   }
@@ -6173,7 +6179,7 @@ window.addEventListener('error', function(e){
     return cur || (mkt != null ? '<span class="srctag">mkt ' + fmtMoney(mkt) + '</span>' : '&ndash;');
   }
   function tdRwActionCell(r, stage){
-    if (stage === 'undecided' || stage === 'offer_sent')
+    if (stage === 'undecided' || stage === 'offer_sent' || stage === 'declined')
       return '<a class="tdact" href="' + esc(tdRwBuildium(r.lease_id)) + '" target="_blank" rel="noopener">Open in Buildium &#8599;</a>';
     if (stage === 'pending_esign')
       return '<button type="button" class="tdact" data-rn-chase="email" data-rn-lease="' + esc(String(r.lease_id)) + '">Chase e-sign &#9993;</button> ' +
@@ -6198,19 +6204,19 @@ window.addEventListener('error', function(e){
     all.forEach(function(r){ var s = tdRwStage(r); if (counts[s] != null) counts[s]++; });
     var chips = '<div class="mvchips">' + TD_RW_ORDER.map(function(s){
       return '<button type="button" class="chip' + (tdRwStageF === s ? ' on' : '') + '" data-rn-stage="' + s + '">' +
-        TD_RW_META[s].label + ' ' + counts[s] + '</button>';
+        tdRwMeta(s).label + ' ' + counts[s] + '</button>';
     }).join('') + '</div>';
     var vis = all.filter(function(r){ return !tdRwStageF || tdRwStage(r) === tdRwStageF; })
       .map(function(r){ var s = tdRwStage(r); var d = tdMgrDays(r.term_end); return { r: r, s: s, d: d,
-        risk: (s === 'undecided' || s === 'offer_sent' || s === 'pending_esign') && d != null && d <= 14 }; })
+        risk: (s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'pending_esign') && d != null && d <= 14 }; })
       .sort(function(a, b){
         var rd = (b.risk ? 1 : 0) - (a.risk ? 1 : 0); if (rd) return rd;
-        var pd = TD_RW_META[a.s].pri - TD_RW_META[b.s].pri; if (pd) return pd;
+        var pd = tdRwMeta(a.s).pri - tdRwMeta(b.s).pri; if (pd) return pd;
         return (a.d == null ? 9e9 : a.d) - (b.d == null ? 9e9 : b.d);
       });
     var th = '<tr><th>Unit</th><th>Tenant</th><th>Lease ends</th><th>Rent</th><th>Status</th><th></th></tr>';
     var body = vis.map(function(x){
-      var r = x.r, s = x.s, d = x.d, meta = TD_RW_META[s];
+      var r = x.r, s = x.s, d = x.d, meta = tdRwMeta(s);
       var pend = '';
       if (s === 'pending_esign' && r.renewal_created){
         var dd = Math.floor((Date.now() - Date.parse(r.renewal_created)) / 86400000);
@@ -6227,12 +6233,12 @@ window.addEventListener('error', function(e){
         '<td data-label="Status"><span class="chip ' + meta.chip + '">' + meta.label + pend + '</span></td>' +
         '<td data-label="">' + tdRwActionCell(r, s) + '</td></tr>';
     }).join('');
-    var flow = '<div class="note">Not renewing &rarr; notice on the lease &rarr; the unit appears in <b>Move-outs</b> automatically on the next sync.</div>';
+    var flow = '<div class="note">Declined &rarr; record the notice on the lease in Buildium &rarr; it becomes <b>Not renewing</b> and the unit appears in <b>Move-outs</b> automatically on the next sync.</div>';
     box.innerHTML = chips +
       (body ? '<div class="scrollx"><table class="mvtable"><thead>' + th + '</thead><tbody>' + body + '</tbody></table></div>'
             : '<div class="note">Nothing in this stage.</div>') + flow;
     var n = el('td-mgr-ren-n');
-    if (n){ var act = counts.undecided + counts.offer_sent + counts.pending_esign; n.textContent = act ? act + ' to work' : ''; }
+    if (n){ var act = counts.undecided + counts.offer_sent + counts.declined + counts.pending_esign; n.textContent = act ? act + ' to work' : ''; }
   }
   // Chase a pending e-signature: fetch tenant contact on click (the no-PII-in-list rule), then
   // open a prefilled RingCentral text / mailto. Tenant-facing copy is plain and factual, no URLs.
@@ -9299,7 +9305,7 @@ window.addEventListener('error', function(e){
     el('te-ending').innerHTML    = fmtNum(pl.not_renewing) + ' <small>' + tePct(pl.not_renewing) + '</small>';
     el('te-undecided').innerHTML = fmtNum(pl.undecided) + ' <small>' + tePct(pl.undecided) + '</small>';
     el('te-total').textContent   = fmtNum(teTot);
-    el('te-foot').innerHTML = 'Undecided = no renewal offer recorded yet and no notice &mdash; near-term undecided are usually holdovers not yet processed, not at-risk.';
+    el('te-foot').innerHTML = 'Not started = no renewal yet and no notice (includes offers sent and still waiting on the tenant) &mdash; near-term ones are usually holdovers not yet processed, not at-risk. A declined offer counts as ending.';
 
     var warn = el('caly-warn');
     if (sh.unclassified_event_types > 0) {
@@ -9340,7 +9346,7 @@ window.addEventListener('error', function(e){
       'The vacancy-aging chart counts <b>all</b> vacant units (listed and unlisted), excluding not-ready and take-back. Listed units age from their <b>available date</b> (units available in the future show <b>negative</b> days and sit in the 0&ndash;30 bucket); unlisted turnover ages from the lease end date, and unlisted never-leased from the listed/complex date or show as <b>age unknown</b>. ' +
       'Pre-leased units (signed future lease) count as <b>occupied</b> in both rates. ' +
       '“Leases signed” = lease records created in Buildium in the window; the future-start portion is pre-leasing. ' +
-      'Past term-ends: “Renewed” = a new lease term started in the window (from Buildium renewal history); “Held over” = lease still active past its end with no new term (month-to-month); “Moved out” = lease ended. “Renewing vs ending” (next 90d) uses the live renewal e-signature status: signed / pending / not-renewing (notice or cancelled) / undecided. ' +
+      'Past term-ends: “Renewed” = a new lease term started in the window (from Buildium renewal history); “Held over” = lease still active past its end with no new term (month-to-month); “Moved out” = lease ended. “Renewing vs ending” (next 90d) uses the live renewal e-signature status: signed / pending / not-renewing (notice, cancelled or offer declined) / not started.' +
       'Applications count individual applicants; the households figure collapses co-applicants. ' +
       'Showings and trend ignore the entity filters. ' +
       'Generated ' + (m.generated_at ? new Date(m.generated_at).toLocaleString('en-CA') : '') + '.';
@@ -10009,13 +10015,15 @@ window.addEventListener('error', function(e){
   }
   // Renewal stage chip (Pearse 2026-09-30). r.renewal_stage is stamped onto every /units row
   // server-side from dashboard.v_renewal_worklist — the SAME source as the Renewals board and the
-  // Manager Today card — for leases whose term ends in the next 90 days: undecided (no renewal
-  // started) → offer_sent → pending_esign → signed, or not_renewing (tenant gave notice, or the
-  // renewal was cancelled — a denied renewal). A signed renewal keeps its chip until the old lease
+  // Manager Today card — for leases whose term ends in the next 90 days: undecided (label "Not
+  // started": no renewal offer) → offer_sent → pending_esign → signed; declined (the tenant
+  // declined Buildium's renewal offer, no notice recorded yet); or not_renewing (tenant gave
+  // notice, or the renewal was cancelled). A signed renewal keeps its chip until the old lease
   // ends; the view's 90-day window drops it on its own after that.
   var RN_STAGE = {
-    undecided:     { label:'Undecided',    cls:'c-cold', tip:'Lease ends within 90 days and no renewal has been started in Buildium' },
-    offer_sent:    { label:'Offer sent',   cls:'c-warm', tip:'Renewal offer sent in Buildium, not yet drafted' },
+    undecided:     { label:'Not started',  cls:'c-cold', tip:'Lease ends within 90 days and no renewal offer has been started in Buildium' },
+    offer_sent:    { label:'Offer sent',   cls:'c-warm', tip:'Renewal offer sent in Buildium, waiting on the tenant' },
+    declined:      { label:'Declined',     cls:'c-bad',  tip:'The tenant declined the renewal offer in Buildium — no move-out notice recorded on the lease yet' },
     pending_esign: { label:'Pending',      cls:'c-warm', tip:'Renewal sent for signature, awaiting signatures' },
     signed:        { label:'Signed',       cls:'c-ok',   tip:'Renewal fully signed — shown until the current lease ends' },
     not_renewing:  { label:'Not renewing', cls:'c-bad',  tip:'Not renewing — the tenant gave notice or the renewal was cancelled' }
@@ -12725,9 +12733,9 @@ window.addEventListener('error', function(e){
   });
 
   /* ════════════ Lease renewals ════════════ */
-  var RN_ORDER = ['Undecided','Offer sent','Pending','Signed','Cancelling','Cancelled','Sent','Not sent','Processing','Failed','Unknown'];
+  var RN_ORDER = ['Not started','Offer sent','Declined','Pending','Signed','Cancelling','Cancelled','Sent','Not sent','Processing','Failed','Unknown'];
   function rnChip(s){
-    var c = s === 'Signed' ? 'c-ok' : (s === 'Pending' || s === 'Offer sent') ? 'c-warm' : (s === 'Cancelled' || s === 'Failed') ? 'c-bad' : 'c-cold';
+    var c = s === 'Signed' ? 'c-ok' : (s === 'Pending' || s === 'Offer sent') ? 'c-warm' : (s === 'Cancelled' || s === 'Failed' || s === 'Declined') ? 'c-bad' : 'c-cold';
     return '<span class="chip ' + c + '">' + esc(s || '–') + '</span>';
   }
   function renderMiniRenewals(box, list){
@@ -12764,12 +12772,12 @@ window.addEventListener('error', function(e){
   }
   // Undecided (Pearse 2026-09-28). /renewals returns them under a SEPARATE key (undecided) from
   // dashboard.v_renewal_worklist: leases ending in the next 90 days with no renewal record yet,
-  // split Undecided / Offer sent exactly like the Manager Today renewals card. They join the
-  // Renewals TAB only (rnTabRows) — renewalsAll stays records-only because the renewals tile,
-  // the Units "renewal:" chips (rnByUnit) and the unit popup all read it as "has a renewal".
+  // split Not started / Offer sent / Declined exactly like the Manager Today renewals card. They
+  // join the Renewals TAB only (rnTabRows) — renewalsAll stays records-only because the renewals
+  // tile, the Units "renewal:" chips (rnByUnit) and the unit popup all read it as "has a renewal".
   function rnFromWorklist(r){
     return { renewal_id: null, lease_id: r.lease_id, is_undecided: true,
-      renewal_state: r.stage === 'offer_sent' ? 'Offer sent' : 'Undecided', esignature_status: null,
+      renewal_state: r.stage === 'offer_sent' ? 'Offer sent' : r.stage === 'declined' ? 'Declined' : 'Not started', esignature_status: null,
       lease_from_date: null, lease_to_date: null, rent: null, last_updated_date_time: null,
       current_lease_end: r.term_end, current_rent: r.current_rent, tenant_names: r.tenant_names,
       unit_id: r.unit_id, unit_number: r.unit_number, property_id: r.property_id, property_name: r.property_name,
@@ -12820,7 +12828,7 @@ window.addEventListener('error', function(e){
         '<td>' + esc(r.property_name || '–') + '</td>' +
         '<td>' + esc(r.unit_number || '–') + '</td>' +
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
-        '<td>' + (r.is_undecided ? '<span class="qn">no offer yet</span>' : (esc((r.lease_from_date || '').slice(0, 10)) || '–')) + '</td>' +
+        '<td>' + (r.is_undecided ? '<span class="qn">no new term yet</span>' :(esc((r.lease_from_date || '').slice(0, 10)) || '–')) + '</td>' +
         // undecided rows have no new term: show the CURRENT lease end and rent, labelled, so
         // neither can be read as a renewal date or an offered rent
         '<td>' + (r.is_undecided ? esc((r.current_lease_end || '').slice(0, 10)) + ' <span class="qn">current</span>' : (esc((r.lease_to_date || '').slice(0, 10)) || '–')) + '</td>' +
@@ -12829,7 +12837,7 @@ window.addEventListener('error', function(e){
         '<td>' + (esc((r.last_updated_date_time || '').slice(0, 10)) || '–') + '</td></tr>';
     });
     el('rntable').querySelector('tbody').innerHTML = html || emptyRow('rntable', 'Nothing matches');
-    el('rn-count').textContent = rows.length + ' of ' + all.length + ' renewals' + (rnUndecided.length ? ' (incl. ' + rnUndecided.length + ' undecided)' : '');
+    el('rn-count').textContent = rows.length + ' of ' + all.length + ' renewals' + (rnUndecided.length ? ' (incl. ' + rnUndecided.length + ' with no new term yet)' : '');
   }
   el('rn-chips').addEventListener('click', function(e){
     var b = e.target.closest('.qchip'); if (!b) return;

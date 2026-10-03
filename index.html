@@ -2713,7 +2713,7 @@ window.addEventListener('error', function(e){
     <div class="card tablecard" style="margin-top:18px">
       <div class="tablebar">
         <h2>Owners</h2>
-        <input type="text" id="o-search" placeholder="Search name, email, property&hellip;">
+        <input type="text" id="o-search" placeholder="Search name, property&hellip;">
         <span class="count-note" id="o-count"></span>
       </div>
       <div id="o-acmbar" role="group" aria-label="Your owners"></div>
@@ -2722,8 +2722,6 @@ window.addEventListener('error', function(e){
           <thead><tr>
             <th data-k="display_name">Owner</th>
             <th data-k="is_company">Type</th>
-            <th data-k="email">Email</th>
-            <th data-k="phone">Phone</th>
             <th data-k="property_count" class="rt">Props</th>
             <th data-k="management_agreement_start_date">Mgmt start</th>
             <th data-k="management_agreement_end_date">Mgmt end</th>
@@ -4848,7 +4846,7 @@ window.addEventListener('error', function(e){
       } else if (mail){
         act = '<a href="' + esc(tdMailto(mail, 'Confirming your tour' + (addr ? ' at ' + addr : ''), msg)) + '" class="tdact" title="No phone on file — email instead">&#9993; Confirm by email</a>';
       } else {
-        act = '<span class="count-note">No phone or email on file</span>';
+        act = tourContactBtn(r) || '<span class="count-note">No phone or email on file</span>';   // S6: outside the contact window
       }
       return '<div class="schoffer" data-uri="' + esc(r.uri) + '"><div class="schoffer-main"><b>' + esc(when) + '</b> &middot; ' + esc(r.invitee_name || 'Prospect') +
         '<div class="schoffer-sub">' + esc(r.agent || '?') + (addr ? ' &middot; ' + esc(addr) : '') + '</div></div>' +
@@ -4936,6 +4934,8 @@ window.addEventListener('error', function(e){
         act = '<div class="tdrowact"><a href="' + rcCall(esc(tel)) + '" class="tdact">&#128222; Call</a> <a href="' + rcText(esc(tel), msg) + '" class="tdact">&#128172; Text</a></div>';
       } else if (mail){
         act = '<div class="tdrowact"><a href="' + esc(tdMailto(mail, 'Your tour' + (addr ? ' at ' + addr : ''), msg)) + '" class="tdact" title="No phone on file — email instead">&#9993; Email</a></div>';
+      } else if (tourNeedsContact(r)){
+        act = '<div class="tdrowact">' + tourContactBtn(r) + '</div>';   // S6: outside the contact window
       }
       return '<div class="schoffer"><div class="schoffer-main"><b>' + esc(r.invitee_name || 'Prospect') + '</b>' + (r.agent ? ' &middot; ' + esc(r.agent) : '') +
         '<div class="schoffer-sub">' + esc(when) + '</div>' + (addr ? '<div class="schoffer-sub">' + esc(addr) + '</div>' : '') +
@@ -9897,14 +9897,15 @@ window.addEventListener('error', function(e){
     return s;
   }
   // Unit-popup panel — shown only when the unit has a signed future lease.
+  // S6 (Batch F): one unit = a detail view, so it reads /move-in-contact (full row + contact,
+  // logged); 404 = no future lease on this unit. The bulk /upcoming-move-ins list is contact-free.
   function mountIncomingPanel(box, unitId){
     if (!box) return;
     box.innerHTML = '';
     if (!unitId) return;
-    authFetch('/upcoming-move-ins?unit_id=' + encodeURIComponent(unitId)).then(function(j){
-      var rows = (j && j.move_ins) || [];
-      if (!rows.length) { box.innerHTML = ''; return; }
-      var r = rows[0];
+    authFetch('/move-in-contact?unit_id=' + encodeURIComponent(unitId)).then(function(j){
+      var r = j && j.move_in;
+      if (!r) { box.innerHTML = ''; return; }
       var badge = r.is_flip ? '<span class="chip c-warm">flip &middot; tenant in place</span>' : '<span class="chip c-cold">pre-leased</span>';
       var ts = (r.incoming_tenants && r.incoming_tenants.length) ? r.incoming_tenants
         : [{ name:r.incoming_tenant_names, phone:r.incoming_phone, email:r.incoming_email, applicant_id:(r.incoming_applicant_ids || [])[0] }];
@@ -9918,7 +9919,17 @@ window.addEventListener('error', function(e){
       }).join('');
       box.innerHTML = '<div class="sect">Incoming tenant ' + badge +
         (r.move_in_date ? ' <small style="font-weight:400;opacity:.8">moves in ' + esc(r.move_in_date) + '</small>' : '') + '</div>' + body;
-    }).catch(function(){ box.innerHTML = ''; });
+    }).catch(function(e){
+      box.innerHTML = '';
+      var m = String(e && e.message);
+      if (m !== 'AUTH' && m !== 'HTTP 404') console.error('move-in-contact', e);   // 404 = no future lease here
+    });
+  }
+  // S6: the move-ins LIST carries has_phone/has_email only. "Contact" fetches this one row and
+  // swaps in the real Call/Text/Email links, so the phone launch is still a direct tap.
+  function miContactBtn(r){
+    if (!(r.has_phone || r.has_email)) return '';
+    return '<button type="button" class="listbtn" data-mi-contact="' + esc(r.unit_id) + '" title="Show contact">Contact</button>';
   }
   // Dedicated "Upcoming move-ins" list (opened from the Pre-leased/upcoming KPI + Move-ins tile).
   var miAll = null, miFilter = 'all';
@@ -9943,7 +9954,7 @@ window.addEventListener('error', function(e){
       var appId = (r.incoming_applicant_ids && r.incoming_applicant_ids[0]) || null;
       return '<div class="trow"><span class="tn">' + loc + ' ' + badge + '</span>' +
         '<span>' + nm + (r.move_in_date ? ' &middot; in ' + esc(r.move_in_date) : '') + '</span>' +
-        '<span class="rmpro-acts">' + incomingActs(r.incoming_phone, r.incoming_email, appId, r.incoming_tenant_names) + '</span>' +
+        '<span class="rmpro-acts" data-mi-acts="' + esc(r.unit_id) + '">' + miContactBtn(r) + incomingActs(null, null, appId, r.incoming_tenant_names) + '</span>' +
         '<button type="button" class="listbtn" data-mi-unit="' + r.unit_id + '">View unit &rarr;</button></div>';
     }).join('');
   }
@@ -9963,6 +9974,22 @@ window.addEventListener('error', function(e){
     if (f){ miFilter = f.getAttribute('data-mifilter'); drawMiChips(); drawMoveIns(); return; }
     var u = e.target.closest('[data-mi-unit]');
     if (u){ closeModal('mimodal'); openUnitEnsure(u.getAttribute('data-mi-unit')); return; }
+    var mc = e.target.closest('[data-mi-contact]');
+    if (mc){
+      var uid = mc.getAttribute('data-mi-contact');
+      mc.disabled = true; mc.textContent = '…';
+      authFetch('/move-in-contact?unit_id=' + encodeURIComponent(uid)).then(function(j){
+        var r = (j && j.move_in) || {};
+        var box = el('mi-list') && el('mi-list').querySelector('[data-mi-acts="' + uid + '"]');
+        if (!box) return;   // list redrawn / closed meanwhile
+        var appId = (r.incoming_applicant_ids && r.incoming_applicant_ids[0]) || null;
+        box.innerHTML = incomingActs(r.incoming_phone, r.incoming_email, appId, r.incoming_tenant_names) || '<span class="count-note">No contact on file</span>';
+      }).catch(function(err){
+        if (mc.isConnected) { mc.disabled = false; mc.textContent = 'Contact'; }
+        if (String(err && err.message) !== 'AUTH') console.error('move-in-contact', err);
+      });
+      return;
+    }
   });
 
   function openModal(id){
@@ -12407,7 +12434,7 @@ window.addEventListener('error', function(e){
       })
       .catch(function(){
         el('veil').classList.add('hide');
-        el('otable').querySelector('tbody').innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center">Could not load owners.</td></tr>';
+        el('otable').querySelector('tbody').innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center">Could not load owners.</td></tr>';
       });
   }
   function drawOwners(){
@@ -12419,7 +12446,8 @@ window.addEventListener('error', function(e){
       if (!scopeTestOwner(r, ow, pr)) return false;
       if (acmOn && !acmPass(r)) return false;
       if (!q) return true;
-      return ((r.display_name||'') + ' ' + (r.email||'') + ' ' + ((r.property_names||[]).join(' '))).toLowerCase().indexOf(q) >= 0;
+      // S6 (Batch F): /owners carries no email/phone — contact lives in the owner modal (/owner-detail)
+      return ((r.display_name||'') + ' ' + ((r.property_names||[]).join(' '))).toLowerCase().indexOf(q) >= 0;
     });
     rows.sort(cmpRows(oSort.k, oSort.d));
     var html = '';
@@ -12427,8 +12455,6 @@ window.addEventListener('error', function(e){
       html += '<tr class="rowlink" data-oid="' + r.buildium_id + '">' +
         '<td><b>' + esc(r.display_name) + '</b></td>' +
         '<td>' + (r.is_company ? 'Company' : 'Individual') + '</td>' +
-        '<td>' + esc(r.email || '–') + '</td>' +
-        '<td>' + esc(r.phone || '–') + '</td>' +
         '<td class="rt">' + fmtNum(r.property_count) + '</td>' +
         '<td>' + esc(r.management_agreement_start_date || '–') + '</td>' +
         '<td>' + esc(r.management_agreement_end_date || '–') + '</td>' + acmCellTd(r) + '</tr>';
@@ -12453,30 +12479,51 @@ window.addEventListener('error', function(e){
     if (!r) return;
     omOpen(r);
   });
+  // Owner modal identity strip + collapsed details. c = {phone,email,alternate_email} once known,
+  // null while /owner-detail is loading; failed=true when that fetch errored.
+  function omPaintContact(r, c, failed){
+    var nm = (r.display_name || 'Owner').trim();
+    var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+    var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div><div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div><div class="rmpro-stat">' + (r.is_company ? 'Company' : 'Individual') + ' &middot; ' + fmtNum(r.property_count) + (r.property_count === 1 ? ' property' : ' properties') + '</div></div><div class="rmpro-acts">';
+    if (c && c.phone) { var tel = String(c.phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>'; }
+    if (c && c.email) pc += '<a href="mailto:' + esc(c.email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
+    if (!c) pc += '<span class="rmpro-load" style="font-size:.8rem;color:var(--ink-soft)">Loading contact&hellip;</span>';
+    else if (failed) pc += '<span style="font-size:.8rem;color:var(--ink-soft)">Contact unavailable</span>';
+    pc += '</div></div>';
+    el('om-contact').innerHTML = pc;
+    var f = '';
+    f += fitem('Phone', c ? esc(c.phone) : null);
+    f += fitem('Email', c && c.email ? '<a href="mailto:' + esc(c.email) + '" style="color:var(--clay)">' + esc(c.email) + '</a>' : null);
+    f += fitem('Alt email', c && c.alternate_email ? esc(c.alternate_email) : null);
+    f += fitem('Properties', fmtNum(r.property_count));
+    f += fitem('Mgmt start', esc(r.management_agreement_start_date));
+    f += fitem('Mgmt end', esc(r.management_agreement_end_date));
+    el('om-fields').innerHTML = f;
+  }
   // Paints and opens the owner modal for one owner row. /owners rows and the account manager's
-  // /me/owners rows carry the same fields, so the Today brief opens this same modal.
+  // /me/owners rows share the shape (only /me/owners still carries contact), so the Today brief
+  // opens this same modal.
   function omOpen(r){
     curOwner = r;
     el('om-title').textContent = r.display_name || '';
     el('om-sub').innerHTML = (r.is_company ? 'Company' : 'Individual') + (r.is_active === false ? ' &middot; INACTIVE' : '');
     // identity strip — the owner, tap-to-call/text/email
-    var nm = (r.display_name || 'Owner').trim();
-    var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
-    var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div><div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div><div class="rmpro-stat">' + (r.is_company ? 'Company' : 'Individual') + ' &middot; ' + fmtNum(r.property_count) + (r.property_count === 1 ? ' property' : ' properties') + '</div></div><div class="rmpro-acts">';
-    if (r.phone) { var tel = String(r.phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>'; }
-    if (r.email) pc += '<a href="mailto:' + esc(r.email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
-    pc += '</div></div>';
-    el('om-contact').innerHTML = pc;
-    // collapsed details
-    var f = '';
-    f += fitem('Phone', esc(r.phone));
-    f += fitem('Email', r.email ? '<a href="mailto:' + esc(r.email) + '" style="color:var(--clay)">' + esc(r.email) + '</a>' : null);
-    f += fitem('Alt email', r.alternate_email ? esc(r.alternate_email) : null);
-    f += fitem('Properties', fmtNum(r.property_count));
-    f += fitem('Mgmt start', esc(r.management_agreement_start_date));
-    f += fitem('Mgmt end', esc(r.management_agreement_end_date));
-    el('om-fields').innerHTML = f;
+    // S6 (Batch F): /owners rows carry NO contact; /me/owners rows (account manager) still do.
+    // Contact comes from the row when present, otherwise /owner-detail fetched now; the
+    // curOwner check drops a stale reply when another owner was opened meanwhile.
+    var hasContact = Object.prototype.hasOwnProperty.call(r, 'email') || Object.prototype.hasOwnProperty.call(r, 'phone');
+    omPaintContact(r, hasContact ? r : null, false);
     el('om-detwrap').open = false;
+    if (!hasContact && r.buildium_id != null) {
+      authFetch('/owner-detail?owner_id=' + encodeURIComponent(r.buildium_id)).then(function(j){
+        if (curOwner !== r) return;
+        omPaintContact(r, (j && j.owner) || {}, false);
+      }).catch(function(e){
+        if (curOwner !== r) return;
+        omPaintContact(r, {}, true);
+        if (String(e && e.message) !== 'AUTH') console.error('owner-detail', e);
+      });
+    }
     // portfolio — what they own
     var props = r.property_names || [];
     el('om-portlab').textContent = 'Portfolio · ' + props.length + (props.length === 1 ? ' property' : ' properties');
@@ -13826,15 +13873,68 @@ window.addEventListener('error', function(e){
     if (r.is_manual_link) body += rowH('Link', '<span class="chip c-warm">manual</span>' + (r.manual_linked_by ? ' by ' + esc(r.manual_linked_by) : ''));
     el('rm-body').innerHTML = body;
     el('rm-detwrap').open = false;
-    // Prospect strip — avatar + name + contact actions; the stat line fills in once
-    // the prospect history loads (showings / no-shows / notes).
+    rmPaintProspect(r, when);
+    renderReconBlock(r);
+    // Attendees + their Calendly answers. Multi-attendee open houses list everyone with the
+    // suite they asked about; a 1:1 tour shows just "Their answers" (renderRoster branches on
+    // count). Always load so the prospect's questions are visible on every tour.
+    var rosterBox = el('rm-roster');
+    if (rosterBox) { rosterBox.innerHTML = ''; loadRoster(r); }
+    rmFinishOpen(r, s);
+    // S6 (Batch F): outside the /tours contact window the row has flags, not values. Fetch this
+    // one tour's contact (logged), merge it into the cached row, and repaint only what reads it.
+    if (tourNeedsContact(r)) {
+      tourContactEnsure(r, function(){
+        if (curTour !== r || modalStack.indexOf('rmodal') < 0) return;
+        rmPaintProspect(r, when); renderReconBlock(r); loadProspectFeed(r);
+      });
+    }
+  }
+  // true when this /tours row was sent without contact but the tour has some
+  function tourNeedsContact(r){
+    return !!r && r.contact_in_list === false && !r._contact_loaded && !!(r.has_phone || r.has_email);
+  }
+  // List rows outside the contact window: a "Contact" button that opens the tour modal (which
+  // fetches the contact). Rows that already open the modal on click ([data-uri]) handle it
+  // themselves; the document handler below covers the rest (tdCalFallback).
+  function tourContactBtn(r){
+    return tourNeedsContact(r) ? '<button type="button" class="tdact" data-tcuri="' + esc(r.uri) + '">&#128100; Contact</button>' : '';
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-tcuri]');
+    if (!b || b.parentElement.closest('[data-uri]')) return;
+    openTourDetail(b.getAttribute('data-tcuri'));
+  });
+  // Fetch ONE tour's contact via /tour-contact and merge it into this row object (the copy the
+  // modal opened; a list that later re-renders the same object picks it up). cb runs on success.
+  function tourContactEnsure(r, cb){
+    if (r._contact_loading) return;   // a second open while in flight: the first reply repaints
+    r._contact_loading = true;
+    authFetch('/tour-contact?uri=' + encodeURIComponent(r.uri)).then(function(j){
+      r._contact_loading = false;
+      var c = (j && j.contact) || {};
+      r.invitee_email = c.invitee_email || null;
+      r.invitee_phone = c.invitee_phone || null;
+      if (!r.invitee_name && c.invitee_name) r.invitee_name = c.invitee_name;
+      r._contact_loaded = true;
+      cb();
+    }).catch(function(e){
+      r._contact_loading = false;
+      if (String(e && e.message) !== 'AUTH') console.error('tour-contact', e);
+      var st = el('rm-prostat'); if (st && curTour === r) st.textContent = 'Contact unavailable';
+    });
+  }
+  // Prospect strip — avatar + name + contact actions; the stat line fills in once
+  // the prospect history loads (showings / no-shows / notes).
+  function rmPaintProspect(r, when){
     var pc = '';
-    if (r.invitee_name || r.invitee_email || r.invitee_phone) {
+    var pending = tourNeedsContact(r);
+    if (r.invitee_name || r.invitee_email || r.invitee_phone || pending) {
       var nm = (r.invitee_name || dispEmail(r.invitee_email) || '?').trim();
       var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
       pc += '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div>';
       pc += '<div class="rmpro-main"><div class="rmpro-name">' + esc(r.invitee_name || 'Prospect') + '</div>';
-      pc += '<div class="rmpro-stat" id="rm-prostat">' + esc(dispEmail(r.invitee_email) || r.invitee_phone || '') + (isSynthEmail(r.invitee_email) ? ' <span class="chip c-warm">texts only</span>' : '') + '</div></div>';
+      pc += '<div class="rmpro-stat" id="rm-prostat">' + (pending ? 'Loading contact&hellip;' : esc(dispEmail(r.invitee_email) || r.invitee_phone || '') + (isSynthEmail(r.invitee_email) ? ' <span class="chip c-warm">texts only</span>' : '')) + '</div></div>';
       pc += '<div class="rmpro-acts">';
       if (r.invitee_phone) {
         var tel = r.invitee_phone.replace(/[^0-9+]/g, '');
@@ -13847,12 +13947,9 @@ window.addEventListener('error', function(e){
       pc += '</div></div>';
     }
     el('rm-contact').innerHTML = pc;
-    renderReconBlock(r);
-    // Attendees + their Calendly answers. Multi-attendee open houses list everyone with the
-    // suite they asked about; a 1:1 tour shows just "Their answers" (renderRoster branches on
-    // count). Always load so the prospect's questions are visible on every tour.
-    var rosterBox = el('rm-roster');
-    if (rosterBox) { rosterBox.innerHTML = ''; loadRoster(r); }
+  }
+  // The rest of opening the tour modal: link/map/listing buttons, Calendly actions, notes, feed.
+  function rmFinishOpen(r, s){
     el('rm-pick').innerHTML = '';
     el('rm-link').innerHTML = ''; el('rm-link').removeAttribute('data-open');
     el('rm-linkbtn').innerHTML = r.matched_property_id ? '&#128279; Change link' : '&#128279; Link to a unit';
@@ -13945,6 +14042,7 @@ window.addEventListener('error', function(e){
   function loadProspectFeed(r){
     var feed = el('rm-feed'), lab = el('rm-feedlab'); if (!feed) return;
     var email = (r.invitee_email || '').trim();
+    if (!email && tourNeedsContact(r)) { lab.textContent = 'Activity · across all their tours'; feed.innerHTML = '<span class="count-note">Loading…</span>'; return; }   // S6: re-run once /tour-contact lands
     if (!email) { lab.textContent = 'Notes'; feed.innerHTML = '<span class="count-note">No prospect email on this tour — notes can’t be grouped by person.</span>'; return; }
     lab.textContent = 'Activity · across all their tours';
     feed.innerHTML = '<span class="count-note">Loading…</span>';
@@ -14984,7 +15082,7 @@ window.addEventListener('error', function(e){
     if (started && r.invitee_uri && r.status !== 'canceled'){
       acts.push('<button type="button" class="tdact" data-nsuri="' + esc(r.uri) + '">' + (r.is_no_show ? '&#8617; Undo no-show' : '&#8856; No-show') + '</button>');
     }
-    if (!tel && !mail) acts.push('<span class="count-note">No phone or email on file</span>');
+    if (!tel && !mail) acts.push(tourContactBtn(r) || '<span class="count-note">No phone or email on file</span>');   // S6: outside the contact window
     var act = acts.length ? '<div class="tdrowact">' + acts.join(' ') + '</div>' : '';
     // the tour's unit address is clickable → opens the listing (or unit) right here in a modal
     var canList = r.matched_unit_id || r.matched_property_id;
@@ -16025,8 +16123,9 @@ window.addEventListener('error', function(e){
         }
         var when = schEdFmt(r.created_at, { month:'short', day:'numeric' });
         var sub = [r.actor, when, r.delivered_via].filter(Boolean).map(esc).join(' · ');
-        var noPer = !(r.prospect_name || r.prospect_email || r.prospect_phone);   // truly anonymous open links only; phone-only offers now flip to Booked via phone match
-        var who = noPer ? '<b>No prospect · open link</b>' : ('<b>' + esc(r.prospect_name || dispEmail(r.prospect_email) || r.prospect_phone || 'Prospect') + '</b>');
+        // S6 (Batch F): /tour-offers sends has_email/has_phone + a masked prospect_hint, never the values
+        var noPer = !(r.prospect_name || r.has_email || r.has_phone);   // truly anonymous open links only; phone-only offers now flip to Booked via phone match
+        var who = noPer ? '<b>No prospect · open link</b>' : ('<b>' + esc(r.prospect_name || r.prospect_hint || 'Prospect') + '</b>');
         var srcChip = r.lead_source ? ' <span class="schoffer-src">' + esc(r.lead_source) + '</span>' : '';
         var pills = '';
         if (Array.isArray(r.slots) && r.slots.length){

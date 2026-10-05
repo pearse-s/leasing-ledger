@@ -1127,6 +1127,34 @@ window.addEventListener('error', function(e){
   @media (min-width:880px){ #td-acm .acmgrid{grid-template-columns:repeat(2,minmax(0,1fr))} }
   #td-acm .acmtiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   #o-acmbar .chip-mini,#o-acmbar .tdact{min-height:40px}
+  /* Owner desk (#td-desk) — Pearse's client follow-up checklist, Me persona only (plan:
+     Reports/owner-desk-on-ledger-plan-2026-09-30.md, phase 2). One column on a phone. */
+  #td-desk{margin-top:18px}
+  #td-desk .dskgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:4px 28px}
+  @media (min-width:880px){ #td-desk .dskgrid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  #td-desk .tdact{min-height:40px}
+  .dskc{border-top:1px solid var(--hairline)}
+  .dskc > summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:flex-start;padding:10px 0;min-height:40px}
+  .dskc > summary::-webkit-details-marker{display:none}
+  .dskcar{flex:none;width:14px;color:var(--ink-soft);transition:transform .15s ease}
+  .dskc[open] > summary .dskcar{transform:rotate(90deg)}
+  .dskname{font-size:.9rem;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+  .dskn{font-size:.74rem;color:var(--ink-soft);font-variant-numeric:tabular-nums;flex:none;padding-top:2px}
+  .dskbody{padding:0 0 8px 24px}
+  .dsktask{display:flex;gap:6px;align-items:flex-start;padding:4px 0;border-top:1px solid var(--hairline)}
+  .dskchk{flex:none;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;padding:0;margin-left:-10px}
+  .dskchk span{width:20px;height:20px;box-sizing:border-box;border:1.5px solid var(--hairline-dark);border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;color:transparent}
+  .dskchk.on span{background:var(--clay);border-color:var(--clay);color:#fff}
+  .dskchk:disabled{cursor:progress;opacity:.6}
+  .dsktx{font-size:.86rem;color:var(--ink);line-height:1.4;overflow-wrap:anywhere;padding-top:10px}
+  .dsktask.done .dsktx{text-decoration:line-through;color:var(--ink-soft)}
+  .dsksec{display:inline-block;font-size:.72rem;color:var(--ink-soft);border:1px solid var(--hairline);border-radius:999px;padding:0 7px;margin-right:6px}
+  .dskq{margin:6px 0 4px 18px;padding:0;font-size:.82rem;color:var(--ink);line-height:1.45}
+  .dskq li{margin:2px 0;overflow-wrap:anywhere}
+  .dskmsg{font-size:.78rem;color:var(--amber);padding:2px 0 6px}
+  #td-desk .kform label{font-size:.72rem}
+  #td-desk .kform{margin:6px 0 8px}
+  @media (prefers-reduced-motion:reduce){ .dskcar{transition:none} }
   /* the Account cell's content sets its column's floor: without it the auto table squeezed the
      column to ~120px and every row grew to ~140px tall (measured in the preview at 800px) */
   #otable td.acm-col > div{min-width:250px}
@@ -2151,10 +2179,11 @@ window.addEventListener('error', function(e){
         <button type="button" class="chip-mini" data-role="agent">Agent</button>
         <button type="button" class="chip-mini" data-role="manager">Manager</button>
         <button type="button" class="chip-mini adminonly" data-role="admin">Admin</button>
-        <button type="button" class="chip-mini" data-role="me" style="display:none" title="Your brief — owners to reach, owner calls to return, watched owners">Me</button>
+        <button type="button" class="chip-mini" data-role="me" style="display:none" title="Your brief — owners to reach, owner calls to return, watched owners, the owner desk">Me</button>
       </div>
     </div>
     <div id="td-acm" style="display:none"></div>
+    <div id="td-desk" style="display:none"></div>
     <div id="td-coord" style="display:none">
   <div id="page-schedule">
     <div class="schfunnel" id="sch-funnel" style="display:none"></div>
@@ -4428,7 +4457,8 @@ window.addEventListener('error', function(e){
     if (role === 'me'){
       var ph0 = el('page-hub'); if (ph0) ph0.style.display = 'none';
       g.style.display = 'none'; g.innerHTML = '';
-      tdSub('Me — owners to reach, owner calls to return, your numbers and watched owners.');
+      tdSub('Me — owners to reach, owner calls to return, your numbers, watched owners and the owner desk.');
+      dskLoad();   // the owner desk refreshes on every visit to Me (it renders under #td-acm)
       return;
     }
     // the merged Hub block (#page-hub lives INSIDE Today since 2026-07-17, same
@@ -12214,6 +12244,7 @@ window.addEventListener('error', function(e){
   // Its own block (#td-acm), shown ONLY under the "Me" persona chip (Pearse 2026-09-30 — it used
   // to sit above every role's workspace). It never touches another role's render.
   function acmRenderBrief(){
+    dskRender();   // the owner desk shows and hides with the brief (same Me-only rule)
     var box = el('td-acm'); if (!box) return;
     if (!acmOn || !acmRows || tdRole() !== 'me'){ box.style.display = 'none'; box.innerHTML = ''; return; }
     var due = acmRows.filter(function(a){ var d = acmDays(a.next_touch_due); return d != null && d <= 7; })
@@ -12421,6 +12452,289 @@ window.addEventListener('error', function(e){
     if (t.closest('#acm-push-on')){ acmPushOn(); return; }
     if (t.closest('#acm-push-test')){ acmPushTest(); return; }
   });
+
+  /* ── Owner desk (/me/desk*, 2026-10-04) ─────────────────────── */
+  // Pearse's client follow-up checklist (plan: Reports/owner-desk-on-ledger-plan-2026-09-30.md,
+  // phase 2). Rendered into #td-desk under the Me persona ONLY, below the brief, and on exactly
+  // when the account-manager layer is (acmOn; the server gates every /me/ route itself).
+  // During the dual run the claude.ai artifact stays the main copy: ticks and adds made here are
+  // copied back to it by the Inbox Sort routine (phase 3). Every write carries the row's version;
+  // a 409 means the item changed elsewhere, and the row is replaced with the current one.
+  // Held drafts are READ-ONLY here — answering stays in the Claude app's desk skill.
+  var dskData = null, dskReq = 0, dskLoading = false, dskErr = '', dskMsg = '', dskOpen = {}, dskEdit = null, dskBusy = {}, dskFocus = false;
+  // Coalesced (one request in flight) and generation-guarded (a sign-out while it is in flight
+  // bumps dskReq in dskRender, so the stale answer is dropped).
+  function dskLoad(){
+    if (!acmOn || dskLoading) return;
+    var gen = ++dskReq;
+    dskLoading = true;
+    if (!dskData) dskRender();   // "Loading" the first time; later visits keep the last list up
+    authFetch('/me/desk').then(function(j){
+      dskLoading = false;
+      if (gen !== dskReq) return;
+      dskData = { clients: (j && j.clients) || [], tasks: (j && j.tasks) || [], drafts: (j && j.drafts) || [] };
+      dskErr = '';
+      dskRender();
+    }).catch(function(e){
+      dskLoading = false;
+      if (gen !== dskReq) return;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('me/desk failed', e);
+      dskErr = dskData ? 'Could not refresh the owner desk; this is the last copy loaded.' : 'Could not load the owner desk.';
+      dskRender();
+    });
+  }
+  // POST that keeps the body on an error (postJSON drops it, and a 409 carries the current row).
+  function dskPost(path, body){
+    return apiFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){ return { ok: r.ok, status: r.status, j: j || {} }; });
+    });
+  }
+  function dskTask(id){
+    if (!dskData) return null;
+    for (var i = 0; i < dskData.tasks.length; i++) if (dskData.tasks[i].id === id) return dskData.tasks[i];
+    return null;
+  }
+  // Insert or replace a task from a route answer, kept in the route's order (client, order, id).
+  function dskPut(t){
+    if (!dskData || !t || !t.id) return;
+    dskData.tasks = dskData.tasks.filter(function(x){ return x.id !== t.id; });
+    dskData.tasks.push(t);
+    var o = function(v){ return typeof v === 'number' ? v : 1e9; };
+    dskData.tasks.sort(function(a, b){
+      if (a.client !== b.client) return a.client < b.client ? -1 : 1;
+      return (o(a.order) - o(b.order)) || (a.id < b.id ? -1 : (a.id > b.id ? 1 : 0));
+    });
+  }
+  function dskDate(ymd){
+    var p = String(ymd || '').split('-');
+    if (p.length !== 3) return '';
+    var d = new Date(+p[0], +p[1] - 1, +p[2]);
+    var o = { month: 'short', day: 'numeric' };
+    if (d.getFullYear() !== new Date().getFullYear()) o.year = 'numeric';
+    return d.toLocaleDateString('en-CA', o);
+  }
+  // "Oct 10 (in 6 days)" for a key date; past dates read "(3 days ago)".
+  function dskRel(d){
+    if (d == null) return '';
+    if (d === 0) return 'today';
+    if (d === 1) return 'tomorrow';
+    if (d === -1) return 'yesterday';
+    return d > 0 ? 'in ' + d + ' days' : (-d) + ' days ago';
+  }
+  function dskTaskHtml(t, where, label){
+    if (dskEdit && dskEdit.id === t.id && dskEdit.where === where) return dskFormHtml(t, t.client);
+    var d = acmDays(t.due), meta = [];
+    if (label) meta.push(esc(label));
+    if (t.due){
+      var cls = t.done ? '' : (d < 0 ? 'acmover' : (d <= 7 ? 'acmdue' : ''));
+      meta.push('<span class="' + cls + '">' + esc(dskDate(t.due)) + (t.done ? '' : ' &middot; ' + esc(acmWhen(d))) + '</span>');
+    }
+    return '<div class="dsktask' + (t.done ? ' done' : '') + '">' +
+      '<button type="button" class="dskchk' + (t.done ? ' on' : '') + '" data-dsktick="' + esc(t.id) + '" aria-pressed="' + (t.done ? 'true' : 'false') +
+        '" aria-label="' + (t.done ? 'Mark not done: ' : 'Mark done: ') + esc(t.text) + '"' + (dskBusy[t.id] ? ' disabled' : '') + '><span>&#10003;</span></button>' +
+      '<div style="flex:1;min-width:0"><div class="dsktx">' + (t.section ? '<span class="dsksec">' + esc(t.section) + '</span>' : '') + esc(t.text) + '</div>' +
+        (meta.length ? '<div class="acmline">' + meta.join(' &middot; ') + '</div>' : '') +
+        (t.note ? '<div class="acmline">' + esc(t.note) + '</div>' : '') + '</div>' +
+      (t.done ? '' : '<button type="button" class="tdact" data-dskedit="' + esc(t.id) + '" data-dskwhere="' + where + '" style="margin-top:2px">Edit</button>') +
+      '</div>';
+  }
+  // Add (t null) or edit form. clientId '' = the panel-level "Add item", which asks for the client.
+  function dskFormHtml(t, clientId){
+    var h = '<div class="kform" data-dskform="' + (t ? esc(t.id) : '') + '" data-dskfor="' + esc(clientId || '') + '">' +
+      '<div class="kfh">' + (t ? 'Edit item' : 'New item') + '</div>';
+    if (!t && !clientId){
+      h += '<label>Client</label><select data-dskf="client"><option value="">Choose a client</option>' +
+        (dskData ? dskData.clients : []).map(function(c){ return '<option value="' + esc(c.id) + '">' + esc(c.name || c.id) + (c.tier === 'pipeline' ? ' (pipeline)' : '') + '</option>'; }).join('') +
+        '</select>';
+    }
+    h += '<label>Item</label><textarea data-dskf="text" maxlength="1000">' + esc(t ? t.text : '') + '</textarea>' +
+      '<div class="kfrow"><div><label>Section</label><input data-dskf="section" maxlength="80" value="' + esc(t ? (t.section || '') : 'Added') + '"></div>' +
+      '<div><label>Due</label><input type="date" data-dskf="due" value="' + esc(t ? (t.due || '') : '') + '"></div></div>' +
+      '<label>Note</label><textarea data-dskf="note" maxlength="4000">' + esc(t ? (t.note || '') : '') + '</textarea>' +
+      '<div class="kfbtns"><span class="acmline" data-dskferr style="flex:1"></span>' +
+      '<button type="button" class="btn" data-dskcancel="1">Cancel</button>' +
+      '<button type="button" class="btn primary" data-dsksave="1">' + (t ? 'Save' : 'Add') + '</button></div></div>';
+    return h;
+  }
+  function dskClientHtml(c, ts){
+    var open = ts.filter(function(t){ return !t.done; });
+    var isOpen = dskOpen[c.id] != null ? dskOpen[c.id]
+      : open.some(function(t){ var d = acmDays(t.due); return d != null && d <= 0; });   // first view: open what is due today or late
+    var sub = [];
+    if (c.stage) sub.push(esc(c.stage));
+    if (c.owner) sub.push(esc(c.owner));
+    var when = [];
+    if (c.keyDate) when.push(esc(c.keyLabel || 'Key date') + ': ' + esc(dskDate(c.keyDate)) + ' (' + esc(dskRel(acmDays(c.keyDate))) + ')');
+    if (c.lastActivity){
+      var q = -acmDays(c.lastActivity);
+      // quiet: amber past two weeks, red past a month (pipeline leads never go red — they idle by nature)
+      var qc = q > 30 && c.tier !== 'pipeline' ? 'acmover' : (q > 14 ? 'acmdue' : '');
+      when.push('<span class="' + qc + '">' + (q <= 0 ? 'Active today' : (q === 1 ? 'Active yesterday' : 'Quiet ' + q + ' days')) + '</span>');
+    }
+    var h = '<details class="dskc" data-dskclient="' + esc(c.id) + '"' + (isOpen ? ' open' : '') + '><summary>' +
+      '<span class="dskcar" aria-hidden="true">&#9656;</span><div style="flex:1;min-width:0"><div class="dskname">' + esc(c.name || c.id) + '</div>' +
+      (sub.length ? '<div class="acmline">' + sub.join(' &middot; ') + '</div>' : '') +
+      (when.length ? '<div class="acmline">' + when.join(' &middot; ') + '</div>' : '') + '</div>' +
+      '<span class="dskn">' + open.length + ' open</span></summary><div class="dskbody">';
+    var a = (c.ownerId != null && acmMap) ? acmMap[String(c.ownerId)] : null;
+    if (a) h += '<div class="acmline" style="padding-bottom:6px">' + acmStatsHtml(a) + (a.next_touch_due ? ' &middot; ' + acmNextHtml(a) : '') + '</div>';
+    if (!ts.length) h += '<div class="note">No open items.</div>';
+    ts.forEach(function(t){ h += dskTaskHtml(t, 'client', ''); });
+    if (dskEdit && dskEdit.add === c.id) h += dskFormHtml(null, c.id);
+    else h += '<div style="padding-top:6px"><button type="button" class="tdact" data-dskadd="' + esc(c.id) + '">Add item</button></div>';
+    return h + '</div></details>';
+  }
+  function dskDraftHtml(dr, names){
+    var parts = [];
+    if (dr.toName) parts.push('To ' + esc(dr.toName));
+    if (dr.client) parts.push(esc(names[dr.client] || dr.client));
+    if (dr.createdAt) parts.push('held ' + esc(new Date(dr.createdAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })));
+    var qs = Array.isArray(dr.questions) ? dr.questions : [];
+    // the route only ever stores Gmail links; checked again here because it becomes an href
+    var link = String(dr.url || '').indexOf('https://mail.google.com/') === 0
+      ? '<a class="tdact" href="' + esc(dr.url) + '" target="_blank" rel="noopener">Open thread</a>' : '';
+    return '<div class="acmrow"><span class="acmdot" style="background:var(--clay)"></span><div style="flex:1;min-width:0">' +
+      '<b style="overflow-wrap:anywhere">' + esc(dr.subject || 'No subject') + '</b>' +
+      (parts.length ? '<div class="acmline">' + parts.join(' &middot; ') + '</div>' : '') +
+      (qs.length ? '<ol class="dskq">' + qs.map(function(q){ return '<li>' + esc(q) + '</li>'; }).join('') + '</ol>' : '') +
+      '</div>' + link + '</div>';
+  }
+  function dskRender(){
+    var box = el('td-desk'); if (!box) return;
+    if (!acmOn || tdRole() !== 'me'){
+      box.style.display = 'none'; box.innerHTML = '';
+      if (!acmOn){ dskData = null; dskReq++; dskEdit = null; dskMsg = ''; dskErr = ''; }
+      return;
+    }
+    box.style.display = '';
+    if (!dskData){
+      box.innerHTML = '<section class="panel tdq"><h3>Owner desk</h3><div class="note">' + (dskErr ? esc(dskErr) : 'Loading&hellip;') + '</div></section>';
+      return;
+    }
+    // A re-render (a tick elsewhere, the brief's numbers arriving) must not wipe what is being typed.
+    var keep = null, of = box.querySelector('[data-dskform]');
+    if (of){
+      keep = { key: of.getAttribute('data-dskform') + '|' + of.getAttribute('data-dskfor'), v: {} };
+      Array.prototype.forEach.call(of.querySelectorAll('[data-dskf]'), function(n){ keep.v[n.getAttribute('data-dskf')] = n.value; });
+    }
+    var D = dskData, byClient = {}, names = {};
+    D.clients.forEach(function(c){ byClient[c.id] = []; names[c.id] = c.name || c.id; });
+    D.tasks.forEach(function(t){ (byClient[t.client] = byClient[t.client] || []).push(t); });
+    var open = D.tasks.filter(function(t){ return !t.done; });
+    var soon = D.tasks.filter(function(t){ var d = acmDays(t.due); return d != null && d <= 7; })   // ticked-this-visit rows stay, struck through
+      .sort(function(x, y){ return x.due < y.due ? -1 : (x.due > y.due ? 1 : (x.client < y.client ? -1 : (x.client > y.client ? 1 : 0))); });
+    var h = '<section class="panel tdq"><h3>Owner desk <span class="qn2">' + open.length + ' open</span>' +
+      '<span style="margin-left:auto"><button type="button" class="tdact" data-dskadd="">Add item</button></span></h3>';
+    if (dskErr) h += '<div class="dskmsg">' + esc(dskErr) + '</div>';
+    if (dskMsg) h += '<div class="dskmsg" role="status">' + esc(dskMsg) + '</div>';
+    if (dskEdit && dskEdit.add === '') h += dskFormHtml(null, '');
+    h += '<div class="dskgrid"><div>';
+    h += '<div class="sect">Due this week &middot; ' + soon.length + '</div>';
+    if (!soon.length) h += '<div class="note">Nothing on the desk is due this week.</div>';
+    soon.forEach(function(t){ h += dskTaskHtml(t, 'soon', names[t.client] || t.client); });
+    h += '<div class="sect">Held drafts &middot; ' + D.drafts.length + '</div>';
+    if (!D.drafts.length) h += '<div class="note">No replies are waiting on you.</div>';
+    D.drafts.forEach(function(dr){ h += dskDraftHtml(dr, names); });
+    if (D.drafts.length) h += '<div class="acmline" style="padding-top:6px">Answer these in the Claude app: say &ldquo;finish my drafts&rdquo;.</div>';
+    h += '</div><div>';
+    [['active', 'Active clients'], ['pipeline', 'Pipeline']].forEach(function(p){
+      var cs = D.clients.filter(function(c){ return (c.tier || 'active') === p[0]; });
+      h += '<div class="sect">' + p[1] + ' &middot; ' + cs.length + '</div>';
+      if (!cs.length) h += '<div class="note">None.</div>';
+      cs.forEach(function(c){ h += dskClientHtml(c, byClient[c.id] || []); });
+    });
+    h += '</div></div></section>';
+    box.innerHTML = h;
+    var nf = box.querySelector('[data-dskform]');
+    if (nf && keep && keep.key === nf.getAttribute('data-dskform') + '|' + nf.getAttribute('data-dskfor')){
+      Array.prototype.forEach.call(nf.querySelectorAll('[data-dskf]'), function(n){ var k = n.getAttribute('data-dskf'); if (k in keep.v) n.value = keep.v[k]; });
+    }
+    if (nf && dskFocus){ dskFocus = false; var ta = nf.querySelector('textarea'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }   // caret at the end: an edit usually adds
+  }
+  // Optimistic tick: the box flips at once and the row stays (struck through) so a mis-tap can be
+  // undone; a failure puts it back, a 409 shows the version someone else saved.
+  function dskTick(id){
+    var t = dskTask(id); if (!t || dskBusy[id]) return;
+    var was = t.done, next = !was;
+    dskBusy[id] = true; t.done = next; dskMsg = '';
+    dskRender();
+    dskPost('/me/desk/task', { op: next ? 'tick' : 'untick', id: id, version: t.version }).then(function(res){
+      delete dskBusy[id];
+      if (res.status === 409 && res.j.current){
+        dskPut(res.j.current);
+        dskMsg = 'That item changed somewhere else, so it now shows the latest.';
+      } else if (!res.ok){
+        throw new Error(res.j.error || ('HTTP ' + res.status));
+      } else dskPut(res.j.task);
+      dskRender();
+    }).catch(function(e){
+      delete dskBusy[id];
+      var cur = dskTask(id); if (cur) cur.done = was;
+      if (String(e && e.message) !== 'AUTH'){ console.error('me/desk tick failed', e); dskMsg = 'Could not save that tick. Try again.'; }
+      dskRender();
+    });
+  }
+  function dskSave(form, btn){
+    var f = function(k){ var n = form.querySelector('[data-dskf="' + k + '"]'); return n ? String(n.value || '').trim() : ''; };
+    var err = form.querySelector('[data-dskferr]');
+    var say = function(m){ if (err) err.textContent = m; };
+    var text = f('text'), sec = f('section'), due = f('due'), note = f('note');
+    if (!text){ say('Write the item first.'); return; }
+    var id = form.getAttribute('data-dskform'), cid = form.getAttribute('data-dskfor') || f('client'), body;
+    if (id){
+      var t = dskTask(id); if (!t){ dskEdit = null; dskRender(); return; }
+      body = { op: 'edit', id: id, version: t.version };
+      if (text !== t.text) body.text = text;
+      if (sec !== (t.section || '')) body.section = sec || null;
+      if (due !== (t.due || '')) body.due = due || null;
+      if (note !== (t.note || '')) body.note = note || null;
+      if (Object.keys(body).length === 3){ dskEdit = null; dskRender(); return; }   // nothing changed
+    } else {
+      if (!cid){ say('Choose a client.'); return; }
+      body = { op: 'add', client_id: cid, text: text };
+      if (sec) body.section = sec;
+      if (due) body.due = due;
+      if (note) body.note = note;
+    }
+    btn.disabled = true; say('Saving…');
+    dskPost('/me/desk/task', body).then(function(res){
+      if (res.status === 409 && res.j.current){
+        dskPut(res.j.current); dskEdit = null;
+        dskMsg = 'That item was changed somewhere else, so it now shows the latest. Edit it again if it still needs it.';
+        dskRender(); return;
+      }
+      if (!res.ok) throw new Error(res.j.error || ('HTTP ' + res.status));
+      dskPut(res.j.task);
+      if (!id) dskOpen[cid] = true;
+      dskEdit = null; dskMsg = '';
+      dskRender();
+    }).catch(function(e){
+      btn.disabled = false;
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('me/desk/task failed', e);
+      say('Could not save: ' + String(e && e.message || 'error'));
+    });
+  }
+  // Bound once at boot; inert unless the click lands inside #td-desk.
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if (!t || !t.closest || !acmOn || !t.closest('#td-desk')) return;
+    var k = t.closest('[data-dsktick]');
+    if (k){ e.preventDefault(); dskTick(k.getAttribute('data-dsktick')); return; }
+    var ed = t.closest('[data-dskedit]');
+    if (ed){ dskEdit = { id: ed.getAttribute('data-dskedit'), where: ed.getAttribute('data-dskwhere') }; dskMsg = ''; dskFocus = true; dskRender(); return; }
+    var ad = t.closest('[data-dskadd]');
+    if (ad){ var cid = ad.getAttribute('data-dskadd'); dskEdit = { add: cid }; if (cid) dskOpen[cid] = true; dskMsg = ''; dskFocus = true; dskRender(); return; }
+    if (t.closest('[data-dskcancel]')){ dskEdit = null; dskRender(); return; }
+    var sv = t.closest('[data-dsksave]');
+    if (sv){ var form = sv.closest('[data-dskform]'); if (form) dskSave(form, sv); return; }
+  });
+  // A client's open/closed state survives re-renders. 'toggle' does not bubble, so listen in capture.
+  document.addEventListener('toggle', function(e){
+    var d = e.target;
+    if (d && d.getAttribute && d.getAttribute('data-dskclient')) dskOpen[d.getAttribute('data-dskclient')] = d.open;
+  }, true);
 
   /* ── Owners directory ─────────────────────── */
   function loadOwners(){

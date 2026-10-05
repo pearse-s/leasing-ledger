@@ -822,6 +822,10 @@ window.addEventListener('error', function(e){
   .mvtable tr.tdrentrow{cursor:pointer}
   .mvtable tr.tdrentrow:hover td{background:rgba(244,236,225,.04)}
   .mvtable tr.tdrentrow:focus-visible td{outline:none;background:rgba(244,236,225,.07)}
+  /* Open-tasks rows open the task popup (Direction A phase 0) — same hover/focus read as the rent rows */
+  .schoffer.tdtkrow{cursor:pointer}
+  .schoffer.tdtkrow:hover{background:rgba(244,236,225,.04)}
+  .schoffer.tdtkrow:focus-visible{outline:none;background:rgba(244,236,225,.07)}
   /* Current/Past switch = the Moves card's .mvtgl pill, at full touch height (labels stay short so it never needs to wrap) */
   .mvtgl.rentwho{margin:0 0 8px;width:max-content;max-width:100%;align-self:flex-start}
   .mvtgl.rentwho button{min-height:40px;padding:0 16px;font-size:.78rem}
@@ -3909,6 +3913,34 @@ window.addEventListener('error', function(e){
       });
     });
   }
+  // ── Usage pings (Direction A phase 0, 2026-10-05) ─────────────────────────────────────
+  // Until now only sign-ins and writes were logged, so "do managers actually open Today?"
+  // had no answer. POST /user/event takes a short server-side allow-list (view_tab,
+  // view_today, queue_open_item) and writes it to user_events under the signed-in person —
+  // the identity comes from the session, never from this body.
+  // Rules this helper keeps so no call site has to:
+  //   · fire-and-forget: a ping never blocks, never alerts and never throws — it is called
+  //     from showTab and tdRender, and a throw there is a dead tab;
+  //   · signed out = no ping (authIdent is a var declared later in this IIFE: undefined
+  //     until the handshake sets it, which is exactly the guard we want);
+  //   · one row per distinct (person, event, detail) per 30 minutes — tdRender re-runs on
+  //     every scope change and roster load, and the table is an audit log, not a click stream.
+  // The server also caps pings per person per hour, so a loop here cannot flood the table.
+  var UE_GAP_MS = 30 * 60000, ueSeen = {};
+  function uePing(ev, meta){
+    try {
+      if (!authIdent || !authIdent.email) return;
+      var body = { event: ev }, k;
+      for (k in (meta || {})) if (meta[k] != null) body[k] = meta[k];
+      var key = authIdent.email + '|' + JSON.stringify(body), now = Date.now();
+      if (ueSeen[key] && now - ueSeen[key] < UE_GAP_MS) return;
+      ueSeen[key] = now;
+      postJSON('/user/event', body).catch(function(e){
+        if (String(e && e.message) === 'AUTH') return;
+        console.error('usage ping failed (' + ev + ')', e);
+      });
+    } catch (e) { console.error('usage ping skipped (' + ev + ')', e); }
+  }
 
   function countUp(id, value, formatter){
     var node = el(id);
@@ -4148,6 +4180,7 @@ window.addEventListener('error', function(e){
     // keep the URL hash in sync so the current tab is shareable/bookmarkable
     // (replaceState, not location.hash, so back/forward still leaves the app cleanly)
     try { if (('#' + key) !== location.hash) history.replaceState(null, '', location.pathname + location.search + '#' + key); } catch (e) {}
+    uePing('view_tab', { tab: key });   // usage log; self-guarding and throttled (see uePing)
   }
   // a valid tab key from the URL hash (e.g. #keys), or '' if none/unknown
   function tabFromHash(){
@@ -4447,6 +4480,15 @@ window.addEventListener('error', function(e){
     if (!authIdent) return;
     tdReq++;   // anything still in flight from the previous render/role is now stale
     var role = tdRole();
+    // Usage log: WHICH persona of Today was looked at. Only while Today is the tab on screen —
+    // tdRender also runs from scope changes made on other tabs, and that is not a view.
+    // A saved "me" chip resolves only once the /me/owners probe answers (see tdRole): until
+    // then this render is the fall-through persona, painted for a moment and replaced by
+    // acmSet's re-render. Logging it recorded a bogus "agent" view at the top of every Me
+    // session (mock-verified 2026-10-05), so that interim render is not a view either.
+    var savedRole = '';
+    try { savedRole = localStorage.getItem(TD_ROLE_KEY) || ''; } catch (e) {}
+    if (ACTIVE_TAB === 'today' && !(savedRole === 'me' && role !== 'me')) uePing('view_today', { role: role });
     // coordinator = the scheduling workspace (moved Schedule page + team calendar);
     // agent/manager = the dynamic queue grid. Toggle, never rebuild, the workspace —
     // its listeners and mid-flow state must survive role flips.
@@ -4513,7 +4555,7 @@ window.addEventListener('error', function(e){
         '<section class="panel tdq tdwide"><h3>Applications <span class="qn2" id="td-mgr-apps-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-apps"><div class="note">Loading&hellip;</div></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="applications">Open Applications &rarr;</button></div></section>' +
-        tdPanel('td-mgr-tasks', 'Tasks needing attention', 'tasks', 'Open Tasks', true) +
+        tdPanel('td-mgr-tasks', 'Open tasks', 'tasks', 'Open Tasks', true) +
         // merged 2026-07-28: this ONE card replaces "Unit updates" + "Aging vacancies · 60d+"
         // (same population, two different counts). tdPanel is not reused here because the card
         // renders its own chip row and expander inside #td-mgr-units.
@@ -4989,9 +5031,33 @@ window.addEventListener('error', function(e){
   }
   // "needing attention" = actionable now; Deferred is parked on purpose, Completed/Closed are done
   function tdMgrOpenTask(t){ return t.task_status === 'New' || t.task_status === 'InProgress'; }
+  // Whole CALENDAR days from today to a date, on the America/Edmonton calendar: 0 = today,
+  // 3 = in three days, -2 = two days ago; null when there is no usable date.
+  // This used to be Math.ceil((Date.parse(date) - Date.now()) / 86400000). Date.parse of a
+  // date-only string is UTC midnight, so from about 18:00 Mountain — when the UTC date is
+  // already tomorrow — every answer was one day short: a move-in 7 days out read 6, one
+  // happening today read -1 and dropped out of the at-risk window, and a deposit return hit
+  // its 10-day deadline an evening early. The daily records (dashboard.manager_ops_rows) count
+  // on the Edmonton calendar, so the card and the saved number also disagreed each evening.
+  // ONE helper: tdMvSodaDays, the at-risk rules, the brief, the renewals countdown and the
+  // export all come through here. A date-only string is taken as that calendar date as
+  // written; a full timestamp is first placed on its Edmonton day.
+  function tdDayNo(key){   // 'YYYY-MM-DD' -> a day number (only differences are meaningful)
+    var p = String(key || '').slice(0, 10).split('-');
+    var n = p.length === 3 ? Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000 : NaN;
+    return isFinite(n) ? n : null;
+  }
   function tdMgrDays(dateStr){
-    var t = Date.parse(dateStr || '');
-    return t ? Math.ceil((t - Date.now()) / 86400000) : null;
+    var s = String(dateStr || '');
+    if (!s) return null;
+    var key = s;
+    if (s.length > 10){   // a timestamp, not a bare date
+      var t = Date.parse(s);
+      if (!isFinite(t)) return null;
+      key = tdDayKeyEd(new Date(t));
+    }
+    var a = tdDayNo(key), b = tdDayNo(tdDayKeyEd(new Date()));
+    return (a == null || b == null) ? null : Math.round(a - b);
   }
   // ── WS-G M5: PM move appointments (Google Calendar mirror) ────────────────────────────
   // These are the PM's actual booked appointments, NOT lease dates. The "Unit updates" panel
@@ -5101,10 +5167,12 @@ window.addEventListener('error', function(e){
       turned: tdMvSt(r.turned_auto_at, tdMvManual(r, 'turned'))
     };
   }
+  // Days SINCE the move-out while the deposit statement is still outstanding; 0 when the move
+  // is today or still ahead, or the statement is done. Edmonton calendar days via tdMgrDays.
   function tdMvSodaDays(r){
-    var t = Date.parse(tdMvOn(r, 'out') || ''); if (!t || t > Date.now()) return 0;
+    var d = tdMgrDays(tdMvOn(r, 'out')); if (d == null || d >= 0) return 0;
     if (tdMvStagesOut(r).soda !== 'no') return 0;
-    return Math.floor((Date.now() - t) / 86400000);
+    return -d;
   }
   // At-risk (Pearse 2026-07-20): move-in inside 7 days AND (SD unpaid OR not cleaned);
   // move-out: SODA still outstanding 7+ days after the move (red at 10 — Alberta's deadline).
@@ -5786,7 +5854,7 @@ window.addEventListener('error', function(e){
         r[stage + '_manual_state'] = t.state || state;
         r[stage + '_manual_actor'] = t.actor || actor;
         r[stage + '_manual_at'] = t.noted_at || new Date().toISOString();
-        r.__risk = (k === 'in') ? tdMvRiskIn(r) : tdMvRiskOut(r);
+        r.__risk = tdMvRisk(r, k);   // the ONE done-aware rule — a tick on a finished move must not put it back at risk
         tdMvRefreshDrawer(k, leaseId);
         tdMvCountNote();
         if (tdMvView === 'track') tdMvRenderTrack();
@@ -5812,7 +5880,7 @@ window.addEventListener('error', function(e){
       r.actual_actor = r.actual_on ? (d.actor || actor) : null;
       r.actual_at = r.actual_on ? (d.noted_at || new Date().toISOString()) : null;
       r.effective_on = r.actual_on || tdMvLeaseOn(r, k);
-      r.__risk = (k === 'in') ? tdMvRiskIn(r) : tdMvRiskOut(r);
+      r.__risk = tdMvRisk(r, k);   // done-aware, same as tdMvPrep and tdMvTick
       tdMvRefreshDrawer(k, leaseId);
       tdMvCountNote();
       if (tdMvView === 'track') tdMvRenderTrack();
@@ -6038,17 +6106,30 @@ window.addEventListener('error', function(e){
     }
     // WS-M M3 (D8): tracker-driven at-risk lines — click lands on the Moves card in
     // tracker view, pre-filtered to the At-risk chip
+    // Both lines go through the done-aware rule the Moves card header counts with (tdMvRisk:
+    // a finished move is never at risk). They used to call tdMvRiskIn / tdMvSodaDays directly,
+    // so a move-in ticked Done with its deposit still unpaid was "at risk" in this line and
+    // not on the card it lands on — one screen, two counts. The deposit line keeps its own
+    // 10-day threshold (Alberta's deadline; the card's at-risk starts at 7) and only gains
+    // the Done check.
     if (m.trackIn){
-      var rkIn = m.trackIn.filter(tdMgrScopePass).filter(tdMvRiskIn).length;
+      var rkIn = m.trackIn.filter(tdMgrScopePass).filter(function(r){ return tdMvRisk(r, 'in'); }).length;
       if (rkIn) L.push({ k: 'moves', t: rkIn + ' move-in' + (rkIn === 1 ? '' : 's') + ' at risk — inside 7 days missing SD or cleaning' });
     }
     if (m.trackOut){
-      var od10 = m.trackOut.filter(tdMgrScopePass).filter(function(r){ return tdMvSodaDays(r) >= 10; }).length;
+      var od10 = m.trackOut.filter(tdMgrScopePass).filter(function(r){ return !tdMvDone(r) && tdMvSodaDays(r) >= 10; }).length;
       if (od10) L.push({ k: 'moves', t: od10 + ' deposit return' + (od10 === 1 ? '' : 's') + ' overdue — 10+ days past move-out' });
     }
     if (m.stats && m.stats.vacancy){
       var v = m.stats.vacancy, ag = m.stats.aging || {};
-      var old60 = (ag.d61_90 || 0) + (ag.d90 || 0);
+      // A-15 family again: this read ag.d61_90 + ag.d90 — flat keys get_stats.aging has never
+      // had — so the "vacant 60+ days" suffix never rendered, and the mock fixture carried the
+      // same wrong flat shape, hiding it. Live aging is NESTED: aging.op_vacant.{d0_30, d31_60,
+      // d61_90, d90_plus, unknown} and aging.never_leased.{same} (the Ledger chart reads it that
+      // way). The headline here is TOTAL vacancy (op_vacant + never_leased), so the suffix sums
+      // both groups — the same stacked 61–90 + 90+ bars this line's click lands on.
+      var agOp = ag.op_vacant || {}, agNl = ag.never_leased || {};
+      var old60 = (agOp.d61_90 || 0) + (agOp.d90_plus || 0) + (agNl.d61_90 || 0) + (agNl.d90_plus || 0);
       // A-15 family: this read v.op_rate_pct — a key get_stats never returned — so the "(x%)"
       // parenthetical silently never rendered. The real key is vacancy.op_vacancy_rate.
       // Pearse 2026-09-28: TOTAL vacancy here (vacant_total = op_vacant + never_leased, and
@@ -6145,9 +6226,14 @@ window.addEventListener('error', function(e){
   var tdMgrTasksLast = null;
   function tdMgrRenderTasks(m){
     if (m.tasks === null){ tdMgrTasksLast = null; tdFail('td-mgr-tasks', 'tasks'); return; }
+    // OLDEST FIRST (Direction A phase 0, 2026-10-05). The old sort was overdue-then-due-date,
+    // but live 238 of 243 open tasks carry no due date, so it was really "5 dated rows, then
+    // whatever order the server sent". Age is the one thing every task has. age_days leads
+    // (the legacy /tasks path and the mock both carry it); created_date_time breaks ties.
+    // Overdue is still one tap away on its filter chip, and still flagged on the row.
     tdMgrTasksLast = m.tasks.slice().sort(function(a, b){
-      var d = (b.is_overdue ? 1 : 0) - (a.is_overdue ? 1 : 0); if (d) return d;
-      return (Date.parse(a.due_date || '') || 9e15) - (Date.parse(b.due_date || '') || 9e15);
+      var d = (Number(b.age_days) || 0) - (Number(a.age_days) || 0); if (d) return d;
+      return (Date.parse(a.created_date_time || '') || 9e15) - (Date.parse(b.created_date_time || '') || 9e15);
     });
     tdMgrTasksPaint();
   }
@@ -6183,6 +6269,10 @@ window.addEventListener('error', function(e){
       var due = t.is_overdue ? '<span class="chip c-hot">overdue</span>' : (t.due_date ? '<span class="chip c-warm">due ' + esc(String(t.due_date).slice(0, 10)) + '</span>' : '');
       var pri = (t.priority === 'High' || t.priority === 'Urgent') ? ' <span class="chip c-bad">' + esc(t.priority) + '</span>' : '';
       var sub = esc([t.property_name, t.unit_number].filter(Boolean).join(' · ')) + (t.assignee_name ? ' &middot; ' + esc(t.assignee_name) : '');
+      // the list is sorted by age, so the age has to be readable on the row — as sub-line text,
+      // not a fourth chip: at phone width the title column has no room left to give
+      var ageD = t.age_days == null ? NaN : Number(t.age_days);
+      if (isFinite(ageD) && ageD >= 0) sub += (sub ? ' &middot; ' : '') + (ageD === 0 ? 'opened today' : 'open ' + ageD + 'd');
       // the work-order line only appears when there IS one, so a plain admin task reads clean
       if (t.work_order_id != null){
         var wo = ['Work order' + (t.wo_status ? ' &middot; ' + esc(String(t.wo_status)) : '')];
@@ -6191,7 +6281,13 @@ window.addEventListener('error', function(e){
         sub += '<br><span class="srctag">' + wo.join(' &middot; ') + '</span>' +
           (t.wo_vendor_id == null ? ' <span class="chip c-hot">no vendor</span>' : '');
       }
-      h += '<div class="schoffer"><div class="schoffer-main"><b>' + esc(t.title || t.category_name || 'Task') + '</b>' +
+      // The row opens the EXISTING read-only task popup (openTask -> #tmodal: description,
+      // history, work order, "Open in Buildium"). The Buildium link on the row keeps its own
+      // click — the #td-grid delegate lets anchors through before it opens the popup.
+      var rowAttrs = t.task_id != null
+        ? 'class="schoffer tdtkrow" data-tkid="' + esc(String(t.task_id)) + '" role="button" tabindex="0"'
+        : 'class="schoffer"';
+      h += '<div ' + rowAttrs + '><div class="schoffer-main"><b>' + esc(t.title || t.category_name || 'Task') + '</b>' +
         '<div class="schoffer-sub">' + sub + '</div></div>' + due + pri +
         (t.task_id != null ? '<a class="tdact" target="_blank" rel="noopener" href="' + esc(BMGR + '/tasks/' + encodeURIComponent(t.task_id) + '/task-summary?searchOption=new') + '">Buildium &#8599;</a>' : '') +
         '</div>';
@@ -6200,7 +6296,8 @@ window.addEventListener('error', function(e){
     if (box) box.innerHTML = chips + (h ? h + tdMoreBtn('tasks', rows.length)
       : '<div class="note">' + (tdTkF ? 'Nothing matches this filter.' : 'No open tasks in scope.') + '</div>');
     // the header count is always the FULL open-task population, never the filtered or capped one
-    var n = el('td-mgr-tasks-n'); if (n) n.textContent = all.length ? all.length + ' waiting' : '';
+    // bare count: the card is titled "Open tasks", so "243 open" would say it twice
+    var n = el('td-mgr-tasks-n'); if (n) n.textContent = all.length ? String(all.length) : '';
   }
   // ── WS-M M5: the renewals card (5 stage chips + worklist rows + per-stage actions) ─────────
   // Rows + counts come from get_manager_brief.renewals = dashboard.v_renewal_worklist, which is
@@ -6817,6 +6914,10 @@ window.addEventListener('error', function(e){
     var tg = el('td-grid');
     if (tg) tg.addEventListener('keydown', function(e){
       if (e.key !== 'Enter' && e.key !== ' ') return;
+      // e.target === row: Enter on the row itself opens it; Enter on a link or button INSIDE
+      // the row keeps its own default (the Buildium link on a task row, for one).
+      var kt = e.target.closest('.tdtkrow');
+      if (kt && e.target === kt){ e.preventDefault(); openTask(kt.getAttribute('data-tkid')); return; }
       var kr = e.target.closest('.tdrentrow'); if (!kr || e.target !== kr) return;
       e.preventDefault(); tdRentOpen(kr.getAttribute('data-rentlid'));
     });
@@ -6907,6 +7008,10 @@ window.addEventListener('error', function(e){
       }
       var rrow = e.target.closest('.tdrentrow');
       if (rrow){ tdRentOpen(rrow.getAttribute('data-rentlid')); return; }
+      // Open-tasks row -> the existing task popup. Anchors first: the row's "Buildium" link
+      // must open Buildium, not the popup behind it (same rule as the Moves rows above).
+      var tkrow = e.target.closest('.tdtkrow');
+      if (tkrow){ if (e.target.closest('a')) return; openTask(tkrow.getAttribute('data-tkid')); return; }
       var arow = e.target.closest('.tdaprow');
       if (arow){ openAppEnsure(arow.getAttribute('data-apid')); return; }
       var ur = e.target.closest('.tdurow');

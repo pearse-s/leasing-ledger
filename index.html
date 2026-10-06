@@ -6100,18 +6100,29 @@ window.addEventListener('error', function(e){
     });
   }
   function tdMgrAssemble(){
-    var m = { stats: null, tasks: null, renewals: null, units: null, rent: null, moves: null, trends: null, trackIn: null, trackOut: null, apps: null }, done = 0, q = tdReq;
+    var m = { stats: null, tasks: null, renewals: null, units: null, rent: null, moves: null, trends: null, trackIn: null, trackOut: null, apps: null, wi: null }, done = 0, q = tdReq;
     // mirror of the agent guard: a manager assembly that finishes after a flip to Agent must not
     // paint (its targets are null-guarded today, but that is luck, not a contract).
     // Option C: ONE /manager-brief read replaces the three list fetches (server-scoped by the
     // same ids appendScope sends); /stats stays separate so brief/pulse numbers can never
     // diverge from the Ledger, and the GCal moves stay their own request (not in the RPC).
-    // FOUR fetches (was five until 2026-07-28: the two tracker reads are now one kind=both
-    // call — the brief's at-risk lines need both lists anyway, so two round trips bought
-    // nothing). days=all once; the window chips filter client-side, so toggles never refetch.
+    // FIVE fetches (four from 2026-07-28, when the two tracker reads became one kind=both call;
+    // five again since Direction A phase 2, 2026-10-05: /work-item-state, the per-item follow-up
+    // and reminder state the Work queue reads). days=all once; the window chips filter
+    // client-side, so toggles never refetch.
     // ⚠ Adding or removing a fetch here means changing the counter below to match, or the
     // ENTIRE manager brief hangs on "Loading" (the v226 lesson). Count the .then(step) calls.
-    var step = function(){ if (++done === 4 && q === tdReq) tdRenderMgr(m); };
+    var step = function(){ if (++done === 5 && q === tdReq) tdRenderMgr(m); };
+    // Direction A phase 2: m.wi = the rows of GET /work-item-state (dashboard.v_work_item_state:
+    // item_kind, item_id, live follow_up_on, last reminder, counts, actor names — no contact
+    // details). null = "no follow-ups known": the read failed, so the queue (phase 3) renders
+    // without follow-up/reminder badges and says so; it NEVER blocks the brief. Nothing renders
+    // m.wi yet — phase 2 ships dark; tdQBuild(m, state) in phase 3 is its first reader.
+    authFetch('/work-item-state').then(function(j){
+      m.wi = (j && Array.isArray(j.items)) ? j.items : null;
+    }).catch(function(e){
+      if (String(e && e.message) !== 'AUTH') console.error('work-item-state failed — no follow-ups known', e);
+    }).then(step);
     // one failure must not blank BOTH lists: a null trackIn/trackOut is the "could not load"
     // state, so only the side that actually failed should stay null.
     authFetch('/move-tracker?kind=both&days=all').then(function(j){

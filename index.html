@@ -2229,6 +2229,42 @@ window.addEventListener('error', function(e){
     #page-today .tdqpane .tdqpane-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 30px 10px 0;font-size:.8rem;color:var(--ink-soft)}
     #page-today .tdqfoot{margin-top:14px}
     #page-today .tdqfoot .linklike{margin:0;padding:0 2px;font-size:.8rem}
+    /* ── List | Calendar (Direction A phase 5, 2026-10-05): the calendar box swaps with the lanes
+       inside the same wrap, so the record pane docks beside either. Every label wraps; the one
+       clipped string is the event title (.fc-ev-t, the documented FullCalendar exception). */
+    #page-today .tdqviews{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+    #page-today .tdqviews .mvtgl button{min-height:40px;padding:0 16px;font-size:.78rem}
+    #page-today .tdqcalbox{min-width:0}
+    #page-today .tdqcal-h{margin:0 0 8px}
+    #page-today .tdqcal-h b{color:var(--ink)}
+    #page-today .tdqcal{min-width:0}
+    /* the house dark theme for FullCalendar is scoped to #rcal (the coordinator calendar); without
+       it the agenda list's day headers are FC's default light grey under soft ink — unreadable */
+    #page-today .tdqcal .fc{--fc-border-color:var(--hairline-dark);--fc-page-bg-color:transparent;--fc-neutral-bg-color:rgba(255,255,255,.06);--fc-neutral-text-color:var(--ink-soft);--fc-today-bg-color:rgba(232,180,62,.10);--fc-list-event-hover-bg-color:rgba(232,180,62,.10);--fc-small-font-size:.74em;color:var(--ink)}
+    #page-today .tdqcal .fc-list-day-text,#page-today .tdqcal .fc-list-day-side-text{color:var(--ink);font-weight:700}
+    #page-today .tdqcal .fc-list-event-time{white-space:normal}
+    /* the agenda list (under 768 px) is not time-boxed, so its titles WRAP (the .fc-ev-t ellipsis
+       stays for the month and week blocks) and the table keeps its container's width instead of
+       growing to the longest title (auto layout grew it to 968 px in a 333 px host; found by
+       ledger-verify 2026-10-05). max-width:0 on the title cell is what stops that growth. */
+    #page-today .tdqcal .fc-list-table{width:100%}
+    #page-today .tdqcal .fc-list-event-title{max-width:0}
+    #page-today .tdqcal .fc-list-event .fc-ev-wrap{display:block;overflow:visible;white-space:normal}
+    #page-today .tdqcal .fc-list-event .fc-mv-k{display:inline-block;margin-right:6px}
+    #page-today .tdqcal .fc-list-event .fc-ev-t{display:inline;white-space:normal;overflow:visible;text-overflow:clip}
+    #page-today .tdqtray{margin-top:16px}
+    #page-today .tdqtray .schoffers{max-height:none;overflow:visible}
+    #page-today .tdqtray .mvsec-h{margin-top:10px}
+    #page-today .tdqtray .tdqtray-n{margin:0 0 4px}
+    /* queue events by kind (moves reuse the Moves card's .fc-mv-in / .fc-mv-out tints) */
+    .fc-q .fc-ev-t,.fc-q .fc-mv-k{color:var(--ink)}
+    .fc-q-time{flex:0 0 auto;font-size:.72em;color:var(--ink-soft);margin-right:3px}
+    .fc-q-rent{background:var(--clay-soft)!important;border-color:rgba(224,117,95,.55)!important}
+    .fc-q-renewal{background:rgba(120,170,230,.18)!important;border-color:rgba(120,170,230,.5)!important}
+    .fc-q-task,.fc-q-meeting_action{background:rgba(244,236,225,.10)!important;border-color:var(--hairline-dark)!important}
+    .fc-q-application,.fc-q-unit{background:var(--amber-soft)!important;border-color:rgba(232,180,62,.55)!important}
+    .fc-q-soda{background:transparent!important;border:1px dashed rgba(224,117,95,.7)!important}
+    .fc-q-snoozed{opacity:.72}
     /* ── PRINT — the first @media print rules in the app, scoped to the manager board ──
        html.prt-today is set by tdPrintPrep (beforeprint) ONLY when the manager board is on
        screen and removed on afterprint, so every other tab prints exactly as before. No @page
@@ -2440,8 +2476,20 @@ window.addEventListener('error', function(e){
     <div id="td-queue" style="display:none">
       <div class="tdqtiles" id="td-q-tiles"></div>
       <div class="mvchips" id="td-q-chips" style="display:none"></div>
+      <!-- Direction A phase 5 (2026-10-05): List | Calendar (ledger_mgrqview_v1, default List). The
+           calendar box is a sibling of the lanes INSIDE the same wrap, so the record pane docks
+           beside either; tdQViewApply swaps the two, tdQCalPaint fills the box (a second
+           FullCalendar instance, never the Moves card's mvcal). Static, never rebuilt. -->
+      <div class="tdqviews" id="td-q-views"><span class="sf-label">Show as</span><span class="mvtgl" role="group" aria-label="Queue layout">
+        <button type="button" class="on" data-qview="list" aria-pressed="true" title="Four lanes, in order of what needs you first">List</button>
+        <button type="button" data-qview="calendar" aria-pressed="false" title="Every dated item on a month or week calendar, with the booked move appointments">Calendar</button></span></div>
       <div class="tdqwrap" id="td-q-wrap">
         <div class="tdqlanes" id="td-q-lanes"><div class="note">Loading&hellip;</div></div>
+        <div class="tdqcalbox" id="td-q-calbox" style="display:none">
+          <div class="note tdqcal-h" id="td-q-cal-h" role="status"></div>
+          <div class="tdqcal" id="td-q-cal"></div>
+          <section class="panel tdq tdqtray" id="td-q-tray" hidden></section>
+        </div>
         <aside class="tdqpane" id="td-qpane" hidden aria-label="Record">
           <button type="button" class="lmclose tdqpane-x" data-qpane-close="1" aria-label="Close">&times;</button>
           <div id="td-qpane-body"></div>
@@ -4681,7 +4729,7 @@ window.addEventListener('error', function(e){
     g.style.display = role === 'manager' ? '' : 'none';   // the grid is the manager's; agent/admin live in #page-hub
     // the Work queue (Direction A phase 3) is the manager's too: any other persona hides it and
     // drops whatever its record pane held (the manager branch below re-shows it per saved view)
-    if (role !== 'manager'){ var qv0 = el('td-queue'); if (qv0) qv0.style.display = 'none'; tdQPaneClose(); }
+    if (role !== 'manager'){ var qv0 = el('td-queue'); if (qv0) qv0.style.display = 'none'; tdQPaneClose(); tdQCalDestroy(); }
     if (isCo){
       g.innerHTML = '';
       tdSub("Coordinator — pick a prospect, agent and event type, then book right on the team calendar.");
@@ -6574,6 +6622,9 @@ window.addEventListener('error', function(e){
     if (qv) qv.style.display = on ? '' : 'none';
     if (bar) bar.innerHTML = tdMgrViewInner();
     if (!on) tdQPaneClose();   // nothing stays mounted in a hidden pane
+    // phase 5: the List | Calendar choice inside the queue — applied when the queue shows (the
+    // calendar instance is built only while it is on screen), dropped when it hides
+    if (on) tdQViewApply(); else tdQCalDestroy();
   }
   function tdMgrViewInner(){
     var v = tdMgrView();
@@ -6711,10 +6762,11 @@ window.addEventListener('error', function(e){
     var tiles = el('td-q-tiles'), chips = el('td-q-chips'), lanes = el('td-q-lanes'), foot = el('td-q-foot');
     if (!tiles || !chips || !lanes || !foot) return;
     var q = tdQLast, m = tdMgrLast;
-    tdQIndex = [];
+    tdQIndex = []; tdQCalBase = -1;   // phase 5: the calendar takes its slots after the lane rows
     if (!q){
       tiles.innerHTML = ''; chips.style.display = 'none'; foot.innerHTML = '';
       lanes.innerHTML = '<div class="note">Loading&hellip;</div>';
+      tdQCalPaint();   // phase 5: the calendar view shows the same "Loading…" and drops its instance
       return;
     }
     var st = tdQStateMap(m && m.wi);
@@ -6769,6 +6821,7 @@ window.addEventListener('error', function(e){
     if (m && m.wi === null) fh += ' Follow-ups and reminders could not be loaded, so nothing is snoozed and no reminder shows.';
     fh += ' <button type="button" class="linklike" data-mgrview="review">Open Review &rarr;</button>';
     foot.innerHTML = fh;
+    tdQCalPaint();   // phase 5: the calendar view repaints from the same tdQLast and the same tile filter
   }
   // ── the record pane ──
   // Docked beside the lanes from 1100 px (CSS .tdqwrap.haspane); below that each kind opens its
@@ -7160,6 +7213,249 @@ window.addEventListener('error', function(e){
     var ta = e.target && e.target.closest ? e.target.closest('.tdwi-ta') : null; if (!ta) return;
     var box = ta.closest('.tdwi'); if (box) tdWiDraft[box.getAttribute('data-wikey')] = ta.value;
   }
+  // ── Calendar view of the queue (Direction A phase 5, 2026-10-05) ────────────────────────
+  // A SECOND FullCalendar instance (tdQCal), never mvcal: the Moves card's instance lives in
+  // the Review grid and is destroyed and rebuilt with it. This one lives in the static
+  // #td-q-calbox inside #td-queue (markup earlier in the file), beside the lanes and under the
+  // same record pane. List | Calendar is ledger_mgrqview_v1, default List. Events are the
+  // dated items tdQLast already holds (the item's date, or its follow-up date when one is set —
+  // plan section 4 — plus the move-out deposit deadline as a second event for the same row) and
+  // the booked move appointments m.moves carries (the /gcal/moves read tdMgrAssemble already
+  // makes, the next GCAL_MOVE_DAYS Edmonton days — no new fetch). The instance is destroyed and
+  // rebuilt on EVERY tdQPaint (so on every tdQRender, tile toggle and view flip) and dropped
+  // whenever the queue hides; the month the manager navigated to survives a rebuild. The six
+  // tiles filter it through the same tdQItemPass the lanes use; an event opens the same record
+  // as its row (tdQOpen with the same tdQIndex slot). Under 768 px the agenda list (listWeek)
+  // replaces the grids. Nothing here decides a lane or a date: tdQBuild did.
+  var TD_MGRQVIEW_KEY = 'ledger_mgrqview_v1';
+  var tdQCal = null;        // the queue's FullCalendar instance (null = not built)
+  var tdQCalRO = null;      // ResizeObserver on the host: the pane docking beside it changes its width
+  var tdQCalSet = null;     // the last tdQCalEvents() result (the header line re-counts it on navigation)
+  var tdQCalRange = null;   // { start, end, type } of the visible range, from datesSet
+  var tdQCalW = 0;          // host width at the last build (the observer rebuilds only on a real change)
+  var tdQCalBase = -1;      // tdQIndex length before the calendar's own slots; -1 = tdQPaint just reset it
+  var TD_Q_CAL_TAG = { rent: 'RENT', renewal: 'RENEW', move_in: 'IN', move_out: 'OUT', application: 'APP', task: 'TASK', unit: 'UNIT', meeting_action: 'MEET' };
+  function tdQView(){
+    var v = '';
+    try { v = localStorage.getItem(TD_MGRQVIEW_KEY) || ''; } catch (e) {}
+    return v === 'calendar' ? 'calendar' : 'list';
+  }
+  function tdQViewSet(v){
+    try { localStorage.setItem(TD_MGRQVIEW_KEY, v === 'calendar' ? 'calendar' : 'list'); } catch (e) {}
+    tdQViewApply();
+  }
+  // display only: the lanes and the calendar box swap; the tiles, pane and footer serve both
+  function tdQViewApply(){
+    var lanes = el('td-q-lanes'), box = el('td-q-calbox'), views = el('td-q-views');
+    var cal = tdQView() === 'calendar';
+    if (lanes) lanes.style.display = cal ? 'none' : '';
+    if (box) box.style.display = cal ? '' : 'none';
+    if (views) views.querySelectorAll('[data-qview]').forEach(function(b){
+      var on = b.getAttribute('data-qview') === (cal ? 'calendar' : 'list');
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+    });
+    tdQCalPaint();   // builds when the calendar is on screen, destroys when it is not
+  }
+  // on screen = a signed-in manager, in the Work queue view, showing it as a calendar
+  function tdQCalOn(){ return !!authIdent && tdRole() === 'manager' && tdMgrView() === 'queue' && tdQView() === 'calendar'; }
+  function tdQCalNarrow(){ return !!(window.matchMedia && window.matchMedia('(max-width:767px)').matches); }
+  function tdQCalDestroy(){
+    if (tdQCalRO){ try { tdQCalRO.disconnect(); } catch (e) {} tdQCalRO = null; }
+    if (tdQCal){ try { tdQCal.destroy(); } catch (e) { console.error('queue calendar destroy failed', e); } tdQCal = null; }
+    tdQCalRange = null; tdQCalSet = null;
+  }
+  // the calendar date of an item: its follow-up date when one is set (snoozed, or reached and
+  // back in Do today), else the rule's date (move date, lease end, task due); rent has none of its own
+  function tdQCalDate(it){ return it.followUp || (it.date ? String(it.date).slice(0, 10) : null); }
+  // Events from the queue in hand. Every queue event carries qi = its tdQIndex slot, so a click
+  // opens the record exactly as the row does; a booked appointment carries the slot of the move
+  // it belongs to when that move is in the queue. Returns the counts the header line and the
+  // tray need alongside the events.
+  function tdQCalEvents(){
+    var q = tdQLast, m = tdMgrLast, out = { evs: [], dated: [], undated: [], appts: 0, apptsFailed: false };
+    if (!q) return out;
+    var items = [];
+    TD_Q_LANES.forEach(function(l){ q.lanes[l].forEach(function(it){ items.push(it); }); });
+    q.snoozed.forEach(function(it){ items.push(it); });   // a snoozed item sits on its follow-up date
+    var byUnit = {};   // 'move_in:<unit_id>' → slot, so the appointment opens the same record
+    items.filter(tdQItemPass).forEach(function(it){
+      var d = tdQCalDate(it);
+      if (!d){ out.undated.push(it); return; }
+      var i = tdQIndex.length; tdQIndex.push(it);
+      var isMove = it.kind === 'move_in' || it.kind === 'move_out';
+      if (isMove && it.row && it.row.unit_id != null) byUnit[it.kind + ':' + it.row.unit_id] = i;
+      out.dated.push({ i: i, d: d });
+      out.evs.push({ id: 'q' + i, title: tdQTitle(it), start: d, allDay: true,
+        classNames: ['fc-q', isMove ? (it.kind === 'move_in' ? 'fc-mv-in' : 'fc-mv-out') : 'fc-q-' + it.kind, it.snoozed ? 'fc-q-snoozed' : ''].filter(Boolean),
+        extendedProps: { qi: i, kind: it.kind, tag: TD_Q_CAL_TAG[it.kind] || '', snoozed: !!it.snoozed } });
+      // the deposit statement deadline (move-out + TD_Q_DEPOSIT_DUE_D days) is a second event
+      // for the same row, shown for the lanes that show the SODA chip (not Coming up)
+      if (it.kind === 'move_out' && it.due && it.lane !== 'coming') out.evs.push({ id: 'qd' + i, title: 'Deposit statement due — ' + tdQTitle(it),
+        start: String(it.due).slice(0, 10), allDay: true, classNames: ['fc-q', 'fc-q-soda'], extendedProps: { qi: i, kind: 'soda', tag: 'SODA' } });
+    });
+    // booked appointments: the same rows the Moves card's calendar draws, from the payload in
+    // hand (null = that read failed; the header line says so). The Moves tile keeps them, any
+    // other tile hides them — the same rule the lanes apply to move rows.
+    if (!tdQKindF || tdQKindF === 'moves'){
+      var moves = m && m.moves && Array.isArray(m.moves.moves) ? m.moves.moves : null;
+      if (!moves) out.apptsFailed = true;
+      else gcalMovesInWindow(moves).filter(tdMgrMovesScopePass).forEach(function(r){
+        var isIn = r.event_kind === 'move_in', k = isIn ? 'move_in' : 'move_out';
+        var qi = byUnit[k + ':' + r.unit_id];
+        out.appts++;
+        out.evs.push({ id: 'g' + r.id, title: gcalMoveWhere(r), start: r.starts_at, end: r.ends_at || undefined, allDay: !!r.all_day,
+          classNames: ['fc-q', 'fc-q-appt', isIn ? 'fc-mv-in' : 'fc-mv-out'],
+          extendedProps: { qi: qi == null ? null : qi, appt: true, kind: k, tag: 'APPT', unit_id: r.unit_id, tentative: !!r.tentative } });
+      });
+    }
+    return out;
+  }
+  function fcQueueEventContent(arg){
+    var p = arg.event.extendedProps || {};
+    // the agenda list prints the time in its own column; the grids need it inside the block
+    var time = arg.timeText && !(arg.view && arg.view.type === 'listWeek') ? arg.timeText : '';
+    var wrap = document.createElement('div');
+    wrap.className = 'fc-ev-wrap';
+    // the block's hover title carries the full text: in a narrow month cell (the pane docked
+    // beside the calendar) only the kind tag fits and the title is the documented ellipsis case
+    wrap.title = (p.tag ? p.tag + ' · ' : '') + (time ? time + ' · ' : '') + (arg.event.title || '');
+    wrap.innerHTML = '<span class="fc-mv-k">' + esc(p.tag || '') + '</span>' +
+      (time ? '<span class="fc-q-time">' + esc(time) + '</span>' : '') +
+      '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' +
+      (p.snoozed ? '<span class="fcx" title="snoozed to this follow-up date">zz</span>' : '') +
+      (p.tentative ? '<span class="fcx" title="tentative">?</span>' : '');
+    return { domNodes: [wrap] };
+  }
+  // the header line: "8 on this month's calendar, 6 undated" — queue items on the visible range
+  // (a deposit deadline is the same item twice, so it is not counted again), then what the
+  // range leaves out, the booked appointments, and anything that did not load
+  function tdQCalHead(){
+    var hd = el('td-q-cal-h'); if (!hd) return;
+    var s = tdQCalSet, q = tdQLast, r = tdQCalRange;
+    if (!s || !q){ hd.innerHTML = ''; return; }
+    var word = r && r.type === 'dayGridMonth' ? 'month' : 'week';
+    var inRange = r ? s.dated.filter(function(x){ return x.d >= r.start && x.d < r.end; }).length : s.dated.length;
+    var h = '<b>' + inRange + '</b> on this ' + word + '&rsquo;s calendar, <b>' + s.undated.length + '</b> undated';
+    if (s.dated.length > inRange) h += ' &middot; ' + (s.dated.length - inRange) + ' dated outside this ' + word;
+    if (s.appts) h += ' &middot; ' + s.appts + ' booked move appointment' + (s.appts === 1 ? '' : 's') + ' in the next ' + GCAL_MOVE_DAYS + ' days';
+    if (s.apptsFailed) h += ' &middot; the booked move appointments could not load';
+    if (q.failed.length) h += ' &middot; could not load ' + q.failed.map(function(k){ return TD_Q_SOURCE_LABEL[k] || k; }).join(', ') + ', so those are missing here too';
+    hd.innerHTML = h;
+  }
+  function tdQCalTrayHead(){
+    var h3 = el('td-q-tray-h'); if (!h3 || !tdQCalSet) return;
+    var word = tdQCalRange && tdQCalRange.type === 'dayGridMonth' ? 'month' : 'week';
+    h3.innerHTML = 'Not on this ' + word + '&rsquo;s calendar <span class="qn2">' + tdQCalSet.undated.length + '</span>';
+  }
+  // destroy + rebuild, every time: tdQIndex was just reset by tdQPaint, so the events take
+  // fresh slots after the lane rows; the tray rows take theirs after the events
+  function tdQCalPaint(){
+    var box = el('td-q-calbox'), host = el('td-q-cal'), tray = el('td-q-tray'), hd = el('td-q-cal-h');
+    if (!box || !host || !tray || !hd) return;
+    var q = tdQLast;
+    if (!tdQCalOn() || !q){
+      tdQCalDestroy();
+      host.innerHTML = '';
+      hd.innerHTML = q ? '' : 'Loading&hellip;';
+      tray.innerHTML = ''; tray.hidden = true;
+      return;
+    }
+    if (typeof FullCalendar === 'undefined'){
+      tdQCalDestroy();
+      host.innerHTML = '<div class="note">The calendar engine did not load. Refresh the page, or use the list.</div>';
+      hd.innerHTML = ''; tray.innerHTML = ''; tray.hidden = true;
+      return;
+    }
+    // the calendar's events and tray rows take tdQIndex slots AFTER the lane rows. A repaint that
+    // did not come through tdQPaint (view flip, width change) drops its earlier slots first, so
+    // the index does not grow with every rebuild; the pane holds the item itself, never a slot.
+    if (tdQCalBase < 0 || tdQCalBase > tdQIndex.length) tdQCalBase = tdQIndex.length; else tdQIndex.length = tdQCalBase;
+    // remember where the manager was: a rebuild (tile toggle, fresh payload) lands on the same month
+    var keepView = null, keepDate = null;
+    if (tdQCal){ try { keepView = tdQCal.view.type; keepDate = tdQCal.getDate(); } catch (e) {} }
+    tdQCalDestroy();
+    var s = tdQCalSet = tdQCalEvents();
+    host.innerHTML = '';
+    var h = document.createElement('div'); host.appendChild(h);
+    var narrow = tdQCalNarrow();
+    var opts = {
+      initialView: narrow ? 'listWeek' : (keepView === 'timeGridWeek' ? 'timeGridWeek' : 'dayGridMonth'),
+      headerToolbar: narrow ? { left: 'prev,next', center: 'title', right: 'today' } : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+      buttonText: { today: 'Today', month: 'Month', week: 'Week', list: 'List' },
+      height: 'auto', firstDay: 0, dayMaxEvents: 4, eventDisplay: 'block',
+      allDaySlot: true, slotMinTime: '07:00:00', slotMaxTime: '20:00:00', expandRows: true,
+      eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
+      noEventsContent: 'Nothing dated this week.',
+      eventContent: fcQueueEventContent,
+      eventClick: function(info){
+        if (info.jsEvent) info.jsEvent.preventDefault();
+        var xp = info.event.extendedProps || {};
+        if (xp.qi != null){ tdQOpen(xp.qi); return; }
+        // an appointment with no queue row behind it (marked done, out of the queue, or not
+        // matched to a unit): the Moves card's own fallback, so the same record opens either way
+        var side = xp.kind === 'move_out' ? 'out' : 'in';
+        var row = xp.unit_id != null ? tdMvRowByUnit(side, xp.unit_id) : null;
+        if (row && row.lease_id != null) tdMvOpen(side, row.lease_id);
+        else if (xp.unit_id != null) openUnitEnsure(String(xp.unit_id));
+      },
+      datesSet: function(info){
+        tdQCalRange = { start: info.startStr.slice(0, 10), end: info.endStr.slice(0, 10), type: info.view.type };
+        tdQCalHead(); tdQCalTrayHead();
+      },
+      events: s.evs
+    };
+    if (keepDate) opts.initialDate = keepDate;
+    tdQCal = new FullCalendar.Calendar(h, opts);
+    tdQCal.render();
+    // a width change (the pane docking or closing, anything else that moves the column) goes
+    // through tdQCalResized, which rebuilds only when the width really moved
+    tdQCalW = host.getBoundingClientRect().width;
+    if (window.ResizeObserver){ tdQCalRO = new ResizeObserver(tdQCalResized); tdQCalRO.observe(host); }
+    // ── the tray: the queue items with no date, by lane, rolled up as the lanes roll them up ──
+    if (!s.undated.length){ tray.innerHTML = ''; tray.hidden = true; return; }
+    var st = tdQStateMap(tdMgrLast && tdMgrLast.wi), th = '';
+    TD_Q_LANES.forEach(function(l){
+      var list = s.undated.filter(function(it){ return it.lane === l; }); if (!list.length) return;
+      var rh = '';
+      q.rows[l].forEach(function(r){
+        var items = r.items.filter(function(it){ return list.indexOf(it) >= 0; }); if (!items.length) return;
+        rh += r.rollup && items.length > 1 ? tdQRollHtml(r, items, st) : items.map(function(it){ return tdQRowHtml(it, st); }).join('');
+      });
+      th += '<div class="mvsec-h">' + TD_Q_LANE_LABEL[l] + ' <span class="qn2">' + list.length + '</span></div><div class="schoffers">' + rh + '</div>';
+    });
+    tray.innerHTML = '<h3 id="td-q-tray-h"></h3><div class="note tdqtray-n">These have no date, so they never land on a day. Open one for its record.</div>' + th;
+    tray.hidden = false;
+    tdQCalTrayHead();
+  }
+  // The host's width changes when the record pane docks beside it or closes (and whenever the
+  // page column moves). FullCalendar sizes its grid once and listens to WINDOW resizes only, so
+  // the day columns kept their old width and the right-hand days were cut off (ledger-verify
+  // 2026-10-05: scroll harness 972 px in a 536 px host); updateSize() from a ResizeObserver did
+  // not help, and a frame-bound observer never even fires while the tab is not painting. So two
+  // sources funnel here — the ResizeObserver above (any cause, while painting) and a
+  // MutationObserver on #td-q-wrap's class (the pane dock, a microtask, fires regardless) — into
+  // one timer-based check that rebuilds only on a real width change. The guard also stops the
+  // rebuild's own height change from re-firing the observers forever.
+  function tdQCalResized(){
+    setTimeout(function(){
+      if (!tdQCal || !tdQCalOn()) return;
+      var host = el('td-q-cal'); if (!host) return;
+      var w = host.getBoundingClientRect().width;
+      if (Math.abs(w - tdQCalW) < 2) return;
+      tdQCalPaint();
+    }, 0);
+  }
+  // once at boot: crossing 768 px swaps the agenda list for the grids (and back); the pane's
+  // dock class on the wrap re-sizes the calendar beside it
+  (function(){
+    if (window.matchMedia){
+      var mq = window.matchMedia('(max-width:767px)');
+      var flip = function(){ if (tdQCal) tdQCalPaint(); };
+      if (mq.addEventListener) mq.addEventListener('change', flip); else if (mq.addListener) mq.addListener(flip);
+    }
+    var wrap = el('td-q-wrap');
+    if (wrap && window.MutationObserver) new MutationObserver(tdQCalResized).observe(wrap, { attributes: true, attributeFilter: ['class'] });
+  })();
   // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
   // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff.
   // (Days-on-market and rent-gap rows were removed 2026-07-24 — see the note below.)
@@ -8657,6 +8953,8 @@ window.addEventListener('error', function(e){
       if (e.target.closest('[data-qurgent]')){ tdQUrgentF = !tdQUrgentF; tdQPaint(); return; }
       var mvw = e.target.closest('[data-mgrview]');
       if (mvw){ tdMgrViewSet(mvw.getAttribute('data-mgrview')); return; }
+      var qvw = e.target.closest('[data-qview]');   // phase 5: List | Calendar
+      if (qvw){ tdQViewSet(qvw.getAttribute('data-qview')); return; }
       if (e.target.closest('[data-qpane-close]')){ tdQPaneClose(); return; }
       if (tdWiClick(e)) return;   // phase 4: the follow-up / notes block in the pane
       if (e.target.closest('[data-qsnoozed]')){ tdQShowSnoozed = !tdQShowSnoozed; tdQPaint(); return; }

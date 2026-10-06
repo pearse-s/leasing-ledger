@@ -2208,11 +2208,13 @@ window.addEventListener('error', function(e){
       html.prt-today #page-today .panel{background:#fff !important;border:none !important;box-shadow:none !important;
         -webkit-backdrop-filter:none !important;backdrop-filter:none !important;padding:0 !important;margin:0 0 14px !important;
         animation:none !important;transform:none !important;opacity:1 !important}
-      /* NOT a forced page break before each section. The plan asked for that AND "four pages or
-         fewer per manager"; with seven sections the two cannot both hold (measured at Cheryl's
-         live size, 2026-10-06: forced breaks 10 pages; whole-section keeping 6). Sections flow
-         on from the one before; a heading never sits alone at a page foot (break-after:avoid
-         on h3) and a row is never cut in half (break-inside:avoid on rows). */
+      /* ONE SECTION PER PAGE (Pearse, D1 2026-10-05): every section after the brief starts a new
+         sheet. This trades the plan's "four pages or fewer" away on purpose — measured at
+         Cheryl's live size, forced breaks give ~10 pages vs 5 flowing on. Inside a section a
+         heading never sits alone at a page foot (break-after:avoid on h3) and a row is never cut
+         in half (break-inside:avoid on rows). The sibling selector skips the brief because the
+         review bar and print header (divs, not .panel) sit before it. */
+      html.prt-today #td-grid > .panel.tdq + .panel.tdq{break-before:page}
       html.prt-today #page-today .panel::before,html.prt-today #page-today .panel::after{display:none !important}
       html.prt-today #page-today .tdq h3{font-size:1.25rem;break-after:avoid;border-bottom:1px solid #999;padding-bottom:4px}
       html.prt-today #page-today .schoffers{max-height:none !important;overflow:visible !important;margin-top:4px}
@@ -7069,8 +7071,8 @@ window.addEventListener('error', function(e){
   window.addEventListener('beforeprint', tdPrintPrep);
   window.addEventListener('afterprint', tdPrintDone);
   // ── the review workbook ──
-  // Nine sheets: Summary, Rent, Renewals, Move-ins, Move-outs, Tasks, Applications, Vacant,
-  // Actions. EXPORT EQUALS SCREEN: every sheet writes the SAME set its card lists under the
+  // Ten sheets: Summary, Rent, Renewals, Move-ins, Move-outs, Tasks, Applications, Unit
+  // movement (Pearse D2, 2026-10-05), Vacant, Actions. EXPORT EQUALS SCREEN: every sheet writes the SAME set its card lists under the
   // current scope and filters, in the same order, uncapped — tdRentSides / tdRwVisible /
   // tdMvVisible / tdTkVisible / tdApVisible are the ones the cards paint from. Row 1 of each
   // sheet names the manager, the date, the compare date and the filters that applied.
@@ -7143,27 +7145,44 @@ window.addEventListener('error', function(e){
     { label:'Property',     w:26, key:'property_name' },
     { label:'Unit',         w:10, key:'unit_number' },
     { label:'Status',       w:20, get:function(u){ return u.occupancy_status === 'never_leased' ? 'Never leased' : 'Operationally vacant'; } },
+    { label:'Not ready',    w:10, get:function(u){ return tdReviewYN(u.is_not_ready); } },
+    { label:'Counted by the vacant tile', w:14, get:function(u){ return tdReviewYN(!u.is_not_ready); } },
     { label:'Days vacant',  w:11, type:'num', key:'days_vacant' },
     { label:'Listed',       w:8,  get:function(u){ return tdReviewYN(u.is_listed); } },
     { label:'Rent (listed, else last lease)', w:16, type:'money', get:function(u){ var v = rentBasis(u); return (v != null && v > 0) ? v : null; } },
     { label:'Market rent',  w:13, type:'money', get:function(u){ return (u.market_rent != null && u.market_rent > 0) ? u.market_rent : null; } },
     { label:'Application',  w:26, get:function(u){ return u.pending_app_stage ? (TD_RV_PAS[u.pending_app_stage] || 'Application approved, no lease yet') : ''; } },
-    { label:'On Unit movement (aging 60d+)', w:16, get:function(u){ return tdReviewYN(u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60); } },
+    { label:'On Unit movement (aging 60d+)', w:16, get:function(u){ return tdReviewYN(!u.is_not_ready && u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60); } },
     { label:'Unit ID',      w:10, type:'num', key:'unit_id' }
+  ];
+  // Unit movement — the card's feed rows (tdMuVisible), each carrying its unit row as .u
+  var TD_RV_UM_COLS = [
+    { label:'Group',        w:12, get:function(f){ return TD_MU_META[f.k].label; } },
+    { label:'Property',     w:26, get:function(f){ return f.u.property_name || ''; } },
+    { label:'Unit',         w:10, get:function(f){ return f.u.unit_number || ''; } },
+    { label:'Tenant',       w:28, get:function(f){ return f.k === 'aging' ? '' : (f.u.tenant_names || ''); } },
+    { label:'Moving out',   w:12, get:function(f){ return f.k === 'notice' ? String(f.u.next_move_out || '').slice(0, 10) : ''; } },
+    { label:'Days vacant',  w:11, type:'num', get:function(f){ return f.k === 'aging' ? f.d : null; } },
+    { label:'Listed',       w:8,  get:function(f){ return f.k === 'aging' ? tdReviewYN(f.u.is_listed) : ''; } },
+    { label:'Rent (listed, else last lease)', w:16, type:'money', get:function(f){ if (f.k !== 'aging') return null; var v = rentBasis(f.u); return (v != null && v > 0) ? v : null; } },
+    { label:'Unit ID',      w:10, type:'num', get:function(f){ return f.id; } }
   ];
   var TD_RV_ACT_COLS = [
     { label:'Action', w:40, key:'body' }, { label:'Who', w:18, key:'assignee' },
     { label:'Due', w:12, key:'due_on' }, { label:'Status', w:10, key:'status' }, { label:'Added in review', w:14, key:'held_on' }
   ];
-  // The house rule the vacant TILE counts by (get_stats.vacancy.vacant_total): owner take-backs and
-  // not-ready units are out. Checked live 2026-10-06: Cheryl 133 vacant rows in the brief, 30
-  // take-backs + 93 not-ready among them, 10 left = the tile's 10; team-wide 70 = 70. Without it
-  // the sheet ran 13x the tile it sits beside.
+  // The vacant TILE (get_stats.vacancy.vacant_total) leaves out owner take-backs and not-ready
+  // units. Checked live 2026-10-06: Cheryl 133 vacant rows in the brief, 30 take-backs + 93
+  // not-ready among them, 10 left = the tile's 10; team-wide 70 = 70.
+  // Pearse D3 (2026-10-05): the sheet SHOWS the not-ready units too, flagged in their own column
+  // and listed after the units the tile counts, so the top of the sheet still reconciles to the
+  // tile. Owner take-backs stay out. This is a sheet rule only: the tile, v_unit_status and the
+  // Unit movement card keep the house exclusion.
   function tdReviewVacant(m){
     return (m.units || []).filter(function(u){
-      return (u.occupancy_status === 'op_vacant' || u.occupancy_status === 'never_leased') && !u.is_owner_takeback && !u.is_not_ready;
+      return (u.occupancy_status === 'op_vacant' || u.occupancy_status === 'never_leased') && !u.is_owner_takeback;
     })
-      .sort(function(a, b){ return (Number(b.days_vacant) || 0) - (Number(a.days_vacant) || 0); });
+      .sort(function(a, b){ return ((a.is_not_ready ? 1 : 0) - (b.is_not_ready ? 1 : 0)) || ((Number(b.days_vacant) || 0) - (Number(a.days_vacant) || 0)); });
   }
   // the moves filters that applied, WITHOUT the scope (row 1 already names it)
   function tdReviewMvBits(){
@@ -7210,9 +7229,15 @@ window.addEventListener('error', function(e){
     // Vacant — every vacant unit in scope; the pulse tile's count rides along for reconciliation
     var vacFail = m.units === null, vacRows = vacFail ? [] : tdReviewVacant(m);
     var v = (m.stats && m.stats.vacancy) || {}, mo = (m.stats && m.stats.money) || {}, pp = (m.stats && m.stats.pipeline) || {};
-    var vacBits = ['Every operationally vacant and never-leased unit in scope, longest vacant first, without owner take-backs and not-ready units (the vacant tile counts the same way)'];
+    var vacNr = vacRows.filter(function(u){ return u.is_not_ready; }).length;
+    var vacBits = ['Every operationally vacant and never-leased unit in scope except owner take-backs, longest vacant first',
+      (vacRows.length - vacNr) + ' the vacant tile counts, then ' + vacNr + ' not-ready unit' + (vacNr === 1 ? '' : 's') + ' (flagged in the Not ready column; the tile leaves them out)'];
     if (v.vacant_total != null) vacBits.push('The "vacant" tile on the page counts ' + v.vacant_total);
     add('Vacant units', vacFail ? null : vacRows.length, null, vacFail ? 'did not load' : vacBits.join(' · '));
+    // Unit movement — the group chip on screen
+    var umFail = tdMuLast === null, umRows = umFail ? [] : tdMuVisible(tdMuLast);
+    var umBits = (tdMuKindF && TD_MU_META[tdMuKindF]) ? ['Group: ' + TD_MU_META[tdMuKindF].label] : [];
+    add('Unit movement', umFail ? null : umRows.length, null, umFail ? 'did not load' : (umBits.join(' · ') || 'Evictions, then notices, then units vacant 60+ days (no owner take-backs or not-ready units)'));
     add('Meeting actions', 0, null, 'Not recorded in the Ledger yet');
     // the pulse tiles, as figures (no sheet of their own)
     if (m.stats){
@@ -7233,6 +7258,7 @@ window.addEventListener('error', function(e){
       mvIn, mvOut,
       tdReviewSheet('Tasks', TD_RV_TASK_COLS, tkRows, tkBits, tkFail),
       tdReviewSheet('Applications', tdRvAppCols(), apRows, apBits, apFail),
+      tdReviewSheet('Unit movement', TD_RV_UM_COLS, umRows, umBits, umFail),
       tdReviewSheet('Vacant', TD_RV_VAC_COLS, vacRows, vacBits, vacFail),
       tdReviewSheet('Actions', TD_RV_ACT_COLS, [], ['Meeting actions are not recorded in the Ledger yet, so this sheet is empty'], false)
     ];
@@ -7269,13 +7295,13 @@ window.addEventListener('error', function(e){
       // WS-M M3 (D1): the move-in/move-out ≤14d lines stay GONE — the Moves card owns move
       // movement (same units, richer stage state). This feed keeps what that card does not.
       if (u.unit_event === 'Eviction Pending')
-        feed.push({ k: 'evict', t: label, sub: u.tenant_names || '', id: u.unit_id, d: 0 });
+        feed.push({ k: 'evict', t: label, sub: u.tenant_names || '', id: u.unit_id, d: 0, u: u });
       else if (u.unit_event === 'Notice to Vacate')
-        feed.push({ k: 'notice', t: label, id: u.unit_id, d: 0,
+        feed.push({ k: 'notice', t: label, id: u.unit_id, d: 0, u: u,
           sub: (u.next_move_out ? 'moving out ' + u.next_move_out : '') + (u.tenant_names ? ' · ' + u.tenant_names : '') });
       if (u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60){
         var rent = rentBasis(u);
-        feed.push({ k: 'aging', t: label, id: u.unit_id, d: u.days_vacant || 0,
+        feed.push({ k: 'aging', t: label, id: u.unit_id, d: u.days_vacant || 0, u: u,
           sub: 'vacant ' + (u.days_vacant || 0) + 'd' + ((rent != null && rent > 0) ? ' · ' + (u.is_listed ? 'listed ' : 'last rent ') + fmtMoney(rent) : ''),
           // aging AND unmarketed is the actionable combination — keep the flag from the old card
           flag: u.is_listed ? '' : '<span class="chip c-hot">NOT listed</span>' });
@@ -7285,6 +7311,8 @@ window.addEventListener('error', function(e){
     tdMuLast = feed;
     tdMuPaint();
   }
+  // the group chip's filter — the card paints from it and the review workbook's Unit movement sheet exports it
+  function tdMuVisible(feed){ return (feed || []).filter(function(f){ return !tdMuKindF || f.k === tdMuKindF; }); }
   function tdMuPaint(){
     var box = el('td-mgr-units'); if (!box || tdMuLast === null) return;
     var feed = tdMuLast;
@@ -7294,7 +7322,7 @@ window.addEventListener('error', function(e){
       return '<button type="button" class="chip' + (tdMuKindF === k ? ' on' : '') + '" data-mu-kind="' + k + '">' +
         TD_MU_META[k].label + ' ' + counts[k] + '</button>';
     }).join('') + '</div>';
-    var vis = feed.filter(function(f){ return !tdMuKindF || f.k === tdMuKindF; });
+    var vis = tdMuVisible(feed);
     var h = tdMoreSlice('units', vis).map(function(f){
       return '<div class="schoffer tdurow" data-uid="' + esc(String(f.id)) + '" role="button" tabindex="0">' +
         '<div class="schoffer-main"><b>' + esc(f.t) + '</b>' +

@@ -2233,6 +2233,10 @@ window.addEventListener('error', function(e){
       /* wrap, never clip — on paper too: the tables give up their screen min-widths and wrap */
       html.prt-today #page-today .mvtable{min-width:0 !important;font-size:.9rem}
       html.prt-today #page-today .mvtable th{white-space:normal;color:#333}
+      /* every table header (rent, tracker, renewals, the calendar's day row) has a HARD-CODED dark
+         background (thead th, rgba(16,19,30,.96)) that the variable re-pointing above cannot reach;
+         it printed as a near-black bar with unreadable labels (Cheryl's print, 2026-10-05) */
+      html.prt-today #page-today thead th{background:#fff !important;color:#333 !important;position:static !important;border-bottom:1.5px solid #555 !important}
       html.prt-today #page-today .mvtable tr{break-inside:avoid}
       html.prt-today #page-today .mvtable td{padding:3px 4px}
       /* paper is ~740 px wide, under the 768 px breakpoint where #page-hub's style block turns the

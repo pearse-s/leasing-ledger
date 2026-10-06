@@ -867,6 +867,15 @@ window.addEventListener('error', function(e){
   .mvacts .tdact{padding:5px 8px}
   .mvexp{margin-left:auto}
   .mvdate{font:inherit;font-size:.82rem;background:var(--glass-2);color:var(--ink);border:1px solid var(--hairline-dark);border-radius:8px;padding:6px 9px;min-height:40px}
+  /* Direction A phase 4: the follow-up / reminder / notes block (tdWiBlock) — global, because the
+     same block mounts in the queue pane AND in #rentmodal / #mvmodal / #qmodal (outside #page-today) */
+  .tdwi{margin-top:14px}
+  .tdwi .mvd-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .tdwi-msg:empty{display:none}
+  .tdwi-msg.bad{color:var(--clay);font-weight:700}
+  .tdwi .linklike{margin:0;padding:0 2px}
+  .tdwi-note{border-left:2px solid var(--hairline-dark);padding:2px 0 2px 9px;margin:6px 0}
+  .tdwi-note-b{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.82rem}
   /* the booked appointment time - the one thing a manager wants off this row on the day */
   .mvappt{margin-top:3px;font-weight:700;font-size:.8rem;color:var(--moss);white-space:normal}
   .mvappt.off{color:var(--amber)}
@@ -5977,6 +5986,8 @@ window.addEventListener('error', function(e){
         ' &mdash; untick to reopen it'
        : 'Mark this ' + (k === 'in' ? 'move-in' : 'move-out') + ' finished. It leaves the list; the Done chip brings it back.') +
       '</span><span>' + tdMvDoneCell(r, k) + '</span></div>';
+    // Direction A phase 4: the follow-up date (no notes block — moves keep their one move_notes note below)
+    if (r.lease_id != null && !r.is_manual) h += tdWiBlock((k === 'in' ? 'move_in:' : 'move_out:') + r.lease_id);
     var mvLease = tdMvLeaseOn(r, k), mvIds = ' data-mvl="' + esc(String(r.lease_id)) + '" data-mvk="' + k + '"';
     h += '<div class="orcfg-h">Move date</div>' +
       '<div class="mvd-row"><input type="date" id="mv-d-date" class="mvdate" min="2020-01-01" max="2035-12-31" value="' + esc(String(d || '')) + '">' +
@@ -6475,7 +6486,7 @@ window.addEventListener('error', function(e){
         var fd = tdMgrDays(s.follow_up_on);
         if (fd != null){
           it.followUp = String(s.follow_up_on).slice(0, 10);
-          if (fd > 0){ it.snoozed = true; it.why = 'follow up ' + it.followUp + ' (was: ' + (it.lane || 'Review only') + ')'; it.lane = null; }
+          if (fd > 0){ it.snoozed = true; it.why = 'snoozed, was in ' + ({ today: 'Do today', week: 'This week', coming: 'Coming up', waiting: 'Waiting' }[it.lane] || 'Review only'); it.lane = null; }
           else { it.lane = 'today'; it.why = 'follow-up date reached, ' + it.why; }
           return;
         }
@@ -6579,6 +6590,7 @@ window.addEventListener('error', function(e){
   var tdQOpenKey = null;     // work-item key of the item in the record pane (null = closed)
   var tdQOpenItem = null;    // ...and the item itself (the Moves write actions refresh the pane through it)
   var tdQPaneReq = 0;        // generation guard for the pane's async loads (a second open or a close retires the first)
+  var tdQShowSnoozed = false; // phase 4: the footer's "Show them" — lists the snoozed items so one can be opened and cleared
   var TD_Q_TILES = ['rent', 'renewals', 'moves', 'apps', 'tasks', 'units'];
   var TD_Q_TILE_KINDS = { rent: { rent: 1 }, renewals: { renewal: 1 }, moves: { move_in: 1, move_out: 1 }, apps: { application: 1 }, tasks: { task: 1 }, units: { unit: 1 } };
   var TD_Q_LANE_LABEL = { today: 'Do today', week: 'This week', coming: 'Coming up this month', waiting: 'Waiting on someone else' };
@@ -6659,14 +6671,13 @@ window.addEventListener('error', function(e){
     var r = it.row || {}, bits = [];
     if (it.kind === 'task' && tdQWhere(r)) bits.push(esc(tdQWhere(r)));
     if (it.why) bits.push(esc(it.why));
-    if (s && s.last_reminder_at){
-      var ch = s.last_reminder_channel, when = tdRwDateShort(tdDayKeyEd(new Date(Date.parse(s.last_reminder_at))));
-      bits.push(esc((ch === 'sms' ? 'Texted' : (ch === 'email' ? 'Emailed' : 'Called')) + ' ' + when + (s.last_reminder_by ? ' · ' + String(s.last_reminder_by).split(/\s+/)[0] : '')));
-    }
+    if (s && s.last_reminder_at) bits.push(esc(tdWiRemLine(s)));   // "Texted Oct 2 · Cheryl" (phase 4: one line, shared with the block)
     return bits.join(' &middot; ') + (it.flag === 'stale' ? '<span class="tdqflag">stale</span>' : '');
   }
   function tdQDateChips(it){
     var h = '';
+    // phase 4: the follow-up date, when one is set (snoozed rows and the ones it brought back)
+    if (it.followUp) h += '<span class="chip ' + (it.snoozed ? 'c-cold' : 'c-hot') + '" title="Follow-up date ' + esc(it.followUp) + '">Follow up ' + esc(tdRwDateShort(it.followUp)) + '</span> ';
     if (it.date){
       var d = tdMgrDays(it.date);
       h += '<span class="chip ' + (d != null && d <= 0 ? 'c-hot' : 'c-warm') + '" title="' + esc(String(it.date).slice(0, 10)) + '">' + esc(tdRwDateShort(it.date)) +
@@ -6742,11 +6753,19 @@ window.addEventListener('error', function(e){
         (total ? (shown === total ? total : shown + ' of ' + total) : '') + '</span></h3>' +
         '<div class="schoffers">' + (rh || '<div class="note">' + empty + '</div>') + '</div></section>';
     });
+    // phase 4: the snoozed items, on demand — the only way back to one before its date (open it,
+    // Clear follow-up). Same rows, same tile filter; ordered by the follow-up date.
+    var sn = q.snoozed.length;
+    if (sn && tdQShowSnoozed){
+      var snRows = q.snoozed.filter(tdQItemPass).slice().sort(function(a, b){ return String(a.followUp).localeCompare(String(b.followUp)); });
+      h += '<section class="panel tdq tdqlane"><h3>Snoozed <span class="qn2">' + (snRows.length === sn ? sn : snRows.length + ' of ' + sn) + '</span></h3>' +
+        '<div class="schoffers">' + (snRows.length ? snRows.map(function(it){ return tdQRowHtml(it, st); }).join('') : '<div class="note">Nothing here matches the tile you picked.</div>') + '</div></section>';
+    }
     lanes.innerHTML = h;
     // ── the "left in Review only" line (plan section 8: every card row is in a lane, snoozed or here) ──
-    var revN = q.review.filter(function(it){ return !!it.card; }).length, sn = q.snoozed.length;
+    var revN = q.review.filter(function(it){ return !!it.card; }).length;
     var fh = revN + ' row' + (revN === 1 ? '' : 's') + ' from the Review cards ' + (revN === 1 ? 'is' : 'are') + ' not in the queue &mdash; settled, not due yet, or past tenants.';
-    if (sn) fh += ' ' + sn + ' snoozed to a later follow-up date.';
+    if (sn) fh += ' ' + sn + ' snoozed to a later follow-up date <button type="button" class="linklike" data-qsnoozed="1" aria-pressed="' + tdQShowSnoozed + '">' + (tdQShowSnoozed ? 'Hide them' : 'Show them') + '</button>.';
     if (m && m.wi === null) fh += ' Follow-ups and reminders could not be loaded, so nothing is snoozed and no reminder shows.';
     fh += ' <button type="button" class="linklike" data-mgrview="review">Open Review &rarr;</button>';
     foot.innerHTML = fh;
@@ -6791,10 +6810,18 @@ window.addEventListener('error', function(e){
     var k = it.kind, r = it.row || {};
     tdQPaneReq++;   // an earlier open still loading must not paint over this one
     if (it.id != null) uePing('queue_open_item', { kind: k === 'meeting_action' ? 'task' : k, id: String(it.id), lane: it.lane || undefined });
-    if (k === 'application'){ if (it.id != null) openAppEnsure(String(it.id)); else if (r.unit_id != null) openUnitEnsure(String(r.unit_id)); return; }
-    if (k === 'unit'){ if (r.unit_id != null) openUnitEnsure(String(r.unit_id)); return; }
     if (k === 'meeting_action') return;   // reserved (review plan R4)
     var dock = tdQPaneDocked();
+    if (!dock) tdQPaneClose();   // a pane left open at a wider width must not sit under a modal record
+    // applications and units open their own popups (they write into fixed ids). Phase 4: when the
+    // pane is docked it ALSO mounts a small record with the follow-up / notes block behind the
+    // popup, so these kinds can be given a date too; under 1100 px the popup alone (A6's sheet).
+    if (k === 'application' || k === 'unit'){
+      if (dock) tdQPaneMount(it, tdQPaneHead(it) + tdQRefBody(it));
+      if (k === 'application' && it.id != null) openAppEnsure(String(it.id));
+      else if (r.unit_id != null) openUnitEnsure(String(r.unit_id));
+      return;
+    }
     if (k === 'rent'){ if (dock) tdQPaneRent(it); else tdRentOpen(it.id); return; }
     if (k === 'move_in' || k === 'move_out'){
       var mk = k === 'move_in' ? 'in' : 'out';
@@ -6804,7 +6831,9 @@ window.addEventListener('error', function(e){
       return;
     }
     if (k === 'renewal'){ if (dock) tdQPaneMount(it, tdQPaneHead(it) + tdQRwBody(r)); else tdQModalOpen(tdQRwBody(r)); return; }
-    if (k === 'task'){ if (dock) tdQPaneTask(it); else openTask(it.id); }
+    // tasks under 1100 px: #qmodal with the same body as the pane (phase 4 — the follow-up and
+    // notes block lives in it; "History & details" still opens the full task popup)
+    if (k === 'task') tdQPaneTask(it, !dock);
   }
   // rent: the drawer body + the live ledger, exactly as #rentmodal shows them
   function tdQPaneRent(it){
@@ -6856,6 +6885,7 @@ window.addEventListener('error', function(e){
     if (act.indexOf('managebuilding') < 0 && r.lease_id != null) act += ' <a class="tdact" href="' + esc(tdRwBuildium(r.lease_id)) + '" target="_blank" rel="noopener">Lease in Buildium &#8599;</a>';
     if (r.unit_id != null) act += ' <button type="button" class="tdact" data-uid="' + esc(String(r.unit_id)) + '">Open unit</button>';
     h += '<div class="mvd-row" style="margin-top:12px">' + act + '</div>';
+    if (r.lease_id != null) h += tdWiBlock('renewal:' + r.lease_id, { notes: true });   // phase 4
     return h + '</div>';
   }
   // tasks: the row's own fields, the description from /task on click, Buildium and the unit
@@ -6884,21 +6914,251 @@ window.addEventListener('error', function(e){
       (t.task_id != null ? '<a class="tdact" target="_blank" rel="noopener" href="' + esc(BMGR + '/tasks/' + encodeURIComponent(t.task_id) + '/task-summary?searchOption=new') + '">Open in Buildium &#8599;</a>' : '') +
       (t.task_id != null ? ' <button type="button" class="tdact" data-qtask-open="' + esc(String(t.task_id)) + '" title="The full task popup, with its history">History &amp; details</button>' : '') +
       (t.unit_id != null ? ' <button type="button" class="tdact" data-uid="' + esc(String(t.unit_id)) + '">Open unit</button>' : '') + '</div>';
+    if (t.task_id != null) h += tdWiBlock('task:' + t.task_id, { notes: true });   // phase 4
     return h + '</div>';
   }
-  function tdQPaneTask(it){
+  // inModal: #qmodal under 1100 px (phase 4), else the docked pane. The pane's generation guard
+  // retires both: a second open, a pane close or a fresh payload bumps tdQPaneReq.
+  function tdQPaneTask(it, inModal){
     var t = it.row || {};
-    var b = tdQPaneMount(it, tdQPaneHead(it) + tdQTkBody(t, undefined)); if (!b) return;
-    var g = ++tdQPaneReq, q = tdReq;
+    var head = inModal ? '' : tdQPaneHead(it);
+    if (inModal) tdQModalOpen(tdQTkBody(t, undefined));
+    else if (!tdQPaneMount(it, head + tdQTkBody(t, undefined))) return;
+    var g = ++tdQPaneReq, q = tdReq, target = inModal ? 'q-d-body' : 'td-qpane-body';
     authFetch('/task?task_id=' + encodeURIComponent(String(it.id))).then(function(j){
       if (g !== tdQPaneReq || q !== tdReq) return;
-      var b2 = el('td-qpane-body'); if (b2) b2.innerHTML = tdQPaneHead(it) + tdQTkBody((j && j.task) || t, (j && j.detail) || {});
+      var b2 = el(target); if (b2) b2.innerHTML = head + tdQTkBody((j && j.task) || t, (j && j.detail) || {});
     }).catch(function(e){
       if (String(e && e.message) === 'AUTH') return;
       console.error('task (queue pane) failed', e);
       if (g !== tdQPaneReq || q !== tdReq) return;
-      var b3 = el('td-qpane-body'); if (b3) b3.innerHTML = tdQPaneHead(it) + tdQTkBody(t, null);
+      var b3 = el(target); if (b3) b3.innerHTML = head + tdQTkBody(t, null);
     });
+  }
+  // applications and units in the docked pane (phase 4): what the row says, the popup again, and
+  // the follow-up / notes block. The popup itself stays the record (it writes into fixed ids).
+  function tdQRefBody(it){
+    var r = it.row || {}, isApp = it.kind === 'application' && it.id != null;
+    var h = '<div class="lmhead"><h3>' + esc(tdQTitle(it)) + '</h3><div class="lmsub">' + esc(it.why || '') + '</div></div><div class="lmbody">';
+    h += '<div class="mvd-row">' +
+      (isApp ? '<button type="button" class="tdact" data-qapp-open="' + esc(String(it.id)) + '">Open the application</button> ' : '') +
+      (r.unit_id != null ? '<button type="button" class="tdact" data-uid="' + esc(String(r.unit_id)) + '">Open unit</button>' : '') + '</div>';
+    return h + tdWiBlock(it.key, { notes: true }) + '</div>';
+  }
+
+  // ── Follow-ups, the reminder log and notes (Direction A phase 4, 2026-10-05) ─────────────
+  // ONE control (tdWiBlock) and ONE poster (tdWiPost) for every surface that shows an item: the
+  // queue's record pane, #rentmodal, #mvmodal and #qmodal (sibling surfaces ship together). A
+  // write answers the item's new state ({ok, state} from POST /work-item/event); tdWiApply
+  // patches tdMgrLast.wi with it and rebuilds the lanes from tdQBuild — no brief refetch — while
+  // the pane stays on the same item (its key does not change). A failed write says so in the
+  // block and leaves the lanes as they were.
+  // The block is found by its data-wikey (plan 5.1 key, kind:id), never by element id, so it
+  // reads the same in the pane and in a modal; a re-render restores the typed note and the
+  // loaded notes from tdWiDraft / tdWiNotesHtml (the move drawer's draft lesson).
+  // Notes: the bodies are NOT in the list payload (WI_STATE_COLS keeps free text out of it);
+  // GET /work-item-notes reads them on click. Moves keep their own one note (move_notes), so
+  // their block has the follow-up only.
+  var tdWiLocal = {};      // key -> state from a write while m.wi is null (the list read failed)
+  var tdWiDraft = {};      // key -> the note being typed
+  var tdWiNotesHtml = {};  // key -> the notes list last painted (survives a body re-render)
+  var tdWiNotesReq = {};   // key -> generation of the notes read (a second read or a save retires the first)
+  function tdWiParts(key){
+    var mm = /^([a-z_]+):([0-9]{1,18})$/.exec(String(key || ''));
+    return mm ? { kind: mm[1], id: mm[2] } : null;
+  }
+  function tdWiGet(key){
+    var m = tdMgrLast;
+    if (m && Array.isArray(m.wi)) return tdQStateMap(m.wi)[key] || null;
+    return tdWiLocal[key] || null;
+  }
+  function tdWiWho(n){ return n ? String(n).trim().split(/\s+/)[0] : ''; }
+  function tdWiWhen(ts){ var t = Date.parse(ts); return isFinite(t) ? tdRwDateShort(tdDayKeyEd(new Date(t))) : ''; }
+  // "Texted Oct 2 · Cheryl" — the queue row and the block share this one line
+  function tdWiRemLine(s){
+    if (!s || !s.last_reminder_at) return '';
+    var ch = s.last_reminder_channel;
+    return (ch === 'sms' ? 'Texted' : (ch === 'email' ? 'Emailed' : 'Called')) + ' ' + tdWiWhen(s.last_reminder_at) +
+      (s.last_reminder_by ? ' · ' + tdWiWho(s.last_reminder_by) : '');
+  }
+  function tdWiFuHtml(key){
+    var s = tdWiGet(key), fu = s && s.follow_up_on ? String(s.follow_up_on).slice(0, 10) : '', h;
+    if (fu){
+      var d = tdMgrDays(fu);
+      h = '<b>Follow up ' + esc(tdRwDateShort(fu)) + '</b> &middot; ' +
+        (d > 0 ? 'off the lanes until then (snoozed)' : (d === 0 ? 'due today, in Do today' : 'due since ' + (-d) + ' day' + (d === -1 ? '' : 's') + ', in Do today')) +
+        (s.follow_up_set_by ? ' &middot; set by ' + esc(tdWiWho(s.follow_up_set_by)) : '');
+    } else h = 'No follow-up date. Give it one and it leaves the lanes until that day, then comes back in Do today.';
+    var rem = tdWiRemLine(s);
+    if (rem) h += '<br>' + esc(rem) + (Number(s.reminder_count) > 1 ? ' &middot; ' + Number(s.reminder_count) + ' reminders in all' : '');
+    return h;
+  }
+  function tdWiNoteHead(key){
+    var s = tdWiGet(key);
+    if (!s || !s.last_note_at) return 'No notes yet.';
+    return 'Last note ' + esc(tdWiWhen(s.last_note_at)) + (s.last_note_by ? ' &middot; ' + esc(tdWiWho(s.last_note_by)) : '') +
+      ' <button type="button" class="linklike" data-wi-note="show">Show notes</button>';
+  }
+  // the control. opts.notes = the notes half (every kind but moves).
+  function tdWiBlock(key, opts){
+    if (!tdWiParts(key)) return '';
+    opts = opts || {};
+    var s = tdWiGet(key), cur = s && s.follow_up_on ? String(s.follow_up_on).slice(0, 10) : '';
+    var h = '<div class="tdwi" data-wikey="' + esc(key) + '"><div class="orcfg-h">Follow-up</div>' +
+      '<div class="mvd-row note tdwi-fu">' + tdWiFuHtml(key) + '</div>' +
+      '<div class="mvd-row">' +
+        '<button type="button" class="tdact" data-wi-fu="1">Tomorrow</button>' +
+        '<button type="button" class="tdact" data-wi-fu="3">In 3 days</button>' +
+        '<button type="button" class="tdact" data-wi-fu="7">Next week</button></div>' +
+      '<div class="mvd-row"><input type="date" class="mvdate tdwi-date" min="' + esc(tdDayKeyEd(new Date())) + '" max="2035-12-31" value="' + esc(cur) + '" aria-label="Follow-up date">' +
+        '<button type="button" class="tdact" data-wi-fu="date">Set date</button>' +
+        '<button type="button" class="tdact tdwi-clear" data-wi-fu="clear"' + (cur ? '' : ' hidden') + '>Clear follow-up</button></div>' +
+      '<div class="mvd-row note tdwi-msg" role="status" aria-live="polite"></div>';
+    if (opts.notes){
+      h += '<div class="orcfg-h">Notes</div><div class="mvd-row note tdwi-nh">' + tdWiNoteHead(key) + '</div>' +
+        '<div class="tdwi-notes">' + (tdWiNotesHtml[key] || '') + '</div>' +
+        '<textarea class="mvnote-ta tdwi-ta" rows="3" maxlength="2000" placeholder="What should the next person know?" aria-label="New note">' + esc(tdWiDraft[key] || '') + '</textarea>' +
+        '<div class="mvnote-btns"><button type="button" class="tdact" data-wi-note="save">Add note</button></div>';
+    }
+    return h + '</div>';
+  }
+  function tdWiBoxes(key){
+    return Array.prototype.filter.call(document.querySelectorAll('.tdwi'), function(n){ return n.getAttribute('data-wikey') === key; });
+  }
+  function tdWiMsg(key, text, bad){
+    tdWiBoxes(key).forEach(function(n){ var m = n.querySelector('.tdwi-msg'); if (m){ m.textContent = text || ''; m.classList.toggle('bad', !!bad); } });
+  }
+  // repaint the state parts of every block for this key in place (the typed note stays put)
+  function tdWiPaint(key){
+    var s = tdWiGet(key), cur = s && s.follow_up_on ? String(s.follow_up_on).slice(0, 10) : '';
+    tdWiBoxes(key).forEach(function(n){
+      var fu = n.querySelector('.tdwi-fu'); if (fu) fu.innerHTML = tdWiFuHtml(key);
+      var c = n.querySelector('.tdwi-clear'); if (c) c.hidden = !cur;
+      var dt = n.querySelector('.tdwi-date'); if (dt) dt.value = cur;
+      var nh = n.querySelector('.tdwi-nh'); if (nh) nh.innerHTML = tdWiNoteHead(key);
+    });
+  }
+  // the ONE poster: every follow-up, clear, reminder and note goes through here
+  function tdWiPost(key, ev, extra){
+    var p = tdWiParts(key);
+    if (!p) return Promise.reject(new Error('no work-item key'));
+    var body = { kind: p.kind, id: p.id, event: ev, actor: getActor() }, k;
+    for (k in (extra || {})) body[k] = extra[k];
+    return postJSON('/work-item/event', body).then(function(j){
+      if (!j || !j.ok) throw new Error((j && j.error) || 'no ok from /work-item/event');
+      tdWiApply(key, j.state || null);
+      return j;
+    });
+  }
+  function tdWiApply(key, state){
+    var m = tdMgrLast;
+    if (m && Array.isArray(m.wi)){
+      m.wi = m.wi.filter(function(s){ return !(s && (s.item_kind + ':' + s.item_id) === key); });
+      if (state) m.wi.push(state);
+    } else tdWiLocal[key] = state;   // m.wi null: the list read failed, so the lanes cannot move (the footer says why)
+    tdQRefresh();
+    tdWiPaint(key);
+  }
+  // rebuild the lanes from the patched state — the same builder, no refetch — keeping the pane
+  function tdQRefresh(){
+    var m = tdMgrLast;
+    if (!m || !tdQLast) return;
+    tdQLast = tdQBuild(m, m.wi);
+    if (tdQOpenKey !== null){
+      var nx = tdQFind(tdQOpenKey);
+      if (nx){
+        tdQOpenItem = nx;
+        var hd = document.querySelector('#td-qpane-body .tdqpane-h');
+        if (hd) hd.outerHTML = tdQPaneHead(nx);
+      }
+    }
+    tdQPaint();
+  }
+  function tdQFind(key){
+    var q = tdQLast, hit = null;
+    if (!q) return null;
+    var look = function(list){ if (hit) return; for (var i = 0; i < list.length; i++) if (list[i].key === key){ hit = list[i]; return; } };
+    TD_Q_LANES.forEach(function(l){ look(q.lanes[l]); });
+    look(q.snoozed); look(q.review);
+    return hit;
+  }
+  function tdWiSend(key, ev, extra, btn, okText){
+    if (btn) btn.disabled = true;
+    tdWiMsg(key, 'Saving…');
+    tdWiPost(key, ev, extra).then(function(){
+      var stale = tdMgrLast && tdMgrLast.wi === null && ev !== 'note';
+      tdWiMsg(key, (okText || 'Saved.') + (stale ? ' The lanes catch up on the next reload — follow-ups could not be loaded this time.' : ''));
+      if (ev === 'note'){
+        tdWiDraft[key] = '';
+        tdWiBoxes(key).forEach(function(n){ var ta = n.querySelector('.tdwi-ta'); if (ta) ta.value = ''; });
+        tdWiLoadNotes(key);
+      }
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('work-item ' + ev + ' failed', e);
+      tdWiMsg(key, 'Could not save that — ' + String((e && e.message) || 'try again') + '. Nothing changed.', true);
+    }).then(function(){ if (btn) btn.disabled = false; });
+  }
+  function tdWiLoadNotes(key){
+    var p = tdWiParts(key); if (!p) return;
+    var g = tdWiNotesReq[key] = (tdWiNotesReq[key] || 0) + 1;
+    var paint = function(h){
+      tdWiNotesHtml[key] = h;
+      tdWiBoxes(key).forEach(function(n){ var l = n.querySelector('.tdwi-notes'); if (l) l.innerHTML = h; });
+    };
+    paint('<div class="note">Loading notes&hellip;</div>');
+    authFetch('/work-item-notes?kind=' + encodeURIComponent(p.kind) + '&id=' + encodeURIComponent(p.id)).then(function(j){
+      if (g !== tdWiNotesReq[key]) return;
+      var list = (j && Array.isArray(j.notes)) ? j.notes : [];
+      paint(list.length ? list.map(function(n){
+        return '<div class="tdwi-note"><div class="note">' + esc(tdWiWhen(n.created_at)) + (n.actor ? ' &middot; ' + esc(n.actor) : '') + '</div>' +
+          '<div class="tdwi-note-b">' + esc(n.body || '') + '</div></div>';
+      }).join('') : '<div class="note">No notes yet.</div>');
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('work-item-notes failed', e);
+      if (g === tdWiNotesReq[key]) paint('<div class="note">Could not load the notes right now.</div>');
+    });
+  }
+  // O3 (Pearse 2026-10-05): a reminder is RECORDED when the button is pressed. tdRentRemind and
+  // tdRwChase call this right before the mailto / RingCentral hand-off opens — and only once there
+  // is a phone or email to hand off to (no contact = nothing went out = nothing logged). The
+  // hand-off never waits on it; a failed log says so in any open block for the item.
+  function tdWiReminder(kind, id, channel){
+    if (id == null || id === '') return;
+    var key = kind + ':' + id;
+    tdWiSend(key, 'reminder', { channel: channel === 'sms' ? 'sms' : 'email' }, null, (channel === 'sms' ? 'Text' : 'Email') + ' reminder logged.');
+  }
+  // ONE click handler for the block, called first by each surface's delegate (#td-queue,
+  // #rentmodal, #mvmodal, #qmodal). true = handled.
+  function tdWiClick(e){
+    var b = e.target.closest('[data-wi-fu],[data-wi-note]'); if (!b) return false;
+    var box = b.closest('.tdwi'); if (!box) return false;
+    var key = box.getAttribute('data-wikey'), fu = b.getAttribute('data-wi-fu'), nt = b.getAttribute('data-wi-note');
+    var today = tdDayKeyEd(new Date());
+    if (fu === 'clear'){ tdWiSend(key, 'follow_up_cleared', {}, b, 'Follow-up cleared.'); return true; }
+    if (fu){
+      var on;
+      if (fu === 'date'){
+        var inp = box.querySelector('.tdwi-date'); on = inp ? inp.value : '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(on)){ tdWiMsg(key, 'Pick a date first.', true); return true; }
+        if (on < today){ tdWiMsg(key, 'Pick today or a later date.', true); return true; }
+      } else on = tdQAddDays(today, Number(fu));
+      tdWiSend(key, 'follow_up', { follow_up_on: on }, b, 'Follow-up set for ' + tdRwDateShort(on) + '.');
+      return true;
+    }
+    if (nt === 'show'){ tdWiLoadNotes(key); return true; }
+    if (nt === 'save'){
+      var ta = box.querySelector('.tdwi-ta'), txt = ta ? ta.value.trim() : '';
+      if (!txt){ tdWiMsg(key, 'Write the note first.', true); return true; }
+      tdWiSend(key, 'note', { body: txt }, b, 'Note added.');
+      return true;
+    }
+    return true;
+  }
+  function tdWiInput(e){
+    var ta = e.target && e.target.closest ? e.target.closest('.tdwi-ta') : null; if (!ta) return;
+    var box = ta.closest('.tdwi'); if (box) tdWiDraft[box.getAttribute('data-wikey')] = ta.value;
   }
   // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
   // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff.
@@ -7356,10 +7616,12 @@ window.addEventListener('error', function(e){
       if (channel === 'sms'){
         var phone = t0.phone;
         if (!phone){ alert('No phone number on file for this tenant — try the email chase.'); return; }
+        tdWiReminder('renewal', leaseId, 'sms');   // O3: logged on press, before the hand-off
         window.location.href = rcText(String(phone), tdRwChaseText(first, addr, end, me));
       } else {
         var email = t0.email || t0.alt_email;
         if (!email){ alert('No email on file for this tenant — try the text chase.'); return; }
+        tdWiReminder('renewal', leaseId, 'email');
         window.location.href = tdMailto(email, tdRwChaseSubject(addr), tdRwChaseBody(first, addr, end, me));
       }
     };
@@ -8097,6 +8359,9 @@ window.addEventListener('error', function(e){
       h += '<button type="button" class="tdact" data-rent-remind="email" data-rent-lease="' + esc(String(u.lease_id)) + '" data-rent-uid="' + esc(String(u.unit_id)) + '">Send a reminder &#9993;</button>' +
            '<button type="button" class="tdact" data-rent-remind="sms" data-rent-lease="' + esc(String(u.lease_id)) + '" data-rent-uid="' + esc(String(u.unit_id)) + '" title="Text the tenant">&#128172;</button>';
     h += '</div>';
+    // Direction A phase 4: follow-up, the reminder log (the two buttons above write it on press)
+    // and notes — the same block in the queue pane and in #rentmodal
+    if (u.lease_id != null) h += tdWiBlock('rent:' + u.lease_id, { notes: true });
     return h;
   }
   function tdRentRemind(leaseId, unitId, channel){
@@ -8109,10 +8374,12 @@ window.addEventListener('error', function(e){
       var me = String(getActor() || '').trim().split(/\s+/)[0] || 'the Live Furnished team';
       if (channel === 'sms'){
         if (!t0.phone){ alert('No phone number on file for this tenant — try the email reminder.'); return; }
+        tdWiReminder('rent', leaseId, 'sms');   // O3: logged on press, before the hand-off
         window.location.href = rcText(String(t0.phone), tdRentMsgText(first, addr, amt, me));
       } else {
         var email = t0.email || t0.alt_email;
         if (!email){ alert('No email on file for this tenant — try the text reminder.'); return; }
+        tdWiReminder('rent', leaseId, 'email');
         window.location.href = tdMailto(email, tdRentMsgSubject(addr), tdRentMsgBody(first, addr, amt, me));
       }
     };
@@ -8327,6 +8594,7 @@ window.addEventListener('error', function(e){
   (function(){
     var mm = el('mvmodal'); if (!mm) return;
     mm.addEventListener('click', function(e){
+      if (tdWiClick(e)) return;   // phase 4: the follow-up block
       var t = e.target.closest('[data-mvtick]');
       if (t){ tdMvTick(t); return; }
       var dt = e.target.closest('[data-mvdate]');
@@ -8352,9 +8620,29 @@ window.addEventListener('error', function(e){
   (function(){
     var rm = el('rentmodal'); if (!rm) return;
     rm.addEventListener('click', function(e){
+      if (tdWiClick(e)) return;   // phase 4: follow-up / notes block
       var b = e.target.closest('[data-rent-remind]');
       if (b) tdRentRemind(b.getAttribute('data-rent-lease'), b.getAttribute('data-rent-uid'), b.getAttribute('data-rent-remind'));
     });
+    rm.addEventListener('input', tdWiInput);
+  })();
+  // #qmodal (the queue's record under 1100 px: renewals, and tasks since phase 4) lives outside
+  // #td-queue, so it needs its own boot delegate — before phase 4 it had none, which left its
+  // renewal chase and Open-unit buttons as dead markup. Same controls, same functions.
+  (function(){
+    var qm = el('qmodal'); if (!qm) return;
+    qm.addEventListener('click', function(e){
+      if (tdWiClick(e)) return;
+      if (e.target.closest('a')) return;
+      var rnc = e.target.closest('[data-rn-chase]');
+      if (rnc){ tdRwChase(rnc.getAttribute('data-rn-lease'), rnc.getAttribute('data-rn-chase')); return; }
+      if (e.target.closest('[data-rn-moves]')){ closeModal('qmodal'); tdMgrViewSet('review'); tdMgrBriefGo('moves'); return; }
+      var qt = e.target.closest('[data-qtask-open]');
+      if (qt){ closeModal('qmodal'); openTask(qt.getAttribute('data-qtask-open')); return; }
+      var u = e.target.closest('[data-uid]');
+      if (u){ closeModal('qmodal'); openUnitEnsure(u.getAttribute('data-uid')); }
+    });
+    qm.addEventListener('input', tdWiInput);
   })();
   // Work queue (Direction A phase 3) — #td-queue is a sibling of #td-grid, so it needs its own
   // once-at-boot delegate. The record pane mounts the SAME drawer bodies #rentmodal / #mvmodal
@@ -8370,6 +8658,10 @@ window.addEventListener('error', function(e){
       var mvw = e.target.closest('[data-mgrview]');
       if (mvw){ tdMgrViewSet(mvw.getAttribute('data-mgrview')); return; }
       if (e.target.closest('[data-qpane-close]')){ tdQPaneClose(); return; }
+      if (tdWiClick(e)) return;   // phase 4: the follow-up / notes block in the pane
+      if (e.target.closest('[data-qsnoozed]')){ tdQShowSnoozed = !tdQShowSnoozed; tdQPaint(); return; }
+      var qa = e.target.closest('[data-qapp-open]');
+      if (qa){ openAppEnsure(qa.getAttribute('data-qapp-open')); return; }
       // ── the record pane's controls (checked before the row, or a press would re-open the row) ──
       var rr = e.target.closest('[data-rent-remind]');
       if (rr){ tdRentRemind(rr.getAttribute('data-rent-lease'), rr.getAttribute('data-rent-uid'), rr.getAttribute('data-rent-remind')); return; }
@@ -8404,6 +8696,7 @@ window.addEventListener('error', function(e){
       var cb = e.target.closest('[data-mvdone]');
       if (cb) tdMvDoneToggle(cb);
     });
+    qv.addEventListener('input', tdWiInput);
   })();
 
   /* ════════════ Key Manager + History ════════════ */

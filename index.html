@@ -6161,6 +6161,277 @@ window.addEventListener('error', function(e){
     tdMgrLast = m;   // the review export reads this; tdMgrAssemble only calls here while tdReq still matches
     tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderRent(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderApps(m); tdMvRenderCard(m); tdMgrRenderUnits(m);
   }
+  // ── Manager work queue: the rules (Direction A phase 1, 2026-10-05) ──────────────────
+  // ONE builder (plan D3): tdQBuild(m, state) decides what is in a manager's queue, which
+  // lane, why, and what stays on the Review board only. PURE: it reads the tdMgrAssemble
+  // payload (m) and the work-item state (follow-ups and reminders, phase 2; null until then)
+  // and returns plain data. No DOM, no fetch, and it never writes to m or its rows.
+  // NOT CALLED by the page yet. Phase 3 renders it; until then tools/queue-rules-check.mjs
+  // slices this block (and every td* helper it calls) out of THIS file and runs it over
+  // saved /manager-brief and /move-tracker dumps, so the dry-run numbers are the shipped
+  // rules, never a hand copy. Keep every helper a top-level declaration (the slicer finds
+  // them by name) and keep tdQ* names unique (grep "function tdQ" before adding one).
+  // Rules: plan section 4 as answered in section 10 (Reports/manager-today-direction-a-
+  // build-plan-2026-10-05.md). Days always come from tdMgrDays (Edmonton calendar days),
+  // never Date.parse arithmetic. The card helpers decide membership wherever one exists
+  // (tdRentList, tdRwStage, tdMvRisk / tdMvOn / tdMvOpenStages / tdMvDone, tdMgrScopePass,
+  // tdMgrOpenTask via m.tasks, TD_AP_STALE_D).
+  // KNOWN MIRRORS, to fold into shared helpers when phase 3 touches the renderers (doing it
+  // now would edit the card renderers the parallel review-page phase is also editing):
+  //   · TD_Q_RW_TOWORK = the five stages the renewals header counts as "to work" and the
+  //     brief's tdRwAct tests;
+  //   · the Units-card feed test below (eviction / notice / op-vacant 60+ days, take-backs
+  //     and not-ready skipped) mirrors tdMgrRenderUnits;
+  //   · the application rows (m.apps in scope + units with pending_app_stage) mirror
+  //     tdMgrRenderApps. That card still ages applications with Date.parse arithmetic, so its
+  //     "stale" flag can be a day apart from this lane in the evening.
+  // The tool reconciles each mirror against the live card headers, so a drift shows there.
+  var TD_Q_LANES = ['today', 'week', 'coming', 'waiting'];
+  // Order inside a lane (plan section 4): meeting actions first, then aged rent, moves by
+  // date, renewals by days left, applications by age, tasks by age, unlisted vacant units.
+  // meeting_action is RESERVED (review plan R4 fills m.meetingActions); its slot already
+  // sorts first and rolls up like any other kind, so adding it needs no restructuring.
+  var TD_Q_KINDS = ['meeting_action', 'rent', 'move_in', 'move_out', 'renewal', 'application', 'task', 'unit'];
+  var TD_Q_RW_URGENT_D = 45;       // Pearse 2026-10-05: 45 days or fewer left = Do today
+  var TD_Q_RW_HORIZON_D = 90;      // Pearse 2026-10-05: every renewal to work inside 90 days is in the queue
+  // Pearse 2026-10-05 (after the phase-1 dry run): renewals with 46-60 days left go to This
+  // week (or Waiting once the tenant has the offer); 61-90 days go to Coming up. Still all in
+  // the queue. The dry run put This week at 32-44 items with all of 46-90 in it.
+  var TD_Q_RW_WEEK_D = 60;
+  var TD_Q_RW_TOWORK = { undecided: 1, offer_sent: 1, declined: 1, not_sent: 1, pending_esign: 1 };
+  var TD_Q_RW_WAITING = { offer_sent: 1, pending_esign: 1 };   // the tenant has it; 46-60 days = Waiting
+  var TD_Q_RENT_WEEK_MIN = 1000;   // Pearse 2026-10-05: $1,000 or more owing (nothing aged) = This week
+  var TD_Q_MOVE_WEEK_D = 7;        // a move inside 7 days = This week (or Do today when at risk)
+  var TD_Q_MOVE_COMING_D = 30;     // inside 30 days = Coming up
+  var TD_Q_DEPOSIT_DUE_D = 10;     // deposit statement deadline = move-out + 10 days (calendar date)
+  var TD_Q_TASK_NEW_D = 7;         // a New task opened in the last 7 days = This week
+  var TD_Q_TASK_URGENT = { High: 1, Urgent: 1 };
+  // Pearse 2026-10-05: an in-progress task nobody has touched for more than 30 days is
+  // FLAGGED stale (it stays in Waiting; moving them would put ~50 of Kevin's in This week).
+  // "Touched" = last_updated_date_time when the row has it, else the day it was opened.
+  var TD_Q_TASK_STALE_D = 30;
+  var TD_Q_REMIND_WAIT_D = 7;      // a rent reminder logged in the last 7 days parks the balance in Waiting
+  var TD_Q_ROLLUP_MIN = 5;         // more than this many of one kind for one building in one lane = one row
+  // In-progress tasks in Waiting roll up per building from 2 (plan section 4: "one row per building").
+  var TD_Q_ROLLUP_MIN_BY = { 'waiting:task': 1 };
+  // Pearse 2026-10-05: nothing in Do today rolls up, so every urgent item is its own row
+  // (Sarah's ten renewals inside 45 days had folded into one).
+  var TD_Q_NO_ROLLUP = { today: 1 };
+  // the work-item state (phase 2, GET /work-item-state) as a map 'kind:id' -> row. Accepts the
+  // route's array, an { items: [] } wrapper, or null (no state known: nothing snoozed, no
+  // reminders, which is also the degrade path when that fetch fails).
+  function tdQStateMap(state){
+    var map = {};
+    var rows = Array.isArray(state) ? state : (state && Array.isArray(state.items) ? state.items : []);
+    rows.forEach(function(s){ if (s && s.item_kind && s.item_id != null) map[s.item_kind + ':' + s.item_id] = s; });
+    return map;
+  }
+  // 'YYYY-MM-DD' + n calendar days, by parts (no timezone in play: it is a calendar date)
+  function tdQAddDays(key, n){
+    var d = tdDayNo(key);
+    return d == null ? null : new Date((d + n) * 86400000).toISOString().slice(0, 10);
+  }
+  function tdQBuild(m, state){
+    m = m || {};
+    var st = tdQStateMap(state), all = [];
+    var num = function(v){ return Number(v) || 0; };
+    var money = function(v){ return '$' + Math.round(num(v)).toLocaleString('en-CA'); };
+    var mgrOf = function(r){ return r && r.property_manager_id != null ? String(r.property_manager_id) : 'scope'; };
+    // one item per card row (or per queue-only thing). lane null = left on the Review board.
+    var add = function(o){
+      all.push({
+        kind: o.kind, id: o.id == null ? null : o.id,
+        key: o.sk || (o.kind + ':' + o.id),     // the work-item state key (plan section 5.1)
+        card: o.card || null,                   // the Review card this row lives on (null = queue only)
+        lane: o.lane || null, why: o.why || '', flag: o.flag || '',   // flag: 'stale' (old in-progress task)
+        date: o.date || null, due: o.due || null,   // calendar date(s); null = undated
+        sort: o.sort == null ? 0 : o.sort,
+        bldg: o.row && o.row.property_id != null ? String(o.row.property_id) : '?',
+        mgr: mgrOf(o.row), row: o.row, snoozed: false, followUp: null
+      });
+    };
+    var loaded = {
+      rent: m.rent != null || m.units != null,
+      renewals: m.renewals != null,
+      moves_in: m.trackIn != null,
+      moves_out: m.trackOut != null,
+      apps: m.apps != null || m.units != null,
+      tasks: m.tasks != null,
+      units: m.units != null
+    };
+    // ── rent: current tenants only (the card's default view); past tenants stay on Review
+    if (loaded.rent) tdRentList(m).forEach(function(r){
+      var bal = num(r.total_balance);
+      var aged = num(r.balance_31_60_days) + num(r.balance_61_90_days) + num(r.balance_over_90_days);
+      var o = { kind: 'rent', id: r.lease_id, row: r, card: r.is_current ? 'rent' : 'rent_past', sort: -bal };
+      if (!r.is_current) o.why = 'moved out (Past tenants)';
+      else if (aged > 0){ o.lane = 'today'; o.why = money(aged) + ' aged 31+ days of ' + money(bal); }
+      else if (bal >= TD_Q_RENT_WEEK_MIN){ o.lane = 'week'; o.why = money(bal) + ' owing, none aged'; }
+      else o.why = 'under ' + money(TD_Q_RENT_WEEK_MIN) + ', none aged';
+      add(o);
+    });
+    // ── renewals: every stage still to work inside 90 days; 45 or fewer days left = Do today
+    if (loaded.renewals) m.renewals.forEach(function(r){
+      var s = tdRwStage(r), end = r.term_end || r.current_lease_end || r.lease_to_date || null;
+      var d = tdMgrDays(end);
+      var o = { kind: 'renewal', id: r.lease_id, row: r, card: 'renewals', date: end, sort: d == null ? 9e9 : d };
+      if (!TD_Q_RW_TOWORK[s]) o.why = s === 'signed' ? 'signed' : 'not renewing (Move-outs)';
+      else if (d == null) o.why = 'no lease end date';
+      else if (d <= TD_Q_RW_URGENT_D){ o.lane = 'today'; o.why = tdRwMeta(s).label + ', ' + (d <= 0 ? 'lease ended' : d + ' days left'); }
+      else if (d <= TD_Q_RW_HORIZON_D){
+        o.lane = d > TD_Q_RW_WEEK_D ? 'coming' : (TD_Q_RW_WAITING[s] ? 'waiting' : 'week');
+        o.why = tdRwMeta(s).label + ', ' + d + ' days left';
+      } else o.why = 'more than ' + TD_Q_RW_HORIZON_D + ' days out';
+      add(o);
+    });
+    // ── moves: the tracker rows in scope (tdMvPrep's filter), one rule set per side
+    [['in', m.trackIn, 'move_in', 'moves_in'], ['out', m.trackOut, 'move_out', 'moves_out']].forEach(function(side){
+      var k = side[0], list = side[1];
+      if (!list) return;
+      list.filter(tdMgrScopePass).forEach(function(r){
+        var on = tdMvOn(r, k), d = tdMgrDays(on);
+        var open = tdMvOpenStages(r, k).length;
+        var o = { kind: side[2], id: r.lease_id, row: r, card: side[3], date: on, sort: d == null ? 9e9 : d,
+          due: k === 'out' && on ? tdQAddDays(on, TD_Q_DEPOSIT_DUE_D) : null };
+        if (tdMvDone(r)) o.why = 'marked done';
+        else if (d == null) o.why = 'no move date';
+        else if (tdMvRisk(r, k)){
+          o.lane = 'today';
+          o.why = k === 'in' ? 'moves in ' + (d === 0 ? 'today' : 'in ' + d + ' days') + ', deposit or cleaning missing'
+                             : 'deposit statement not sent, ' + tdMvSodaDays(r) + ' days after move-out';
+        }
+        else if (d >= 0 && d <= TD_Q_MOVE_WEEK_D){ o.lane = 'week'; o.why = 'moves ' + k + ' ' + (d === 0 ? 'today' : 'in ' + d + ' days'); }
+        else if (d < 0 && k === 'out' && open){ o.lane = 'week'; o.why = 'moved out ' + (-d) + ' days ago, ' + open + ' stage' + (open === 1 ? '' : 's') + ' open'; }
+        else if (d > 0 && d <= TD_Q_MOVE_COMING_D){ o.lane = 'coming'; o.why = 'moves ' + k + ' in ' + d + ' days'; }
+        else if (d < 0) o.why = k === 'in' ? 'moved in ' + (-d) + ' days ago, not marked done' : 'every stage ticked, not marked done';
+        else o.why = 'more than ' + TD_Q_MOVE_COMING_D + ' days out';
+        add(o);
+      });
+    });
+    // ── applications: undecided ones (stale after TD_AP_STALE_D), plus units approved or in
+    // draft with no lease yet. MIRROR of tdMgrRenderApps' rows (see the header note).
+    if (loaded.apps){
+      (m.apps || []).filter(tdMgrScopePass).forEach(function(a){
+        var d = tdMgrDays(a.submitted_at), age = d == null ? null : -d;
+        var o = { kind: 'application', id: a.application_id, row: a, card: 'apps', sort: -(age || 0) };
+        if (age != null && age > TD_AP_STALE_D){ o.lane = 'today'; o.why = 'waiting ' + age + ' days for a decision'; }
+        else { o.lane = 'week'; o.why = age == null ? 'waiting for a decision' : 'waiting ' + age + ' day' + (age === 1 ? '' : 's') + ' for a decision'; }
+        add(o);
+      });
+      (m.units || []).forEach(function(u){
+        if (!u.pending_app_stage) return;
+        // no application id on these rows (they come from units), so their state is keyed by unit
+        add({ kind: 'application', id: null, sk: 'unit:' + u.unit_id, row: u, card: 'apps', lane: 'week', sort: 0,
+          why: u.pending_app_stage === 'draft_lease' ? 'draft lease started, not signed' : 'approved, no lease yet' });
+      });
+    }
+    // ── tasks: open ones (m.tasks is already tdMgrOpenTask-filtered by tdMgrAssemble)
+    if (loaded.tasks) m.tasks.forEach(function(t){
+      var noVendor = t.work_order_id != null && t.wo_vendor_id == null;
+      var opened = tdMgrDays(t.created_date_time), age = opened == null ? 0 : -opened;
+      var o = { kind: 'task', id: t.task_id, row: t, card: 'tasks', date: t.due_date || null, sort: -age };
+      if (t.is_overdue){ o.lane = 'today'; o.why = 'overdue'; }
+      else if (TD_Q_TASK_URGENT[t.priority]){ o.lane = 'today'; o.why = t.priority + ' priority'; }
+      else if (noVendor){ o.lane = 'today'; o.why = 'work order with no vendor'; }
+      else if (t.task_status === 'InProgress'){
+        o.lane = 'waiting';
+        var touched = tdMgrDays(t.last_updated_date_time || t.created_date_time), idle = touched == null ? 0 : -touched;
+        if (idle > TD_Q_TASK_STALE_D){ o.flag = 'stale'; o.why = 'in progress, untouched ' + idle + ' days'; }
+        else o.why = 'in progress';
+      }
+      else if (t.task_status === 'New' && opened != null && opened >= -TD_Q_TASK_NEW_D){ o.lane = 'week'; o.why = 'new, opened ' + (age === 0 ? 'today' : age + ' day' + (age === 1 ? '' : 's') + ' ago'); }
+      else o.why = 'new, opened ' + age + ' days ago';
+      add(o);
+    });
+    // ── units: the Unit movement card's rows (MIRROR of tdMgrRenderUnits' feed) and the queue's
+    // vacant kind: vacant, in service (no take-back, not not-ready) and not listed = This week.
+    if (loaded.units) m.units.forEach(function(u){
+      if (u.is_owner_takeback || u.is_not_ready) return;
+      if (u.unit_event === 'Eviction Pending') add({ kind: 'unit', id: u.unit_id, sk: 'unit:' + u.unit_id + ':evict', row: u, card: 'units', why: 'eviction pending' });
+      else if (u.unit_event === 'Notice to Vacate') add({ kind: 'unit', id: u.unit_id, sk: 'unit:' + u.unit_id + ':notice', row: u, card: 'units', why: 'notice to vacate (Moves covers the move-out)' });
+      if (u.occupancy_status !== 'op_vacant') return;
+      var dv = num(u.days_vacant), aging = dv >= 60;
+      if (!u.is_listed) add({ kind: 'unit', id: u.unit_id, row: u, card: aging ? 'units' : null, lane: 'week', sort: -dv,
+        why: 'vacant ' + dv + ' days, not listed' });
+      else if (aging) add({ kind: 'unit', id: u.unit_id, row: u, card: 'units', why: 'vacant ' + dv + ' days, listed' });
+    });
+    // ── reserved: meeting actions (review plan R4). Nothing produces them yet.
+    (m.meetingActions || []).forEach(function(a){
+      add({ kind: 'meeting_action', id: a.id, row: a, card: null, lane: 'today', why: a.title || 'meeting action' });
+    });
+    // ── work-item state on top of the rules: a follow-up date in the future snoozes the item
+    // (counted, hidden from the lanes); one that is today or past puts it in Do today; a rent
+    // reminder logged in the last 7 days parks a queued balance in Waiting.
+    all.forEach(function(it){
+      var s = st[it.key]; if (!s) return;
+      if (s.follow_up_on){
+        var fd = tdMgrDays(s.follow_up_on);
+        if (fd != null){
+          it.followUp = String(s.follow_up_on).slice(0, 10);
+          if (fd > 0){ it.snoozed = true; it.why = 'follow up ' + it.followUp + ' (was: ' + (it.lane || 'Review only') + ')'; it.lane = null; }
+          else { it.lane = 'today'; it.why = 'follow-up date reached, ' + it.why; }
+          return;
+        }
+      }
+      if (it.kind === 'rent' && it.lane && s.last_reminder_at){
+        var rd = tdMgrDays(s.last_reminder_at);
+        if (rd != null && rd <= 0 && rd >= -TD_Q_REMIND_WAIT_D){ it.lane = 'waiting'; it.why = 'reminder sent ' + (rd === 0 ? 'today' : (-rd) + ' days ago') + ', ' + it.why; }
+      }
+    });
+    var lanes = {}, rows = {}, cards = {}, snoozed = [], review = [];
+    TD_Q_LANES.forEach(function(l){ lanes[l] = []; });
+    all.forEach(function(it){
+      if (it.card){
+        var c = cards[it.card] || (cards[it.card] = { total: 0, lane: 0, snoozed: 0, review: 0 });
+        c.total++;
+        if (it.snoozed) c.snoozed++; else if (it.lane) c.lane++; else c.review++;
+      }
+      if (it.snoozed) snoozed.push(it);
+      else if (it.lane) lanes[it.lane].push(it);
+      else review.push(it);
+    });
+    TD_Q_LANES.forEach(function(l){
+      lanes[l].sort(function(a, b){ return (TD_Q_KINDS.indexOf(a.kind) - TD_Q_KINDS.indexOf(b.kind)) || (a.sort - b.sort); });
+      rows[l] = tdQRollup(lanes[l], l);
+    });
+    var failed = Object.keys(loaded).filter(function(k){ return !loaded[k]; });
+    return { asOf: tdDayKeyEd(new Date()), lanes: lanes, rows: rows, snoozed: snoozed, review: review,
+      cards: cards, loaded: loaded, failed: failed, anyLoaded: failed.length < Object.keys(loaded).length };
+  }
+  // Roll-up (plan section 4, settled with Pearse 2026-10-05 after the phase-1 dry run):
+  //   1. more than TD_Q_ROLLUP_MIN of one kind for one building in one lane (for in-progress
+  //      tasks in Waiting: 2 or more) collapse into one expandable BUILDING row;
+  //   2. the rows left over are single items; when a kind has more than TD_Q_ROLLUP_MIN of
+  //      those in the lane (a portfolio of single units), they collapse into one row per
+  //      MANAGER. Building rows from step 1 stay as they are, so a building never hides
+  //      inside a manager row.
+  // Lanes in TD_Q_NO_ROLLUP skip both steps. Items stay in order; a row is { rollup: '' |
+  // 'building' | 'manager', kind, key, items }.
+  function tdQRollup(items, lane){
+    var out = [], byKind = {};
+    if (TD_Q_NO_ROLLUP[lane]) return items.map(function(it){ return { rollup: '', kind: it.kind, key: it.key, items: [it] }; });
+    items.forEach(function(it){ (byKind[it.kind] = byKind[it.kind] || []).push(it); });
+    TD_Q_KINDS.forEach(function(k){
+      var list = byKind[k]; if (!list) return;
+      var min = TD_Q_ROLLUP_MIN_BY[lane + ':' + k] || TD_Q_ROLLUP_MIN;
+      var byB = {}, order = [], rows = [];
+      list.forEach(function(it){ if (!byB[it.bldg]){ byB[it.bldg] = []; order.push(it.bldg); } byB[it.bldg].push(it); });
+      order.forEach(function(b){
+        var g = byB[b];
+        if (g.length > min) rows.push({ rollup: 'building', kind: k, key: b, items: g });
+        else g.forEach(function(it){ rows.push({ rollup: '', kind: k, key: it.key, items: [it] }); });
+      });
+      var singles = rows.filter(function(r){ return !r.rollup; });
+      if (singles.length > TD_Q_ROLLUP_MIN){
+        var byM = {}, mo = [];
+        singles.forEach(function(r){ var it = r.items[0]; if (!byM[it.mgr]){ byM[it.mgr] = []; mo.push(it.mgr); } byM[it.mgr].push(it); });
+        rows = rows.filter(function(r){ return !!r.rollup; })
+          .concat(mo.map(function(mm){ return { rollup: 'manager', kind: k, key: mm, items: byM[mm] }; }));
+      }
+      rows.forEach(function(r){ out.push(r); });
+    });
+    return out;
+  }
   // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
   // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff.
   // (Days-on-market and rent-gap rows were removed 2026-07-24 — see the note below.)

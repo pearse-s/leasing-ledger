@@ -882,6 +882,8 @@ window.addEventListener('error', function(e){
   .mvd-crow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--hairline);font-size:.84rem;flex-wrap:wrap}
   .mvd-money{border:1px solid var(--hairline);border-radius:10px;padding:8px 12px;margin:10px 0;background:var(--glass-2)}
   #td-mv-cal{margin-top:2px}
+  /* the calendar view's load-failure line (tdMvCalNote) — the tracker view says its own */
+  .mvcalerr{color:var(--clay);margin:0 0 8px}
   .fc-mv-k{flex:0 0 auto;font-weight:800;font-size:.66em;letter-spacing:.06em;background:rgba(0,0,0,.28);border-radius:6px;padding:0 5px;margin-right:4px;align-self:center}
   .fc-mv-r{flex:0 0 auto;margin-left:3px}
   .fc-mv-in{background:rgba(157,190,134,.22)!important;border-color:rgba(157,190,134,.55)!important}
@@ -2172,6 +2174,94 @@ window.addEventListener('error', function(e){
     #page-today .tdtrend-row b{color:var(--ink)}
     /* .tdtrend-h / .tdtrend-li removed 2026-07-24 with the days-on-market + rent-gap lists
        (their only users). .tdtrend-row below still backs the sparkline/retention/tasks rows. */
+    /* ── Review bar + Expand everything (review plan R1, 2026-10-06) ── */
+    #page-today .tdrevbar{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    #page-today .tdrevbar .sf-label{margin:0}
+    #page-today .tdprint-h{display:none}
+    /* the 340 px scroll boxes go: every capped card shows all its rows in full. .scrollx inside
+       still scrolls wide tables sideways, so dropping overflow here clips nothing */
+    #td-grid.tdexpand .schoffers{max-height:none;overflow:visible}
+    /* ── PRINT — the first @media print rules in the app, scoped to the manager board ──
+       html.prt-today is set by tdPrintPrep (beforeprint) ONLY when the manager board is on
+       screen and removed on afterprint, so every other tab prints exactly as before. No @page
+       rule on purpose: @page cannot be scoped, and it would change every other tab's paper.
+       Dark-on-white: the palette variables are re-pointed rather than every rule overridden. */
+    @media print{
+      html.prt-today{font-size:11px;
+        --ink:#111;--ink-soft:#444;--hairline:#d0d0d0;--hairline-dark:#8c8c8c;
+        --glass:#fff;--glass-2:#fff;--glass-brd:#bbb;--paper:#fff;--paper-deep:#f2f2f2;
+        --clay:#7a4f00;--clay-deep:#5e3c00;--clay-soft:transparent;--moss:#2f6b2f;--amber:#7a4f00;--plum:#2c5a7a;
+        --glow:none;--accent-glow:none;--rim:none;--rim-strong:none}
+      html.prt-today,html.prt-today body{background:#fff !important;background-image:none !important;color:#111 !important;padding:0 !important;min-height:0 !important}
+      html.prt-today body::after,html.prt-today body::before,html.prt-today .fx-aurora,html.prt-today .fx-spot,html.prt-today #veil,
+      html.prt-today .sidebar,html.prt-today .mobnav,html.prt-today .mobscrim,html.prt-today #errbox,html.prt-today .lmodal,
+      html.prt-today #page-today .tdhead,html.prt-today #td-acm,html.prt-today #td-desk,html.prt-today #td-mgr-workas,html.prt-today #td-revbar,
+      html.prt-today #page-today .tdmore,html.prt-today #page-today .mvchips,html.prt-today #td-mv-bar,html.prt-today #page-today .rentwho,
+      html.prt-today #page-today .tdact,
+      html.prt-today #td-mv-cal .fc-header-toolbar .fc-toolbar-chunk:first-child,
+      html.prt-today #td-mv-track .mvtable th:last-child,html.prt-today #td-mv-track .mvtable td:last-child{display:none !important}
+      html.prt-today .wrap{display:block !important;max-width:none !important;padding:0 !important;margin:0 !important}
+      html.prt-today .content{padding:0 !important;overflow:visible !important}
+      html.prt-today #page-today{display:block !important}
+      html.prt-today #page-today .tdprint-h{display:block;font-weight:700;font-size:1.05rem;margin:0 0 10px;padding:0 0 6px;border-bottom:1.5px solid #555}
+      html.prt-today #page-today .tdgrid{display:block !important;margin:0 !important}
+      html.prt-today #page-today .panel{background:#fff !important;border:none !important;box-shadow:none !important;
+        -webkit-backdrop-filter:none !important;backdrop-filter:none !important;padding:0 !important;margin:0 0 14px !important;
+        animation:none !important;transform:none !important;opacity:1 !important}
+      /* NOT a forced page break before each section. The plan asked for that AND "four pages or
+         fewer per manager"; with seven sections the two cannot both hold (measured at Cheryl's
+         live size, 2026-10-06: forced breaks 10 pages; whole-section keeping 6). Sections flow
+         on from the one before; a heading never sits alone at a page foot (break-after:avoid
+         on h3) and a row is never cut in half (break-inside:avoid on rows). */
+      html.prt-today #page-today .panel::before,html.prt-today #page-today .panel::after{display:none !important}
+      html.prt-today #page-today .tdq h3{font-size:1.25rem;break-after:avoid;border-bottom:1px solid #999;padding-bottom:4px}
+      html.prt-today #page-today .schoffers{max-height:none !important;overflow:visible !important;margin-top:4px}
+      /* one compact ruled line per row instead of the screen's rounded cards */
+      html.prt-today #page-today .schoffers{gap:0}
+      html.prt-today #page-today .schoffer{break-inside:avoid;border:none !important;border-bottom:1px solid #d4d4d4 !important;border-radius:0 !important;
+        background:#fff !important;padding:3px 0 !important;margin:0 !important;box-shadow:none !important;gap:4px}
+      html.prt-today #page-today .schoffer-sub{font-size:.88em;margin-top:0}
+      /* title and detail on ONE line where they fit: Open tasks is the longest section by far
+         (Cheryl 70, Kevin 89 open) and two lines a row doubled its pages */
+      html.prt-today #page-today .schoffer-main > b{display:inline}
+      html.prt-today #page-today .schoffer-main > .schoffer-sub{display:inline;margin-left:10px}
+      html.prt-today #page-today .tdpulse{gap:5px;margin-top:6px}
+      html.prt-today #page-today .tdpulsec{padding:3px 8px;min-width:0}
+      html.prt-today .scrollx{overflow:visible !important}
+      /* wrap, never clip — on paper too: the tables give up their screen min-widths and wrap */
+      html.prt-today #page-today .mvtable{min-width:0 !important;font-size:.9rem}
+      html.prt-today #page-today .mvtable th{white-space:normal;color:#333}
+      html.prt-today #page-today .mvtable tr{break-inside:avoid}
+      html.prt-today #page-today .mvtable td{padding:3px 4px}
+      /* paper is ~740 px wide, under the 768 px breakpoint where #page-hub's style block turns the
+         Moves tracker tables into stacked phone cards (one move per half page). On paper they
+         stay tables. Selectors outrank that rule (html.prt-today + id) and it comes later in the
+         file, hence !important as well. */
+      html.prt-today #td-mv-tin thead,html.prt-today #td-mv-tout thead{display:table-header-group !important}
+      html.prt-today #td-mv-tin tr,html.prt-today #td-mv-tout tr{display:table-row !important;padding:0 !important}
+      html.prt-today #td-mv-tin td,html.prt-today #td-mv-tout td{display:table-cell !important;text-align:left !important;border-bottom:1px solid #d4d4d4 !important}
+      html.prt-today #td-mv-tin td::before,html.prt-today #td-mv-tout td::before{content:none !important}
+      /* an empty note is an "+ Note" button, which means nothing on paper; a written note prints as text */
+      html.prt-today #page-today .mvnoteb.empty{display:none !important}
+      html.prt-today #page-today .mvnoteb{border:none !important;background:none !important;padding:0 !important;color:#111 !important;text-align:left}
+      html.prt-today #page-today .chip{background:none !important;border:1px solid #888;color:#111 !important}
+      html.prt-today #page-today .tdbrief{border-left-color:#555;color:#111;padding:3px 8px;margin:0 0 3px}
+      html.prt-today #page-today .tdpulsec{background:#fff !important;border-color:#999}
+      html.prt-today #page-today .mvrisk td{background:none !important;font-weight:600}
+      html.prt-today #td-mv-cal .fc{--fc-border-color:#bbb;--fc-page-bg-color:#fff;--fc-neutral-bg-color:#f2f2f2;--fc-today-bg-color:#fff;color:#111}
+      /* FullCalendar writes its SCREEN pixel width onto these tables; paper is narrower, so
+         without this the Friday and Saturday columns were cut off the page */
+      html.prt-today #td-mv-cal .fc table,html.prt-today #td-mv-cal .fc .fc-scrollgrid,
+      html.prt-today #td-mv-cal .fc .fc-col-header,html.prt-today #td-mv-cal .fc .fc-daygrid-body,
+      html.prt-today #td-mv-cal .fc .fc-timegrid-body,html.prt-today #td-mv-cal .fc .fc-scroller-harness,
+      html.prt-today #td-mv-cal .fc .fc-scroller{width:100% !important;min-width:0 !important;overflow:visible !important}
+      html.prt-today #td-mv-cal .fc .fc-daygrid-day-frame{min-height:0 !important}
+      /* the month grid is one picture: never split a week row across two sheets */
+      html.prt-today #td-mv-cal{break-inside:avoid}
+      html.prt-today #td-mv-cal .fc-toolbar-title{font-size:1.15rem}
+      html.prt-today #td-mv-cal .fc-event,html.prt-today #td-mv-cal .fc-event *{color:#111 !important;background:#fff !important;border-color:#777 !important}
+      html.prt-today #td-mv-cal .fc-daygrid-day,html.prt-today #td-mv-cal .fc-event{break-inside:avoid}
+    }
     </style>
     <div class="tdhead">
       <div>
@@ -4542,13 +4632,16 @@ window.addEventListener('error', function(e){
       // tasks → unit movement); the two new cards slot in as money-first and
       // decisions-next-to-renewals. Reordering is a markup move only — every renderer fills
       // by id, so the render-call order above stays irrelevant.
-      g.innerHTML = tdMgrWorkasHtml() + '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
+      // review plan R1: the Review bar (expand everything / export / print) sits first, the
+      // print-only header beside it; both are full-width rows of the grid
+      g.innerHTML = tdMgrWorkasHtml() + tdReviewBarHtml() + '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
           '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div><div id="td-mgr-trends"></div></section>' +
         '<section class="panel tdq tdwide"><h3>Rent owing <span class="qn2" id="td-mgr-rent-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-rent"><div class="note">Loading&hellip;</div></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
         '<section class="panel tdq tdwide"><h3>Move-ins &amp; move-outs <span class="qn2" id="td-mgr-moves-n"></span></h3>' +
           '<div class="mvbar" id="td-mv-bar"><div class="note">Loading&hellip;</div></div>' +
+          '<div class="note mvcalerr" id="td-mv-calerr" role="status" hidden></div>' +
           '<div id="td-mv-cal" hidden></div><div id="td-mv-track" hidden></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>' +
         tdPanel('td-mgr-ren', 'Renewals &middot; next 90 days', 'renewals', 'Open Renewals', true) +   /* WS-M M5: wide — the 5-stage worklist table needs a full row */
@@ -4562,6 +4655,7 @@ window.addEventListener('error', function(e){
         '<section class="panel tdq tdwide"><h3>Unit movement <span class="qn2" id="td-mgr-units-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-units"><div class="note">Loading&hellip;</div></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>';
+      tdReviewSync();   // the signed-in person's saved Expand-everything choice, before the cards paint
       tdMgrAssemble();
     } else if (role === 'admin'){
       g.innerHTML = '';
@@ -5297,6 +5391,7 @@ window.addEventListener('error', function(e){
     bar.innerHTML = h;
     cal.hidden = tdMvView !== 'cal';
     tr.hidden = tdMvView !== 'track';
+    tdMvCalNote();
     if (tdMvView === 'cal') tdMvRenderCal(); else tdMvRenderTrack();
   }
   function tdMvCtl(b){
@@ -5339,22 +5434,54 @@ window.addEventListener('error', function(e){
           extendedProps: { kind: r.event_kind, unit_id: r.unit_id, lease_id: row ? row.lease_id : null,
             tentative: !!r.tentative, risk: !!(row && row.__risk) } });
       });
-      var from = info.startStr.slice(0, 10), to = info.endStr.slice(0, 10);
-      tdMvGhostRows().forEach(function(r){
-        var d = tdMvOn(r);
-        if (!d || d < from || d >= to) return;
-        // keyed on unit_id, not lease_id: a manually forced move-in has no lease, and two
-        // of them would otherwise collide on the same FullCalendar event id
-        evs.push({ id: 't' + r.__k + r.unit_id, title: tdMvWhere(r) + ' — no appt', start: d, allDay: true,
-          classNames: ['fc-mv', 'fc-mv-ghost', r.__k === 'in' ? 'fc-mv-in' : 'fc-mv-out'],
-          extendedProps: { kind: r.__k === 'in' ? 'move_in' : 'move_out', unit_id: r.unit_id,
-            lease_id: r.lease_id, ghost: true, risk: !!r.__risk } });
-      });
+      tdMvGhostEvents(info).forEach(function(ev){ evs.push(ev); });
+      tdMvCalGcalErr = false;
+      tdMvCalNote();
       success(evs);
     }).catch(function(e){
-      if (String(e && e.message) !== 'AUTH') console.error('mv cal events failed', e);
-      failure(e);
+      if (String(e && e.message) === 'AUTH'){ failure(e); return; }
+      console.error('mv cal events failed', e);
+      // Degrade, and SAY so (found 2026-10-06: this used to call failure() alone, so a dead
+      // /gcal/moves left an empty month with no message while the Tracker view said "Could not
+      // load"). The tracker rows already in hand still give every move with no booked
+      // appointment, so the calendar keeps those and the note names what is missing.
+      tdMvCalGcalErr = true;
+      tdMvCalNote();
+      success(tdMvGhostEvents(info));
     });
+  }
+  // the "no appt" events from the tracker rows already loaded, for one visible range
+  function tdMvGhostEvents(info){
+    var evs = [], from = info.startStr.slice(0, 10), to = info.endStr.slice(0, 10);
+    tdMvGhostRows().forEach(function(r){
+      var d = tdMvOn(r);
+      if (!d || d < from || d >= to) return;
+      // keyed on unit_id, not lease_id: a manually forced move-in has no lease, and two
+      // of them would otherwise collide on the same FullCalendar event id
+      evs.push({ id: 't' + r.__k + r.unit_id, title: tdMvWhere(r) + ' — no appt', start: d, allDay: true,
+        classNames: ['fc-mv', 'fc-mv-ghost', r.__k === 'in' ? 'fc-mv-in' : 'fc-mv-out'],
+        extendedProps: { kind: r.__k === 'in' ? 'move_in' : 'move_out', unit_id: r.unit_id,
+          lease_id: r.lease_id, ghost: true, risk: !!r.__risk } });
+    });
+    return evs;
+  }
+  // The calendar view draws from TWO sources: booked appointments (/gcal/moves, per visible
+  // range) and the tracker rows (/move-tracker, loaded with the board) for the moves nobody
+  // has booked. Either can fail on its own, and an empty or thinner month looks exactly like
+  // a quiet one, so this line names what did not load. Only the sides the In/Out filter is
+  // showing count; hidden with the calendar; cleared by the next good load.
+  var tdMvCalGcalErr = false;
+  function tdMvCalNote(){
+    var n = el('td-mv-calerr'); if (!n) return;
+    var miss = [];
+    if (tdMvKind !== 'out' && tdMvData.in_ === null) miss.push('move-ins');
+    if (tdMvKind !== 'in' && tdMvData.out_ === null) miss.push('move-outs');
+    var msg = '';
+    if (tdMvCalGcalErr && miss.length) msg = 'Could not load the move calendar: neither the booked appointments nor the ' + miss.join(' and ') + ' answered. Try refreshing.';
+    else if (tdMvCalGcalErr) msg = 'Could not load the booked move appointments, so only moves with no appointment are showing. Try refreshing.';
+    else if (miss.length) msg = 'Could not load the ' + miss.join(' and ') + ', so only booked appointments are showing. Try refreshing.';
+    n.textContent = msg;
+    n.hidden = !msg || tdMvView !== 'cal';
   }
   function tdMvRenderCal(){
     var box = el('td-mv-cal'); if (!box) return;
@@ -5368,7 +5495,10 @@ window.addEventListener('error', function(e){
       mvcal = new FullCalendar.Calendar(host, {
         initialView: tdMvCalView === 'week' ? 'timeGridWeek' : 'dayGridMonth',
         headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
-        height: 560, firstDay: 0, dayMaxEvents: true, eventDisplay: 'block',
+        // review plan R1: under Expand everything the month shows EVERY move on a day and the
+        // grid grows to fit (tdMvCalRebuild destroys + rebuilds the instance to switch)
+        height: tdReviewExpand ? 'auto' : 560, firstDay: 0, dayMaxEvents: !tdReviewExpand, eventDisplay: 'block',
+        loading: function(isLoading){ if (isLoading) tdMvCalBusy = true; else tdMvCalSettled(); },
         allDaySlot: true, slotMinTime: '07:00:00', slotMaxTime: '20:00:00', expandRows: true,
         eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
         eventContent: fcMoveEventContent,
@@ -5380,9 +5510,11 @@ window.addEventListener('error', function(e){
         },
         events: tdMvCalSrc
       });
+      tdMvCalBusy = true;   // render always starts an events fetch; the loading callback clears this
       mvcal.render();
     } else {
       mvcal.updateSize();
+      tdMvCalBusy = true;
       mvcal.refetchEvents();
     }
   }
@@ -6026,6 +6158,7 @@ window.addEventListener('error', function(e){
     ]);
   }
   function tdRenderMgr(m){
+    tdMgrLast = m;   // the review export reads this; tdMgrAssemble only calls here while tdReq still matches
     tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderRent(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderApps(m); tdMvRenderCard(m); tdMgrRenderUnits(m);
   }
   // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
@@ -6055,7 +6188,11 @@ window.addEventListener('error', function(e){
     var wd = t.week_diff;
     if (wd){
       h += '<div class="tdtrend-row"><span>Tasks this week: <b>' + fmtNum(wd.tasks_opened || 0) + '</b> opened &middot; <b>' +
-        fmtNum(wd.tasks_closed || 0) + '</b> closed</span></div>';
+        // "closed, last touched this week" (review plan R1): get_manager_brief.week_diff counts
+        // a Completed/Closed task by last_updated_date_time in the last 7 days (checked live
+        // 2026-10-06) — not a completion date, so a task closed weeks ago and edited this week
+        // lands here too. Say what it is.
+        fmtNum(wd.tasks_closed || 0) + '</b> closed, last touched this week</span></div>';
     }
     // Pearse 2026-07-24: the "Days on market · listed vacants" and "Listed vs market rent ·
     // gaps ≥5%" lists are REMOVED from the brief. get_manager_brief still returns
@@ -6184,7 +6321,11 @@ window.addEventListener('error', function(e){
       chip('vacant', v.vacant_total != null ? fmtNum(v.vacant_total) + vacD : '–', 'units',
         'Total vacant units: operationally vacant + never leased' + (vacD ? ' — arrow = vs last week, manager-scoped' : '')) +
       chip('vacancy rate', v.total_vacancy_rate != null ? v.total_vacancy_rate + '%' : '–', 'ledger', 'Total vacancy rate: all vacant units ÷ all units') +
-      chip('rent at risk', mo.rent_at_risk != null ? fmtMoney(mo.rent_at_risk) : '–', 'units') +
+      // review plan R1 wording: three money figures on this page read alike ("rent at risk",
+      // "rent owing", the Ledger's outstanding balance). This one is the monthly rent of the
+      // VACANT units (listed rent, else last rent, else market) — not money anyone owes.
+      chip('rent at risk from vacancy, per month', mo.rent_at_risk != null ? fmtMoney(mo.rent_at_risk) : '–', 'units',
+        'Monthly rent of the vacant units in scope (listed rent, else last lease rent, else market rent). Not a balance anyone owes — that is Rent owing below.') +
       chip('expiring 90d', p.expiring_90d != null ? fmtNum(p.expiring_90d) : '–', 'renewals',
         'Leases ending in the next 90 days — jumps to the Renewals worklist below', 'ren') +
       // the worklist SPLITS this number into Not started + Offer sent, so the chip lands on the
@@ -6255,6 +6396,8 @@ window.addEventListener('error', function(e){
     overdue:  { label: 'Overdue',     test: function(t){ return !!t.is_overdue; } }
   };
   var tdTkF = '';   // '' = every open task
+  // the filtered set the card lists (and the review export writes) — one definition
+  function tdTkVisible(all){ return (tdTkF && TD_TK_META[tdTkF]) ? (all || []).filter(TD_TK_META[tdTkF].test) : (all || []); }
   function tdMgrTasksPaint(){
     if (tdMgrTasksLast === null) return;
     var all = tdMgrTasksLast;
@@ -6263,7 +6406,7 @@ window.addEventListener('error', function(e){
       return '<button type="button" class="chip' + (tdTkF === k ? ' on' : '') + '" data-tk-filter="' + k + '">' +
         TD_TK_META[k].label + ' ' + counts[k] + '</button>';
     }).join('') + '</div>';
-    var rows = tdTkF ? all.filter(TD_TK_META[tdTkF].test) : all;
+    var rows = tdTkVisible(all);
     var h = '';
     tdMoreSlice('tasks', rows).forEach(function(t){
       var due = t.is_overdue ? '<span class="chip c-hot">overdue</span>' : (t.due_date ? '<span class="chip c-warm">due ' + esc(String(t.due_date).slice(0, 10)) + '</span>' : '');
@@ -6391,6 +6534,18 @@ window.addEventListener('error', function(e){
       return '<button type="button" class="tdact" data-rn-moves="1" title="This unit is in the Move-outs tracker">&rarr; Move-outs</button>';
     return '';   // signed — settled, nothing to chase
   }
+  // the stage filter + the on-screen sort, ONE place: the card and the review export both read
+  // it, so the Renewals sheet is the table on screen, row for row (the uRowsCur lesson)
+  function tdRwVisible(all){
+    return (all || []).filter(function(r){ return !tdRwStageF || tdRwStage(r) === tdRwStageF; })
+      .map(function(r){ var s = tdRwStage(r); var d = tdMgrDays(r.term_end); return { r: r, s: s, d: d,
+        risk: (s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'not_sent' || s === 'pending_esign') && d != null && d <= 14 }; })
+      .sort(function(a, b){
+        var rd = (b.risk ? 1 : 0) - (a.risk ? 1 : 0); if (rd) return rd;
+        var pd = tdRwMeta(a.s).pri - tdRwMeta(b.s).pri; if (pd) return pd;
+        return (a.d == null ? 9e9 : a.d) - (b.d == null ? 9e9 : b.d);
+      });
+  }
   function tdMgrRenderRenewals(m){
     var box = el('td-mgr-ren'); if (!box) return;
     if (m.renewals === null){ tdFail('td-mgr-ren', 'renewals'); return; }
@@ -6409,14 +6564,7 @@ window.addEventListener('error', function(e){
       return '<button type="button" class="chip' + (tdRwStageF === s ? ' on' : '') + '" data-rn-stage="' + s + '">' +
         tdRwMeta(s).label + ' ' + counts[s] + '</button>';
     }).join('') + '</div>';
-    var vis = all.filter(function(r){ return !tdRwStageF || tdRwStage(r) === tdRwStageF; })
-      .map(function(r){ var s = tdRwStage(r); var d = tdMgrDays(r.term_end); return { r: r, s: s, d: d,
-        risk: (s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'not_sent' || s === 'pending_esign') && d != null && d <= 14 }; })
-      .sort(function(a, b){
-        var rd = (b.risk ? 1 : 0) - (a.risk ? 1 : 0); if (rd) return rd;
-        var pd = tdRwMeta(a.s).pri - tdRwMeta(b.s).pri; if (pd) return pd;
-        return (a.d == null ? 9e9 : a.d) - (b.d == null ? 9e9 : b.d);
-      });
+    var vis = tdRwVisible(all);
     var th = '<tr><th>Unit</th><th>Tenant</th><th>Lease ends</th><th>Rent</th><th>Status</th><th></th></tr>';
     var body = vis.map(function(x){
       var r = x.r, s = x.s, d = x.d, meta = tdRwMeta(s);
@@ -6441,7 +6589,16 @@ window.addEventListener('error', function(e){
       (body ? '<div class="scrollx"><table class="mvtable"><thead>' + th + '</thead><tbody>' + body + '</tbody></table></div>'
             : '<div class="note">Nothing in this stage.</div>') + flow;
     var n = el('td-mgr-ren-n');
-    if (n){ var act = counts.undecided + counts.offer_sent + counts.declined + counts.not_sent + counts.pending_esign; n.textContent = act ? act + ' to work' : ''; }
+    // "<n> to work · <m> with no renewal yet" (review plan R1). The two numbers count different
+    // stages and the page used to show only the first, beside a pulse tile showing only the
+    // second: to work = every actionable stage; no renewal yet = Not started + Offer sent,
+    // which is exactly get_stats.pipeline.undecided (the tile), so the tile and this header
+    // now say the same number in the same words.
+    if (n){
+      var act = counts.undecided + counts.offer_sent + counts.declined + counts.not_sent + counts.pending_esign;
+      var noRen = counts.undecided + counts.offer_sent;
+      n.textContent = act ? act + ' to work · ' + noRen + ' with no renewal yet' : '';
+    }
   }
   // Chase a pending e-signature: fetch tenant contact on click (the no-PII-in-list rule), then
   // open a prefilled RingCentral text / mailto. Tenant-facing copy is plain and factual, no URLs.
@@ -6483,7 +6640,9 @@ window.addEventListener('error', function(e){
   // Tasks capped at 8 rows and Unit movement at 10, with no way to reach the rest: you could
   // read 8 of 113 open tasks and had to leave Today for the other 105. Two call sites is
   // exactly where a third copy starts — add a call site here, never a second helper.
-  // tdMoreOpen is deliberately NOT persisted: expanded-by-default would undo the cap.
+  // tdMoreOpen is deliberately NOT persisted: expanded-by-default would undo the cap. The one
+  // exception is the review's "Expand everything" (below), a reading mode the person turns on
+  // themselves; it sets every key here at once and is remembered in ledger_review_expand_v1.
   var TD_MORE_CAP = { units: 10, tasks: 8, apps: 8, rent: 10 };
   var tdMoreOpen = {};
   function tdMoreSlice(key, list){
@@ -6494,6 +6653,310 @@ window.addEventListener('error', function(e){
     if (total <= cap) return '';
     return '<div class="tdmore"><button type="button" class="tdact" data-tdmore="' + esc(key) + '">' +
       (tdMoreOpen[key] ? 'Show fewer' : 'Show all ' + total) + '</button></div>';
+  }
+  // ── Review: expand everything · export · print (review plan R1, 2026-10-06) ─────────────
+  // The weekly review reads the manager board end to end, so ONE switch opens every capped
+  // list and drops the 340 px scroll boxes (#td-grid.tdexpand). It drives the SAME
+  // tdMoreOpen / tdMoreSlice state the per-card "Show all" buttons use — never a second
+  // expander. Unlike a single card's "Show all" (still not persisted, see above) this one is
+  // a deliberate reading mode, so it is remembered per signed-in person:
+  // localStorage ledger_review_expand_v1 = { "<email>" : 1 } ('_' when signed out).
+  var TD_REVIEW_KEY = 'ledger_review_expand_v1';
+  var tdReviewExpand = false;
+  var tdMgrLast = null;   // the last assembled manager payload (tdRenderMgr) — the export reads it, never refetches
+  function tdReviewWho(){ return (authIdent && authIdent.email) ? String(authIdent.email).toLowerCase() : '_'; }
+  function tdReviewStore(){
+    var all = null;
+    try { all = JSON.parse(localStorage.getItem(TD_REVIEW_KEY) || '{}'); } catch (e) { all = null; }
+    return (all && typeof all === 'object' && !Array.isArray(all)) ? all : {};
+  }
+  function tdReviewPref(){ return !!tdReviewStore()[tdReviewWho()]; }
+  function tdReviewSave(on){
+    var all = tdReviewStore();
+    if (on) all[tdReviewWho()] = 1; else delete all[tdReviewWho()];
+    try { localStorage.setItem(TD_REVIEW_KEY, JSON.stringify(all)); } catch (e) {}
+  }
+  // state only; callers repaint. Sets every capped list's tdMoreOpen together.
+  function tdReviewApply(on){
+    tdReviewExpand = !!on;
+    Object.keys(TD_MORE_CAP).forEach(function(k){ tdMoreOpen[k] = tdReviewExpand; });
+    var g = el('td-grid'); if (g) g.classList.toggle('tdexpand', tdReviewExpand);
+  }
+  // called by tdRender's manager branch on every board build: picks up the signed-in person's
+  // saved choice. Only a CHANGE resets tdMoreOpen, so a card's own "Show all" survives a
+  // scope switch exactly as it did before this existed.
+  function tdReviewSync(){
+    var p = tdReviewPref();
+    if (p !== tdReviewExpand) tdReviewApply(p);
+    else { var g = el('td-grid'); if (g) g.classList.toggle('tdexpand', p); }
+  }
+  // repaint every capped card from its stashed rows (never a refetch — a toggle cannot race
+  // the assembly), then the Moves calendar, which cannot change height/limits in place
+  function tdReviewRepaint(){
+    tdMuPaint(); tdMgrTasksPaint(); tdApPaint(); tdRentPaint();
+    tdReviewBarPaint();
+    tdMvCalRebuild();
+  }
+  function tdReviewToggle(){
+    tdReviewApply(!tdReviewExpand);
+    tdReviewSave(tdReviewExpand);
+    tdReviewRepaint();
+  }
+  function tdReviewBarInner(){
+    return '<span class="sf-label">Review</span>' +
+      '<button type="button" class="chip-mini' + (tdReviewExpand ? ' on' : '') + '" data-review-expand="1" aria-pressed="' + tdReviewExpand + '" title="' +
+        (tdReviewExpand ? 'Every list is open. Tap to go back to the short lists.' : 'Open every list on this page in full, with no scroll boxes. Remembered for you on this device.') + '">' +
+        (tdReviewExpand ? 'Showing everything' : 'Expand everything') + '</button>' +
+      '<button type="button" class="tdact" data-review-export="1" title="One workbook: a summary plus a sheet per section, the same rows this page shows under the current scope and filters. No tenant phone numbers or emails.">Export review (XLSX)</button>' +
+      '<button type="button" class="tdact" data-review-print="1" title="Print this board with every list open, one section per page">Print</button>';
+  }
+  // the bar sits first in the grid; the print header beside it is hidden on screen
+  function tdReviewBarHtml(){
+    return '<div class="tdrevbar" id="td-revbar">' + tdReviewBarInner() + '</div>' +
+      '<div class="tdprint-h" id="td-print-h"></div>';
+  }
+  function tdReviewBarPaint(){ var b = el('td-revbar'); if (b) b.innerHTML = tdReviewBarInner(); }
+  // who and what the review covers — the manager scope by NAME (msLabels, the Units-export
+  // helper), plus any other sidebar scope that narrows it
+  function tdReviewScope(){
+    var mg = msLabels('managers');
+    var bits = [mg.length ? 'Manager: ' + mg.join(', ') : 'Manager: team-wide (every manager)'];
+    ['owners', 'properties', 'ptypes'].forEach(function(key){
+      var n = msLabels(key); if (n.length) bits.push(msScopeLabel(key) + ': ' + n.join(', '));
+    });
+    return bits;
+  }
+  // R2 adds the compare date (saved daily records). Until then every header says so, rather
+  // than leaving the reader to wonder whether "change since" was silently zero.
+  var TD_REVIEW_NOCMP = 'Compared with: no comparison date yet';
+  function tdReviewNote(extra){
+    return tdReviewScope().concat(['Date: ' + tdDayKeyEd(new Date()), TD_REVIEW_NOCMP], extra || []).join(' · ');
+  }
+  // ── the Moves calendar under the review switch ──
+  // Expanded, the month grid lists EVERY move on a day (no "+3 more") and grows to fit;
+  // FullCalendar cannot swap those options on a live instance cleanly, so the instance is
+  // destroyed and rebuilt (tdMvRenderCal reads tdReviewExpand). tdMvCalBusy follows the
+  // calendar's own loading callback, so Print can wait for the rebuilt events to land.
+  var tdMvCalBusy = false, tdMvCalIdleQ = [];
+  function tdMvCalRebuild(){
+    if (mvcal){ try { mvcal.destroy(); } catch (e) { console.error('moves calendar destroy failed', e); } mvcal = null; }
+    tdMvCalBusy = false;
+    var box = el('td-mv-cal');
+    if (box && !box.hidden && tdMvView === 'cal') tdMvRenderCal();
+  }
+  function tdMvCalSettled(){
+    tdMvCalBusy = false;
+    var q = tdMvCalIdleQ; tdMvCalIdleQ = [];
+    q.forEach(function(f){ try { f(); } catch (e) { console.error('moves calendar idle callback failed', e); } });
+  }
+  function tdMvCalWhenIdle(cb){
+    if (!mvcal || !tdMvCalBusy){ cb(); return; }
+    var fired = false, once = function(){ if (fired) return; fired = true; cb(); };
+    tdMvCalIdleQ.push(once);
+    setTimeout(once, 6000);   // a stuck /gcal/moves must not swallow the print
+  }
+  // ── print ──
+  // The first print rules in the app, and they are scoped: html.prt-today exists only between
+  // beforeprint and afterprint, and only when the manager board is what is on screen, so every
+  // other tab prints exactly as it did before (CSS: the @media print block under #page-today).
+  // Ctrl+P opens the capped lists synchronously; the Print button also rebuilds the calendar
+  // with every move showing and waits for its events before opening the dialog.
+  var tdPrintUndo = false;   // true while a print has the lists open that the reader had closed
+  function tdPrintIsReview(){ return ACTIVE_TAB === 'today' && tdRole() === 'manager' && !!el('td-revbar'); }
+  function tdPrintPrep(){
+    if (!tdPrintIsReview()) return;
+    document.documentElement.classList.add('prt-today');
+    var h = el('td-print-h');
+    if (h) h.textContent = 'Manager review · ' + tdReviewNote().replace(/^Manager: /, '');
+    if (!tdReviewExpand){
+      tdPrintUndo = true;
+      tdReviewApply(true);
+      tdMuPaint(); tdMgrTasksPaint(); tdApPaint(); tdRentPaint();
+    }
+  }
+  function tdPrintDone(){
+    document.documentElement.classList.remove('prt-today');
+    if (tdPrintUndo){ tdPrintUndo = false; tdReviewApply(false); tdReviewRepaint(); }
+  }
+  function tdReviewPrint(){
+    if (!tdPrintIsReview()) return;
+    if (!tdReviewExpand){ tdPrintUndo = true; tdReviewApply(true); tdReviewRepaint(); }
+    // a short settle after the events land: FullCalendar paints them on the next frame
+    tdMvCalWhenIdle(function(){ setTimeout(function(){ window.print(); }, 250); });
+  }
+  window.addEventListener('beforeprint', tdPrintPrep);
+  window.addEventListener('afterprint', tdPrintDone);
+  // ── the review workbook ──
+  // Nine sheets: Summary, Rent, Renewals, Move-ins, Move-outs, Tasks, Applications, Vacant,
+  // Actions. EXPORT EQUALS SCREEN: every sheet writes the SAME set its card lists under the
+  // current scope and filters, in the same order, uncapped — tdRentSides / tdRwVisible /
+  // tdMvVisible / tdTkVisible / tdApVisible are the ones the cards paint from. Row 1 of each
+  // sheet names the manager, the date, the compare date and the filters that applied.
+  // NO CONTACT DETAILS: no column reads a phone or an email (the Moves-export rule); tenant and
+  // applicant names are shown, as they are on screen.
+  function tdReviewYN(v){ return v ? 'Yes' : 'No'; }
+  function tdReviewSheet(name, cols, rows, extra, failed){
+    return { sheet: name, cols: cols,
+      rows: failed ? [] : rows,
+      note: tdReviewNote(failed ? ['This section did not load, so this sheet is empty — refresh and export again'] : (extra || [])) };
+  }
+  var TD_RV_RENT_COLS = [
+    { label:'Tenancy',  w:10, get:function(r){ return r.is_current ? 'Current' : 'Past'; } },
+    { label:'Property', w:26, key:'property_name' },
+    { label:'Unit',     w:10, key:'unit_number' },
+    { label:'Tenant',   w:28, key:'tenant_names' },
+    { label:'Moved out', w:12, get:function(r){ return r.is_current ? '' : String(r.move_out_date || '').slice(0, 10); } },
+    { label:'0-30 days',  w:12, type:'money', key:'balance_0_30_days' },
+    { label:'31-60 days', w:12, type:'money', key:'balance_31_60_days' },
+    { label:'61-90 days', w:12, type:'money', key:'balance_61_90_days' },
+    { label:'Over 90 days', w:13, type:'money', key:'balance_over_90_days' },
+    { label:'Balance',  w:13, type:'money', get:function(r){ return Number(r.total_balance) || 0; } },
+    { label:'Aged 31+ days', w:13, get:function(r){ return tdReviewYN((Number(r.balance_31_60_days) || 0) + (Number(r.balance_61_90_days) || 0) + (Number(r.balance_over_90_days) || 0) > 0); } },
+    { label:'Lease ID', w:11, type:'num', key:'lease_id' },
+    { label:'Unit ID',  w:10, type:'num', key:'unit_id' }
+  ];
+  var TD_RV_REN_COLS = [
+    { label:'Property',    w:26, get:function(x){ return x.r.property_name || ''; } },
+    { label:'Unit',        w:10, get:function(x){ return x.r.unit_number || ''; } },
+    { label:'Address',     w:26, get:function(x){ return x.r.address_line1 || ''; } },
+    { label:'Tenant',      w:28, get:function(x){ return x.r.tenant_names || ''; } },
+    { label:'Lease ends',  w:12, get:function(x){ return String(x.r.term_end || '').slice(0, 10); } },
+    { label:'Days left',   w:10, type:'num', get:function(x){ return x.d; } },
+    { label:'Stage',       w:15, get:function(x){ return tdRwMeta(x.s).label; } },
+    { label:'Open, ending inside 14 days', w:14, get:function(x){ return tdReviewYN(x.risk); } },
+    { label:'Current rent', w:13, type:'money', get:function(x){ return x.r.current_rent; } },
+    { label:'Renewal rent', w:13, type:'money', get:function(x){ return x.r.renewal_rent; } },
+    { label:'Market rent',  w:13, type:'money', get:function(x){ return x.r.market_rent; } },
+    { label:'Lease ID',    w:11, type:'num', get:function(x){ return x.r.lease_id; } },
+    { label:'Unit ID',     w:10, type:'num', get:function(x){ return x.r.unit_id; } }
+  ];
+  var TD_RV_TASK_COLS = [
+    { label:'Task',      w:36, get:function(t){ return t.title || t.category_name || 'Task'; } },
+    { label:'Category',  w:18, key:'category_name' },
+    { label:'Property',  w:26, key:'property_name' },
+    { label:'Unit',      w:10, key:'unit_number' },
+    { label:'Assignee',  w:18, key:'assignee_name' },
+    { label:'Status',    w:12, key:'task_status' },
+    { label:'Priority',  w:10, key:'priority' },
+    { label:'Open days', w:10, type:'num', get:function(t){ return t.age_days == null ? null : Number(t.age_days); } },
+    { label:'Due',       w:12, get:function(t){ return String(t.due_date || '').slice(0, 10); } },
+    { label:'Overdue',   w:9,  get:function(t){ return tdReviewYN(t.is_overdue); } },
+    { label:'Work order', w:16, get:function(t){ return t.work_order_id != null ? ('Yes' + (t.wo_status ? ' · ' + t.wo_status : '')) : 'No'; } },
+    { label:'Work order amount', w:14, type:'money', get:function(t){ return (t.wo_amount != null && Number(t.wo_amount) > 0) ? Number(t.wo_amount) : null; } },
+    { label:'No vendor', w:10, get:function(t){ return t.work_order_id != null ? tdReviewYN(t.wo_vendor_id == null) : ''; } },
+    { label:'Task ID',   w:10, type:'num', key:'task_id' }
+  ];
+  // a function, not a var: TD_AP_STALE_D is declared further down, after this runs at boot
+  function tdRvAppCols(){ return [
+    { label:'Waiting on',  w:24, get:function(r){ return TD_AP_META[r.k] ? TD_AP_META[r.k].label : r.k; } },
+    { label:'Applicant or unit', w:28, key:'t' },
+    { label:'Property and unit', w:30, key:'sub' },
+    { label:'Days waiting', w:12, type:'num', key:'age' },
+    { label:'Over ' + TD_AP_STALE_D + ' days', w:11, get:function(r){ return r.k === 'decide' ? tdReviewYN(r.stale) : ''; } },
+    { label:'Application ID', w:14, type:'num', key:'id' },
+    { label:'Unit ID', w:10, type:'num', key:'unitId' }
+  ]; }
+  var TD_RV_PAS = { draft_lease: 'Draft lease started, not signed' };
+  var TD_RV_VAC_COLS = [
+    { label:'Property',     w:26, key:'property_name' },
+    { label:'Unit',         w:10, key:'unit_number' },
+    { label:'Status',       w:20, get:function(u){ return u.occupancy_status === 'never_leased' ? 'Never leased' : 'Operationally vacant'; } },
+    { label:'Days vacant',  w:11, type:'num', key:'days_vacant' },
+    { label:'Listed',       w:8,  get:function(u){ return tdReviewYN(u.is_listed); } },
+    { label:'Rent (listed, else last lease)', w:16, type:'money', get:function(u){ var v = rentBasis(u); return (v != null && v > 0) ? v : null; } },
+    { label:'Market rent',  w:13, type:'money', get:function(u){ return (u.market_rent != null && u.market_rent > 0) ? u.market_rent : null; } },
+    { label:'Application',  w:26, get:function(u){ return u.pending_app_stage ? (TD_RV_PAS[u.pending_app_stage] || 'Application approved, no lease yet') : ''; } },
+    { label:'On Unit movement (aging 60d+)', w:16, get:function(u){ return tdReviewYN(u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60); } },
+    { label:'Unit ID',      w:10, type:'num', key:'unit_id' }
+  ];
+  var TD_RV_ACT_COLS = [
+    { label:'Action', w:40, key:'body' }, { label:'Who', w:18, key:'assignee' },
+    { label:'Due', w:12, key:'due_on' }, { label:'Status', w:10, key:'status' }, { label:'Added in review', w:14, key:'held_on' }
+  ];
+  // The house rule the vacant TILE counts by (get_stats.vacancy.vacant_total): owner take-backs and
+  // not-ready units are out. Checked live 2026-10-06: Cheryl 133 vacant rows in the brief, 30
+  // take-backs + 93 not-ready among them, 10 left = the tile's 10; team-wide 70 = 70. Without it
+  // the sheet ran 13x the tile it sits beside.
+  function tdReviewVacant(m){
+    return (m.units || []).filter(function(u){
+      return (u.occupancy_status === 'op_vacant' || u.occupancy_status === 'never_leased') && !u.is_owner_takeback && !u.is_not_ready;
+    })
+      .sort(function(a, b){ return (Number(b.days_vacant) || 0) - (Number(a.days_vacant) || 0); });
+  }
+  // the moves filters that applied, WITHOUT the scope (row 1 already names it)
+  function tdReviewMvBits(){
+    var scopeLbl = ['managers', 'owners', 'properties', 'ptypes'].map(function(k){ return msScopeLabel(k) + ': '; });
+    var bits = tdMvFilterBits().filter(function(b){ return !scopeLbl.some(function(p){ return b.indexOf(p) === 0; }); });
+    if (tdMvView === 'cal') bits.push('The card is on its calendar view: these are the tracker rows under the same filters');
+    return bits;
+  }
+  function tdReviewExport(){
+    var m = tdMgrLast;
+    if (!m){ alert('The board has not finished loading — try again in a moment.'); return; }
+    var sum = [];
+    var add = function(item, count, money, detail){ sum.push({ item: item, count: count, money: money, detail: detail || '' }); };
+    // Rent — the side (current/past) and band on screen
+    var rentFail = tdRentLast === null, rs = rentFail ? null : tdRentSides();
+    var rentBits = rentFail ? [] : ['Showing: ' + (tdRentWho === 'past' ? 'past tenants (lease ended)' : 'current tenants (lease active)')];
+    if (!rentFail && tdRentF && TD_RENT_META[tdRentF]) rentBits.push('Band: ' + TD_RENT_META[tdRentF].label);
+    var rentRows = rentFail ? [] : rs.vis;
+    add('Rent owing', rentFail ? null : rentRows.length, rentFail ? null : tdRentSum(rentRows), rentFail ? 'did not load' : rentBits.join(' · '));
+    // Renewals — the stage chip on screen
+    var renFail = tdRwLast === null, renRows = renFail ? [] : tdRwVisible(tdRwLast);
+    var renHdr = (el('td-mgr-ren-n') || {}).textContent || '';
+    var renBits = tdRwStageF ? ['Stage: ' + tdRwMeta(tdRwStageF).label] : [];
+    add('Renewals, next 90 days', renFail ? null : renRows.length, null, renFail ? 'did not load' : [renHdr].concat(renBits).filter(Boolean).join(' · '));
+    // Moves — the tracker set under the card's filters (tdMvVisible, the Moves export's own reader)
+    var mvBits = tdReviewMvBits();
+    var mvSheet = function(k){
+      var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
+      var hidden = (k === 'in' && tdMvKind === 'out') || (k === 'out' && tdMvKind === 'in');
+      var rows = (L === null || hidden) ? [] : tdMvVisible(k);
+      var extra = hidden ? mvBits.concat(['Empty because the card is filtered to ' + (k === 'in' ? 'move-outs' : 'move-ins') + ' only']) : mvBits;
+      add(k === 'in' ? 'Move-ins' : 'Move-outs', L === null ? null : rows.length, null, L === null ? 'did not load' : extra.join(' · '));
+      return tdReviewSheet(k === 'in' ? 'Move-ins' : 'Move-outs', MV_XL_COLS, rows, extra, L === null);
+    };
+    var mvIn = mvSheet('in'), mvOut = mvSheet('out');
+    // Tasks — the maintenance / no-vendor / overdue chip on screen
+    var tkFail = tdMgrTasksLast === null, tkRows = tkFail ? [] : tdTkVisible(tdMgrTasksLast);
+    var tkBits = (tdTkF && TD_TK_META[tdTkF]) ? ['Filter: ' + TD_TK_META[tdTkF].label] : [];
+    add('Open tasks', tkFail ? null : tkRows.length, null, tkFail ? 'did not load' : (tkBits.join(' · ') || 'oldest first'));
+    // Applications — the group chip on screen
+    var apFail = tdApLast === null, apRows = apFail ? [] : tdApVisible(tdApLast);
+    var apBits = (tdApF && TD_AP_META[tdApF]) ? ['Group: ' + TD_AP_META[tdApF].label] : [];
+    add('Applications', apFail ? null : apRows.length, null, apFail ? 'did not load' : (apBits.join(' · ') || ((el('td-mgr-apps-n') || {}).textContent || '')));
+    // Vacant — every vacant unit in scope; the pulse tile's count rides along for reconciliation
+    var vacFail = m.units === null, vacRows = vacFail ? [] : tdReviewVacant(m);
+    var v = (m.stats && m.stats.vacancy) || {}, mo = (m.stats && m.stats.money) || {}, pp = (m.stats && m.stats.pipeline) || {};
+    var vacBits = ['Every operationally vacant and never-leased unit in scope, longest vacant first, without owner take-backs and not-ready units (the vacant tile counts the same way)'];
+    if (v.vacant_total != null) vacBits.push('The "vacant" tile on the page counts ' + v.vacant_total);
+    add('Vacant units', vacFail ? null : vacRows.length, null, vacFail ? 'did not load' : vacBits.join(' · '));
+    add('Meeting actions', 0, null, 'Not recorded in the Ledger yet');
+    // the pulse tiles, as figures (no sheet of their own)
+    if (m.stats){
+      add('Tile: vacant', v.vacant_total != null ? v.vacant_total : null, null, 'operationally vacant + never leased');
+      add('Tile: vacancy rate (%)', v.total_vacancy_rate != null ? Number(v.total_vacancy_rate) : null, null, 'all vacant units / all units');
+      add('Tile: rent at risk from vacancy, per month', null, mo.rent_at_risk != null ? Number(mo.rent_at_risk) : null, 'monthly rent of the vacant units, not a balance owed');
+      add('Tile: expiring in 90 days', pp.expiring_90d != null ? pp.expiring_90d : null, null, '');
+      add('Tile: no renewal yet', pp.undecided != null ? pp.undecided : null, null, 'Not started + Offer sent');
+      add('Tile: move-ins next 30 days', v.upcoming_move_ins != null ? v.upcoming_move_ins : null, null, '');
+    }
+    var sheets = [
+      { sheet:'Summary', note: tdReviewNote(['One row per section: the rows on its sheet (the same rows the page lists)', 'Blank count = the section did not load']),
+        cols: [{ label:'Section or figure', w:40, key:'item' }, { label:'Count', w:10, type:'num', key:'count' },
+               { label:'Money', w:15, type:'money', key:'money' }, { label:'What it covers', w:90, key:'detail' }],
+        rows: sum },
+      tdReviewSheet('Rent', TD_RV_RENT_COLS, rentRows, rentBits, rentFail),
+      tdReviewSheet('Renewals', TD_RV_REN_COLS, renRows, renBits, renFail),
+      mvIn, mvOut,
+      tdReviewSheet('Tasks', TD_RV_TASK_COLS, tkRows, tkBits, tkFail),
+      tdReviewSheet('Applications', tdRvAppCols(), apRows, apBits, apFail),
+      tdReviewSheet('Vacant', TD_RV_VAC_COLS, vacRows, vacBits, vacFail),
+      tdReviewSheet('Actions', TD_RV_ACT_COLS, [], ['Meeting actions are not recorded in the Ledger yet, so this sheet is empty'], false)
+    ];
+    var today = tdDayKeyEd(new Date());
+    var slug = (msLabels('managers').join('-') || 'team-wide').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    xlsxDownload('manager-review-' + today + (slug ? '-' + slug : '') + '.xlsx', sheets);
   }
   // ── ONE unit-movement card (merged 2026-07-28) ────────────────────────────────────────
   // Was TWO cards — "Unit updates" and "Aging vacancies · 60d+" — both listing the SAME
@@ -6581,6 +7044,7 @@ window.addEventListener('error', function(e){
   };
   var tdApF = '';
   var tdApLast = null;
+  function tdApVisible(rows){ return (rows || []).filter(function(r){ return !tdApF || r.k === tdApF; }); }
   var TD_AP_STALE_D = 3;   // Pearse-visible threshold: an undecided application older than this is flagged
   function tdMgrRenderApps(m){
     var box = el('td-mgr-apps'); if (!box) return;
@@ -6619,7 +7083,7 @@ window.addEventListener('error', function(e){
       return '<button type="button" class="chip' + (tdApF === k ? ' on' : '') + '" data-ap-kind="' + k + '">' +
         TD_AP_META[k].label + ' ' + counts[k] + '</button>';
     }).join('') + '</div>';
-    var vis = rows.filter(function(r){ return !tdApF || r.k === tdApF; });
+    var vis = tdApVisible(rows);
     var h = tdMoreSlice('apps', vis).map(function(r){
       var age = r.age == null ? '' : '<span class="chip ' + (r.stale ? 'c-hot' : 'c-warm') + '">' +
         (r.age === 0 ? 'today' : r.age + 'd') + '</span>';
@@ -6688,13 +7152,21 @@ window.addEventListener('error', function(e){
     rows.forEach(function(r){ tdRentRows[r.lease_id] = r; });
     tdRentPaint();
   }
+  // current/past split + the band filter, ONE place: the card paints it and the review export
+  // writes sides.vis, so the Rent sheet is the table on screen (same side, same band, same order)
+  function tdRentSides(){
+    var all = tdRentLast || [];
+    var cur = all.filter(function(r){ return r.is_current; });
+    var gone = all.filter(function(r){ return !r.is_current; });
+    var rows = tdRentWho === 'past' ? gone : cur;
+    var vis = (tdRentF && TD_RENT_META[tdRentF]) ? rows.filter(TD_RENT_META[tdRentF].test) : rows;
+    return { cur: cur, gone: gone, rows: rows, vis: vis };
+  }
   function tdRentSum(rows){ var t = 0; rows.forEach(function(r){ t += Number(r.total_balance) || 0; }); return t; }
   function tdRentPaint(){
     var box = el('td-mgr-rent'); if (!box || tdRentLast === null) return;
     var past = tdRentWho === 'past';
-    var cur = tdRentLast.filter(function(r){ return r.is_current; });
-    var gone = tdRentLast.filter(function(r){ return !r.is_current; });
-    var rows = past ? gone : cur;
+    var sides = tdRentSides(), cur = sides.cur, gone = sides.gone, rows = sides.rows;
     // labels stay SHORT (count only): .mvtgl is a nowrap pill, and the $ total for the
     // selected side is in the card header (#td-mgr-rent-n); each button's title carries the other
     var who = '<span class="mvtgl rentwho" role="group" aria-label="Which tenants">' +
@@ -6708,7 +7180,7 @@ window.addEventListener('error', function(e){
         TD_RENT_META[k].label + ' ' + n + '</button>';
     }).join('');
     chips = chips ? '<div class="mvchips">' + chips + '</div>' : '';
-    var vis = (tdRentF && TD_RENT_META[tdRentF]) ? rows.filter(TD_RENT_META[tdRentF].test) : rows;
+    var vis = sides.vis;
     var money = function(v){ v = Number(v) || 0; return v > 0 ? fmtMoney(v) : '<span class="qn">&ndash;</span>'; };
     var th = '<tr><th>Unit</th><th>Tenant</th>' + (past ? '<th>Moved out</th>' : '') +
       '<th class="rt rtb">0&ndash;30d</th><th class="rt rtb">31&ndash;60d</th><th class="rt rtb">61&ndash;90d</th><th class="rt rtb">90d+</th><th class="rt">Balance</th></tr>';
@@ -6949,6 +7421,10 @@ window.addEventListener('error', function(e){
       var mvc = e.target.closest('[data-mv-view],[data-mv-cal],[data-mv-kind],[data-mv-days],[data-mv-stage],[data-mv-showdone]');
       if (mvc){ tdMvCtl(mvc); return; }
       if (e.target.closest('[data-mv-export]')){ tdMvExport(); return; }
+      // review plan R1: the Review bar
+      if (e.target.closest('[data-review-expand]')){ tdReviewToggle(); return; }
+      if (e.target.closest('[data-review-export]')){ tdReviewExport(); return; }
+      if (e.target.closest('[data-review-print]')){ tdReviewPrint(); return; }
       // 2026-07-27: the row's own controls are checked BEFORE the row itself, or every
       // in-place action would fall through and open the drawer instead
       var mvtk = e.target.closest('[data-mvtick]');
@@ -6993,7 +7469,7 @@ window.addEventListener('error', function(e){
       var rf = e.target.closest('[data-rent-f]');
       if (rf){ var rv2 = rf.getAttribute('data-rent-f'); tdRentF = (tdRentF === rv2 ? '' : rv2); tdRentPaint(); return; }
       var rw = e.target.closest('[data-rent-who]');
-      if (rw){ var wv = rw.getAttribute('data-rent-who'); if (wv !== tdRentWho){ tdRentWho = wv; tdRentF = ''; tdMoreOpen.rent = false; tdRentPaint(); } return; }
+      if (rw){ var wv = rw.getAttribute('data-rent-who'); if (wv !== tdRentWho){ tdRentWho = wv; tdRentF = ''; tdMoreOpen.rent = tdReviewExpand; tdRentPaint(); } return; }
       // NOTE: the rent drawer's reminder buttons are NOT handled here — #rentmodal lives
       // outside #td-grid, so they get their own boot delegate (see the mvmodal precedent).
       var mo = e.target.closest('[data-tdmore]');
@@ -10677,12 +11153,13 @@ window.addEventListener('error', function(e){
     }
     return xlText(ref, 0, v);
   }
-  function xlsxBlob(o){
+  // One worksheet part from one { sheet, note, cols, rows } object. Split out of xlsxBlob
+  // (review plan R1, 2026-10-06) so a workbook can carry several sheets; the XML each sheet
+  // gets is byte-for-byte what the single-sheet writer produced before.
+  function xlSheetXml(o){
     var XD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
     var NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
-    var RS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
     var cols = o.cols || [], rows = o.rows || [];
-    var sheetName = xlEsc(String(o.sheet || 'Sheet1').replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31));
     var last = xlColRef(Math.max(0, cols.length - 1));
     var hdrRow = o.note ? 2 : 1, firstData = hdrRow + 1;
     var lastRow = Math.max(hdrRow + rows.length, firstData);
@@ -10702,14 +11179,32 @@ window.addEventListener('error', function(e){
       cw += '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + (c.w || 14) + '" customWidth="1"/>';
     });
     cw += '</cols>';
-    var sheet = XD + '<worksheet xmlns="' + NS + '">' +
+    return XD + '<worksheet xmlns="' + NS + '">' +
       '<dimension ref="A1:' + last + lastRow + '"/>' +
       '<sheetViews><sheetView workbookViewId="0"><pane ySplit="' + hdrRow + '" topLeftCell="A' + firstData +
         '" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
       '<sheetFormatPr defaultRowHeight="15"/>' + cw +
       '<sheetData>' + sd + '</sheetData>' +
       '<autoFilter ref="A' + hdrRow + ':' + last + Math.max(lastRow, hdrRow) + '"/></worksheet>';
-    // style ids used above: 1 = bold header on a sand fill, 2 = money, 3 = grey italic note
+  }
+  // xlsxBlob(o): o is ONE sheet object (every existing caller, unchanged) or an ARRAY of
+  // them, written as one workbook in array order. Sheet names are cleaned of the characters
+  // Excel forbids, cut to 31 and made unique, because a duplicate name makes Excel refuse
+  // to open the whole file.
+  function xlsxBlob(o){
+    var XD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    var NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    var RS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    var list = Array.isArray(o) ? o : [o];
+    if (!list.length) list = [{}];
+    var used = {};
+    var names = list.map(function(s, i){
+      var base = String(s.sheet || ('Sheet' + (i + 1))).replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31), nm = base, n = 2;
+      while (used[nm.toLowerCase()]){ var suf = ' (' + n++ + ')'; nm = base.slice(0, 31 - suf.length) + suf; }
+      used[nm.toLowerCase()] = true;
+      return nm;
+    });
+    // style ids used in xlSheetXml: 1 = bold header on a sand fill, 2 = money, 3 = grey italic note
     var styles = XD + '<styleSheet xmlns="' + NS + '">' +
       '<numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/></numFmts>' +
       '<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font>' +
@@ -10725,27 +11220,36 @@ window.addEventListener('error', function(e){
       '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
       '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>' +
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
-    return xlZip([
+    // sheet i is part xl/worksheets/sheet<i+1>.xml with relationship rId<i+1>; styles take the
+    // next id, so a one-sheet workbook is exactly the old package (rId1 sheet, rId2 styles)
+    var ovr = '', sheetsXml = '', rels = '';
+    list.forEach(function(s, i){
+      var n = i + 1;
+      ovr += '<Override PartName="/xl/worksheets/sheet' + n + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+      sheetsXml += '<sheet name="' + xlEsc(names[i]) + '" sheetId="' + n + '" r:id="rId' + n + '"/>';
+      rels += '<Relationship Id="rId' + n + '" Type="' + RS + '/worksheet" Target="worksheets/sheet' + n + '.xml"/>';
+    });
+    var files = [
       { name:'[Content_Types].xml', data: XD +
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="xml" ContentType="application/xml"/>' +
         '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        ovr +
         '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
       { name:'_rels/.rels', data: XD +
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
         '<Relationship Id="rId1" Type="' + RS + '/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
       { name:'xl/workbook.xml', data: XD +
         '<workbook xmlns="' + NS + '" xmlns:r="' + RS + '">' +
-        '<sheets><sheet name="' + sheetName + '" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+        '<sheets>' + sheetsXml + '</sheets></workbook>' },
       { name:'xl/_rels/workbook.xml.rels', data: XD +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId1" Type="' + RS + '/worksheet" Target="worksheets/sheet1.xml"/>' +
-        '<Relationship Id="rId2" Type="' + RS + '/styles" Target="styles.xml"/></Relationships>' },
-      { name:'xl/styles.xml', data: styles },
-      { name:'xl/worksheets/sheet1.xml', data: sheet }
-    ]);
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + rels +
+        '<Relationship Id="rId' + (list.length + 1) + '" Type="' + RS + '/styles" Target="styles.xml"/></Relationships>' },
+      { name:'xl/styles.xml', data: styles }
+    ];
+    list.forEach(function(s, i){ files.push({ name:'xl/worksheets/sheet' + (i + 1) + '.xml', data: xlSheetXml(s) }); });
+    return xlZip(files);
   }
   function xlsxDownload(fname, o){
     var a = document.createElement('a');

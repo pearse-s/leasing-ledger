@@ -2181,6 +2181,45 @@ window.addEventListener('error', function(e){
     /* the 340 px scroll boxes go: every capped card shows all its rows in full. .scrollx inside
        still scrolls wide tables sideways, so dropping overflow here clips nothing */
     #td-grid.tdexpand .schoffers{max-height:none;overflow:visible}
+    /* ── Work queue | Review (Direction A phase 3, 2026-10-05) ──
+       The view switch is a grid row rebuilt with the board; the queue itself is the static
+       #td-queue below the grid. In queue view the Review cards, bar and print header hide and
+       the admin "working as" strip + the switch stay, so one strip drives both views. */
+    #page-today .tdmgrview{grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    #page-today .tdmgrview .mvtgl button{min-height:40px;padding:0 16px;font-size:.78rem}
+    #td-grid.tdqv > .panel.tdq,#td-grid.tdqv > .tdrevbar,#td-grid.tdqv > .tdprint-h{display:none}
+    /* six tiles: explicit column counts at every width (2 / 3 / 6), never auto-fit — no orphan tile */
+    #page-today .tdqtiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
+    @media (min-width:481px){ #page-today .tdqtiles{grid-template-columns:repeat(3,minmax(0,1fr))} }
+    @media (min-width:900px){ #page-today .tdqtiles{grid-template-columns:repeat(6,minmax(0,1fr))} }
+    #page-today .tdqtile{display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;background:var(--glass-2);border:1px solid var(--hairline-dark);border-radius:10px;padding:10px 12px;cursor:pointer;font-family:var(--sans);color:var(--ink);min-width:0;min-height:40px}
+    #page-today .tdqtile:hover{border-color:var(--clay)}
+    #page-today .tdqtile.on{border-color:var(--clay);background:var(--clay-soft)}
+    #page-today .tdqtile .tdp-v{font-size:1.05rem}
+    #page-today .tdqtile .tdqt-s{font-size:.72rem;color:var(--ink-soft);line-height:1.3}
+    #page-today #td-q-chips{margin:10px 0 0}
+    /* lanes beside the record pane from 1100 px; below that the record opens in a modal */
+    #page-today .tdqwrap{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:4px;align-items:start}
+    @media (min-width:1100px){ #page-today .tdqwrap.haspane{grid-template-columns:minmax(0,1fr) minmax(340px,420px)} }
+    #page-today .tdqlanes{display:flex;flex-direction:column;gap:16px;min-width:0}
+    #page-today .tdqlane{margin-top:0}
+    #page-today .tdqlane .schoffers{max-height:none;overflow:visible}
+    #page-today .tdqrow{cursor:pointer}
+    #page-today .tdqrow:hover{background:rgba(244,236,225,.04)}
+    #page-today .tdqrow:focus-visible{outline:none;background:rgba(244,236,225,.07)}
+    #page-today .tdqrow.on{border-color:var(--clay)}
+    #page-today .tdqkind{flex:0 0 auto}
+    #page-today .tdqflag{font-size:.7rem;color:var(--clay);font-weight:700;margin-left:4px}
+    /* roll-up rows: the collapsible details block wraps a summary styled as a row, children indented */
+    #page-today .tdqroll summary{list-style:none;cursor:pointer}
+    #page-today .tdqroll summary::-webkit-details-marker{display:none}
+    #page-today .tdqroll .tdqsub{display:flex;flex-direction:column;gap:6px;padding:6px 0 0 12px;margin:0 0 4px 12px;border-left:2px solid var(--hairline-dark)}
+    #page-today .tdqpane{position:sticky;top:12px;align-self:start;max-height:calc(100vh - 24px);overflow:auto;background:var(--glass);border:1px solid var(--hairline-dark);border-radius:14px;padding:14px 16px 18px;min-width:0}
+    #page-today .tdqpane .lmhead{padding:0 30px 10px 0}
+    #page-today .tdqpane .lmbody{padding:12px 0 0;overflow:visible}
+    #page-today .tdqpane .tdqpane-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 30px 10px 0;font-size:.8rem;color:var(--ink-soft)}
+    #page-today .tdqfoot{margin-top:14px}
+    #page-today .tdqfoot .linklike{margin:0;padding:0 2px;font-size:.8rem}
     /* ── PRINT — the first @media print rules in the app, scoped to the manager board ──
        html.prt-today is set by tdPrintPrep (beforeprint) ONLY when the manager board is on
        screen and removed on afterprint, so every other tab prints exactly as before. No @page
@@ -2385,6 +2424,22 @@ window.addEventListener('error', function(e){
       </div>
     </div>
     <div class="tdgrid" id="td-grid"></div>
+    <!-- Direction A phase 3 (2026-10-05): the manager WORK QUEUE. STATIC and toggled by tdRender,
+         never rebuilt (the #td-coord contract) — tdQPaint fills the three boxes by id, and the
+         record pane keeps its listeners across repaints. Shown only for the manager persona with
+         ledger_mgrview_v1 = queue; #td-grid stays the Review view. -->
+    <div id="td-queue" style="display:none">
+      <div class="tdqtiles" id="td-q-tiles"></div>
+      <div class="mvchips" id="td-q-chips" style="display:none"></div>
+      <div class="tdqwrap" id="td-q-wrap">
+        <div class="tdqlanes" id="td-q-lanes"><div class="note">Loading&hellip;</div></div>
+        <aside class="tdqpane" id="td-qpane" hidden aria-label="Record">
+          <button type="button" class="lmclose tdqpane-x" data-qpane-close="1" aria-label="Close">&times;</button>
+          <div id="td-qpane-body"></div>
+        </aside>
+      </div>
+      <div class="note tdqfoot" id="td-q-foot"></div>
+    </div>
 
   <div id="page-hub" style="display:none">
     <style>
@@ -3210,6 +3265,16 @@ window.addEventListener('error', function(e){
   <div class="lmcard" style="max-width:560px">
     <button type="button" class="lmclose" data-close="rentmodal">&times;</button>
     <div id="rent-d-body"><div class="note">Loading&hellip;</div></div>
+  </div>
+</div>
+
+<!-- Direction A phase 3: the work queue's record under 1100 px, for the kinds that have no house
+     modal of their own (renewals). Rent, moves, tasks and applications open their existing popups. -->
+<div class="lmodal" id="qmodal">
+  <div class="lmback" data-close="qmodal"></div>
+  <div class="lmcard" style="max-width:560px">
+    <button type="button" class="lmclose" data-close="qmodal">&times;</button>
+    <div id="q-d-body"><div class="note">Loading&hellip;</div></div>
   </div>
 </div>
 
@@ -4605,6 +4670,9 @@ window.addEventListener('error', function(e){
     var ph = el('page-hub');
     if (ph) ph.style.display = (role === 'agent' || role === 'admin') ? 'block' : 'none';
     g.style.display = role === 'manager' ? '' : 'none';   // the grid is the manager's; agent/admin live in #page-hub
+    // the Work queue (Direction A phase 3) is the manager's too: any other persona hides it and
+    // drops whatever its record pane held (the manager branch below re-shows it per saved view)
+    if (role !== 'manager'){ var qv0 = el('td-queue'); if (qv0) qv0.style.display = 'none'; tdQPaneClose(); }
     if (isCo){
       g.innerHTML = '';
       tdSub("Coordinator — pick a prospect, agent and event type, then book right on the team calendar.");
@@ -4640,7 +4708,9 @@ window.addEventListener('error', function(e){
       // by id, so the render-call order above stays irrelevant.
       // review plan R1: the Review bar (expand everything / export / print) sits first, the
       // print-only header beside it; both are full-width rows of the grid
-      g.innerHTML = tdMgrWorkasHtml() + tdReviewBarHtml() + '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
+      // Direction A phase 3: the Work queue | Review switch sits under the work-as strip and
+      // stays visible in BOTH views (only the cards and the review bar hide in queue view)
+      g.innerHTML = tdMgrWorkasHtml() + tdMgrViewBarHtml() + tdReviewBarHtml() + '<section class="panel tdq tdwide"><h3>Manager brief <span class="qn2" id="td-mgr-brief-n"></span></h3>' +
           '<div id="td-mgr-brief"><div class="note">Loading&hellip;</div></div><div class="tdpulse" id="td-mgr-pulse"></div><div id="td-mgr-trends"></div></section>' +
         '<section class="panel tdq tdwide"><h3>Rent owing <span class="qn2" id="td-mgr-rent-n"></span></h3>' +
           '<div class="schoffers" id="td-mgr-rent"><div class="note">Loading&hellip;</div></div>' +
@@ -4662,6 +4732,8 @@ window.addEventListener('error', function(e){
           '<div class="schoffers" id="td-mgr-units"><div class="note">Loading&hellip;</div></div>' +
           '<div class="tdmore"><button type="button" class="tdact" data-goto="units">Open Units &rarr;</button></div></section>';
       tdReviewSync();   // the signed-in person's saved Expand-everything choice, before the cards paint
+      tdQReset();       // the queue says "Loading…" until THIS assembly lands (never the previous scope's rows)
+      tdMgrViewApply(); // and the saved Work queue | Review choice decides which of the two is on screen
       tdMgrAssemble();
     } else if (role === 'admin'){
       g.innerHTML = '';
@@ -5359,22 +5431,32 @@ window.addEventListener('error', function(e){
   // its own function so a tick or a date change refreshes the header count too — both can
   // flip a row's at-risk state, and a stale "24 at risk" beside a corrected table is the
   // chip-vs-number trap in miniature
-  function tdMvCountNote(){
-    var n = el('td-mgr-moves-n'); if (!n) return;
-    var bits = [], fin = 0;
+  // The header's numbers, as data: open in / open out / at risk / done, from the prepped tracker
+  // rows. ONE function for the card header and the work queue's Moves tile (plan D4), so the two
+  // can never disagree. null = neither side loaded. sides lists the sides that did.
+  function tdMvOpenCounts(){
+    if (!tdMvData.in_ && !tdMvData.out_) return null;
+    var c = { inN: 0, outN: 0, risk: 0, done: 0, sides: [] };
     ['in', 'out'].forEach(function(k){
       var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
       if (!L) return;
       var open = L.filter(function(r){ return !tdMvDone(r); });
-      fin += L.length - open.length;
-      bits.push(open.length + ' ' + k);
+      c[k + 'N'] = open.length;
+      c.done += L.length - open.length;
+      c.risk += L.filter(function(r){ return r.__risk; }).length;
+      c.sides.push(k);
     });
-    var rk = (tdMvData.in_ || []).filter(function(r){ return r.__risk; }).length +
-             (tdMvData.out_ || []).filter(function(r){ return r.__risk; }).length;
-    if (rk) bits.push(rk + ' at risk');
+    return c;
+  }
+  function tdMvCountNote(){
+    var n = el('td-mgr-moves-n'); if (!n) return;
+    var c = tdMvOpenCounts();
+    if (!c){ n.textContent = tdMvData.movesStale ? 'mirror stale' : ''; return; }
+    var bits = c.sides.map(function(k){ return c[k + 'N'] + ' ' + k; });
+    if (c.risk) bits.push(c.risk + ' at risk');
     // the in/out counts above EXCLUDE finished moves, so say how many were taken out. A header
     // that quietly shrank is the chip-vs-number trap this function was split out to avoid.
-    if (fin) bits.push(fin + ' done');
+    if (c.done) bits.push(c.done + ' done');
     if (tdMvData.movesStale) bits.push('mirror stale');
     n.textContent = bits.join(' · ');
   }
@@ -5952,12 +6034,14 @@ window.addEventListener('error', function(e){
   function tdMvRefreshDrawer(k, leaseId){
     var mm = el('mvmodal');
     if (mm && mm.classList.contains('open')) tdMvOpen(k, leaseId);
+    else tdQPaneRefreshMove(k, leaseId);   // Direction A phase 3: the same body may be mounted in the queue's record pane
   }
   function tdMvOpen(k, leaseId){
     var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
     var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
     var mm = el('mvmodal'), body = el('mv-d-body');
     if (!r || !mm || !body) return;
+    tdQPaneClose();   // one drawer body at a time: the queue's record pane shares these element ids
     body.innerHTML = tdMvDrawerBody(r, undefined);
     if (!mm.classList.contains('open')) openModal('mvmodal');   // house helper: stack + Escape + open animation
     var g = ++tdMvDetReq;
@@ -6177,6 +6261,7 @@ window.addEventListener('error', function(e){
   function tdRenderMgr(m){
     tdMgrLast = m;   // the review export reads this; tdMgrAssemble only calls here while tdReq still matches
     tdMgrRenderBrief(m); tdMgrRenderPulse(m); tdMgrRenderTrends(m); tdMgrRenderRent(m); tdMgrRenderTasks(m); tdMgrRenderRenewals(m); tdMgrRenderApps(m); tdMvRenderCard(m); tdMgrRenderUnits(m);
+    tdQRender(m);   // Direction A phase 3: the Work queue, LAST — its Moves tile reads tdMvData, which tdMvRenderCard just prepped
   }
   // ── Manager work queue: the rules (Direction A phase 1, 2026-10-05) ──────────────────
   // ONE builder (plan D3): tdQBuild(m, state) decides what is in a manager's queue, which
@@ -6292,7 +6377,7 @@ window.addEventListener('error', function(e){
       var s = tdRwStage(r), end = r.term_end || r.current_lease_end || r.lease_to_date || null;
       var d = tdMgrDays(end);
       var o = { kind: 'renewal', id: r.lease_id, row: r, card: 'renewals', date: end, sort: d == null ? 9e9 : d };
-      if (!TD_Q_RW_TOWORK[s]) o.why = s === 'signed' ? 'signed' : 'not renewing (Move-outs)';
+      if (!tdRwToWork(s)) o.why = s === 'signed' ? 'signed' : 'not renewing (Move-outs)';
       else if (d == null) o.why = 'no lease end date';
       else if (d <= TD_Q_RW_URGENT_D){ o.lane = 'today'; o.why = tdRwMeta(s).label + ', ' + (d <= 0 ? 'lease ended' : d + ' days left'); }
       else if (d <= TD_Q_RW_HORIZON_D){
@@ -6325,23 +6410,21 @@ window.addEventListener('error', function(e){
         add(o);
       });
     });
-    // ── applications: undecided ones (stale after TD_AP_STALE_D), plus units approved or in
-    // draft with no lease yet. MIRROR of tdMgrRenderApps' rows (see the header note).
-    if (loaded.apps){
-      (m.apps || []).filter(tdMgrScopePass).forEach(function(a){
-        var d = tdMgrDays(a.submitted_at), age = d == null ? null : -d;
-        var o = { kind: 'application', id: a.application_id, row: a, card: 'apps', sort: -(age || 0) };
-        if (age != null && age > TD_AP_STALE_D){ o.lane = 'today'; o.why = 'waiting ' + age + ' days for a decision'; }
-        else { o.lane = 'week'; o.why = age == null ? 'waiting for a decision' : 'waiting ' + age + ' day' + (age === 1 ? '' : 's') + ' for a decision'; }
+    // ── applications: the Applications card's own rows (tdApRows — one definition since phase
+    // 3): undecided ones (stale after TD_AP_STALE_D) = Do today, the rest + units approved or in
+    // draft with no lease yet = This week.
+    if (loaded.apps) tdApRows(m).forEach(function(x){
+      if (x.k === 'decide'){
+        var o = { kind: 'application', id: x.id, row: x.row, card: 'apps', sort: -(x.age || 0) };
+        if (x.stale){ o.lane = 'today'; o.why = 'waiting ' + x.age + ' days for a decision'; }
+        else { o.lane = 'week'; o.why = x.age == null ? 'waiting for a decision' : 'waiting ' + x.age + ' day' + (x.age === 1 ? '' : 's') + ' for a decision'; }
         add(o);
-      });
-      (m.units || []).forEach(function(u){
-        if (!u.pending_app_stage) return;
+      } else {
         // no application id on these rows (they come from units), so their state is keyed by unit
-        add({ kind: 'application', id: null, sk: 'unit:' + u.unit_id, row: u, card: 'apps', lane: 'week', sort: 0,
-          why: u.pending_app_stage === 'draft_lease' ? 'draft lease started, not signed' : 'approved, no lease yet' });
-      });
-    }
+        add({ kind: 'application', id: null, sk: 'unit:' + x.unitId, row: x.row, card: 'apps', lane: 'week', sort: 0,
+          why: x.row.pending_app_stage === 'draft_lease' ? 'draft lease started, not signed' : 'approved, no lease yet' });
+      }
+    });
     // ── tasks: open ones (m.tasks is already tdMgrOpenTask-filtered by tdMgrAssemble)
     if (loaded.tasks) m.tasks.forEach(function(t){
       var noVendor = t.work_order_id != null && t.wo_vendor_id == null;
@@ -6360,18 +6443,25 @@ window.addEventListener('error', function(e){
       else o.why = 'new, opened ' + age + ' days ago';
       add(o);
     });
-    // ── units: the Unit movement card's rows (MIRROR of tdMgrRenderUnits' feed) and the queue's
-    // vacant kind: vacant, in service (no take-back, not not-ready) and not listed = This week.
-    if (loaded.units) m.units.forEach(function(u){
-      if (u.is_owner_takeback || u.is_not_ready) return;
-      if (u.unit_event === 'Eviction Pending') add({ kind: 'unit', id: u.unit_id, sk: 'unit:' + u.unit_id + ':evict', row: u, card: 'units', why: 'eviction pending' });
-      else if (u.unit_event === 'Notice to Vacate') add({ kind: 'unit', id: u.unit_id, sk: 'unit:' + u.unit_id + ':notice', row: u, card: 'units', why: 'notice to vacate (Moves covers the move-out)' });
-      if (u.occupancy_status !== 'op_vacant') return;
-      var dv = num(u.days_vacant), aging = dv >= 60;
-      if (!u.is_listed) add({ kind: 'unit', id: u.unit_id, row: u, card: aging ? 'units' : null, lane: 'week', sort: -dv,
-        why: 'vacant ' + dv + ' days, not listed' });
-      else if (aging) add({ kind: 'unit', id: u.unit_id, row: u, card: 'units', why: 'vacant ' + dv + ' days, listed' });
-    });
+    // ── units: the Unit movement card's rows (tdMuRows — one definition since phase 3: evictions,
+    // notices, and op-vacant 60+ days with take-backs and not-ready skipped), plus the queue's own
+    // vacant kind: vacant, in service and NOT listed = This week, whatever its age.
+    if (loaded.units){
+      tdMuRows(m).forEach(function(f){
+        var u = f.u;
+        if (f.k === 'evict') add({ kind: 'unit', id: u.unit_id, sk: 'unit:' + u.unit_id + ':evict', row: u, card: 'units', why: 'eviction pending' });
+        else if (f.k === 'notice') add({ kind: 'unit', id: u.unit_id, sk: 'unit:' + u.unit_id + ':notice', row: u, card: 'units', why: 'notice to vacate (Moves covers the move-out)' });
+        else if (!u.is_listed) add({ kind: 'unit', id: u.unit_id, row: u, card: 'units', lane: 'week', sort: -f.d, why: 'vacant ' + f.d + ' days, not listed' });
+        else add({ kind: 'unit', id: u.unit_id, row: u, card: 'units', why: 'vacant ' + f.d + ' days, listed' });
+      });
+      // queue-only rows: unlisted vacants under 60 days (the aging ones are the card rows above)
+      m.units.forEach(function(u){
+        if (u.is_owner_takeback || u.is_not_ready || u.occupancy_status !== 'op_vacant' || u.is_listed) return;
+        var dv = num(u.days_vacant);
+        if (dv >= 60) return;
+        add({ kind: 'unit', id: u.unit_id, row: u, card: null, lane: 'week', sort: -dv, why: 'vacant ' + dv + ' days, not listed' });
+      });
+    }
     // ── reserved: meeting actions (review plan R4). Nothing produces them yet.
     (m.meetingActions || []).forEach(function(a){
       add({ kind: 'meeting_action', id: a.id, row: a, card: null, lane: 'today', why: a.title || 'meeting action' });
@@ -6449,6 +6539,367 @@ window.addEventListener('error', function(e){
     });
     return out;
   }
+  // ── Manager work queue: the VIEW (Direction A phase 3, 2026-10-05) ──────────────────────
+  // Everything below renders what tdQBuild decided; nothing here decides a lane. The page has
+  // two manager views: Review = today's card grid (#td-grid, untouched), Work queue = the
+  // static #td-queue beside it. ledger_mgrview_v1 remembers the choice; Review opens first
+  // until Pearse flips the default (plan D7, phase 6). Toggle, never rebuild.
+  var TD_MGRVIEW_KEY = 'ledger_mgrview_v1';
+  function tdMgrView(){
+    var v = '';
+    try { v = localStorage.getItem(TD_MGRVIEW_KEY) || ''; } catch (e) {}
+    return v === 'queue' ? 'queue' : 'review';
+  }
+  function tdMgrViewSet(v){
+    try { localStorage.setItem(TD_MGRVIEW_KEY, v === 'queue' ? 'queue' : 'review'); } catch (e) {}
+    tdMgrViewApply();
+  }
+  // display only: the grid keeps its cards and the queue keeps its rows; the class on #td-grid
+  // hides the cards and review bar (CSS), the work-as strip and this switch stay in both views
+  function tdMgrViewApply(){
+    var g = el('td-grid'), qv = el('td-queue'), bar = el('td-mgrview');
+    var on = !!authIdent && tdRole() === 'manager' && tdMgrView() === 'queue';
+    if (g) g.classList.toggle('tdqv', on);
+    if (qv) qv.style.display = on ? '' : 'none';
+    if (bar) bar.innerHTML = tdMgrViewInner();
+    if (!on) tdQPaneClose();   // nothing stays mounted in a hidden pane
+  }
+  function tdMgrViewInner(){
+    var v = tdMgrView();
+    return '<span class="sf-label">View</span><span class="mvtgl" role="group" aria-label="Manager view">' +
+      '<button type="button" data-mgrview="queue"' + (v === 'queue' ? ' class="on"' : '') + ' aria-pressed="' + (v === 'queue') + '" title="One list of what needs you, in four lanes, with the record beside it">Work queue</button>' +
+      '<button type="button" data-mgrview="review"' + (v === 'review' ? ' class="on"' : '') + ' aria-pressed="' + (v === 'review') + '" title="Every card, every row — the weekly review board">Review</button></span>';
+  }
+  function tdMgrViewBarHtml(){ return '<div class="tdmgrview" id="td-mgrview">' + tdMgrViewInner() + '</div>'; }
+  // ── the queue render ──
+  var tdQLast = null;        // the last tdQBuild result — tile and filter toggles repaint from it, never refetch
+  var tdQIndex = [];         // the rows on screen, in paint order; a row's data-qi indexes here
+  var tdQKindF = '';         // '' | a TD_Q_TILES key: the tile filter on the lanes
+  var tdQUrgentF = false;    // Renewals tile: 45 days or fewer only (plan section 4)
+  var tdQOpenKey = null;     // work-item key of the item in the record pane (null = closed)
+  var tdQOpenItem = null;    // ...and the item itself (the Moves write actions refresh the pane through it)
+  var tdQPaneReq = 0;        // generation guard for the pane's async loads (a second open or a close retires the first)
+  var TD_Q_TILES = ['rent', 'renewals', 'moves', 'apps', 'tasks', 'units'];
+  var TD_Q_TILE_KINDS = { rent: { rent: 1 }, renewals: { renewal: 1 }, moves: { move_in: 1, move_out: 1 }, apps: { application: 1 }, tasks: { task: 1 }, units: { unit: 1 } };
+  var TD_Q_LANE_LABEL = { today: 'Do today', week: 'This week', coming: 'Coming up this month', waiting: 'Waiting on someone else' };
+  var TD_Q_KIND_META = {
+    meeting_action: { label: 'Meeting', chip: 'c-bad', plural: 'meeting actions' },
+    rent:        { label: 'Rent',        chip: 'c-hot',  plural: 'balances' },
+    move_in:     { label: 'Move-in',     chip: 'c-ok',   plural: 'move-ins' },
+    move_out:    { label: 'Move-out',    chip: 'c-warm', plural: 'move-outs' },
+    renewal:     { label: 'Renewal',     chip: 'c-cold', plural: 'renewals' },
+    application: { label: 'Application', chip: 'c-warm', plural: 'applications' },
+    task:        { label: 'Task',        chip: 'c-cold', plural: 'tasks' },
+    unit:        { label: 'Unit',        chip: 'c-cold', plural: 'units' }
+  };
+  var TD_Q_SOURCE_LABEL = { rent: 'rent', renewals: 'renewals', moves_in: 'move-ins', moves_out: 'move-outs', apps: 'applications', tasks: 'tasks', units: 'units' };
+  function tdQKindMeta(k){ return TD_Q_KIND_META[k] || TD_Q_KIND_META.task; }
+  // a new board build (tdRender's manager branch): back to "Loading…" until this assembly lands
+  function tdQReset(){ tdQLast = null; tdQIndex = []; tdQPaneClose(); tdQPaint(); }
+  function tdQRender(m){
+    tdQLast = tdQBuild(m, m.wi);   // m.wi null = no follow-ups known: tdQBuild treats it as empty state
+    tdQPaneClose();                // a fresh payload (scope or data change) retires whatever the pane showed
+    tdQPaint();
+  }
+  // Tile headline = the SAME number the Review card header shows, from the SAME function (plan
+  // D4): rent → tdRentList + tdRentSum, renewals → tdRwToWork over tdRwStage, moves →
+  // tdMvOpenCounts, applications → tdApRows, tasks → m.tasks, units → tdMuRows. null = the
+  // source did not load (the tile says so instead of printing 0).
+  function tdQTileHead(k, m){
+    if (!m) return null;
+    if (k === 'rent'){
+      if (m.rent === null && m.units === null) return null;
+      var cur = tdRentList(m).filter(function(r){ return r.is_current; });
+      return { v: cur.length, label: 'Rent owing', s: fmtMoney(tdRentSum(cur)) + ' owing' };
+    }
+    if (k === 'renewals'){
+      if (m.renewals === null) return null;
+      return { v: m.renewals.filter(function(r){ return tdRwToWork(tdRwStage(r)); }).length, label: 'Renewals', s: 'to work' };
+    }
+    if (k === 'moves'){
+      var c = tdMvOpenCounts(); if (!c) return null;
+      return { v: c.inN + c.outN, label: 'Moves', s: c.inN + ' in · ' + c.outN + ' out' + (c.risk ? ' · ' + c.risk + ' at risk' : '') };
+    }
+    if (k === 'apps'){
+      if (m.apps === null && m.units === null) return null;
+      // the legacy assembly has no application source: the no-lease rows (from units) still
+      // queue, but "0 to decide" would be a claim from missing data — say what is missing
+      if (m.apps === null) return { v: null, label: 'Applications', s: 'decision list could not load' };
+      return { v: tdApRows(m).filter(function(r){ return r.k === 'decide'; }).length, label: 'Applications', s: 'to decide' };
+    }
+    if (k === 'tasks'){
+      if (m.tasks === null) return null;
+      return { v: m.tasks.length, label: 'Open tasks', s: 'open' };
+    }
+    if (k === 'units'){
+      if (m.units === null) return null;
+      var n = tdMuRows(m).length;
+      return { v: n, label: 'Unit movement', s: n === 1 ? 'update' : 'updates' };
+    }
+    return null;
+  }
+  function tdQItemPass(it){
+    if (tdQKindF && !TD_Q_TILE_KINDS[tdQKindF][it.kind]) return false;
+    if (tdQKindF === 'renewals' && tdQUrgentF){ var d = tdMgrDays(it.date); if (d == null || d > TD_Q_RW_URGENT_D) return false; }
+    return true;
+  }
+  function tdQWhere(r){ return [r.property_name, r.unit_number].filter(Boolean).join(' · '); }
+  function tdQTitle(it){
+    var r = it.row || {}, k = it.kind;
+    if (k === 'rent' || k === 'renewal') return (tdQWhere(r) || 'Unit') + (r.tenant_names ? ' — ' + tdRentNames(r.tenant_names) : '');
+    if (k === 'move_in') return tdMvWhere(r) + (r.incoming_tenant_names ? ' — ' + r.incoming_tenant_names : '');
+    if (k === 'move_out') return tdMvWhere(r) + (r.outgoing_tenant_names ? ' — ' + r.outgoing_tenant_names : '');
+    if (k === 'application') return it.id != null ? (r.applicant_name || 'Applicant') + (tdQWhere(r) ? ' — ' + tdQWhere(r) : '') : (tdQWhere(r) || 'Unit');
+    if (k === 'task') return r.title || r.category_name || 'Task';
+    if (k === 'meeting_action') return r.title || 'Meeting action';
+    return tdQWhere(r) || 'Unit';
+  }
+  // the second line: where (tasks), why (from the rules), the reminder badge, the stale flag
+  function tdQSub(it, s){
+    var r = it.row || {}, bits = [];
+    if (it.kind === 'task' && tdQWhere(r)) bits.push(esc(tdQWhere(r)));
+    if (it.why) bits.push(esc(it.why));
+    if (s && s.last_reminder_at){
+      var ch = s.last_reminder_channel, when = tdRwDateShort(tdDayKeyEd(new Date(Date.parse(s.last_reminder_at))));
+      bits.push(esc((ch === 'sms' ? 'Texted' : (ch === 'email' ? 'Emailed' : 'Called')) + ' ' + when + (s.last_reminder_by ? ' · ' + String(s.last_reminder_by).split(/\s+/)[0] : '')));
+    }
+    return bits.join(' &middot; ') + (it.flag === 'stale' ? '<span class="tdqflag">stale</span>' : '');
+  }
+  function tdQDateChips(it){
+    var h = '';
+    if (it.date){
+      var d = tdMgrDays(it.date);
+      h += '<span class="chip ' + (d != null && d <= 0 ? 'c-hot' : 'c-warm') + '" title="' + esc(String(it.date).slice(0, 10)) + '">' + esc(tdRwDateShort(it.date)) +
+        (d == null ? '' : ' <small>&middot; ' + (d === 0 ? 'today' : (d < 0 ? (-d) + 'd ago' : d + 'd')) + '</small>') + '</span>';
+    }
+    if (it.kind === 'move_out' && it.due && it.lane !== 'coming') h += ' <span class="srctag" title="Deposit statement deadline: move-out + ' + TD_Q_DEPOSIT_DUE_D + ' days">SODA by ' + esc(tdRwDateShort(it.due)) + '</span>';
+    return h;
+  }
+  function tdQRowHtml(it, st){
+    var i = tdQIndex.length; tdQIndex.push(it);
+    var meta = tdQKindMeta(it.kind);
+    return '<div class="schoffer tdqrow' + (tdQOpenKey !== null && tdQOpenKey === it.key ? ' on' : '') + '" data-qi="' + i + '" role="button" tabindex="0">' +
+      '<span class="chip tdqkind ' + meta.chip + '">' + meta.label + '</span>' +
+      '<div class="schoffer-main"><b>' + esc(tdQTitle(it)) + '</b><div class="schoffer-sub">' + tdQSub(it, st[it.key]) + '</div></div>' +
+      tdQDateChips(it) + '</div>';
+  }
+  // a roll-up row (tdQRollup): one expandable line for a building or a manager's single units
+  function tdQRollHtml(r, items, st){
+    var first = items[0], f = first.row || {}, meta = tdQKindMeta(r.kind), n = items.length;
+    var where = r.rollup === 'building'
+      ? (f.property_name || f.building_name || f.address_line1 || 'one building')
+      : (f.property_manager_name ? f.property_manager_name + '’s single units' : 'single units');
+    var stale = items.filter(function(x){ return x.flag === 'stale'; }).length;
+    return '<details class="tdqroll"><summary class="schoffer"><span class="chip tdqkind ' + meta.chip + '">' + meta.label + '</span>' +
+      '<div class="schoffer-main"><b>' + n + ' ' + meta.plural + ' &middot; ' + esc(where) + '</b><div class="schoffer-sub">' +
+      (r.rollup === 'building' ? 'one building, rolled up' : 'one row per manager, rolled up') + (stale ? ' &middot; ' + stale + ' stale' : '') +
+      ' &middot; tap to open the list</div></div><span class="chip c-cold">' + n + '</span></summary>' +
+      '<div class="tdqsub">' + items.map(function(it){ return tdQRowHtml(it, st); }).join('') + '</div></details>';
+  }
+  function tdQPaint(){
+    var tiles = el('td-q-tiles'), chips = el('td-q-chips'), lanes = el('td-q-lanes'), foot = el('td-q-foot');
+    if (!tiles || !chips || !lanes || !foot) return;
+    var q = tdQLast, m = tdMgrLast;
+    tdQIndex = [];
+    if (!q){
+      tiles.innerHTML = ''; chips.style.display = 'none'; foot.innerHTML = '';
+      lanes.innerHTML = '<div class="note">Loading&hellip;</div>';
+      return;
+    }
+    var st = tdQStateMap(m && m.wi);
+    var inQueue = {};
+    TD_Q_LANES.forEach(function(l){ q.lanes[l].forEach(function(it){ inQueue[it.kind] = (inQueue[it.kind] || 0) + 1; }); });
+    // ── tiles: the Review card's number, and under it how many of that kind are in the queue ──
+    tiles.innerHTML = TD_Q_TILES.map(function(k){
+      var head = tdQTileHead(k, m), qn = 0;
+      for (var kk in TD_Q_TILE_KINDS[k]) qn += inQueue[kk] || 0;
+      var sub = head ? head.s + ' &middot; ' + qn + ' in your queue' : 'could not load';
+      return '<button type="button" class="tdqtile' + (tdQKindF === k ? ' on' : '') + '" data-qtile="' + k + '" aria-pressed="' + (tdQKindF === k) + '" title="' +
+        (tdQKindF === k ? 'Showing only these. Tap to show every lane in full.' : 'Show only these in the lanes. The big number is the Review card’s own count.') + '">' +
+        '<span class="tdp-v">' + (head && head.v != null ? fmtNum(head.v) : '&ndash;') + '</span><span class="tdp-l">' + (head ? esc(head.label) : esc({ rent: 'Rent owing', renewals: 'Renewals', moves: 'Moves', apps: 'Applications', tasks: 'Open tasks', units: 'Unit movement' }[k])) + '</span>' +
+        '<span class="tdqt-s">' + sub + '</span></button>';
+    }).join('');
+    // the Renewals tile carries the "45 days or fewer" filter (plan section 4)
+    if (tdQKindF === 'renewals'){
+      chips.style.display = '';
+      chips.innerHTML = '<button type="button" class="chip' + (tdQUrgentF ? ' on' : '') + '" data-qurgent="1" aria-pressed="' + tdQUrgentF + '">' + TD_Q_RW_URGENT_D + ' days or fewer</button>' +
+        '<span class="note" style="align-self:center">Every renewal still to work inside ' + TD_Q_RW_HORIZON_D + ' days is in the queue; ' + TD_Q_RW_URGENT_D + ' or fewer is the urgent band.</span>';
+    } else { chips.style.display = 'none'; chips.innerHTML = ''; }
+    // ── lanes ──
+    var h = '';
+    if (q.failed.length) h += '<div class="note">Could not load ' + q.failed.map(function(k){ return TD_Q_SOURCE_LABEL[k] || k; }).join(', ') +
+      ' &mdash; those items are missing from every lane below.</div>';
+    TD_Q_LANES.forEach(function(l){
+      var total = q.lanes[l].length, shown = 0, rh = '';
+      q.rows[l].forEach(function(r){
+        var items = r.items.filter(tdQItemPass); if (!items.length) return;
+        shown += items.length;
+        rh += r.rollup ? tdQRollHtml(r, items, st) : tdQRowHtml(items[0], st);
+      });
+      var empty = total ? 'Nothing here matches the tile you picked.'
+        : (q.anyLoaded ? (l === 'today' ? 'Nothing needs you today.' : 'Nothing here right now.') : 'Could not load the queue.');
+      h += '<section class="panel tdq tdqlane"><h3>' + TD_Q_LANE_LABEL[l] + ' <span class="qn2">' +
+        (total ? (shown === total ? total : shown + ' of ' + total) : '') + '</span></h3>' +
+        '<div class="schoffers">' + (rh || '<div class="note">' + empty + '</div>') + '</div></section>';
+    });
+    lanes.innerHTML = h;
+    // ── the "left in Review only" line (plan section 8: every card row is in a lane, snoozed or here) ──
+    var revN = q.review.filter(function(it){ return !!it.card; }).length, sn = q.snoozed.length;
+    var fh = revN + ' row' + (revN === 1 ? '' : 's') + ' from the Review cards ' + (revN === 1 ? 'is' : 'are') + ' not in the queue &mdash; settled, not due yet, or past tenants.';
+    if (sn) fh += ' ' + sn + ' snoozed to a later follow-up date.';
+    if (m && m.wi === null) fh += ' Follow-ups and reminders could not be loaded, so nothing is snoozed and no reminder shows.';
+    fh += ' <button type="button" class="linklike" data-mgrview="review">Open Review &rarr;</button>';
+    foot.innerHTML = fh;
+  }
+  // ── the record pane ──
+  // Docked beside the lanes from 1100 px (CSS .tdqwrap.haspane); below that each kind opens its
+  // house modal. The pane mounts the SAME bodies the drawers use, so the rent-d-* / mv-d-* ids
+  // exist in exactly one place at a time: opening here empties both drawers, and tdRentOpen /
+  // tdMvOpen call tdQPaneClose first.
+  function tdQPaneDocked(){ return !!(window.matchMedia && window.matchMedia('(min-width:1100px)').matches); }
+  function tdQPaneClose(){
+    tdQOpenKey = null; tdQOpenItem = null; tdQPaneReq++;
+    var p = el('td-qpane'), b = el('td-qpane-body'), w = el('td-q-wrap'), lanes = el('td-q-lanes');
+    if (b) b.innerHTML = '';
+    if (p) p.hidden = true;
+    if (w) w.classList.remove('haspane');
+    if (lanes) lanes.querySelectorAll('.tdqrow.on').forEach(function(n){ n.classList.remove('on'); });
+  }
+  function tdQPaneMount(it, html){
+    var p = el('td-qpane'), b = el('td-qpane-body'), w = el('td-q-wrap'), lanes = el('td-q-lanes');
+    if (!p || !b || !w) return null;
+    var rb = el('rent-d-body'); if (rb) rb.innerHTML = '';
+    var mb = el('mv-d-body'); if (mb) mb.innerHTML = '';
+    var rm = el('rentmodal'); if (rm && rm.classList.contains('open')) closeModal('rentmodal');
+    var mm = el('mvmodal'); if (mm && mm.classList.contains('open')) closeModal('mvmodal');
+    tdQOpenKey = it.key; tdQOpenItem = it;
+    if (lanes) lanes.querySelectorAll('.tdqrow').forEach(function(n){ var x = tdQIndex[Number(n.getAttribute('data-qi'))]; n.classList.toggle('on', !!x && x.key === it.key); });
+    b.innerHTML = html; p.hidden = false; w.classList.add('haspane');
+    return b;
+  }
+  function tdQPaneHead(it){
+    var meta = tdQKindMeta(it.kind);
+    return '<div class="tdqpane-h"><span class="chip ' + meta.chip + '">' + meta.label + '</span><span>' + esc(it.why || '') + '</span></div>';
+  }
+  function tdQModalOpen(html){
+    var b = el('q-d-body'); if (!b) return;
+    b.innerHTML = html;
+    openModal('qmodal');
+  }
+  function tdQOpen(i){
+    var it = tdQIndex[Number(i)]; if (!it) return;
+    var k = it.kind, r = it.row || {};
+    tdQPaneReq++;   // an earlier open still loading must not paint over this one
+    if (it.id != null) uePing('queue_open_item', { kind: k === 'meeting_action' ? 'task' : k, id: String(it.id), lane: it.lane || undefined });
+    if (k === 'application'){ if (it.id != null) openAppEnsure(String(it.id)); else if (r.unit_id != null) openUnitEnsure(String(r.unit_id)); return; }
+    if (k === 'unit'){ if (r.unit_id != null) openUnitEnsure(String(r.unit_id)); return; }
+    if (k === 'meeting_action') return;   // reserved (review plan R4)
+    var dock = tdQPaneDocked();
+    if (k === 'rent'){ if (dock) tdQPaneRent(it); else tdRentOpen(it.id); return; }
+    if (k === 'move_in' || k === 'move_out'){
+      var mk = k === 'move_in' ? 'in' : 'out';
+      // a forced (manual) move has no lease behind it: nothing to fetch, the unit is the record
+      if (it.id == null){ if (r.unit_id != null) openUnitEnsure(String(r.unit_id)); return; }
+      if (dock) tdQPaneMove(it, mk); else tdMvOpen(mk, it.id);
+      return;
+    }
+    if (k === 'renewal'){ if (dock) tdQPaneMount(it, tdQPaneHead(it) + tdQRwBody(r)); else tdQModalOpen(tdQRwBody(r)); return; }
+    if (k === 'task'){ if (dock) tdQPaneTask(it); else openTask(it.id); }
+  }
+  // rent: the drawer body + the live ledger, exactly as #rentmodal shows them
+  function tdQPaneRent(it){
+    var u = tdRentRows[it.id] || it.row; if (!u) return;
+    tdRentRows[it.id] = u;   // the reminder buttons read the row here
+    tdRentOpenLid = String(it.id);
+    var b = tdQPaneMount(it, tdQPaneHead(it) + tdRentDrawerBody(u)); if (!b) return;
+    tdRentFillNames([u]);
+    if (u.lease_id != null) tdRentLoadLedger(u.lease_id);
+  }
+  // moves: the drawer body + /move-detail (contact + documents on click — the no-PII-in-lists rule)
+  function tdQPaneMove(it, mk){
+    var L = mk === 'in' ? tdMvData.in_ : tdMvData.out_;
+    var r = (L || []).filter(function(x){ return String(x.lease_id) === String(it.id); })[0] || it.row;
+    if (!r) return;
+    if (!r.__k){ r.__k = mk; r.__risk = tdMvRisk(r, mk); }
+    var b = tdQPaneMount(it, tdQPaneHead(it) + tdMvDrawerBody(r, undefined)); if (!b) return;
+    var g = ++tdQPaneReq, q = tdReq;
+    authFetch('/move-detail?lease_id=' + encodeURIComponent(String(r.lease_id)) + '&kind=' + mk).then(function(j){
+      if (g !== tdQPaneReq || q !== tdReq) return;
+      var b2 = el('td-qpane-body'); if (b2) b2.innerHTML = tdQPaneHead(it) + tdMvDrawerBody(r, j || null);
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('move-detail (queue pane) failed', e);
+      if (g !== tdQPaneReq || q !== tdReq) return;
+      var b3 = el('td-qpane-body'); if (b3) b3.innerHTML = tdQPaneHead(it) + tdMvDrawerBody(r, null);
+    });
+  }
+  // after a tick / date / note / done write: tdMvRefreshDrawer lands here when #mvmodal is closed
+  function tdQPaneRefreshMove(k, leaseId){
+    var it = tdQOpenItem;
+    if (!it || (it.kind !== 'move_in' && it.kind !== 'move_out') || String(it.id) !== String(leaseId)) return;
+    tdQPaneMove(it, k);
+  }
+  // renewals: a small body — stage, dates, rents — with the card's own actions (tdRwActionCell:
+  // Buildium for the working stages, the e-sign chase for pending, the Move-outs jump) and the unit
+  function tdQRwBody(r){
+    var s = tdRwStage(r), d = tdMgrDays(r.term_end), meta = tdRwMeta(s);
+    if (r.lease_id != null && !tdRwRows[r.lease_id]) tdRwRows[r.lease_id] = r;   // tdRwChase reads the row here
+    var h = '<div class="lmhead"><h3>' + esc(tdQWhere(r) || 'Unit') + ' &middot; renewal</h3>' +
+      '<div class="lmsub">' + esc(r.tenant_names || '–') + (r.address_line1 ? ' &middot; ' + esc(r.address_line1) : '') + '</div></div><div class="lmbody">';
+    h += '<div class="mvd-crow"><span>Stage</span><span><span class="chip ' + meta.chip + '">' + meta.label + '</span></span></div>';
+    h += '<div class="mvd-crow"><span>Lease ends</span><span>' + esc(tdRwDateShort(r.term_end)) + (d == null ? '' : ' &middot; ' + (d <= 0 ? 'ended' : d + ' days left')) + '</span></div>';
+    h += '<div class="mvd-crow"><span>Rent</span><span>' + tdRwRentCell(r, s) + '</span></div>';
+    if (r.renewal_offer_status && r.renewal_offer_status !== 'NotSet') h += '<div class="mvd-crow"><span>Offer</span><span>' + esc(String(r.renewal_offer_status)) + '</span></div>';
+    if (r.renewal_created) h += '<div class="mvd-crow"><span>Renewal drafted</span><span>' + esc(String(r.renewal_created).slice(0, 10)) + '</span></div>';
+    if (r.esignature_status) h += '<div class="mvd-crow"><span>E-signature</span><span>' + esc(String(r.esignature_status)) + '</span></div>';
+    var act = tdRwActionCell(r, s);
+    if (act.indexOf('managebuilding') < 0 && r.lease_id != null) act += ' <a class="tdact" href="' + esc(tdRwBuildium(r.lease_id)) + '" target="_blank" rel="noopener">Lease in Buildium &#8599;</a>';
+    if (r.unit_id != null) act += ' <button type="button" class="tdact" data-uid="' + esc(String(r.unit_id)) + '">Open unit</button>';
+    h += '<div class="mvd-row" style="margin-top:12px">' + act + '</div>';
+    return h + '</div>';
+  }
+  // tasks: the row's own fields, the description from /task on click, Buildium and the unit
+  function tdQTkBody(t, det){
+    var h = '<div class="lmhead"><h3>' + esc(t.title || t.category_name || 'Task') + '</h3>' +
+      '<div class="lmsub">' + esc(tdQWhere(t) || 'no linked unit') + (t.assignee_name ? ' &middot; ' + esc(t.assignee_name) : ' &middot; unassigned') + '</div></div><div class="lmbody">';
+    var row = function(l, v){ return v ? '<div class="mvd-crow"><span>' + l + '</span><span>' + v + '</span></div>' : ''; };
+    h += row('Status', esc(t.task_status || '') + (t.is_overdue ? ' <span class="chip c-hot">overdue</span>' : ''));
+    h += row('Priority', t.priority ? ((t.priority === 'High' || t.priority === 'Urgent') ? '<span class="chip c-bad">' + esc(t.priority) + '</span>' : esc(t.priority)) : '');
+    h += row('Due', t.due_date ? esc(String(t.due_date).slice(0, 10)) : '');
+    var ageD = t.age_days == null ? NaN : Number(t.age_days);
+    h += row('Opened', (t.created_date_time ? esc(String(t.created_date_time).slice(0, 10)) : '') + (isFinite(ageD) && ageD >= 0 ? ' &middot; ' + (ageD === 0 ? 'today' : ageD + ' days ago') : ''));
+    if (t.last_updated_date_time) h += row('Last touched', esc(String(t.last_updated_date_time).slice(0, 10)));
+    h += row('Category', t.category_name ? esc(t.category_name) : '');
+    if (t.work_order_id != null){
+      var wo = ['Work order' + (t.wo_status ? ' &middot; ' + esc(String(t.wo_status)) : '')];
+      if (t.wo_amount != null && Number(t.wo_amount) > 0) wo.push(fmtMoney(Number(t.wo_amount)));
+      if (t.wo_count != null && Number(t.wo_count) > 1) wo.push(Number(t.wo_count) + ' orders');
+      // NEVER the raw wo_vendor_id (an integer beside a dollar amount reads as data) — the flag is the actionable half
+      h += row('Maintenance', wo.join(' &middot; ') + (t.wo_vendor_id == null ? ' <span class="chip c-hot">no vendor</span>' : ''));
+    }
+    if (det && det.requested_by_name) h += row('Requested by', esc(det.requested_by_name) + (det.requested_by_type ? ' (' + esc(det.requested_by_type) + ')' : ''));
+    h += '<div class="orcfg-h" style="margin-top:12px">Description</div><div class="note">' +
+      (det === undefined ? 'Loading from Buildium&hellip;' : (det === null ? 'Could not load the description right now.' : (det.description ? esc(det.description) : 'No description on the task.'))) + '</div>';
+    h += '<div class="mvd-row" style="margin-top:12px">' +
+      (t.task_id != null ? '<a class="tdact" target="_blank" rel="noopener" href="' + esc(BMGR + '/tasks/' + encodeURIComponent(t.task_id) + '/task-summary?searchOption=new') + '">Open in Buildium &#8599;</a>' : '') +
+      (t.task_id != null ? ' <button type="button" class="tdact" data-qtask-open="' + esc(String(t.task_id)) + '" title="The full task popup, with its history">History &amp; details</button>' : '') +
+      (t.unit_id != null ? ' <button type="button" class="tdact" data-uid="' + esc(String(t.unit_id)) + '">Open unit</button>' : '') + '</div>';
+    return h + '</div>';
+  }
+  function tdQPaneTask(it){
+    var t = it.row || {};
+    var b = tdQPaneMount(it, tdQPaneHead(it) + tdQTkBody(t, undefined)); if (!b) return;
+    var g = ++tdQPaneReq, q = tdReq;
+    authFetch('/task?task_id=' + encodeURIComponent(String(it.id))).then(function(j){
+      if (g !== tdQPaneReq || q !== tdReq) return;
+      var b2 = el('td-qpane-body'); if (b2) b2.innerHTML = tdQPaneHead(it) + tdQTkBody((j && j.task) || t, (j && j.detail) || {});
+    }).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('task (queue pane) failed', e);
+      if (g !== tdQPaneReq || q !== tdReq) return;
+      var b3 = el('td-qpane-body'); if (b3) b3.innerHTML = tdQPaneHead(it) + tdQTkBody(t, null);
+    });
+  }
   // Option C trends — server-computed by get_manager_brief, rendered under the pulse chips.
   // Vacancy sparkline (house sparkSVG), retention scope-vs-company, tasks week-diff.
   // (Days-on-market and rent-gap rows were removed 2026-07-24 — see the note below.)
@@ -6506,7 +6957,7 @@ window.addEventListener('error', function(e){
     if (m.renewals){
       // WS-M M5: the worklist carries every stage now — the brief surfaces the ACTIONABLE ones
       // (not started / offer sent / declined / pending e-sign); signed + not-renewing are settled.
-      var tdRwAct = function(r){ var s = tdRwStage(r); return s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'not_sent' || s === 'pending_esign'; };
+      var tdRwAct = function(r){ return tdRwToWork(tdRwStage(r)); };
       var undecSoon = m.renewals.filter(function(r){ if (tdRwStage(r) !== 'undecided') return false; var d = tdMgrDays(r.term_end || r.current_lease_end || r.lease_to_date); return d != null && d <= 30; });
       var actionable = m.renewals.filter(tdRwAct);
       if (undecSoon.length) L.push({ k: 'renewals', t: undecSoon.length + ' renewal' + (undecSoon.length === 1 ? '' : 's') + ' not started inside 30 days' });
@@ -6754,6 +7205,11 @@ window.addEventListener('error', function(e){
     not_renewing:  { label: 'Not renewing',   chip: 'c-bad',  pri: 6 }
   };
   function tdRwMeta(s){ return TD_RW_META[s] || TD_RW_META.undecided; }   // an unknown future stage must not kill the card
+  // "To work" = the five stages a manager still acts on (not started, offer sent, declined, not
+  // sent, pending e-sign); signed and not-renewing are settled. ONE definition (Direction A
+  // phase 3 folded the brief's, the header's, the risk sort's and the queue's copies here): the
+  // set itself is TD_Q_RW_TOWORK, declared with the queue rules below.
+  function tdRwToWork(s){ return !!TD_Q_RW_TOWORK[s]; }
   var tdRwStageF = '';      // '' = all stages; else one of TD_RW_ORDER (chip filter)
   var tdRwLast = null;      // the last rendered worklist array (chip toggles re-render from it)
   var tdRwRows = {};        // lease_id -> worklist row (the chase action reads addr/end/name here)
@@ -6827,7 +7283,7 @@ window.addEventListener('error', function(e){
   function tdRwVisible(all){
     return (all || []).filter(function(r){ return !tdRwStageF || tdRwStage(r) === tdRwStageF; })
       .map(function(r){ var s = tdRwStage(r); var d = tdMgrDays(r.term_end); return { r: r, s: s, d: d,
-        risk: (s === 'undecided' || s === 'offer_sent' || s === 'declined' || s === 'not_sent' || s === 'pending_esign') && d != null && d <= 14 }; })
+        risk: tdRwToWork(s) && d != null && d <= 14 }; })
       .sort(function(a, b){
         var rd = (b.risk ? 1 : 0) - (a.risk ? 1 : 0); if (rd) return rd;
         var pd = tdRwMeta(a.s).pri - tdRwMeta(b.s).pri; if (pd) return pd;
@@ -6883,7 +7339,7 @@ window.addEventListener('error', function(e){
     // which is exactly get_stats.pipeline.undecided (the tile), so the tile and this header
     // now say the same number in the same words.
     if (n){
-      var act = counts.undecided + counts.offer_sent + counts.declined + counts.not_sent + counts.pending_esign;
+      var act = 0; TD_RW_ORDER.forEach(function(s){ if (tdRwToWork(s)) act += counts[s]; });
       var noRen = counts.undecided + counts.offer_sent;
       n.textContent = act ? act + ' to work · ' + noRen + ' with no renewal yet' : '';
     }
@@ -7050,7 +7506,9 @@ window.addEventListener('error', function(e){
   // Ctrl+P opens the capped lists synchronously; the Print button also rebuilds the calendar
   // with every move showing and waits for its events before opening the dialog.
   var tdPrintUndo = false;   // true while a print has the lists open that the reader had closed
-  function tdPrintIsReview(){ return ACTIVE_TAB === 'today' && tdRole() === 'manager' && !!el('td-revbar'); }
+  // the Review view only: in Work queue view (Direction A phase 3) the board is hidden, so a print
+  // there is a plain page print, not the meeting pack
+  function tdPrintIsReview(){ return ACTIVE_TAB === 'today' && tdRole() === 'manager' && tdMgrView() === 'review' && !!el('td-revbar'); }
   function tdPrintPrep(){
     if (!tdPrintIsReview()) return;
     document.documentElement.classList.add('prt-today');
@@ -7289,31 +7747,41 @@ window.addEventListener('error', function(e){
   function tdMgrRenderUnits(m){
     var box = el('td-mgr-units'); if (!box) return;
     if (m.units === null){ tdMuLast = null; tdFail('td-mgr-units', 'units'); return; }
+    // tdMuRows decides WHICH units are in the feed (shared with the work queue); this only adds
+    // the words the card prints for each
+    tdMuLast = tdMuRows(m).map(function(f){
+      var u = f.u, label = (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '');
+      if (f.k === 'evict') return { k: f.k, t: label, sub: u.tenant_names || '', id: f.id, d: f.d, u: u };
+      if (f.k === 'notice') return { k: f.k, t: label, id: f.id, d: f.d, u: u,
+        sub: (u.next_move_out ? 'moving out ' + u.next_move_out : '') + (u.tenant_names ? ' · ' + u.tenant_names : '') };
+      var rent = rentBasis(u);
+      return { k: f.k, t: label, id: f.id, d: f.d, u: u,
+        sub: 'vacant ' + f.d + 'd' + ((rent != null && rent > 0) ? ' · ' + (u.is_listed ? 'listed ' : 'last rent ') + fmtMoney(rent) : ''),
+        // aging AND unmarketed is the actionable combination — keep the flag from the old card
+        flag: u.is_listed ? '' : '<span class="chip c-hot">NOT listed</span>' };
+    });
+    tdMuPaint();
+  }
+  // The Unit movement feed, as data: { k: evict | notice | aging, id, d (days vacant), u }. ONE
+  // membership test for the card, the review export and the work queue (Direction A phase 3
+  // folded the queue's mirror here). Pure — no DOM, no money formatting — so the rules tool
+  // can slice it with tdQBuild.
+  function tdMuRows(m){
     var feed = [];
-    m.units.forEach(function(u){
+    (m.units || []).forEach(function(u){
       // the house stats convention (CLAUDE.md), now card-wide. Without it the aging rows lead
       // with decade-old zombies (live: "316- INACTIVE · vacant 4826d") and bury the 60–120d
       // units that can actually be acted on.
       if (u.is_owner_takeback || u.is_not_ready) return;
-      var label = (u.property_name || '') + (u.unit_number ? ' · ' + u.unit_number : '');
       // WS-M M3 (D1): the move-in/move-out ≤14d lines stay GONE — the Moves card owns move
       // movement (same units, richer stage state). This feed keeps what that card does not.
-      if (u.unit_event === 'Eviction Pending')
-        feed.push({ k: 'evict', t: label, sub: u.tenant_names || '', id: u.unit_id, d: 0, u: u });
-      else if (u.unit_event === 'Notice to Vacate')
-        feed.push({ k: 'notice', t: label, id: u.unit_id, d: 0, u: u,
-          sub: (u.next_move_out ? 'moving out ' + u.next_move_out : '') + (u.tenant_names ? ' · ' + u.tenant_names : '') });
-      if (u.occupancy_status === 'op_vacant' && (u.days_vacant || 0) >= 60){
-        var rent = rentBasis(u);
-        feed.push({ k: 'aging', t: label, id: u.unit_id, d: u.days_vacant || 0, u: u,
-          sub: 'vacant ' + (u.days_vacant || 0) + 'd' + ((rent != null && rent > 0) ? ' · ' + (u.is_listed ? 'listed ' : 'last rent ') + fmtMoney(rent) : ''),
-          // aging AND unmarketed is the actionable combination — keep the flag from the old card
-          flag: u.is_listed ? '' : '<span class="chip c-hot">NOT listed</span>' });
-      }
+      if (u.unit_event === 'Eviction Pending') feed.push({ k: 'evict', id: u.unit_id, d: 0, u: u });
+      else if (u.unit_event === 'Notice to Vacate') feed.push({ k: 'notice', id: u.unit_id, d: 0, u: u });
+      var dv = Number(u.days_vacant) || 0;
+      if (u.occupancy_status === 'op_vacant' && dv >= 60) feed.push({ k: 'aging', id: u.unit_id, d: dv, u: u });
     });
     feed.sort(function(a, b){ return (TD_MU_META[a.k].w - TD_MU_META[b.k].w) || (b.d - a.d); });
-    tdMuLast = feed;
-    tdMuPaint();
+    return feed;
   }
   // the group chip's filter — the card paints from it and the review workbook's Unit movement sheet exports it
   function tdMuVisible(feed){ return (feed || []).filter(function(f){ return !tdMuKindF || f.k === tdMuKindF; }); }
@@ -7365,18 +7833,26 @@ window.addEventListener('error', function(e){
     // null (not []) means the source never answered — the legacy assembly path has NO
     // application source at all, so it must read "could not load", never "none waiting".
     if (m.apps === null && m.units === null){ tdApLast = null; tdFail('td-mgr-apps', 'applications'); return; }
+    tdApLast = tdApRows(m);
+    tdApPaint();
+  }
+  // The card's rows, as data — ONE definition shared by the card, the review export and the
+  // work queue (Direction A phase 3 folded the queue's mirror of this list here). Pure: scope,
+  // ages and the stale flag only; no DOM. Ages count Edmonton calendar days through tdMgrDays —
+  // the old Date.parse arithmetic here was a day off from the queue in the evening.
+  function tdApRows(m){
     var rows = [];
     (m.apps || []).filter(tdMgrScopePass).forEach(function(a){
-      var age = Math.floor((Date.now() - Date.parse(a.submitted_at || '')) / 86400000);
-      rows.push({ k: 'decide', id: a.application_id, unitId: a.unit_id,
+      var d = tdMgrDays(a.submitted_at), age = d == null ? null : -d;
+      rows.push({ k: 'decide', id: a.application_id, unitId: a.unit_id, row: a,
         t: a.applicant_name || 'Applicant',
         sub: [a.property_name, a.unit_number].filter(Boolean).join(' · '),
-        age: (isFinite(age) && age >= 0) ? age : null,
-        stale: isFinite(age) && age > TD_AP_STALE_D });
+        age: (age != null && age >= 0) ? age : null,
+        stale: age != null && age > TD_AP_STALE_D });
     });
     (m.units || []).forEach(function(u){
       if (!u.pending_app_stage) return;
-      rows.push({ k: 'nolease', id: null, unitId: u.unit_id,
+      rows.push({ k: 'nolease', id: null, unitId: u.unit_id, row: u,
         t: [u.property_name, u.unit_number].filter(Boolean).join(' · ') || 'Unit',
         sub: u.pending_app_stage === 'draft_lease' ? 'Draft lease started, not signed' : 'Application approved, no lease yet',
         age: null, stale: false });
@@ -7386,8 +7862,7 @@ window.addEventListener('error', function(e){
       if (a.k !== b.k) return a.k === 'decide' ? -1 : 1;
       return (b.age == null ? -1 : b.age) - (a.age == null ? -1 : a.age);
     });
-    tdApLast = rows;
-    tdApPaint();
+    return rows;
   }
   function tdApPaint(){
     var box = el('td-mgr-apps'); if (!box || tdApLast === null) return;
@@ -7567,6 +8042,7 @@ window.addEventListener('error', function(e){
     var u = tdRentRows[leaseId];
     var mm = el('rentmodal'), body = el('rent-d-body');
     if (!u || !mm || !body) return;
+    tdQPaneClose();   // one drawer body at a time: the queue's record pane shares these element ids
     tdRentOpenLid = String(leaseId);
     body.innerHTML = tdRentDrawerBody(u);
     if (!mm.classList.contains('open')) openModal('rentmodal');
@@ -7735,6 +8211,10 @@ window.addEventListener('error', function(e){
       var mvc = e.target.closest('[data-mv-view],[data-mv-cal],[data-mv-kind],[data-mv-days],[data-mv-stage],[data-mv-showdone]');
       if (mvc){ tdMvCtl(mvc); return; }
       if (e.target.closest('[data-mv-export]')){ tdMvExport(); return; }
+      // Direction A phase 3: the Work queue | Review switch (a grid row; the queue's own copy of
+      // this attribute, in its footer, is handled by the #td-queue delegate)
+      var mvw = e.target.closest('[data-mgrview]');
+      if (mvw){ tdMgrViewSet(mvw.getAttribute('data-mgrview')); return; }
       // review plan R1: the Review bar
       if (e.target.closest('[data-review-expand]')){ tdReviewToggle(); return; }
       if (e.target.closest('[data-review-export]')){ tdReviewExport(); return; }
@@ -7874,6 +8354,55 @@ window.addEventListener('error', function(e){
     rm.addEventListener('click', function(e){
       var b = e.target.closest('[data-rent-remind]');
       if (b) tdRentRemind(b.getAttribute('data-rent-lease'), b.getAttribute('data-rent-uid'), b.getAttribute('data-rent-remind'));
+    });
+  })();
+  // Work queue (Direction A phase 3) — #td-queue is a sibling of #td-grid, so it needs its own
+  // once-at-boot delegate. The record pane mounts the SAME drawer bodies #rentmodal / #mvmodal
+  // show (tdRentDrawerBody, tdMvDrawerBody), so this forwards their controls to the same
+  // functions those two delegates call — one control, one code path, two surfaces.
+  (function(){
+    var qv = el('td-queue'); if (!qv) return;
+    qv.addEventListener('click', function(e){
+      if (e.target.closest('a')) return;   // Buildium / call / text / email links keep their default
+      var t = e.target.closest('[data-qtile]');
+      if (t){ var tk = t.getAttribute('data-qtile'); tdQKindF = (tdQKindF === tk ? '' : tk); if (tdQKindF !== 'renewals') tdQUrgentF = false; tdQPaint(); return; }
+      if (e.target.closest('[data-qurgent]')){ tdQUrgentF = !tdQUrgentF; tdQPaint(); return; }
+      var mvw = e.target.closest('[data-mgrview]');
+      if (mvw){ tdMgrViewSet(mvw.getAttribute('data-mgrview')); return; }
+      if (e.target.closest('[data-qpane-close]')){ tdQPaneClose(); return; }
+      // ── the record pane's controls (checked before the row, or a press would re-open the row) ──
+      var rr = e.target.closest('[data-rent-remind]');
+      if (rr){ tdRentRemind(rr.getAttribute('data-rent-lease'), rr.getAttribute('data-rent-uid'), rr.getAttribute('data-rent-remind')); return; }
+      var mt = e.target.closest('[data-mvtick]');
+      if (mt){ tdMvTick(mt); return; }
+      var dt = e.target.closest('[data-mvdate]');
+      if (dt){
+        var inp = el('mv-d-date');
+        tdMvSetDate(dt.getAttribute('data-mvk'), dt.getAttribute('data-mvl'), dt.getAttribute('data-mvdate') === 'clear' ? '' : (inp ? inp.value : ''), dt);
+        return;
+      }
+      var dn = e.target.closest('[data-mvnote-save]');
+      if (dn){ tdMvNoteSave(dn.getAttribute('data-mvk'), dn.getAttribute('data-mvl'), dn, 'mv-d-note-ta'); return; }
+      if (e.target.closest('.mvdonebox')) return;   // the Done checkbox does its work on 'change' below
+      var rnc = e.target.closest('[data-rn-chase]');
+      if (rnc){ tdRwChase(rnc.getAttribute('data-rn-lease'), rnc.getAttribute('data-rn-chase')); return; }
+      if (e.target.closest('[data-rn-moves]')){ tdMgrViewSet('review'); tdMgrBriefGo('moves'); return; }
+      var qt = e.target.closest('[data-qtask-open]');
+      if (qt){ openTask(qt.getAttribute('data-qtask-open')); return; }
+      var u = e.target.closest('[data-uid]');
+      if (u){ openUnitEnsure(u.getAttribute('data-uid')); return; }
+      // ── a queue row (inside a roll-up or not) opens its record ──
+      var row = e.target.closest('.tdqrow');
+      if (row){ tdQOpen(row.getAttribute('data-qi')); return; }
+    });
+    qv.addEventListener('keydown', function(e){
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var row = e.target.closest('.tdqrow'); if (!row || e.target !== row) return;
+      e.preventDefault(); tdQOpen(row.getAttribute('data-qi'));
+    });
+    qv.addEventListener('change', function(e){
+      var cb = e.target.closest('[data-mvdone]');
+      if (cb) tdMvDoneToggle(cb);
     });
   })();
 

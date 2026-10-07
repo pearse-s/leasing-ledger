@@ -7865,7 +7865,7 @@ window.addEventListener('error', function(e){
     return r.address_line1 || [r.property_name, r.unit_number].filter(Boolean).join(' ') || 'your unit';
   }
   function tdRwBuildium(leaseId){
-    return 'https://livefurnished.managebuilding.com/manager/app/leasing/leases/' + encodeURIComponent(leaseId) + '/summary';
+    return BMGR + '/rentroll/' + encodeURIComponent(leaseId) + '/summary';   // rentroll path; /leasing/leases/ is broken (Pearse 2026-10-07)
   }
   // current rent -> renewal rent (or -> market for undecided/offer, where no offered rent exists)
   function tdRwRentCell(r, stage){

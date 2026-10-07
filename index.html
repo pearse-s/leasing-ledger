@@ -2912,19 +2912,21 @@ window.addEventListener('error', function(e){
         <table id="rntable">
           <thead><tr>
             <th data-k="renewal_state">State</th>
+            <th data-k="rn_event">Event</th>
             <th data-k="property_name">Property</th>
             <th data-k="unit_number">Unit</th>
             <th data-k="tenant_names">Tenant(s)</th>
+            <th data-k="current_lease_end">Lease ends</th>
             <th data-k="lease_from_date">New term</th>
-            <th data-k="lease_to_date">Ends</th>
-            <th data-k="rent" class="rt">New rent</th>
+            <th data-k="rent" class="rt">Rent</th>
+            <th data-k="total_balance" class="rt">Balance</th>
             <th data-k="property_manager_name">Manager</th>
             <th data-k="last_updated_date_time">Updated</th>
           </tr></thead>
           <tbody></tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:10px">Current renewal cycle from Buildium &mdash; <b>Not started</b> = lease ends in the next 90 days and no renewal offer has been started; <b>Offer sent</b> = offer sent, waiting on the tenant; <b>Declined</b> = the tenant declined the offer; <b>Not sent</b> = renewal drafted, not yet sent for signature; <b>Pending</b> = awaiting signatures; <b>Signed</b> = fully signed; <b>Cancelled</b> = renewal cancelled. Scope filters apply. Click a row to open the unit.</div>
+      <div class="note" style="margin-top:10px">Current renewal cycle from Buildium &mdash; <b>Not started</b> = lease ends in the next 90 days and no renewal offer has been started; <b>Lease ended</b> = the term already ended with no renewal and no notice (still Active in Buildium &mdash; holding over); <b>Offer sent</b> = offer sent, waiting on the tenant&rsquo;s answer; <b>Declined</b> = the tenant declined the offer; <b>Not renewing (notice)</b> = the tenant gave notice to vacate; <b>Not renewing</b> = the renewal was cancelled; offers and notices show even when the lease ends more than 90 days out. <b>Event</b> carries the same notice / eviction / listed / move-out flags as the Units board. <b>Not sent</b> = renewal drafted, not yet sent for signature; <b>Pending</b> = awaiting signatures; <b>Signed</b> = fully signed; <b>Cancelled</b> = renewal cancelled. Scope filters apply. Click a row to open the unit.</div>
     </div>
   </div>
 
@@ -11075,9 +11077,11 @@ window.addEventListener('error', function(e){
     }},
     rntable: { rows:function(){ return rnTabRows(); }, redraw:function(){ drawRnChips(); drawRenewals(); }, cols:{
       renewal_state:{ t:'enum', label:'State' },
+      rn_event:{ t:'enum', label:'Event', multi:true, vals:rnEventTags },
+      current_lease_end:{ t:'date', label:'Lease ends', get:function(r){ return (r.current_lease_end||'').slice(0,10); } },
       lease_from_date:{ t:'date', label:'New term', get:function(r){ return (r.lease_from_date||'').slice(0,10); } },
-      lease_to_date:{ t:'date', label:'Ends', get:function(r){ return (r.lease_to_date||'').slice(0,10); } },
       rent:{ t:'num', label:'New rent' },
+      total_balance:{ t:'num', label:'Balance' },
       last_updated_date_time:{ t:'date', label:'Updated', get:function(r){ return (r.last_updated_date_time||'').slice(0,10); } }
     }},
     otable: { rows:function(){ return ownersAll || []; }, redraw:function(){ drawOwners(); }, cols:{
@@ -12376,6 +12380,9 @@ window.addEventListener('error', function(e){
   // declined Buildium's renewal offer, no notice recorded yet); or not_renewing (tenant gave
   // notice, or the renewal was cancelled). A signed renewal keeps its chip until the old lease
   // ends; the view's 90-day window drops it on its own after that.
+  // 2026-10-07: rows now come from v_renewal_classified (the same classifier, unwindowed), so a
+  // lease whose term already ENDED with no renewal arrives as undecided + renewal_lapsed and
+  // reads "Lease ended"; offers/notices on leases ending past 90 days arrive too.
   var RN_STAGE = {
     undecided:     { label:'Not started',  cls:'c-cold', tip:'Lease ends within 90 days and no renewal offer has been started in Buildium' },
     offer_sent:    { label:'Offer sent',   cls:'c-warm', tip:'Renewal offer sent in Buildium, waiting on the tenant' },
@@ -12383,14 +12390,16 @@ window.addEventListener('error', function(e){
     not_sent:      { label:'Not sent',     cls:'c-warm', tip:'Renewal drafted in Buildium but not yet sent for signature' },
     pending_esign: { label:'Pending',      cls:'c-warm', tip:'Renewal sent for signature, awaiting signatures' },
     signed:        { label:'Signed',       cls:'c-ok',   tip:'Renewal fully signed — shown until the current lease ends' },
-    not_renewing:  { label:'Not renewing', cls:'c-bad',  tip:'Not renewing — the tenant gave notice or the renewal was cancelled' }
+    not_renewing:  { label:'Not renewing', cls:'c-bad',  tip:'Not renewing — the tenant gave notice or the renewal was cancelled' },
+    lapsed:        { label:'Lease ended',  cls:'c-bad',  tip:'The lease term has ended with no renewal and no notice — still Active in Buildium (holding over); renew it or record the move-out' }
   };
+  function rnStageKey(r){ return r.renewal_stage === 'undecided' && r.renewal_lapsed ? 'lapsed' : r.renewal_stage; }
   function rnStageLabel(r){
-    var s = RN_STAGE[r.renewal_stage]; if (!s) return '';
+    var s = RN_STAGE[rnStageKey(r)]; if (!s) return '';
     return r.renewal_stage === 'not_renewing' && r.renewal_notice ? 'Not renewing (notice)' : s.label;
   }
   function rnUnitChip(r){
-    var s = r && RN_STAGE[r.renewal_stage]; if (!s) return '';
+    var s = r && RN_STAGE[rnStageKey(r)]; if (!s) return '';
     return ' <span class="chip ' + s.cls + '" title="Lease renewal · ' + esc(r.renewal_notice && r.renewal_stage === 'not_renewing' ? 'the tenant gave notice to vacate' : s.tip) + '">renewal: ' + esc(rnStageLabel(r).toLowerCase()) + '</span>';
   }
   function rnForUnit(uid){
@@ -15702,9 +15711,9 @@ window.addEventListener('error', function(e){
   });
 
   /* ════════════ Lease renewals ════════════ */
-  var RN_ORDER = ['Not started','Offer sent','Declined','Pending','Signed','Cancelling','Cancelled','Sent','Not sent','Processing','Failed','Unknown'];
+  var RN_ORDER = ['Lease ended','Not started','Offer sent','Declined','Not renewing (notice)','Not renewing','Not sent','Pending','Signed','Cancelling','Cancelled','Sent','Processing','Failed','Unknown'];
   function rnChip(s){
-    var c = s === 'Signed' ? 'c-ok' : (s === 'Pending' || s === 'Offer sent' || s === 'Not sent') ? 'c-warm' : (s === 'Cancelled' || s === 'Failed' || s === 'Declined') ? 'c-bad' : 'c-cold';
+    var c = s === 'Signed' ? 'c-ok' : (s === 'Pending' || s === 'Offer sent' || s === 'Not sent') ? 'c-warm' : (s === 'Cancelled' || s === 'Failed' || s === 'Declined' || s === 'Lease ended' || s === 'Not renewing' || s === 'Not renewing (notice)') ? 'c-bad' : 'c-cold';
     return '<span class="chip ' + c + '">' + esc(s || '–') + '</span>';
   }
   function renderMiniRenewals(box, list){
@@ -15744,9 +15753,13 @@ window.addEventListener('error', function(e){
   // split Not started / Offer sent / Declined exactly like the Manager Today renewals card. They
   // join the Renewals TAB only (rnTabRows) — renewalsAll stays records-only because the renewals
   // tile, the Units "renewal:" chips (rnByUnit) and the unit popup all read it as "has a renewal".
+  // 2026-10-07: EVERY no-record status rides this key (v_renewal_classified) — the label is the
+  // Units board's own rnStageLabel, so a unit reads the same on both surfaces.
   function rnFromWorklist(r){
     return { renewal_id: null, lease_id: r.lease_id, is_undecided: true,
-      renewal_state: r.stage === 'offer_sent' ? 'Offer sent' : r.stage === 'declined' ? 'Declined' : 'Not started', esignature_status: null,
+      renewal_state: rnStageLabel({ renewal_stage: r.stage, renewal_notice: r.has_notice, renewal_lapsed: r.lapsed }) || 'Not started', esignature_status: null,
+      stage: r.stage, has_notice: r.has_notice, lapsed: r.lapsed,
+      unit_event: r.unit_event, is_listed: r.is_listed, total_balance: r.total_balance, next_move_out: r.next_move_out,
       lease_from_date: null, lease_to_date: null, rent: null, last_updated_date_time: null,
       current_lease_end: r.term_end, current_rent: r.current_rent, tenant_names: r.tenant_names,
       unit_id: r.unit_id, unit_number: r.unit_number, property_id: r.property_id, property_name: r.property_name,
@@ -15785,7 +15798,7 @@ window.addEventListener('error', function(e){
     return rnDaysToDate(r.current_lease_end);
   }
   function rnInHorizon(r, h){
-    if (h === 'all') return true;
+    if (h === 'all' || r.lapsed) return true;   // a lapsed term is overdue — it belongs in every window
     var d = rnDaysLeft(r);
     return d != null && d >= 0 && d <= +h;
   }
@@ -15812,6 +15825,23 @@ window.addEventListener('error', function(e){
     });
     el('rn-chips').innerHTML = html;
   }
+  // Event column (2026-10-07): the Units board's flags for the same unit — notice / eviction
+  // (evChip), listed, scheduled move-out — plus a notice that landed on a renewal RECORD
+  // (has_notice from the classifier). Tags feed the column filter.
+  function rnEventTags(r){
+    var out = [];
+    if (r.unit_event) out.push(r.unit_event);
+    else if (r.has_notice) out.push('Notice to Vacate');
+    if (r.is_listed) out.push('Listed');
+    if (r.next_move_out) out.push('Move-out set');
+    return out;
+  }
+  function rnEventCell(r){
+    var h = evChip(r.unit_event || (r.has_notice ? 'Notice to Vacate' : ''));
+    if (r.is_listed) h += ' <span class="chip c-cold">listed</span>';
+    if (r.next_move_out) h += ' <span class="qn">out ' + esc(String(r.next_move_out).slice(0, 10)) + '</span>';
+    return h || '–';
+  }
   function drawRenewals(){
     if (renewalsAll === null) return;
     var q = (el('rn-search').value || '').toLowerCase();
@@ -15823,21 +15853,25 @@ window.addEventListener('error', function(e){
       return ((r.tenant_names || '') + ' ' + (r.property_name || '') + ' ' + (r.unit_number || '') + ' ' +
               (r.property_manager_name || '') + ' ' + (r.primary_owner_name || '')).toLowerCase().indexOf(q) >= 0;
     });
-    var raw = (rnSort.k === 'lease_from_date' || rnSort.k === 'lease_to_date' || rnSort.k === 'last_updated_date_time' || rnSort.k === 'rent');
+    var raw = (rnSort.k === 'lease_from_date' || rnSort.k === 'lease_to_date' || rnSort.k === 'current_lease_end' || rnSort.k === 'last_updated_date_time' || rnSort.k === 'rent' || rnSort.k === 'total_balance');
     rows.sort(cmpRows(rnSort.k, rnSort.d, raw));
     var html = '';
     rows.forEach(function(r){
       var clk = r.unit_id ? ' class="rowlink" data-uid="' + r.unit_id + '"' : '';
       html += '<tr' + clk + '>' +
         '<td>' + rnChip(r.renewal_state) + '</td>' +
+        '<td>' + rnEventCell(r) + '</td>' +
         '<td>' + esc(r.property_name || '–') + '</td>' +
         '<td>' + esc(r.unit_number || '–') + '</td>' +
         '<td>' + esc(r.tenant_names || '–') + '</td>' +
-        '<td>' + (r.is_undecided ? '<span class="qn">no new term yet</span>' :(esc((r.lease_from_date || '').slice(0, 10)) || '–')) + '</td>' +
-        // undecided rows have no new term: show the CURRENT lease end and rent, labelled, so
-        // neither can be read as a renewal date or an offered rent
-        '<td>' + (r.is_undecided ? esc((r.current_lease_end || '').slice(0, 10)) + ' <span class="qn">current</span>' : (esc((r.lease_to_date || '').slice(0, 10)) || '–')) + '</td>' +
-        '<td class="rt">' + (r.rent != null ? fmtMoney(r.rent) : (r.is_undecided && r.current_rent != null ? fmtMoney(r.current_rent) + ' <span class="qn">current</span>' : '–')) + '</td>' +
+        // the CURRENT lease end on every row; the new term (from → to) only where a renewal exists,
+        // so neither can be read as the other
+        '<td>' + (esc((r.current_lease_end || '').slice(0, 10)) || '–') + '</td>' +
+        '<td>' + (r.is_undecided ? '<span class="qn">no new term yet</span>' : (esc((r.lease_from_date || '').slice(0, 10)) || '–') + ' &rarr; ' + (esc((r.lease_to_date || '').slice(0, 10)) || '–')) + '</td>' +
+        '<td class="rt">' + (r.current_rent != null ? fmtMoney(r.current_rent) + ' <span class="qn">current</span>' : '') +
+          (r.rent != null ? (r.current_rent != null ? '<br>' : '') + fmtMoney(r.rent) + ' <span class="qn">new</span>' : '') +
+          (r.current_rent == null && r.rent == null ? '–' : '') + '</td>' +
+        '<td class="rt">' + (+r.total_balance > 0 ? '<span class="chip c-hot">' + fmtMoney(r.total_balance) + '</span>' : '–') + '</td>' +
         '<td>' + esc(r.property_manager_name || '–') + '</td>' +
         '<td>' + (esc((r.last_updated_date_time || '').slice(0, 10)) || '–') + '</td></tr>';
     });

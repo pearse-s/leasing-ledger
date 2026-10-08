@@ -17224,9 +17224,13 @@ window.llApplyTheme = function (pref) {
   // APPEARANCE — sidebar sun/moon button cycles dark → light → system. The pre-paint script in
   // <head> owns window.llApplyTheme; CSS does the rest. Only canvas charts need a nudge.
   var THEME_KEY = 'ledger_theme_v1', THEME_ORDER = ['dark', 'light', 'system'];
+  // Carto basemaps need a key since 2026-10 (keyless tiles come back 200 but watermarked
+  // "API KEY REQUIRED"). Tile keys are client-side by nature — restrict this one to
+  // pearse-s.github.io in the Carto basemaps dashboard. Free up to 1M tiles/month commercial.
+  var CARTO_KEY = 'cb1_4elg_1_935e74ef1fba300c3262d2f7';
   function mapTileUrl(){
     var v = document.documentElement.getAttribute('data-theme') === 'light' ? 'light_all' : 'dark_all';
-    return 'https://{s}.basemaps.cartocdn.com/' + v + '/{z}/{x}/{y}{r}.png';
+    return 'https://{s}.basemaps.cartocdn.com/' + v + '/{z}/{x}/{y}{r}.png?key=' + CARTO_KEY;
   }
   var themeBtn = el('themebtn');
   function themeRefresh(){

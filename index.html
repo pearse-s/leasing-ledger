@@ -108,7 +108,7 @@ window.llApplyTheme = function (pref) {
     --danger:#FF9DA6; --danger-alt:#ff8a85; --danger-hot:#ff6b6b;
     --map-bg:#15110D; --warm-pop:#231C16; --warm-pop-hi:#2E251D;
     --on-gold:#15110D; --bg-deep:#090b14; --sunk-rgb:0,0,0; --coral:#E8956A; --mv-in:#DDEBD2; --mv-out:#F3CCC2; --scheme:dark;
-    --dim:.55;   /* de-emphasis opacity for past/expired rows; light needs less fade to stay readable */
+    --dim:.55; --mv-warn:#FFFFFF;   /* de-emphasis opacity for past/expired rows; light needs less fade to stay readable */
     --spring:cubic-bezier(.34,1.56,.64,1);
     --ease-out:cubic-bezier(.22,1,.36,1);
   }
@@ -139,7 +139,7 @@ window.llApplyTheme = function (pref) {
     --danger:#9B2C2C; --danger-alt:#9B2C2C; --danger-hot:#B42318;
     --map-bg:#EDE8DE; --warm-pop:#FFFFFF; --warm-pop-hi:#F5F0E6;
     --coral:#A4472A; --mv-in:#1F4D2E; --mv-out:#7A2E1E; --scheme:light;
-    --bg-deep:#EDE6D8; --sunk-rgb:255,255,255; --dim:.85;
+    --bg-deep:#EDE6D8; --sunk-rgb:255,255,255; --dim:.85; --mv-warn:#9B2C2C;
     color-scheme:light;
   }
   /* light: the dark-only atmosphere (aurora, cursor glow, glass blur) steps aside for flat paper */
@@ -149,7 +149,7 @@ window.llApplyTheme = function (pref) {
   :root[data-theme="light"] body::after{opacity:.025}
   :root[data-theme="light"] .fx-aurora,:root[data-theme="light"] .fx-spot{display:none}
   :root[data-theme="light"] .lmcard{background:var(--bg-1)}
-  :root[data-theme="light"] :is(.qchip .qn,.ndsect .qn,.ndfile-dlmini,.agchip .agn,.schoffers-src .schsrc-n){opacity:1}
+  :root[data-theme="light"] :is(.qchip .qn,.ndsect .qn,.ndfile-dlmini,.agchip .agn,.schoffers-src .schsrc-n,.sf-label){opacity:1}
   *{box-sizing:border-box;margin:0;padding:0}
   html{font-size:16px}
   body{
@@ -196,7 +196,7 @@ window.llApplyTheme = function (pref) {
   /* glass map markers + legend (Units → Map) */
   .lfmap-wrap{background:none;border:0}
   .lfmap-marker{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:800 .76rem "Schibsted Grotesk",Verdana,sans-serif;color:#15110D;border:1px solid rgba(var(--hi-rgb),.35)}
-  .lfmap-hot{background:linear-gradient(135deg,#F4CB63,var(--clay-deep));box-shadow:0 0 0 4px rgba(var(--clay-rgb),.15),0 8px 20px rgba(var(--shade-rgb),.42)}
+  .lfmap-hot{background:linear-gradient(135deg,#F4CB63,#C9912A);box-shadow:0 0 0 4px rgba(var(--clay-rgb),.15),0 8px 20px rgba(var(--shade-rgb),.42)}
   .lfmap-ok{background:linear-gradient(135deg,#B9D79D,#7FA76B);box-shadow:0 0 0 4px rgba(var(--moss-rgb),.15),0 8px 20px rgba(var(--shade-rgb),.42)}
   .lfmap-legend{background:rgba(var(--surface-rgb),.86);border:1px solid var(--hairline-dark);border-radius:8px;padding:7px 10px;font:600 .72rem "Schibsted Grotesk",Verdana,sans-serif;color:var(--ink);line-height:1.7}
   .lfmap-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
@@ -970,7 +970,7 @@ window.llApplyTheme = function (pref) {
   /* the calendar view's load-failure line (tdMvCalNote) — the tracker view says its own */
   .mvcalerr{color:var(--clay);margin:0 0 8px}
   .fc-mv-k{flex:0 0 auto;font-weight:800;font-size:.66em;letter-spacing:.06em;background:rgba(var(--sunk-rgb),.28);border-radius:6px;padding:0 5px;margin-right:4px;align-self:center}
-  .fc-mv-r{flex:0 0 auto;margin-left:3px}
+  .fc-mv-r{flex:0 0 auto;margin-left:3px;color:var(--mv-warn)}
   .fc-mv-in{background:rgba(var(--moss-rgb),.22)!important;border-color:rgba(var(--moss-rgb),.55)!important}
   .fc-mv-in .fc-ev-t,.fc-mv-in .fc-mv-k{color:var(--mv-in)}
   .fc-mv-out{background:rgba(var(--coral-rgb),.2)!important;border-color:rgba(var(--coral-rgb),.55)!important}

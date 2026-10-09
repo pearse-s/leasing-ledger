@@ -435,7 +435,12 @@ window.llApplyTheme = function (pref) {
   .kpi .sub b{color:var(--ink)}
   /* KPI "vs last week" delta chip + weekly sparkline */
   .kx{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;position:relative;z-index:2}
-  .kdelta{display:inline-block;font-size:.6rem;font-weight:700;letter-spacing:.03em;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  /* Wrap, never clip (2026-10-08): the chip sits in .ribbon .kpi{overflow:hidden}, so a nowrap
+     "▲ 3 vs same day last mo · company" overran a 161px tile at 375/768. It may now take a
+     second line (the tile grows; min-height is a floor). Only the arrow + number (.kdp, from
+     deltaChip) is glued together; the "vs …" text wraps at spaces like any other text. */
+  .kdelta{display:inline-block;max-width:100%;font-size:.6rem;font-weight:700;letter-spacing:.03em;line-height:1.35;padding:2px 8px;border-radius:10px;white-space:normal}
+  .kdelta .kdp{white-space:nowrap}
   .kdelta.kgood{color:var(--moss);background:var(--moss-soft)}
   .kdelta.kbad{color:var(--clay);background:var(--clay-soft)}
   .kdelta.kflat{color:var(--ink-soft);background:var(--paper-deep)}
@@ -1899,12 +1904,17 @@ window.llApplyTheme = function (pref) {
   .fdsub{font-size:.76rem;font-weight:700;color:var(--ink);margin:10px 0 4px}
   .fdnote{font-size:.74rem;color:var(--ink-soft);line-height:1.45;margin:8px 0 0}
   .fdrow{display:flex;gap:8px}
-  .fdrawer input[type=text],.fdrawer input[type=search],.fdrawer input[type=number],.fdrawer select{width:100%;min-width:0;box-sizing:border-box;min-height:40px;
+  /* also the Schedule-a-tour wizard's fields (coordinator Today: prospect search, manual
+     prospect, selects) — they had only a width rule and rendered as bare white inputs in dark
+     mode (2026-10-08). .schwiz keeps its own max-width:440px. */
+  .fdrawer input[type=text],.fdrawer input[type=search],.fdrawer input[type=number],.fdrawer select,
+  .schwiz input[type=text],.schwiz input[type=email],.schwiz select{width:100%;min-width:0;box-sizing:border-box;min-height:40px;
     font-family:var(--sans);font-size:.84rem;padding:8px 10px;border:1px solid var(--hairline-dark);border-radius:var(--r-sm);background-color:var(--glass-2);
     color:var(--ink);color-scheme:var(--scheme)}
-  .fdrawer select{padding-right:30px}
-  .fdrawer input::placeholder{color:var(--ink-soft)}
-  .fdrawer input:focus,.fdrawer select:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
+  .fdrawer select,.schwiz select{padding-right:30px}
+  .fdrawer input::placeholder,.schwiz input::placeholder{color:var(--ink-soft)}
+  .fdrawer input:focus,.fdrawer select:focus,
+  .schwiz input[type=text]:focus,.schwiz input[type=email]:focus,.schwiz select:focus{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft);outline:none}
   /* chip groups render as option rows: round = pick one, square = any of */
   .fdrawer .qchips{flex-direction:column;flex-wrap:nowrap;gap:2px;margin:0}
   .fdrawer .chipset,.fdrawer .agentlegend{display:flex;flex-direction:column;align-items:stretch;gap:2px}
@@ -4757,7 +4767,8 @@ window.llApplyTheme = function (pref) {
     var arrow = (o.delta === 0) ? '' : (o.delta > 0 ? '&#9650; ' : '&#9660; ');
     var mag = Math.abs(o.delta);
     var txt = isPct ? (mag.toFixed(1) + ' pts') : fmtNum(mag);
-    return '<span class="kdelta ' + cls + '"' + tip + '>' + arrow + txt + ' ' + vs + (sc ? ' · company' : '') + '</span>';
+    // .kdp keeps "▲ 3" on one line; the chip itself wraps (wrap-never-clip, 2026-10-08)
+    return '<span class="kdelta ' + cls + '"' + tip + '><span class="kdp">' + arrow + txt + '</span> ' + vs + (sc ? ' · company' : '') + '</span>';
   }
   function setKpiExtra(host, html){
     if (!host) return;
@@ -5078,20 +5089,49 @@ window.llApplyTheme = function (pref) {
     if (lc) lc.innerHTML = pct(leadPct) + ' <small>' + fmtNum(lastSigned) + ' signed / ' + (leadDen != null ? fmtNum(leadDen) : '–') + ' leads</small>';
   }
 
-  function load(){
+  // ── ONE /stats per query string (2026-10-08) ──────────────────────────────────────────────
+  // A manager boot used to send FOUR /stats: startApp's load(), the manager brief's own copy in
+  // tdMgrAssemble (same tick), and the same pair again once the roster resolved and idRecompute
+  // re-seeded the scope. The Ledger and the brief now share this memo, so the brief can never
+  // diverge from the Ledger (the reason it reads /stats at all) and a re-render reuses the answer.
+  // statsMemo = the LATEST request { qs, p, at }: any caller with the same qs joins it while it
+  // is in flight, and reuses it for STATS_REUSE_MS once it has landed (at = landing time).
+  // fresh = always a new request (post-Sync reload, take-back write: the numbers moved server-side).
+  // A failed request is dropped from the memo before it rejects, so it is never served again.
+  // This is an in-flight guard as well as a cache guard (CLAUDE.md: "a cache guard is NOT an
+  // in-flight guard") — the memo exists from the moment the request is sent, not when it lands.
+  var statsMemo = null, statsShown = null, STATS_REUSE_MS = 60000;
+  function statsMemoLive(m){ return !!(m && (!m.at || Date.now() - m.at < STATS_REUSE_MS)); }
+  function statsGet(qs, fresh){
+    if (!fresh && statsMemo && statsMemo.qs === qs && statsMemoLive(statsMemo)) return statsMemo.p;
+    var m = { qs: qs, at: 0, p: null };
+    m.p = apiFetch('/stats?' + qs)
+      .then(function(r){
+        if (r.status === 401) throw new Error('AUTH');
+        if (!r.ok) return r.json().then(function(b){ throw new Error(b.error || ('HTTP ' + r.status)); });
+        return r.json();
+      })
+      .then(function(d){ m.at = Date.now(); return d; },
+            function(e){ if (statsMemo === m) statsMemo = null; throw e; });
+    statsMemo = m;
+    return m.p;
+  }
+  function load(fresh){
+    var qs = buildQuery().toString();
+    // The Ledger already shows this exact, recent answer (statsShown is the memo render() last
+    // painted): nothing to do. This is what makes idRecompute's onScopeChange after an identity
+    // resolves a no-op for /stats when the scope did not actually change (agent, coordinator,
+    // and a manager whose portfolio scopeRestore already seeded).
+    if (fresh !== true && statsShown && statsShown === statsMemo && statsShown.qs === qs && statsMemoLive(statsShown)) return;
     statsLoading = true;
     appsAll = null; toursAll = null; // entity filters / window changed → lazy-reload those tabs
     el('veil').classList.remove('hide');
     // F2: generation guard — a quick scope/window change fires two /stats; only the NEWEST may
     // render (tiles) or clear the veil / show the error. Same class as A-14/A-15 (silent wrong numbers).
     var q = ++statsReq;
-    apiFetch('/stats?' + buildQuery().toString())
-      .then(function(r){
-        if (r.status === 401) throw new Error('AUTH');
-        if (!r.ok) return r.json().then(function(b){ throw new Error(b.error || ('HTTP ' + r.status)); });
-        return r.json();
-      })
-      .then(function(d){ if (q !== statsReq) return; render(d); })
+    var p = statsGet(qs, fresh === true), memo = statsMemo;
+    p
+      .then(function(d){ if (q !== statsReq) return; statsShown = memo; render(d); })
       .catch(function(e){
         if (q !== statsReq) { if (String(e && e.message) !== 'AUTH') console.error('stale /stats load failed', e); return; }
         statsLoading = false;
@@ -5146,6 +5186,13 @@ window.llApplyTheme = function (pref) {
         msButton(k);
       });
     } catch (e) {}
+    // 2026-10-08: a manager's own portfolio is seeded HERE too, so the boot /stats (and the brief
+    // that joins it) is already scoped instead of company-wide-then-scoped. authIdent is set by
+    // the sign-in handshake before startApp runs; idRecompute re-seeds the identical selection
+    // once the roster lands, and load() then skips because that answer is already on screen.
+    // Not a scopeRestored scope (no "last visit" notice): it is the default, not a saved pick.
+    var me = idFromAuth();
+    if (me && me.role === 'manager' && me.pmId){ idSeedMgrScope(me); msButton('managers'); }
   }
   function onScopeChange(){
     scopeSave();
@@ -6879,7 +6926,8 @@ window.llApplyTheme = function (pref) {
     }).catch(function(e){
       if (String(e && e.message) !== 'AUTH') console.error('move-tracker (both) failed', e);
     }).then(step);
-    authFetch('/stats?' + buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(e){
+    // the SAME /stats the Ledger reads (statsGet: joins its in-flight request or reuses its answer)
+    statsGet(buildQuery().toString()).then(function(j){ m.stats = j; }).catch(function(e){
       if (String(e && e.message) !== 'AUTH') console.error('manager stats failed', e);
     }).then(step);
     gcalMovesFetch().then(function(j){ m.moves = j; }).catch(function(e){
@@ -9745,11 +9793,14 @@ window.llApplyTheme = function (pref) {
     var first = tmRoster.filter(function(r){ return String(r.display_name || '').toLowerCase().split(/\s+/)[0] === ft; });
     return first.length === 1 ? first[0] : null;
   }
+  // The identity lock as the signed-in answer (authIdent) defines it — ONE derivation, read by
+  // idRecompute and by scopeRestore's boot seed, so the two can never seed different portfolios.
+  function idFromAuth(){
+    return (authIdent && authIdent.role !== 'admin') ? { role: authIdent.role, pmId: authIdent.property_manager_id || null, name: authIdent.display_name, verified: true } : null;
+  }
   function idRecompute(){
     var prev = idLock ? (idLock.role + ':' + idLock.pmId + ':' + idLock.name) : '';
-    var next = null;
-    if (authIdent && authIdent.role !== 'admin') next = { role: authIdent.role, pmId: authIdent.property_manager_id || null, name: authIdent.display_name, verified: true };
-    idLock = next;
+    idLock = idFromAuth();
     idApplyAdmin();
     var now = idLock ? (idLock.role + ':' + idLock.pmId + ':' + idLock.name) : '';
     if (now === prev) return;
@@ -9769,8 +9820,8 @@ window.llApplyTheme = function (pref) {
   // to another manager survives tab hops and refetches for the rest of the session.
   // Seeding a real selection — rather than shadowing msIds as the old pin did — is what lets
   // every existing scoped consumer, the sidebar button and the export labels work unchanged.
-  function idSeedMgrScope(){
-    var mg = idMgr(); if (!mg) return;
+  function idSeedMgrScope(mg){
+    mg = mg || idMgr(); if (!mg) return;
     MS.managers.sel = {};
     MS.managers.sel[String(mg.pmId)] = mg.name;
   }
@@ -14634,7 +14685,7 @@ window.llApplyTheme = function (pref) {
           drawChips(); drawUnits();
           repaint();
           tbrLoad();   // admin take-back card (no-op when it isn't on the page)
-          load();      // the vacancy numbers moved server-side — reload /stats once
+          load(true);  // the vacancy numbers moved server-side — reload /stats once (fresh: never the memo)
           var h2 = el('um-tb-hint');
           if (h2 && mine()) h2.textContent = scope === 'property'
             ? 'Saved in Buildium and the Ledger.' + ((j && j.removed && j.removed.length) ? ' Cleared ' + j.removed.length + ' Ledger flag' + (j.removed.length === 1 ? '' : 's') + ' too.' : '')
@@ -18234,7 +18285,7 @@ window.llApplyTheme = function (pref) {
         // settling = the main run landed but the chained Property Status (take-back) re-read
         // hasn't yet — hold the ONE reload until it does (the server caps the wait at 5 min)
         if (freshB && d.settling) { syncBusy('Updating take-backs\u2026'); return; }
-        if (freshB) { unitsAll = null; ownersAll = null; appsAll = null; toursAll = null; syncDone('Fresh data loaded ✓'); load(); }
+        if (freshB) { unitsAll = null; ownersAll = null; appsAll = null; toursAll = null; syncDone('Fresh data loaded ✓'); load(true); }
       })
       .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.warn('sync-status poll failed (will retry)', e); });
   }
@@ -20390,7 +20441,7 @@ window.llApplyTheme = function (pref) {
      The pinned row ("Show it anyway") is DOM-only: drawn into the open table's tbody by
      findPinPaint after each draw, so it is never in a count, an export or the map, and it clears
      on dismiss, the next search, a tab change (showTab) and reload (nothing is persisted). */
-  var FIND_KINDS = ['unit', 'property', 'tenant', 'applicant', 'owner', 'key'];
+  var FIND_KINDS = ['property', 'unit', 'tenant', 'applicant', 'owner', 'key'];   // results group order; findPaint always puts properties first (Pearse 2026-10-08), then the open tab's kind
   var FIND_KIND_LABEL = { unit:'Units', property:'Properties', tenant:'Tenants', applicant:'Applicants', owner:'Owners', key:'Key sets' };
   var FIND_TAB_KIND = { units:'unit', leases:'tenant', renewals:'tenant', applications:'applicant', tours:'applicant', owners:'owner', keys:'key', history:'key' };
   // where each kind lives: the tab + table a "Show it anyway" pin lands on
@@ -20554,7 +20605,8 @@ window.llApplyTheme = function (pref) {
     var res = el('find-res');
     if (!res || !findQ || findQ.length < 2 || res.hidden) return;
     var tab = ACTIVE_TAB, first = FIND_TAB_KIND[tab];
-    var order = first ? [first].concat(FIND_KINDS.filter(function(k){ return k !== first; })) : FIND_KINDS;
+    // Properties (buildings) ALWAYS lead (Pearse 2026-10-08), then the open tab's own kind, then the rest
+    var order = ['property'].concat(first && first !== 'property' ? [first] : [], FIND_KINDS.filter(function(k){ return k !== 'property' && k !== first; }));
     var nIn = 0, nOut = 0, body = '';
     findHits = [];
     order.forEach(function(kind){
@@ -20738,7 +20790,9 @@ window.llApplyTheme = function (pref) {
       inp.addEventListener('keydown', function(e){
         if (e.key === 'Escape'){
           e.stopPropagation();
-          if (res && !res.hidden) findClose(); else inp.blur();
+          // type=search: Chrome's native Escape also CLEARS the field. The first Escape only
+          // closes the results and keeps the query (preventDefault); the second one blurs.
+          if (res && !res.hidden){ e.preventDefault(); findClose(); } else inp.blur();
           return;
         }
         if (res && !res.hidden) schUnitKeyNav(res, e, '.findhit');

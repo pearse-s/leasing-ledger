@@ -18323,16 +18323,16 @@ window.llApplyTheme = function (pref) {
   });
   document.addEventListener('click', winClose);
   winRender();
-  // #winbar (F3): visible only where the window narrows rows — Ledger, Applications, Tours, and
-  // whenever the Phones panel (a Ledger fold-out) is open. Called from showTab and the panel toggle.
+  // #winbar (F3): visible only where the window narrows rows — Ledger, Applications, Tours. The
+  // Phones panel is a Ledger fold-out, so Ledger (a WIN_TAB) already covers it: an "or the panel is
+  // open" clause leaked the bar onto Units/Leases/… whenever the panel was left open (F5 live
+  // click-through, fn v364). Called from showTab, syncAPresets and the panel toggle.
   function winbarSync(){
     var wb = el('winbar'); if (!wb) return;
-    var pp = el('pnl-phones');
     // Applications: the window applies only in Closed / All AND when no 30d / 90d / 1y / All preset
     // overrides it (a Ledger drill's 'custom' range IS the window at drill time)
     var appsWin = aView !== 'open' && (aWin.mode === 'global' || aWin.mode === 'custom');
-    var on = (!!WIN_TABS[ACTIVE_TAB] && (ACTIVE_TAB !== 'applications' || appsWin)) ||
-      !!(pp && pp.open && el('app') && el('app').style.display !== 'none');
+    var on = !!WIN_TABS[ACTIVE_TAB] && (ACTIVE_TAB !== 'applications' || appsWin);
     wb.style.display = on ? '' : 'none';
     if (!on) winClose();
   }

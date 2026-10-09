@@ -5066,12 +5066,20 @@ window.llApplyTheme = function (pref) {
     var w = windowDates();
     var body = { from: w.from, to: w.to, match_keys: (d && d.meta && d.meta.lead_match_keys) || null };
     apiFetch('/leads', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) })
-      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function(res){ if (my !== leadReq) return; paintLeads(res ? res.leads : null); })
-      .catch(function(){ if (my !== leadReq) return; paintLeads(null); });
+      .catch(function(e){
+        if (my !== leadReq) return;
+        // a FAILED sweep is not "Aptly not connected" — say it failed (chaos sweep 2026-10-09)
+        paintLeads(null, String(e && e.message) !== 'AUTH');
+        if (String(e && e.message) !== 'AUTH') console.error('leads failed', e);
+      });
   }
-  function paintLeads(leads){
-    if (leads && leads.in_window != null) {
+  function paintLeads(leads, failed){
+    if (failed) {
+      el('s-leads').textContent = '?';
+      el('s-leads-sub').textContent = 'Could not load leads from Aptly';
+    } else if (leads && leads.in_window != null) {
       if (leads.filtered && leads.matched != null) {
         el('s-leads').textContent = fmtNum(leads.matched);
         el('s-leads-sub').innerHTML = fmtNum(leads.matched_active) + ' active &middot; ' + fmtNum(leads.matched_lost) + ' lost &middot; matched to filters';
@@ -5140,8 +5148,9 @@ window.llApplyTheme = function (pref) {
         // a Ledger /stats failure is only meaningful on the Ledger tab. #errbox is a
         // SIBLING of #app, so showing it while on another tab would stack the error
         // over that tab's content. Stay quiet off-Ledger; the (hidden) Ledger just
-        // doesn't update until the user is actually looking at it.
-        if (ACTIVE_TAB !== 'ledger') return;
+        // doesn't update until the user is actually looking at it. Quiet on screen, but never
+        // untraced (chaos sweep 2026-10-09: an agent/coordinator boots on Today, so this was silent).
+        if (ACTIVE_TAB !== 'ledger') { console.error('/stats failed (off-Ledger, not shown)', e); return; }
         el('app').style.display = 'none';
         el('errbox').classList.add('show');
         el('errmsg').innerHTML = 'The stats API returned an error: <code>' + esc(e.message) + '</code>';
@@ -5620,10 +5629,14 @@ window.llApplyTheme = function (pref) {
   function tdLoadCal(){
     authFetch('/tour-agents')
       .then(function(j){ tdCalAgents = j.agents || []; tdDrawCal(); })
-      .catch(function(){ tdCalAgents = []; tdDrawCal(); });
+      .catch(function(e){
+        // the calendar still works without agent chips — degrade, but leave a trace
+        tdCalAgents = []; tdDrawCal();
+        if (String(e && e.message) !== 'AUTH') console.error('calendar agents failed', e);
+      });
     authFetch('/tours?' + toursQuery().toString())
       .then(function(j){ tdCalRows = j.tours || []; tdDrawCal(); })
-      .catch(function(e){ if (String(e.message) !== 'AUTH'){ var b = el('td-cal'); if (b) b.innerHTML = '<div class="note">Could not load tours.</div>'; } });
+      .catch(function(e){ if (String(e && e.message) !== 'AUTH'){ console.error('calendar tours failed', e); var b = el('td-cal'); if (b) b.innerHTML = '<div class="note">Could not load tours.</div>'; } });
   }
   function tdCalChips(){
     var box = el('td-cal-ag'); if (!box) return;
@@ -10024,7 +10037,12 @@ window.llApplyTheme = function (pref) {
     }).catch(function(e){
       lgBusy(false);
       if (String(e && e.message) === 'AUTH') return;   // onAuthFail has already routed
-      lgErr('Could not reach the dashboard: ' + String(e && e.message || e));
+      console.error('user/hello failed', e);
+      // On a BOOT resume the login form was never shown, so lgErr alone wrote into a hidden box
+      // and the page sat behind the veil (chaos sweep 2026-10-09). Surface the form first.
+      var lg = el('login');
+      if (lg && lg.style.display !== 'flex') { showLogin(); loginStep('email'); }
+      lgErr('Could not reach the dashboard: ' + String(e && e.message || e) + '. Reload the page to try again.');
     });
   }
   function lgSignOutLocal(){
@@ -11477,7 +11495,7 @@ window.llApplyTheme = function (pref) {
     authFetch('/task-history?task_id=' + encodeURIComponent(taskId)).then(function(j){
       var ev = (j && j.history) || [];
       el('tm-history').innerHTML = ev.length ? ev.map(thRow).join('') : 'No history yet.';
-    }).catch(function(){ el('tm-history').textContent = 'History unavailable right now.'; });
+    }).catch(function(e){ el('tm-history').textContent = 'Could not load history right now.'; if (String(e && e.message) !== 'AUTH') console.error('task history failed', e); });
   }
   function thRow(h){
     var when = (h.CreatedDateTime || h.CreatedDateTIme || '').slice(0,16).replace('T',' ');
@@ -16514,7 +16532,8 @@ window.llApplyTheme = function (pref) {
       })
       .catch(function(e){
         if (q !== lsReq || String(e && e.message) === 'AUTH') return;
-        el('ls-recur').textContent = 'Detail unavailable right now.';
+        console.error('lease detail failed', e);
+        el('ls-recur').textContent = 'Could not load lease detail right now.';
       });
     lsLoadLedger(r.lease_id, q);
   }
@@ -16595,6 +16614,7 @@ window.llApplyTheme = function (pref) {
       })
       .catch(function(e){
         if (q !== lsReq || String(e && e.message) === 'AUTH') return;
+        console.error('lease ledger failed', e);
         el('ls-ledchips').innerHTML = '';
         lsPaintLedgerHead(null);
         el('ls-ledger').innerHTML = 'Buildium didn&rsquo;t answer (' + esc(e && e.message ? e.message : 'error') + '). The balance figures above are from the daily mirror. ' +
@@ -16916,7 +16936,7 @@ window.llApplyTheme = function (pref) {
     authFetch('/applicant-showings?application_id=' + encodeURIComponent(aid)).then(function(j){
       amFeed = { showings: j.showings || [], notes: j.notes || [], apps: j.applications || [] };
       renderAppFeed();
-    }).catch(function(){ el('am-feed').innerHTML = '<span class="count-note">Could not load activity.</span>'; el('am-feedchips').innerHTML = ''; });
+    }).catch(function(e){ el('am-feed').innerHTML = '<span class="count-note">Could not load activity.</span>'; el('am-feedchips').innerHTML = ''; if (String(e && e.message) !== 'AUTH') console.error('applicant activity failed', e); });
   }
   function amFeedItems(){
     var d = amFeed; if (!d) return [];
@@ -17046,9 +17066,15 @@ window.llApplyTheme = function (pref) {
         updateRenewalTile(); drawRnChips(); drawRenewals();
         if (unitsAll !== null) drawUnits();   // refresh the Units board "Event" column with renewal chips
       })
-      .catch(function(){
+      .catch(function(e){
         renewalsLoading = false;
         var t = el('rntable'); if (t) t.querySelector('tbody').innerHTML = emptyRow('rntable', 'Could not load renewals.');
+        // the Ledger tile is the surface every role sees first — never leave it on its loading value
+        var k = el('k-renewals'), ks = el('k-renewals-sub');
+        if (k) k.textContent = '?';
+        if (ks) ks.textContent = 'Could not load renewals';
+        if (String(e && e.message) === 'AUTH') return;
+        console.error('renewals failed', e);
       });
   }
   // Undecided (Pearse 2026-09-28). /renewals returns them under a SEPARATE key (undecided) from
@@ -17356,7 +17382,7 @@ window.llApplyTheme = function (pref) {
     btn.disabled = true; btn.classList.remove('okflash'); btn.innerHTML = 'Refreshing…';
     var actor = (getActor() || '').trim() || 'dashboard';
     postJSON('/tours/refresh-reconfirm', { actor: actor })
-      .catch(function(){ return null; })   // best-effort: still re-pull from the mirror
+      .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('refresh-reconfirm failed', e); return null; })   // best-effort: still re-pull from the mirror
       .then(function(){ return fetchTours(); })
       .then(function(){
         btn.classList.add('okflash'); btn.innerHTML = 'Updated ✓';
@@ -18581,7 +18607,7 @@ window.llApplyTheme = function (pref) {
   var hubLoaded = null, hubScore = null, hubAgent = '',
       hubSigned = null, hubFollow = null, hubSignedFilter = 'all', hubFuFilter = 'all',
       hubSignedScope = 'mine',
-      hubTours = null, hubToursView = 'today',
+      hubTours = null, hubToursErr = false, hubToursView = 'today',
       hubView = 'mine', hubTeamSigned = null, hubTeamTours = null, hubTeamLeasesFilter = 'all', hubTeamLeasesSort = { k:'signed_date', d:-1 },
       // Phase 2 commission-tracker filters. hubSlRows holds the SEPARATE dataset fetched when
       // the range control leaves 'window' — it must NOT overwrite hubTeamSigned, because the
@@ -18661,7 +18687,7 @@ window.llApplyTheme = function (pref) {
         if (hubAgent) sel.value = hubAgent;
       }
       hubRenderLeaderboard(); hubRenderFunnel(); loadHubAgent();
-    }).catch(function(){ if (el('hub-funnel')) el('hub-funnel').innerHTML = '<div class="note">Could not load hub stats.</div>'; });
+    }).catch(function(e){ if (el('hub-funnel')) el('hub-funnel').innerHTML = '<div class="note">Could not load hub stats.</div>'; if (String(e && e.message) !== 'AUTH') console.error('hub scorecard failed', e); });
   }
   // A3 — my pace: attributed signings (confirmed + suggested) month-to-date vs the same
   // day last month. Counts only (the no-commission-$ rule stands); two small scorecard
@@ -18915,8 +18941,12 @@ window.llApplyTheme = function (pref) {
     if (hubTours !== null){ hubRenderTours(); return; }
     var from = dstr(new Date(Date.now() - 90 * 86400000)), to = dstr(new Date(Date.now() + 60 * 86400000));
     authFetch('/tours?from=' + from + '&to=' + to)
-      .then(function(j){ hubTours = j.tours || []; hubRenderTours(); })
-      .catch(function(){ hubTours = []; hubRenderTours(); });
+      .then(function(j){ hubTours = j.tours || []; hubToursErr = false; hubRenderTours(); })
+      .catch(function(e){
+        // [] keeps the Do-next queue rendering, but the list must say it FAILED, never "No tours today"
+        hubTours = []; hubToursErr = true; hubRenderTours();
+        if (String(e && e.message) !== 'AUTH') console.error('my tours failed', e);
+      });
   }
   function hubMineTours(){ return (hubTours || []).filter(function(r){ return sameAgent(r.agent, hubAgent); }); }
   function hubTodayTours(mine){
@@ -19131,6 +19161,11 @@ window.llApplyTheme = function (pref) {
     var mine = hubMineTours();
     if (hubToursView === 'today') hubRenderTodayList(mine);
     else hubRenderTourList(mine, hubToursView === 'past' ? 'past' : 'upcoming');
+    if (hubToursErr){
+      var box = el('hub-tours-list'), cnt = el('hub-tours-count');
+      if (box) box.innerHTML = '<div class="note" style="padding:14px">Could not load your tours — this is not “no tours”. Refresh to try again.</div>';
+      if (cnt) cnt.textContent = '?';
+    }
     hubRenderDoNext();   // the queue's tour tiers read the same data
   }
 
@@ -19148,8 +19183,9 @@ window.llApplyTheme = function (pref) {
       hubTeamTours = (res[1] && res[1].tours) || [];
       if (hubTours === null) hubTours = hubTeamTours;
       hubRenderTeam();
-    }).catch(function(){
+    }).catch(function(e){
       var tb = el('hub-team-table'); if (tb) tb.querySelector('tbody').innerHTML = emptyRow('hub-team-table', 'Could not load team overview.');
+      if (String(e && e.message) !== 'AUTH') console.error('team overview failed', e);
     });
     loadHubTeamMoves();   // own request: a moves failure must not blank the leasing overview
     loadHubTeamFunnel();  // D2 — own request, same isolation rule
@@ -19940,7 +19976,7 @@ window.llApplyTheme = function (pref) {
         h += '<tr><td>' + esc(r.agent) + '</td><td class="rt">' + fmtNum(r.calls_out) + '</td><td class="rt">' + fmtNum(r.calls_in) + '</td><td class="rt">' + fmtNum(r.texts_out) + '</td><td class="rt">' + fmtNum(r.texts_in) + '</td></tr>';
       });
       var t = el('ledoutreach'); if (t) t.querySelector('tbody').innerHTML = h || emptyRow('ledoutreach', 'No outreach in the last 7 days');
-    }).catch(function(){ var t = el('ledoutreach'); if (t) t.querySelector('tbody').innerHTML = emptyRow('ledoutreach', 'Could not load outreach.'); });
+    }).catch(function(e){ var t = el('ledoutreach'); if (t) t.querySelector('tbody').innerHTML = emptyRow('ledoutreach', 'Could not load outreach.'); if (String(e && e.message) !== 'AUTH') console.error('outreach scorecard failed', e); });
   }
 
   // ── Schedule-tour wizard ─────────────────────────────────────────────────
@@ -19948,7 +19984,7 @@ window.llApplyTheme = function (pref) {
   var schedAgents = null;
   function loadSchedule(){
     authFetch('/tour-agents').then(function(j){ schedAgents = j.agents || []; })
-      .catch(function(e){ /* agents load failed; the book flow surfaces its own status */ });
+      .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('schedule agents failed', e); });   // the book flow surfaces its own status
     loadTourOffers();
   }
   var schOfferMsgs = {};   // offer id -> composed message text, for the offers-panel "Copy message" button

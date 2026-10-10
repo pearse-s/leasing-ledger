@@ -3183,6 +3183,7 @@ window.llApplyTheme = function (pref) {
           <button data-v="map">Map</button>
         </div>
         <span class="count-note" id="u-count" aria-live="polite"></span>
+        <button type="button" id="u-sharelist" class="rfreshbtn" style="display:none" title="Copy every listed unit matching the current filters (up to 10) — summary + website link each — to paste to a prospect">&#128279; Copy listings</button>
         <button type="button" id="u-export" class="rfreshbtn" title="Download every unit matching the current filters (all pages, current sort) as an Excel workbook">&#8681; Export XLSX</button>
         <button type="button" class="fltbtn" id="fb-utable" data-fdopen="utable" aria-controls="fd-utable" aria-expanded="false" title="Filters for this table">Filters<span class="fltn"></span></button>
       </div>
@@ -3684,6 +3685,8 @@ window.llApplyTheme = function (pref) {
     <div class="lmbody">
       <div class="rm-actrow" id="lm-actrow">
         <a id="lm-apply" class="btn primary rmact" target="_blank" rel="noopener">Apply &rarr;</a>
+        <button type="button" id="lm-share" class="btn rmact" style="display:none" title="Copy the listing summary + website link to paste into a text, email or DM">&#128279; Copy listing</button>
+        <a id="lm-web" class="btn rmact" target="_blank" rel="noopener" style="display:none">Website &#8599;</a>
         <a id="lm-map" class="btn rmact" target="_blank" rel="noopener">&#129517; Maps</a>
         <button type="button" id="lm-unit" class="btn rmact">View unit &rarr;</button>
       </div>
@@ -4332,6 +4335,7 @@ window.llApplyTheme = function (pref) {
   function boxGen(box){ box._gen = (box._gen || 0) + 1; return box._gen; }
   var uPage = 0, uSig = '', U_PER = 200;
   var uRowsCur = [];   // the FULL filtered+sorted Units set (every page) — what the XLSX export writes
+  var U_SHARE_MAX = 10;   // "Copy listings" cap — a paste longer than this stops reading as a text
   var uSel = {};   // Units flag chips multi-select (on-notice / move-out / eviction / balance / take-backs)
   var uOcc = 'all', uMkt = 'all', uDV = '';   // Occupancy axis · Marketing axis · Days-vacant band
   var curPhotosLm = [], curPhotosUm = [];
@@ -13129,8 +13133,45 @@ window.llApplyTheme = function (pref) {
       city: u.city,
       listing_description: null,   // fetched per-unit on modal open (see openListing)
       listing_amenities: u.amenities || [],
-      listing_url: u.listing_url
+      listing_url: u.listing_url,
+      website_url: u.website_url
     };
+  }
+  // ── Website listing share (2026-10-09) ──────────────────────────────────
+  // website_url arrives on every unitsAll row from v_unit_directory, built by
+  // dashboard.website_listing_url() — the ONE slug rule (liogroup.ca/{city}/rentals/
+  // {property name}-{unit}-{unit id}). Never rebuild the slug here. Listed units only:
+  // an unlisted unit has no page on the site, so it has no website_url.
+  function shareListingDate(v){
+    var p = String(v || '').slice(0, 10).split('-');
+    if (p.length !== 3) return '';
+    var d = new Date(+p[0], +p[1] - 1, +p[2]);
+    if (isNaN(d)) return '';
+    var t = new Date(); t.setHours(0, 0, 0, 0);
+    return d <= t ? 'available now' : 'available ' + d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+  }
+  function shareListingText(u){
+    if (!u || !u.website_url) return '';
+    var facts = [];
+    if (u.unit_bedrooms) facts.push(u.unit_bedrooms + ' bed' + (u.unit_bathrooms ? ' / ' + u.unit_bathrooms + ' bath' : ''));
+    if (u.listing_rent != null) facts.push(fmtMoney(u.listing_rent) + '/mo');
+    var av = shareListingDate(u.listing_available_date);
+    if (av) facts.push(av);
+    return [[u.property_name, u.unit_number].filter(Boolean).join(' · '), facts.join(' · '), u.website_url]
+      .filter(Boolean).join(String.fromCharCode(10));
+  }
+  // Copy to the clipboard and flash the button; prompt() fallback when the clipboard API is
+  // blocked (non-secure context, iOS permission) so the agent can still long-press copy.
+  function shareCopy(txt, btn){
+    if (!txt) return;
+    var orig = btn ? btn.innerHTML : '';
+    var done = function(){
+      if (!btn) return;
+      btn.textContent = 'Copied ✓';
+      setTimeout(function(){ btn.innerHTML = orig; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(function(e){ console.error('shareCopy', e); window.prompt('Copy listing:', txt); });
+    else window.prompt('Copy listing:', txt);
   }
   var lmDescReq = 0;   // generation guard for the per-unit description fetch
   function openListing(uid){
@@ -13150,6 +13191,12 @@ window.llApplyTheme = function (pref) {
     var apply = el('lm-apply');
     if (r.listing_url) { apply.href = r.listing_url; apply.style.display = ''; }
     else { apply.removeAttribute('href'); apply.style.display = 'none'; }
+    var webA = el('lm-web'), shareB = el('lm-share');
+    if (webA){
+      if (r.website_url) { webA.href = r.website_url; webA.style.display = ''; }
+      else { webA.removeAttribute('href'); webA.style.display = 'none'; }
+    }
+    if (shareB){ shareB.setAttribute('data-uid', uid); shareB.style.display = r.website_url ? '' : 'none'; }
     var maddr = [r.address_line1, r.city].filter(Boolean).join(', ') || r.property || '';
     var mapA = el('lm-map');
     if (maddr) { mapA.style.display = ''; mapA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(maddr); }
@@ -13813,6 +13860,11 @@ window.llApplyTheme = function (pref) {
     drawChips(c);   // every filter change re-counts the chips against the new result set
     rows.sort(cmpRows(uSort.k, uSort.d));
     uRowsCur = rows;   // export reads this — every matching row, not just the rendered page
+    var shareN = rows.filter(function(r){ return r.website_url; }).length, shareBtn = el('u-sharelist');
+    if (shareBtn){
+      shareBtn.style.display = shareN ? '' : 'none';
+      shareBtn.innerHTML = '&#128279; Copy ' + (shareN > U_SHARE_MAX ? U_SHARE_MAX + ' of ' + shareN + ' listings' : shareN === 1 ? '1 listing' : shareN + ' listings');
+    }
     // reset to page 1 whenever the filter/sort/scope changes (but not on paging)
     var sig = [q, el('u-rmin').value, el('u-rmax').value, amenSel.join(','), uOcc, uMkt, uDV, Object.keys(uSel).sort().join(','), JSON.stringify(nbf), JSON.stringify(COLF['utable']||{}), mg.join(','), ow.join(','), pr.join(','), uSort.k, uSort.d, uView].join('|');
     if (sig !== uSig) { uSig = sig; uPage = 0; }
@@ -13840,7 +13892,8 @@ window.llApplyTheme = function (pref) {
         '<td>' + esc(r.unit_number) + furnChip(r) + '</td>' +
         '<td>' + esc(r.unit_bedrooms || '–') + '/' + esc(r.unit_bathrooms || '–') + '</td>' +
         '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + usoChip(r) + sdChip(r) + appStageChip(r) + '</td>' +
-        '<td>' + evChip(r.unit_event) + rnUnitChip(r) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') + fbChip(r) + '</td>' +
+        '<td>' + evChip(r.unit_event) + rnUnitChip(r) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') +
+          (r.website_url ? ' <button type="button" class="listbtn" data-wshare="' + r.unit_id + '" title="Copy listing — summary + website link" aria-label="Copy listing">&#128279; copy</button>' : '') + fbChip(r) + '</td>' +
         '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + ' <span class="qn">' + miSrcTag(r.move_in_src) + '</span>' : '–') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
@@ -14214,6 +14267,13 @@ window.llApplyTheme = function (pref) {
       { sheet:'Units', note: note, cols: U_XL_COLS, rows: rows });
   }
   if (el('u-export')) el('u-export').addEventListener('click', unitsExport);
+  // Copy listings: the listed units matching the current filters, in the current sort,
+  // capped (U_SHARE_MAX) so a paste stays a readable text. Filter first (beds / rent / area), then copy.
+  if (el('u-sharelist')) el('u-sharelist').addEventListener('click', function(){
+    var txt = (uRowsCur || []).filter(function(r){ return r.website_url; }).slice(0, U_SHARE_MAX)
+      .map(shareListingText).join(String.fromCharCode(10, 10));
+    shareCopy(txt, this);
+  });
 
   /* ── map view (Leaflet + OpenStreetMap) ───── */
   function drawMap(rows){
@@ -14310,6 +14370,9 @@ window.llApplyTheme = function (pref) {
     // Leasing status cell (2026-10-02) FIRST: its edit / Save / Cancel buttons are .listbtn too,
     // and the generic .listbtn rule below would otherwise swallow them as "open the listing".
     if (lsCellClick(e)) return;
+    // Copy-listing button is a .listbtn too — handle it before the generic "open the listing" rule.
+    var wsb = e.target.closest && e.target.closest('[data-wshare]');
+    if (wsb){ shareCopy(shareListingText(findUnitRow(wsb.getAttribute('data-wshare'))), wsb); return; }
     var lb = e.target.closest && e.target.closest('.listbtn');
     if (lb){ openListing(lb.getAttribute('data-uid')); return; }
     if (e.target.closest && e.target.closest('.c-fb')) return;   // blue FB chip: let the anchor open the listing, don't open the unit modal
@@ -15212,6 +15275,8 @@ window.llApplyTheme = function (pref) {
     var umaddr = r.address_line1 ? (r.address_line1 + (r.city ? ', ' + r.city : '')) : (r.property_name || '');
     if (umaddr) a += '<a class="btn primary rmact" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(umaddr) + '">&#129517; Maps</a>';
     if (r.is_listed) a += '<button type="button" class="btn rmact" data-listing-uid="' + r.unit_id + '">View listing &rarr;</button>';
+    if (r.website_url) a += '<button type="button" class="btn rmact" data-wshare="' + r.unit_id + '" title="Copy the listing summary + website link to paste into a text, email or DM">&#128279; Copy listing</button>' +
+      '<a class="btn rmact" target="_blank" rel="noopener" href="' + esc(r.website_url) + '">Website &#8599;</a>';
     a += '<a class="btn rmact" target="_blank" rel="noopener" href="' + BMGR + '/properties/' + r.property_id + '/units/' + r.unit_id + '/summary">Buildium &rarr;</a>';
     if (r.lease_id) a += '<button type="button" class="btn rmact" data-ls-open="' + r.lease_id + '">Ledger &rarr;</button>';
     if (r.listing_url) a += '<a class="btn rmact" target="_blank" rel="noopener" href="' + esc(r.listing_url) + '">Apply &rarr;</a>';
@@ -15389,6 +15454,8 @@ window.llApplyTheme = function (pref) {
   // unit modal before opening the listing modal rather than stacking (both animate from
   // the clicked button → a clean morph).
   el('um-actrow').addEventListener('click', function(ev){
+    var sb = ev.target.closest('[data-wshare]');
+    if (sb){ shareCopy(shareListingText(findUnitRow(sb.getAttribute('data-wshare'))), sb); return; }
     var b = ev.target.closest('[data-listing-uid]');
     if (!b) return;
     closeModal('umodal');
@@ -15471,6 +15538,10 @@ window.llApplyTheme = function (pref) {
     var uid = this.getAttribute('data-uid'); if (!uid) return;
     closeModal('lmodal');
     openUnitEnsure(uid);
+  });
+  // Listing modal → copy the short share text (summary + liogroup.ca link) for a prospect.
+  if (el('lm-share')) el('lm-share').addEventListener('click', function(){
+    shareCopy(shareListingText(findUnitRow(this.getAttribute('data-uid'))), this);
   });
   // Listing modal → copy a plain-text unit summary for pasting to a tenant.
   el('lm-copy').addEventListener('click', function(){
@@ -19000,6 +19071,21 @@ window.llApplyTheme = function (pref) {
       } else if (mail){
         acts.push('<a href="' + esc(tdMailto(mail, 'Thanks for touring' + (addrRaw ? ' ' + addrRaw : ''), tmsg)) + '" class="tdact"' + mailHint + '>&#9993; Thanks + apply link</a>');
       }
+    }
+    // Send listing (2026-10-09): the tour's unit summary + liogroup.ca link, prefilled in a
+    // RingCentral text the agent reviews and sends (email fallback). Listed units only.
+    // The link rides on the tour row (/tours → unit_website_url): Today never loads /units,
+    // so the directory row is only a bonus (adds the available date) when it IS loaded.
+    var shareU = r.unit_website_url ? (findUnitRow(r.matched_unit_id) || {
+      property_name: r.matched_property_name, unit_number: r.matched_unit_number,
+      unit_bedrooms: r.unit_bedrooms, listing_rent: r.unit_listing_rent, website_url: r.unit_website_url
+    }) : null;
+    var shareTxt = shareListingText(shareU);
+    if (shareTxt && !r.is_no_show){
+      var shareFirst = (String(r.invitee_name || '').trim().split(/\s+/)[0]) || 'there';
+      var shareMsg = 'Hi ' + shareFirst + "! Here's the listing" + (addrRaw ? ' for ' + addrRaw : '') + ':' + String.fromCharCode(10, 10) + shareTxt;
+      if (tel) acts.push('<a href="' + rcText(esc(tel), shareMsg) + '" class="tdact">&#128279; Send listing</a>');
+      else if (mail) acts.push('<a href="' + esc(tdMailto(mail, 'Your listing' + (addrRaw ? ' — ' + addrRaw : ''), shareMsg)) + '" class="tdact"' + mailHint + '>&#128279; Email listing</a>');
     }
     // F5: inline no-show — same writeback + confirm as the tour modal; only offered once
     // the tour has started (Calendly 400s before that).

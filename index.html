@@ -5071,13 +5071,23 @@ window.llApplyTheme = function (pref) {
     var body = { from: w.from, to: w.to, match_keys: (d && d.meta && d.meta.lead_match_keys) || null };
     apiFetch('/leads', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) })
       .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function(res){ if (my !== leadReq) return; paintLeads(res ? res.leads : null); })
+      .then(function(res){
+        if (my !== leadReq) return;
+        // leads:null + error = Aptly configured but failed (timeout / non-ok) — NOT "connect Aptly"
+        // (2026-10-10: the server's Aptly timeout made the tile claim Aptly was not connected).
+        if (res && res.error) { console.error('leads unavailable', res.error); paintLeads(null, true); return; }
+        paintLeads(res ? res.leads : null);
+      })
       .catch(function(e){
         if (my !== leadReq) return;
         // a FAILED sweep is not "Aptly not connected" — say it failed (chaos sweep 2026-10-09)
         paintLeads(null, String(e && e.message) !== 'AUTH');
         if (String(e && e.message) !== 'AUTH') console.error('leads failed', e);
       });
+  }
+  // Some Aptly pages did not load: the counts are a floor, so say so rather than undercount quietly.
+  function leadsPartial(leads){
+    return leads.partial ? ' &middot; <span title="' + fmtNum(leads.pages_missing) + ' of ' + fmtNum(leads.pages) + ' Aptly pages did not load">partial count</span>' : '';
   }
   function paintLeads(leads, failed){
     if (failed) {
@@ -5086,10 +5096,10 @@ window.llApplyTheme = function (pref) {
     } else if (leads && leads.in_window != null) {
       if (leads.filtered && leads.matched != null) {
         el('s-leads').textContent = fmtNum(leads.matched);
-        el('s-leads-sub').innerHTML = fmtNum(leads.matched_active) + ' active &middot; ' + fmtNum(leads.matched_lost) + ' lost &middot; matched to filters';
+        el('s-leads-sub').innerHTML = fmtNum(leads.matched_active) + ' active &middot; ' + fmtNum(leads.matched_lost) + ' lost &middot; matched to filters' + leadsPartial(leads);
       } else {
         el('s-leads').textContent = fmtNum(leads.in_window);
-        el('s-leads-sub').innerHTML = fmtNum(leads.active) + ' active &middot; ' + fmtNum(leads.lost) + ' lost/archived';
+        el('s-leads-sub').innerHTML = fmtNum(leads.active) + ' active &middot; ' + fmtNum(leads.lost) + ' lost/archived' + leadsPartial(leads);
       }
     } else {
       el('s-leads').textContent = '–';

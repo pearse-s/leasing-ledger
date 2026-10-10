@@ -20581,7 +20581,11 @@ window.llApplyTheme = function (pref) {
   // where each kind lives: the tab + table a "Show it anyway" pin lands on
   var FIND_HOME = { unit:{ tab:'units', table:'utable' }, property:{ tab:'units', table:'utable' }, tenant:{ tab:'leases', table:'ltable' },
     applicant:{ tab:'applications', table:'atable' }, owner:{ tab:'owners', table:'otable' }, key:{ tab:'keys', table:'ktable' } };
-  var findReq = 0;          // generation guard for GET /find (units ride schUnitReq inside schUnitLookup)
+  // each tab's OWN table search box — "Search in table" (and Enter in find) types the query there.
+  // Today and Ledger have no one table, so they get neither (Enter keeps opening the top match).
+  var FIND_TABLE_SEARCH = { units:'u-search', leases:'ls-search', applications:'a-search', tours:'r-search', renewals:'rn-search',
+    owners:'o-search', keys:'k-search', tasks:'t-search', history:'h-search' };
+  var findReq = 0;         // generation guard for GET /find (units ride schUnitReq inside schUnitLookup)
   var findQ = '';           // the query the open results answer
   var findUnitRows = null;  // schUnitLookup rows for findQ, server order (null = in flight)
   var findGroups = null;    // GET /find hits by kind for findQ, server order (null = in flight)
@@ -20762,7 +20766,31 @@ window.llApplyTheme = function (pref) {
     if (pending) hd += '<span class="findbusy">Searching…</span>';
     if (!pending && !findHits.length) body = '<div class="findnote">Nothing found for “' + esc(findQ) + '”. Street number and unit number usually finds a unit (for example 8051 24); a surname finds a tenant or an applicant.</div>';
     if (findFailed) body += '<div class="findnote">Tenants, applicants, owners and keys could not be searched just now. Type again to retry.</div>';
-    res.innerHTML = '<div class="findhd" role="status">' + hd + '</div>' + body;
+    // the FIRST option: run the same query through the open tab's table search. It is a .findhit,
+    // so ↑/↓ reach it and Enter with nothing highlighted takes it (schUnitKeyNav's top match).
+    var tbl = findTableSearchEl(), tname = tbl ? findTabName(tab) : '';
+    var tblOpt = tbl ? '<section class="fgrp"><div class="fhit"><button type="button" class="findhit" data-fa="table"><b>Search in table</b><span>“' +
+      esc(findQ) + '” in ' + esc(tname) + '</span></button></div></section>' : '';
+    res.innerHTML = '<div class="findhd" role="status">' + hd + '</div>' + tblOpt + body;
+  }
+  // the open tab's own table search field, or null on a tab without one (Today, Ledger)
+  function findTableSearchEl(){ var id = FIND_TABLE_SEARCH[ACTIVE_TAB]; return id ? el(id) : null; }
+  function findTabName(tab){
+    var b = document.querySelector('#tabs .navitem[data-tab="' + tab + '"]');
+    var t = b ? (b.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    return t || 'this table';
+  }
+  // "Search in table": hand the query to the table's own search box and fire its own input
+  // handler (the same path as typing there), so the table filters exactly as it always does.
+  function findTableSearch(){
+    var tbl = findTableSearchEl(), inp = el('find-q'); if (!tbl || !inp) return false;
+    var q = (inp.value || '').trim(); if (!q) return false;
+    findClose();
+    inp.blur();
+    tbl.value = q;
+    tbl.dispatchEvent(new Event('input', { bubbles: true }));
+    try { tbl.scrollIntoView({ block:'nearest', behavior:'smooth' }); } catch (e) {}
+    return true;
   }
   function findClose(){
     var res = el('find-res'); if (res) { res.hidden = true; res.innerHTML = ''; }
@@ -20929,6 +20957,13 @@ window.llApplyTheme = function (pref) {
           if (res && !res.hidden){ e.preventDefault(); findClose(); } else inp.blur();
           return;
         }
+        // Enter searches the open table — unless ↑/↓ highlighted a hit, which Enter then opens.
+        // On a tab with no table search, Enter keeps taking the top match.
+        if (e.key === 'Enter' && !(res && !res.hidden && res.querySelector('.findhit.on')) && findTableSearchEl()){
+          e.preventDefault();
+          findTableSearch();
+          return;
+        }
         if (res && !res.hidden) schUnitKeyNav(res, e, '.findhit');
       });
     }
@@ -20936,6 +20971,7 @@ window.llApplyTheme = function (pref) {
       e.stopPropagation();   // a repaint detaches the clicked node; the document closer must not read that as an outside click
       var wide = e.target.closest('[data-fa="all"]');
       if (wide){ findScopeEverything(); return; }
+      if (e.target.closest('[data-fa="table"]')){ findTableSearch(); return; }
       var b = e.target.closest('[data-fi]'); if (!b) return;
       var f = findHits[+b.getAttribute('data-fi')]; if (!f) return;
       var fx = b.getAttribute('data-fx');

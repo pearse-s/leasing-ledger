@@ -13153,7 +13153,9 @@ window.llApplyTheme = function (pref) {
   function shareListingText(u){
     if (!u || !u.website_url) return '';
     var facts = [];
-    if (u.unit_bedrooms) facts.push(u.unit_bedrooms + ' bed' + (u.unit_bathrooms ? ' / ' + u.unit_bathrooms + ' bath' : ''));
+    // Buildium bedrooms are a count ("1".."4") or a word ("Studio") — only a count gets "bed".
+    var bd = u.unit_bedrooms;
+    if (bd) facts.push((/^[0-9]/.test(String(bd)) ? bd + ' bed' : String(bd)) + (u.unit_bathrooms ? ' / ' + u.unit_bathrooms + ' bath' : ''));
     if (u.listing_rent != null) facts.push(fmtMoney(u.listing_rent) + '/mo');
     var av = shareListingDate(u.listing_available_date);
     if (av) facts.push(av);
@@ -19083,7 +19085,7 @@ window.llApplyTheme = function (pref) {
     var shareTxt = shareListingText(shareU);
     if (shareTxt && !r.is_no_show){
       var shareFirst = (String(r.invitee_name || '').trim().split(/\s+/)[0]) || 'there';
-      var shareMsg = 'Hi ' + shareFirst + "! Here's the listing" + (addrRaw ? ' for ' + addrRaw : '') + ':' + String.fromCharCode(10, 10) + shareTxt;
+      var shareMsg = 'Hi ' + shareFirst + "! Here's the listing:" + String.fromCharCode(10, 10) + shareTxt;   // shareTxt's first line already names the unit
       if (tel) acts.push('<a href="' + rcText(esc(tel), shareMsg) + '" class="tdact">&#128279; Send listing</a>');
       else if (mail) acts.push('<a href="' + esc(tdMailto(mail, 'Your listing' + (addrRaw ? ' — ' + addrRaw : ''), shareMsg)) + '" class="tdact"' + mailHint + '>&#128279; Email listing</a>');
     }

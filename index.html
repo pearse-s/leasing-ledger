@@ -33,6 +33,12 @@
    WITHOUT clicking a tab. */
 window.addEventListener('error', function(e){
   if (window.__llBooted) return;
+  /* Resource-load errors (a blocked font stylesheet, a CDN script) also reach a capture-phase
+     listener on window, with the ELEMENT as target and no message - they are not a boot crash
+     (audit S13, reproduced 2026-10-12: a blocked fonts.googleapis.com stylesheet raised this
+     banner on a page that had booted). Only an uncaught exception, dispatched on window itself,
+     counts. Never loosen this further - the guard is load-bearing. */
+  if (!e || e.target !== window) return;
   try {
     var v = document.getElementById('veil'); if (v) v.classList.add('hide');
     var b = document.getElementById('booterr');
@@ -4297,7 +4303,11 @@ window.llApplyTheme = function (pref) {
     window.addEventListener('resize', fxNavPill);
   }
 
-  var state = { preset:7, from:dstr(new Date(Date.now()-7*86400000)), to:dstr(new Date()), bucket:null };
+  // S3 (audit 2026-10-11): the window ends on the EDMONTON day (edToday, T-B15), not the UTC date —
+  // from ~18:00 MT the UTC date is tomorrow, so the window ended tomorrow, the label read tomorrow
+  // and /stats (and the scorecard) asked for to=tomorrow. dstr() stays the formatter for date
+  // arithmetic on YYYY-MM-DD strings (Date.parse gives UTC midnight, so the UTC slice is right there).
+  var state = { preset:7, from:edDayPlus(-7), to:edToday(), bucket:null };
   // Multi-select popovers. scope:true entries are global entity filters that also drive
   // server queries (via appendScope); scope:false entries are local table facets (amenity,
   // parking) filtered client-side. cb() is the per-popover refresh, run on every change.
@@ -4847,7 +4857,7 @@ window.llApplyTheme = function (pref) {
     phReach7Queue.push(cb);
     if (phReach7Loading) return;
     phReach7Loading = true;
-    var to = dstr(new Date()), from = dstr(new Date(Date.now() - 6 * 86400000));
+    var to = edToday(), from = edDayPlus(-6);   // S3: Edmonton days
     authFetch('/phone-responsiveness?from=' + from + '&to=' + to).then(function(j){
       phReach7Settle(j && !j.error ? j : null);
     }).catch(function(e){
@@ -4923,6 +4933,10 @@ window.llApplyTheme = function (pref) {
   })();
 
   /* ── tabs ─────────────────────────────────── */
+  // S5 (audit 2026-10-11): these maps are plain objects, so PAGES[h] was truthy for #constructor /
+  // #__proto__ (inherited) and the page booted to no tab at all. Every lookup keyed by outside
+  // input (the hash, ACTIVE_TAB) goes through hasOwn; the lists themselves are unchanged.
+  function hasOwn(o, k){ return Object.prototype.hasOwnProperty.call(o, k); }
   var PAGES = { today:'page-today', ledger:'app', units:'page-units', leases:'page-leases', applications:'page-applications', tours:'page-tours', renewals:'page-renewals', owners:'page-owners', keys:'page-keys', tasks:'page-tasks', history:'page-history' };
   var ACTIVE_TAB = 'ledger';   // which tab is showing; render() only reveals the Ledger (#app) when this is 'ledger'
   // F3: the activity window only narrows these tabs (+ the Phones panel, which lives on the Ledger),
@@ -4984,7 +4998,7 @@ window.llApplyTheme = function (pref) {
       }, 450);
       return 'ledger';
     }
-    return PAGES[h] ? h : '';
+    return hasOwn(PAGES, h) ? h : '';
   }
   el('tabs').addEventListener('click', function(e){
     var b = e.target.closest('.navitem'); if (!b) return;
@@ -5157,23 +5171,33 @@ window.llApplyTheme = function (pref) {
     // render (tiles) or clear the veil / show the error. Same class as A-14/A-15 (silent wrong numbers).
     var q = ++statsReq;
     var p = statsGet(qs, fresh === true), memo = statsMemo;
-    p
-      .then(function(d){ if (q !== statsReq) return; statsShown = memo; render(d); })
-      .catch(function(e){
-        if (q !== statsReq) { if (String(e && e.message) !== 'AUTH') console.error('stale /stats load failed', e); return; }
-        statsLoading = false;
-        el('veil').classList.add('hide');
-        if (e.message === 'AUTH') { onAuthFail(); return; }
-        // a Ledger /stats failure is only meaningful on the Ledger tab. #errbox is a
-        // SIBLING of #app, so showing it while on another tab would stack the error
-        // over that tab's content. Stay quiet off-Ledger; the (hidden) Ledger just
-        // doesn't update until the user is actually looking at it. Quiet on screen, but never
-        // untraced (chaos sweep 2026-10-09: an agent/coordinator boots on Today, so this was silent).
-        if (ACTIVE_TAB !== 'ledger') { console.error('/stats failed (off-Ledger, not shown)', e); return; }
-        el('app').style.display = 'none';
-        el('errbox').classList.add('show');
-        el('errmsg').innerHTML = 'The stats API returned an error: <code>' + esc(e.message) + '</code>';
-      });
+    // S1 (audit 2026-10-11): the fetch and the paint fail on separate paths. render() used to run
+    // inside the fetch's .then, so a render throw was reported as "The stats API returned an error",
+    // and statsShown was stamped BEFORE the paint, so the reuse check above then skipped the very
+    // re-render that would have shown it. A rejected fetch lands in the second argument below; a
+    // throw inside render() lands in the .catch; statsShown moves only once render() has returned.
+    p.then(function(d){
+        if (q !== statsReq) return;
+        render(d);
+        statsShown = memo;
+      }, function(e){ statsLoadFailed(q, e, 'The stats API returned an error'); })
+      .catch(function(e){ statsLoadFailed(q, e, 'The Ledger could not render the stats'); });
+  }
+  // load()'s one failure path. A stale generation is traced only; AUTH routes to sign-in; every
+  // other failure is console.error'd and, on the Ledger tab, shown in #errbox. Off-Ledger it stays
+  // quiet on screen (#errbox is a SIBLING of #app and would stack over the other tab's content; the
+  // hidden Ledger retries when opened — showTab) but never untraced (chaos sweep 2026-10-09: an
+  // agent/coordinator boots on Today, so an untraced failure here was invisible).
+  function statsLoadFailed(q, e, what){
+    if (q !== statsReq) { if (String(e && e.message) !== 'AUTH') console.error('stale /stats load failed', e); return; }
+    statsLoading = false;
+    el('veil').classList.add('hide');
+    if (String(e && e.message) === 'AUTH') { onAuthFail(); return; }
+    console.error(what + (ACTIVE_TAB !== 'ledger' ? ' (off-Ledger, not shown)' : ''), e);
+    if (ACTIVE_TAB !== 'ledger') return;
+    el('app').style.display = 'none';
+    el('errbox').classList.add('show');
+    el('errmsg').innerHTML = esc(what) + ': <code>' + esc(String(e && e.message || e)) + '</code>';
   }
   function scheduleLoad(){
     if (loadTimer) clearTimeout(loadTimer);
@@ -5277,7 +5301,7 @@ window.llApplyTheme = function (pref) {
   function scopeNoteHide(){ var n = el('scope-note'); if (n) n.style.display = 'none'; }
   function scopeNoteSync(key){
     var n = el('scope-note'); if (!n) return;
-    if (scopeNoteShown || !scopeRestored || !SCOPE_NOTE_TABS[key] || !scopeSummary()) { scopeNoteHide(); return; }
+    if (scopeNoteShown || !scopeRestored || !hasOwn(SCOPE_NOTE_TABS, key) || !scopeSummary()) { scopeNoteHide(); return; }
     scopeNoteShown = true;
     var t = el('scope-note-t'); if (t) t.textContent = 'Showing ' + scopeSummary();
     n.style.display = '';
@@ -10075,13 +10099,27 @@ window.llApplyTheme = function (pref) {
     }).catch(function(e){
       lgBusy(false);
       lgErr('That code didn\u2019t verify \u2014 ' + String(e && e.message || e) + '. Codes change every 30 seconds; try the current one.');
-      // a used challenge cannot be retried: open a fresh one for the next attempt
-      SB.auth.mfa.challenge({ factorId: lgFactorId }).then(function(c){ if (c && c.data) lgChallengeId = c.data.id; });
+      // a used challenge cannot be retried: open a fresh one for the next attempt. S12 (audit
+      // 2026-10-11): this had no .catch — a failed re-challenge was an unhandled rejection and the
+      // next Verify reused the spent challenge id. Now it is traced, shown, and the id is cleared
+      // so Verify says "Start again" instead of posting a dead challenge.
+      SB.auth.mfa.challenge({ factorId: lgFactorId }).then(function(c){
+        if (c && c.error) throw c.error;
+        lgChallengeId = c.data.id;
+      }).catch(function(e2){
+        lgChallengeId = '';
+        console.error('mfa re-challenge failed', e2);
+        lgErr('That code didn\u2019t verify, and a new authenticator challenge could not be opened \u2014 ' + String(e2 && e2.message || e2) + '. Reload the page and sign in again.');
+      });
     });
   }
   // The handshake: 200 {ok:false, code} names the next step; ok = in.
   function lgHello(){
+    // S8 (audit 2026-10-11): authGen moves on Sign out (lgSignOutLocal). An answer from before that
+    // is stale and must not start the app — it used to re-run startApp after the user signed out.
+    var gen = authGen;
     return postJSON('/user/hello', {}).then(function(j){
+      if (gen !== authGen) { console.warn('stale /user/hello answer dropped (signed out meanwhile)'); return; }
       lgBusy(false); lgErr('');
       if (j && j.ok){
         authIdent = { email: j.email, display_name: j.display_name, role: j.role, agent_name: j.agent_name || null,
@@ -10101,6 +10139,7 @@ window.llApplyTheme = function (pref) {
       else if (code === 'PASSWORD_LOGIN') lgErr('Password sign-ins aren\u2019t accepted \u2014 use the emailed code.');
       else lgErr('Please sign in again.');
     }).catch(function(e){
+      if (gen !== authGen) { console.warn('stale /user/hello failure dropped (signed out meanwhile)', e); return; }   // S8
       lgBusy(false);
       if (String(e && e.message) === 'AUTH') return;   // onAuthFail has already routed
       console.error('user/hello failed', e);
@@ -12679,9 +12718,25 @@ window.llApplyTheme = function (pref) {
   }
   fltInit();
 
+  // S2 (audit 2026-10-11): Chart.js is a CDN script. Without this guard a blocked CDN threw inside
+  // render() on every Ledger paint (and, before S1, read as a fake "stats API" error). Now the
+  // numbers still render and each canvas says why it is blank — degrade visibly, never silently.
   function mkChart(id, cfg){
-    if (charts[id]) charts[id].destroy();
-    charts[id] = new Chart(el(id).getContext('2d'), cfg);
+    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+    var cv = el(id); if (!cv) { console.error('mkChart: no canvas #' + id); return null; }
+    if (!window.Chart) { chartUnavailable(cv); return null; }
+    charts[id] = new Chart(cv.getContext('2d'), cfg);
+    return charts[id];
+  }
+  var chartLibWarned = false;
+  function chartUnavailable(cv){
+    if (!chartLibWarned) { chartLibWarned = true; console.error('Chart.js did not load (CDN blocked?) — charts are off, the numbers still render'); }
+    cv.setAttribute('aria-label', 'Chart unavailable: the chart library did not load');
+    var ctx = cv.getContext('2d'); if (!ctx) return;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.font = "12px 'Schibsted Grotesk', Verdana, sans-serif";
+    ctx.fillStyle = COL.soft; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Chart unavailable \u2014 the chart library did not load', cv.width / 2, cv.height / 2);
   }
   // scriptable vertical gradient for chart fills — top c1 → bottom c2 (on-brand bar fills)
   function vgrad(c1, c2){
@@ -14348,7 +14403,7 @@ window.llApplyTheme = function (pref) {
     if (unitsAll === null){ loadUnits(unitsExport); return; }
     var rows = uRowsCur || [];
     if (!rows.length){ alert('Nothing matches the current filters — nothing to export.'); return; }
-    var bits = unitsFilterBits(), today = dstr(new Date());
+    var bits = unitsFilterBits(), today = edToday();   // S3: export dated the Edmonton day
     var note = rows.length + ' of ' + unitsAll.length + ' units · exported ' + today + ' · ' +
       (bits.length ? bits.join(' · ') : 'no filters applied');
     var slug = bits.slice(0, 2).join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
@@ -16432,7 +16487,7 @@ window.llApplyTheme = function (pref) {
     // S6 (Batch F): /owners rows carry NO contact; /me/owners rows (account manager) still do.
     // Contact comes from the row when present, otherwise /owner-detail fetched now; the
     // curOwner check drops a stale reply when another owner was opened meanwhile.
-    var hasContact = Object.prototype.hasOwnProperty.call(r, 'email') || Object.prototype.hasOwnProperty.call(r, 'phone');
+    var hasContact = hasOwn(r, 'email') || hasOwn(r, 'phone');
     omPaintContact(r, hasContact ? r : null, false);
     el('om-detwrap').open = false;
     if (!hasContact && r.buildium_id != null) {
@@ -17517,7 +17572,7 @@ window.llApplyTheme = function (pref) {
     var w = windowDates();
     // global window sets the lookback; presets keep upcoming visible, custom honours its exact range
     p.set('from', w.from);
-    p.set('to', state.to !== dstr(new Date()) ? w.to : dstr(new Date(now + 90 * 86400000)));
+    p.set('to', state.to !== winToday() ? w.to : edDayPlus(90));   // S3: Edmonton day on both sides
     return appendScope(p);
   }
   /* stable per-agent colour — assigned in sorted order (Unknown last), so the legend,
@@ -18567,7 +18622,15 @@ window.llApplyTheme = function (pref) {
     syncBusy('Starting\u2026');
     var baselineB = lastBuildiumSync;
     apiFetch('/sync', { method: 'POST' })
-      .then(function(r){ return r.json(); })
+      // S4 (audit 2026-10-11): a 403/500 answers {error}, not {buildium, calendly} — without this
+      // check "bad" read false, the badge said Syncing… and the poll ran for 15 minutes
+      .then(function(r){
+        return r.json().catch(function(){ return {}; }).then(function(res){
+          if (!r.ok) throw new Error((res && res.error) || ('HTTP ' + r.status));
+          if (!res || typeof res !== 'object' || !('buildium' in res) || !('calendly' in res)) throw new Error('unexpected /sync answer');
+          return res;
+        });
+      })
       .then(function(res){
         var bad = (res.buildium || '').indexOf('error') === 0 && (res.calendly || '').indexOf('error') === 0;
         if (bad) { syncDone('Sync failed', true); console.error('sync start returned errors', res); return; }
@@ -18605,7 +18668,7 @@ window.llApplyTheme = function (pref) {
   // triggers a single reload.
   var WMON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var winDirty = false;
-  function winToday(){ return dstr(new Date()); }
+  function winToday(){ return edToday(); }   // S3: Edmonton day (was the UTC date — tomorrow from ~18:00 MT)
   function winDays(){ return Math.max(1, Math.round((Date.parse(state.to) - Date.parse(state.from)) / 86400000)); }
   function winWLabel(n){ var w = n / 7; if (n % 7 === 0) return w + (w === 1 ? ' wk' : ' wks'); return '~' + (Math.round(w * 10) / 10) + ' wks'; }
   function winFmt(s){ var d = new Date(s); return WMON[d.getUTCMonth()] + ' ' + d.getUTCDate(); }
@@ -18661,7 +18724,7 @@ window.llApplyTheme = function (pref) {
     // Applications: the window applies only in Closed / All AND when no 30d / 90d / 1y / All preset
     // overrides it (a Ledger drill's 'custom' range IS the window at drill time)
     var appsWin = aView !== 'open' && (aWin.mode === 'global' || aWin.mode === 'custom');
-    var on = !!WIN_TABS[ACTIVE_TAB] && (ACTIVE_TAB !== 'applications' || appsWin);
+    var on = hasOwn(WIN_TABS, ACTIVE_TAB) && (ACTIVE_TAB !== 'applications' || appsWin);
     wb.style.display = on ? '' : 'none';
     if (!on) winClose();
   }
@@ -20271,7 +20334,7 @@ window.llApplyTheme = function (pref) {
     ledOutreachLoaded = 1;
     // A-19: 6 days back + today = the same 7-day window as the outreach tile above
     // (the scorecard RPC's predicate is >= from AND < to+1; "- 7" made this an 8-day pull).
-    var to = dstr(new Date()), from = dstr(new Date(Date.now() - 6 * 86400000));
+    var to = edToday(), from = edDayPlus(-6);   // S3: Edmonton days
     authFetch('/agent-scorecard?from=' + from + '&to=' + to).then(function(j){
       var rows = (j.scorecard || []).filter(function(r){ return (r.calls_out||0)+(r.calls_in||0)+(r.texts_out||0)+(r.texts_in||0) > 0; })
         .sort(function(a, b){ return ((b.calls_out||0)+(b.texts_out||0)) - ((a.calls_out||0)+(a.texts_out||0)); });
@@ -20980,7 +21043,7 @@ window.llApplyTheme = function (pref) {
   function findPaint(){
     var res = el('find-res');
     if (!res || !findQ || findQ.length < 2 || res.hidden) return;
-    var tab = ACTIVE_TAB, first = FIND_TAB_KIND[tab];
+    var tab = ACTIVE_TAB, first = hasOwn(FIND_TAB_KIND, tab) ? FIND_TAB_KIND[tab] : null;
     // Properties (buildings) ALWAYS lead (Pearse 2026-10-08), then the open tab's own kind, then the rest
     var order = ['property'].concat(first && first !== 'property' ? [first] : [], FIND_KINDS.filter(function(k){ return k !== 'property' && k !== first; }));
     var nIn = 0, nOut = 0, body = '';
@@ -21012,7 +21075,7 @@ window.llApplyTheme = function (pref) {
     res.innerHTML = '<div class="findhd" role="status">' + hd + '</div>' + tblOpt + body;
   }
   // the open tab's own table search field, or null on a tab without one (Today, Ledger)
-  function findTableSearchEl(){ var id = FIND_TABLE_SEARCH[ACTIVE_TAB]; return id ? el(id) : null; }
+  function findTableSearchEl(){ var id = hasOwn(FIND_TABLE_SEARCH, ACTIVE_TAB) ? FIND_TABLE_SEARCH[ACTIVE_TAB] : null; return id ? el(id) : null; }
   function findTabName(tab){
     var b = document.querySelector('#tabs .navitem[data-tab="' + tab + '"]');
     var t = b ? (b.textContent || '').replace(/\s+/g, ' ').trim() : '';

@@ -20162,6 +20162,32 @@ window.llApplyTheme = function (pref) {
   var schUnitReq = 0;   // generation guard for the unit lookup (a slow early keystroke must not paint over a newer one)
   var schBkMode = 'single', schBkStops = [], schBkStopT = null;   // 'single' | 'multi' (back-to-back) | 'offer'; stops: [{start_time, location}]
   var schBkOffers = [], schBkShowOpenPrior = null, schBkOfferLast = null;   // offer run: [{start_time}] — alternative times for ONE visit, one optional shared location
+  // ── One in-flight contract for the two run buttons (audit 2026-10-11 T-B1/B3/B4) ──────────
+  // Book all and Create offer link post to Calendly. The button stays disabled until its post
+  // settles no matter what re-renders meanwhile (adding a stop re-renders the list, and the
+  // list used to re-enable the button mid-run → a second /tour-book loop → duplicate Calendly
+  // bookings), and the actor/agent/event type/prospect are captured at press so an agent
+  // switch mid-run cannot re-point the remaining stops. schBkSyncButtons is the ONE place a
+  // run button's disabled state is set.
+  var schBkBusy = {};   // button id → true while its post runs
+  var schBkRun = { 'sch-bk-book-all': { box: 'sch-bk-multi-result', signIn: 'Sign in first (so the bookings are logged to you).' },
+                   'sch-bk-offer-go': { box: 'sch-bk-offer-result', signIn: 'Sign in first (so the link is logged to you).' } };
+  function schBkResult(btnId, html){ var rb = el(schBkRun[btnId].box); if (!rb) return; rb.style.display = 'block'; rb.innerHTML = html; }
+  function schBkSubmit(btnId, busyText, run){   // run(ctx) → Promise; ctx = the state captured at press
+    var btn = el(btnId); if (!btn || schBkBusy[btnId]) return;
+    var actor = getActor();
+    if (!actor){ schBkResult(btnId, '<div class="note">' + schBkRun[btnId].signIn + '</div>'); return; }
+    var ctx = { actor: actor, agentId: schedBook.agentId, eventType: schedBook.eventType, p: schedBook.applicant };
+    schBkBusy[btnId] = true; var orig = btn.textContent; btn.textContent = busyText; schBkSyncButtons();
+    return run(ctx).catch(function(e){
+      if (String(e && e.message) === 'AUTH') return;   // onAuthFail already showed the sign-in screen
+      schBkResult(btnId, '<div class="note">' + esc(String((e && e.message) || 'error')) + '</div>');
+    }).then(function(){ schBkBusy[btnId] = false; btn.textContent = orig; schBkSyncButtons(); });
+  }
+  function schBkSyncButtons(){
+    [['sch-bk-book-all', schBkStops], ['sch-bk-offer-go', schBkOffers]].forEach(function(x){ var b = el(x[0]); if (b) b.disabled = !!schBkBusy[x[0]] || !x[1].length; });
+  }
+  var schBkAgentReq = 0;   // T-B2: a slow /agent-event-types for agent A must not arm A's type after agent B was picked
   function schShowView(v){
     var L = el('sch-landing'), B = el('sch-view-book');
     if (L) L.style.display = v === 'landing' ? 'block' : 'none';
@@ -20247,7 +20273,9 @@ window.llApplyTheme = function (pref) {
     schBkCloseConfirm();
     tdBkStatus('Checking ' + a.display_name + "'s tour types…");
     var et = el('sch-bk-ettype'); if (et) et.innerHTML = '<span class="count-note">Loading event types…</span>';
+    var g = ++schBkAgentReq;
     authFetch('/agent-event-types?agent_id=' + encodeURIComponent(a.id)).then(function(j){
+      if (g !== schBkAgentReq || String(schedBook.agentId) !== String(a.id)) return;   // superseded: another agent picked, or disarmed, while this answer was in flight
       var types = (j.event_types || []).filter(function(t){ return t.active !== false; });
       if (!types.length){
         // no listed types → auto-arm with the agent's default so booking still flows
@@ -20259,7 +20287,7 @@ window.llApplyTheme = function (pref) {
       // default to "Rental Tour" so Denai can book immediately; fall back to the sole type. The chip can still be switched.
       var pref = types.filter(function(t){ return /rental tour/i.test(t.name || ''); })[0] || (types.length === 1 ? types[0] : null);
       if (pref) schBkPickEventType(pref.uri, pref.name || 'Tour', pref.duration || 15, pref.kind || '');
-    }).catch(function(e){ if (String(e.message) !== 'AUTH' && et) et.innerHTML = '<span class="count-note">Could not load event types.</span>'; });
+    }).catch(function(e){ if (g !== schBkAgentReq) return; if (String(e.message) !== 'AUTH' && et) et.innerHTML = '<span class="count-note">Could not load event types.</span>'; });
   }
   function schBkPickEventType(uri, name, dur, kind){
     schedBook.eventType = uri; schedBook.eventTypeName = name || ''; schedBook.duration = parseInt(dur, 10) || 15;
@@ -20485,7 +20513,7 @@ window.llApplyTheme = function (pref) {
       var n = schBkStops.length;
       sum.innerHTML = n ? ('Book <b>' + n + '</b> tour' + (n === 1 ? '' : 's') + ' for <b>' + esc(schedBook.applicant ? schedBook.applicant.name : 'prospect') + '</b> with <b>' + esc(schedBook.agentName) + '</b>. The prospect gets <b>one text</b> (for the first).') : '';
     }
-    var btn = el('sch-bk-book-all'); if (btn) btn.disabled = !schBkStops.length;
+    schBkSyncButtons();
   }
   /* ── Unit lookup — ONE picker behind every "find a unit" field ────────────────────
      Three tour-location fields (Confirm & book · offer link · each back-to-back stop)
@@ -21036,53 +21064,58 @@ window.llApplyTheme = function (pref) {
     schUnitLookup(inputEl, res);
   }
   function schBkBookAll(){
-    var p = schedBook.applicant; if (!p || !schedBook.agentId || !schBkStops.length) return;
+    if (!schedBook.applicant || !schedBook.agentId || !schBkStops.length) return;
     // pull the latest location text straight from the inputs (in case a keystroke hasn't debounced)
     var inputs = (el('sch-bk-stops') || document).querySelectorAll('.schstop-loc');
     [].slice.call(inputs).forEach(function(inp){ var st = inp.getAttribute('data-st'); var s = schBkStops.filter(function(x){ return x.start_time === st; })[0]; if (s) s.location = inp.value; });
-    var actor = getActor(), rb = el('sch-bk-multi-result');
-    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Sign in first (so the bookings are logged to you).</div>'; } return; }
-    var stops = schBkStops.slice().sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
-    var btn = el('sch-bk-book-all'), orig = btn.textContent; btn.textContent = 'Booking…'; btn.disabled = true;
-    if (rb){ rb.style.display = 'block'; rb.innerHTML = ''; }
-    var done = [];
-    function paint(){
-      if (!rb) return;
-      rb.innerHTML = stops.map(function(st, i){
-        var when = schEdFmt(st.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-        var r = done[i];
-        var tag = !r ? '<span class="schstep-wait">…</span>' : (r.ok ? '<span class="schstop-ok">✓ booked</span>' : '<span class="schstop-err">✕ ' + esc(r.err || 'failed') + '</span>');
-        return '<div class="schstop-res">' + esc(when) + (st.location ? ' · ' + esc(st.location) : '') + ' — ' + tag + '</div>';
-      }).join('');
-    }
-    paint();
-    var i = 0;
-    function next(){
-      if (i >= stops.length){
-        btn.textContent = orig; btn.disabled = false;
-        var ok = done.filter(function(r){ return r && r.ok; }).length;
-        // keep only the failed stops so they can retry; drop the booked ones
-        var failedTimes = {}; stops.forEach(function(st, k){ if (done[k] && !done[k].ok) failedTimes[st.start_time] = 1; });
-        schBkStops = schBkStops.filter(function(s){ return failedTimes[s.start_time]; });
-        if (rb) rb.insertAdjacentHTML('afterbegin', '<div class="schbooked">✓ Booked ' + ok + ' of ' + stops.length + ' tour' + (stops.length === 1 ? '' : 's') + ' for ' + esc(p.name || 'the prospect') + '. The prospect was texted once (first tour).</div>');
-        schBkRenderStops();
-        schBkLoadCalendar();
-        tdLoadCal();   // the new bookings appear on the team calendar's tours layer
-        return;
+    schBkSubmit('sch-bk-book-all', 'Booking…', function(ctx){
+      var p = ctx.p, rb = el('sch-bk-multi-result');
+      var stops = schBkStops.slice().sort(function(a, b){ return Date.parse(a.start_time) - Date.parse(b.start_time); });
+      if (rb){ rb.style.display = 'block'; rb.innerHTML = ''; }
+      var done = [];
+      function paint(){
+        if (!rb) return;
+        rb.innerHTML = stops.map(function(st, i){
+          var when = schEdFmt(st.start_time, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+          var r = done[i];
+          var tag = !r ? '<span class="schstep-wait">…</span>' : (r.ok ? '<span class="schstop-ok">✓ booked</span>' : '<span class="schstop-err">✕ ' + esc(r.err || 'failed') + '</span>');
+          return '<div class="schstop-res">' + esc(when) + (st.location ? ' · ' + esc(st.location) : '') + ' — ' + tag + '</div>';
+        }).join('');
       }
-      var st = stops[i], first = (i === 0);
-      postJSON('/tour-book', {
-        actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,
-        prospect_name: p.name, prospect_email: p.email,
-        prospect_phone: p.phone || null,                 // always sent (phone-only leads mint their email from it)
-        suppress_reminder: !first,                       // Calendly SMS reminder only on the first tour
-        contact_channel: p.channel || null, lead_source: p.lead_source || null,
-        application_id: p.application_id || null, aptly_card_id: (p && p.aptly_card_id) || null,
-        location: (st.location || '').trim(), start_time: st.start_time
-      }).then(function(){ done[i] = { ok: true }; i++; paint(); next(); })
-        .catch(function(e){ if (String(e.message) === 'AUTH') { btn.textContent = orig; btn.disabled = false; return; } done[i] = { ok: false, err: (e && e.message) ? e.message : 'error' }; i++; paint(); next(); });
-    }
-    next();
+      // settle() runs ONCE, whether the loop finished or a sign-out cut it short: the booked stops
+      // leave the list either way, so a retry after signing back in never re-posts them (T-B4).
+      function settle(cut){
+        var booked = {}; stops.forEach(function(st, k){ if (done[k] && done[k].ok) booked[st.start_time] = 1; });
+        var ok = Object.keys(booked).length;
+        schBkStops = schBkStops.filter(function(s){ return !booked[s.start_time]; });
+        if (rb) rb.insertAdjacentHTML('afterbegin', cut
+          ? '<div class="note">Signed out after ' + ok + ' of ' + stops.length + ' — the booked tours are off the list; sign in and press Book all for the rest.</div>'
+          : '<div class="schbooked">✓ Booked ' + ok + ' of ' + stops.length + ' tour' + (stops.length === 1 ? '' : 's') + ' for ' + esc(p.name || 'the prospect') + '. The prospect was texted once (first tour).</div>');
+        schBkRenderStops();
+        if (!cut){ schBkLoadCalendar(); tdLoadCal(); }   // the new bookings appear on the team calendar's tours layer
+      }
+      paint();
+      var i = 0;
+      return new Promise(function(resolve){
+        (function next(){
+          if (i >= stops.length){ settle(false); resolve(); return; }
+          var st = stops[i], first = (i === 0);
+          postJSON('/tour-book', {
+            actor: ctx.actor, agent_id: ctx.agentId, event_type: ctx.eventType,   // captured at press — an agent switch mid-run must not re-point the remaining stops (T-B3)
+            prospect_name: p.name, prospect_email: p.email,
+            prospect_phone: p.phone || null,                 // always sent (phone-only leads mint their email from it)
+            suppress_reminder: !first,                       // Calendly SMS reminder only on the first tour
+            contact_channel: p.channel || null, lead_source: p.lead_source || null,
+            application_id: p.application_id || null, aptly_card_id: (p && p.aptly_card_id) || null,
+            location: (st.location || '').trim(), start_time: st.start_time
+          }).then(function(){ done[i] = { ok: true }; i++; paint(); next(); })
+            .catch(function(e){
+              if (String(e && e.message) === 'AUTH'){ for (var k = i; k < stops.length; k++) done[k] = { ok: false, err: 'not booked — signed out' }; paint(); settle(true); resolve(); return; }
+              done[i] = { ok: false, err: (e && e.message) ? e.message : 'error' }; i++; paint(); next();
+            });
+        })();
+      });
+    });
   }
   // ── Offer times (ONE Calendly Share with several alternative times; prospect optional) ──
   function schBkAddOffer(startIso){
@@ -21120,43 +21153,42 @@ window.llApplyTheme = function (pref) {
         sum.innerHTML = 'Offer <b>' + n + '</b> time' + (n === 1 ? '' : 's') + ' with <b>' + esc(schedBook.agentName) + '</b>' + who + '.';
       }
     }
-    var btn = el('sch-bk-offer-go'); if (btn) btn.disabled = !schBkOffers.length;
+    schBkSyncButtons();
   }
   function schBkOfferLocSearch(inputEl){ schUnitLookup(inputEl, el('sch-bk-offer-loc-results')); }
   function schBkOfferGo(){
     if (!schedBook.agentId || !schedBook.eventType || !schBkOffers.length) return;   // prospect NOT required
-    var actor = getActor(), rb = el('sch-bk-offer-result');
-    if (!actor){ if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Sign in first (so the link is logged to you).</div>'; } return; }
-    var p = schedBook.applicant;   // may be null → bare shareable link
     var loc = ((el('sch-bk-offer-loc') && el('sch-bk-offer-loc').value) || '').trim();
-    var btn = el('sch-bk-offer-go'), orig = btn.textContent; btn.textContent = 'Creating…'; btn.disabled = true;
-    postJSON('/tour-offer', {
-      actor: actor, agent_id: schedBook.agentId, event_type: schedBook.eventType,
-      prospect_name: (p && p.name) || null, prospect_email: (p && p.email) || null, prospect_phone: (p && p.phone) || null,
-      contact_channel: (p && p.channel) || null, lead_source: (p && p.lead_source) || null,
-      application_id: (p && p.application_id) || null, aptly_card_id: (p && p.aptly_card_id) || null,
-      location: loc,
-      slots: schBkOffers.map(function(s){ return { start_time: s.start_time }; })
-    }).then(function(j){
-      btn.textContent = orig; btn.disabled = false;
-      schBkOfferLast = { link: j.booking_url || '', msg: j.message_text || '' };
-      if (rb){
-        rb.style.display = 'block';
-        var canText = !!(p && p.phone), canMail = !!j.mailto_url;
-        rb.innerHTML =
-          '<div class="schlink"><input type="text" readonly value="' + esc(j.booking_url || '') + '"><button type="button" class="rfreshbtn schoffer-copy" data-copy="link">&#10697; Copy link</button></div>' +
-          '<div class="schsend">' +
-            '<button type="button" class="ccbtn schoffer-copymsg" data-copy="msg">&#10697; Copy message</button>' +
-            (canText ? '<a class="ccbtn" target="_blank" rel="noopener" href="' + esc(rcText(String(p.phone).replace(/[^0-9+]/g, ''), j.message_text || '')) + '">&#128172; Text</a>' : '') +
-            (canMail ? '<a class="ccbtn" target="_blank" rel="noopener" href="' + esc(j.mailto_url) + '">&#9993;&#65039; Email</a>' : '') +
-          '</div>' +
-          '<div class="note">' + ((j.offered_dates && j.offered_dates.length) ? ('Offered on: ' + esc(j.offered_dates.join(', ')) + '. The link is single-use and expires once booked or after those dates.') : '') + (p ? '' : ' No prospect &mdash; this is a bare shareable link.') + '</div>';
-      }
-      schBkOffers = []; schBkRenderOffers(); schBkRenderCal();
-      loadTourOffers();
-    }).catch(function(e){
-      btn.textContent = orig; btn.disabled = false;
-      if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Could not create the offer link: ' + esc((e && e.message) ? e.message : 'error') + '</div>'; }
+    var slots = schBkOffers.map(function(s){ return { start_time: s.start_time }; });   // captured at press
+    schBkSubmit('sch-bk-offer-go', 'Creating…', function(ctx){
+      var p = ctx.p, rb = el('sch-bk-offer-result');   // p may be null → bare shareable link
+      return postJSON('/tour-offer', {
+        actor: ctx.actor, agent_id: ctx.agentId, event_type: ctx.eventType,
+        prospect_name: (p && p.name) || null, prospect_email: (p && p.email) || null, prospect_phone: (p && p.phone) || null,
+        contact_channel: (p && p.channel) || null, lead_source: (p && p.lead_source) || null,
+        application_id: (p && p.application_id) || null, aptly_card_id: (p && p.aptly_card_id) || null,
+        location: loc,
+        slots: slots
+      }).then(function(j){
+        schBkOfferLast = { link: j.booking_url || '', msg: j.message_text || '' };
+        if (rb){
+          rb.style.display = 'block';
+          var canText = !!(p && p.phone), canMail = !!j.mailto_url;
+          rb.innerHTML =
+            '<div class="schlink"><input type="text" readonly value="' + esc(j.booking_url || '') + '"><button type="button" class="rfreshbtn schoffer-copy" data-copy="link">&#10697; Copy link</button></div>' +
+            '<div class="schsend">' +
+              '<button type="button" class="ccbtn schoffer-copymsg" data-copy="msg">&#10697; Copy message</button>' +
+              (canText ? '<a class="ccbtn" target="_blank" rel="noopener" href="' + esc(rcText(String(p.phone).replace(/[^0-9+]/g, ''), j.message_text || '')) + '">&#128172; Text</a>' : '') +
+              (canMail ? '<a class="ccbtn" target="_blank" rel="noopener" href="' + esc(j.mailto_url) + '">&#9993;&#65039; Email</a>' : '') +
+            '</div>' +
+            '<div class="note">' + ((j.offered_dates && j.offered_dates.length) ? ('Offered on: ' + esc(j.offered_dates.join(', ')) + '. The link is single-use and expires once booked or after those dates.') : '') + (p ? '' : ' No prospect &mdash; this is a bare shareable link.') + '</div>';
+        }
+        schBkOffers = []; schBkRenderOffers(); schBkRenderCal();
+        loadTourOffers();
+      }).catch(function(e){
+        if (String(e && e.message) === 'AUTH') throw e;   // the contract keeps AUTH quiet (the sign-in screen is already up)
+        if (rb){ rb.style.display = 'block'; rb.innerHTML = '<div class="note">Could not create the offer link: ' + esc((e && e.message) ? e.message : 'error') + '</div>'; }
+      });
     });
   }
   function schBkRenderSummary(){

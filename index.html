@@ -14993,20 +14993,45 @@ window.llApplyTheme = function (pref) {
     in:  { k:'in',  label:'Move-in date',  api:'in'  },
     out: { k:'out', label:'Move-out date', api:'out' }
   };
-  function mvoOverrideOn(r, k){ return (k === 'in' ? r.move_in_override_on : r.move_out_override_on) || null; }
-  function mvoActor(r, k){ return (k === 'in' ? r.move_in_override_actor : r.move_out_override_actor) || null; }
-  function mvoAt(r, k){ return (k === 'in' ? r.move_in_override_at : r.move_out_override_at) || null; }
+  // Move-out on a unit with NO Active lease reads and writes the OUTGOING lease
+  // (last_move_out_lease_id), not the displayed one — on a pre-leased unit the displayed lease
+  // is the incoming Future lease, so an actual move-out recorded there landed on the NEW tenant
+  // (Pearse 2026-10-12). On a plain vacant unit both ids name the same Past lease. NULL on any
+  // unit with an Active lease, which keeps the notice-based behaviour below.
+  function mvoPast(r, k){ return k === 'out' && r.last_move_out_lease_id != null; }
+  function mvoLeaseId(r, k){ return mvoPast(r, k) ? r.last_move_out_lease_id : r.lease_id; }
+  function mvoOverrideOn(r, k){
+    if (mvoPast(r, k)) return r.last_move_out_src === 'manual' ? (r.last_move_out_on || null) : null;
+    return (k === 'in' ? r.move_in_override_on : r.move_out_override_on) || null;
+  }
+  function mvoActor(r, k){
+    if (mvoPast(r, k)) return r.last_move_out_actor || null;
+    return (k === 'in' ? r.move_in_override_actor : r.move_out_override_actor) || null;
+  }
+  function mvoAt(r, k){
+    if (mvoPast(r, k)) return r.last_move_out_at || null;
+    return (k === 'in' ? r.move_in_override_at : r.move_out_override_at) || null;
+  }
   // the date Buildium/the lease supplies, i.e. what shows if the override is cleared
-  function mvoDerivedOn(r, k){ return (k === 'in' ? r.lease_from_date : r.next_move_out) || null; }
+  function mvoDerivedOn(r, k){
+    if (mvoPast(r, k)) return r.last_move_out_derived_on || null;
+    return (k === 'in' ? r.lease_from_date : r.next_move_out) || null;
+  }
   // Move-in reuses the board's ONE reader (miDerive) so the field and the Move-in column can
   // never disagree. Move-out has no such column — the override, else Buildium's notice date.
   function mvoOn(r, k){
     if (k === 'in') return r.move_in_disp || null;
+    if (mvoPast(r, k)) return r.last_move_out_on || null;
     return r.move_out_override_on || r.next_move_out || null;
   }
   function mvoSrc(r, k){
     if (k === 'in') return r.move_in_src || null;
+    if (mvoPast(r, k)) return r.last_move_out_src === 'manual' ? 'manual' : (r.last_move_out_on ? 'lease' : null);
     return r.move_out_override_on ? 'manual' : (r.next_move_out ? 'lease' : null);
+  }
+  // the unit modal's "Last move-out" row — one reader, so a save can repaint it in place
+  function lmoValueHtml(r){
+    return r.last_move_out_on ? esc(r.last_move_out_on) + mvoSrcChip(r.last_move_out_src === 'manual' ? 'manual' : 'lease') : '–';
   }
   function mvoSrcChip(s){
     if (s === 'appt')     return ' <span class="srctag ok" title="Booked appointment from Google Calendar">appt</span>';
@@ -15034,13 +15059,13 @@ window.llApplyTheme = function (pref) {
     if (src === 'appt')     return 'From Google Calendar &mdash; a booked move-in appointment.';
     if (src === 'expected') return 'Expected move-in from the status override, not a lease.' +
       (r.status_override_expires_on ? ' Held until ' + esc(r.status_override_expires_on) + '.' : '');
-    if (src === 'lease')    return k === 'in' ? 'From the lease.' : 'From the move-out notice in Buildium.';
+    if (src === 'lease')    return k === 'in' ? 'From the lease.' : (mvoPast(r, k) ? 'From Buildium &mdash; the last tenant&rsquo;s move-out.' : 'From the move-out notice in Buildium.');
     return k === 'in' ? 'No move-in date yet.' : 'No move-out scheduled.';
   }
   function mvoValueHtml(r, k){
     var id = 'um-mvo-' + k;
     var h = '<span id="' + id + '-stat">' + mvoStatHtml(r, k) + '</span>';
-    if (r.lease_id) {
+    if (mvoLeaseId(r, k)) {
       var ov = mvoOverrideOn(r, k);
       h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px">' +
         '<input type="date" id="' + id + '-date" min="2020-01-01" max="2035-12-31" value="' + esc(String(ov || '')) + '" style="width:150px" aria-label="' + esc(MVO[k].label) + '">' +
@@ -15050,7 +15075,7 @@ window.llApplyTheme = function (pref) {
         '</div>';
     }
     h += '<div class="qn" style="margin-top:4px">' + mvoNote(r, k) + '</div>';
-    if (!r.lease_id) {
+    if (!mvoLeaseId(r, k)) {
       h += '<div class="qn" style="margin-top:4px">' + (k === 'in'
         ? 'No lease in Buildium to attach a date to. Set the expected move-in on the status override above.'
         : 'No lease on this unit, so there is no move-out to record.') + '</div>';
@@ -15078,7 +15103,7 @@ window.llApplyTheme = function (pref) {
       if (!clearing && !dv){ if (hint) hint.textContent = 'Pick a date first (or clear it).'; return; }
       if (hint) hint.textContent = 'Saving…';
       var uid = String(r.unit_id);
-      postJSON('/move/date', { lease_id: Number(r.lease_id), move_kind: MVO[k].api, actual_on: dv, actor: actor })
+      postJSON('/move/date', { lease_id: Number(mvoLeaseId(r, k)), move_kind: MVO[k].api, actual_on: dv, actor: actor })
         .then(function(j){
           var d = (j && j.date) || {};
           var on = d.actual_on || null;
@@ -15090,6 +15115,18 @@ window.llApplyTheme = function (pref) {
             // reader so the row behind the modal follows in the same tick
             miDerive(r);
             drawUnits();
+          } else if (mvoPast(r, k)) {
+            // the outgoing lease's row: a cleared date falls back to Buildium's (same rule as the view)
+            r.last_move_out_on    = on || r.last_move_out_derived_on || null;
+            r.last_move_out_src   = on ? 'manual' : (r.last_move_out_derived_on ? 'lease' : null);
+            r.last_move_out_actor = on ? (d.actor || actor) : null;
+            r.last_move_out_at    = on ? (d.noted_at || new Date().toISOString()) : null;
+            // a vacant unit DISPLAYS that same lease, so its own override fields follow
+            if (String(r.lease_id) === String(r.last_move_out_lease_id)) {
+              r.move_out_override_on    = on;
+              r.move_out_override_actor = r.last_move_out_actor;
+              r.move_out_override_at    = r.last_move_out_at;
+            }
           } else {
             r.move_out_override_on    = on;
             r.move_out_override_actor = on ? (d.actor || actor) : null;
@@ -15098,6 +15135,7 @@ window.llApplyTheme = function (pref) {
           // the modal may show another unit by now — these ids would be ITS nodes, not ours
           var w2 = el('um-fields');
           if (!w2 || w2.getAttribute('data-mvo-uid') !== uid) return;
+          if (mvoPast(r, k)) { var lmo = el('um-lmo'); if (lmo) lmo.innerHTML = lmoValueHtml(r); }
           // the Clear button appears/disappears with the state, so re-render + re-bind
           var host = el(id + '-host');
           if (host){ host.innerHTML = mvoValueHtml(r, k); mvoBindOne(r, k); }
@@ -15383,7 +15421,7 @@ window.llApplyTheme = function (pref) {
     // The outgoing tenant's move-out stays on the unit until the next tenant MOVES IN
     // (Pearse 2026-10-12) — on a pre-leased unit this is the only place the turnover gap shows,
     // because the Lease rows above describe the incoming lease. NULL whenever a lease is Active.
-    f += fitem('Last move-out', r.last_move_out_on ? esc(r.last_move_out_on) + mvoSrcChip(r.last_move_out_src === 'manual' ? 'manual' : 'lease') : null);
+    f += fitem('Last move-out', '<span id="um-lmo">' + lmoValueHtml(r) + '</span>');
     // calendar appointment (Google mirror), deliberately distinct from the lease-date fields —
     // an elevator booked days before/after lease start is routine, not a contradiction
     f += fitem('Move-in appt', esc(r.next_move_in_appt));

@@ -4317,7 +4317,7 @@ window.llApplyTheme = function (pref) {
   var tableRows = [];
   var sortKey = 'days_vacant', sortDir = -1;
   var lastBuildiumSync = null;
-  var pollTimer = null, pollStart = 0;
+  var pollTimer = null, pollStart = 0, pollKick = null;
   var loadTimer = null;
   var unitsAll = null, ownersAll = null;
   var uSort = { k:'property_name', d:1 }, oSort = { k:'display_name', d:1 };
@@ -5009,19 +5009,24 @@ window.llApplyTheme = function (pref) {
   (function(){ var sc = el('sheetclose'); if (sc) sc.addEventListener('click', function(){ document.body.classList.remove('moreopen'); }); })();
   // honour back/forward and manual hash edits while signed in
   window.addEventListener('hashchange', function(){ if (!authIdent) return; var t = tabFromHash(); if (t) showTab(t); });
+  // S10 (audit 2026-10-11): every Units drill starts from the SAME clean board. The four helpers
+  // each reset a different subset, so a Find property hit could land on a table still narrowed by
+  // an old occupancy chip or column filter. This is fltClearAll('utable') minus its redraw (each
+  // drill applies its own filter, then draws once).
+  function unitsDrillReset(){ FT.utable.clear(); COLF['utable'] = {}; }
   function gotoUnitsWithSearch(q){
     showTab('units');
-    var go = function(){ el('u-search').value = q || ''; uSel = {}; drawChips(); drawUnits(); };
+    var go = function(){ unitsDrillReset(); el('u-search').value = q || ''; refreshFunnels(); drawChips(); drawUnits(); };
     if (unitsAll === null) loadUnits(go); else go();
   }
   function gotoUnitsFiltered(filterKey){
     showTab('units');
     var go = function(){
-      el('u-search').value = '';
-      uSel = {}; uSel[filterKey] = 1;
+      unitsDrillReset();
+      uSel[filterKey] = 1;
       if (filterKey === 'exp60' || filterKey === 'exp90') uSort = { k:'days_remaining', d:1 };
       if (filterKey === 'balance') uSort = { k:'total_balance', d:-1 };
-      drawChips(); drawUnits();
+      refreshFunnels(); drawChips(); drawUnits();
     };
     if (unitsAll === null) loadUnits(go); else go();
   }
@@ -5029,9 +5034,7 @@ window.llApplyTheme = function (pref) {
   function gotoUnitsColFilter(apply){
     showTab('units');
     var go = function(){
-      el('u-search').value = '';
-      uSel = {};
-      COLF['utable'] = {};
+      unitsDrillReset();
       apply();
       refreshFunnels(); drawChips(); drawUnits();
     };
@@ -5146,6 +5149,8 @@ window.llApplyTheme = function (pref) {
     // and a manager whose portfolio scopeRestore already seeded).
     if (fresh !== true && statsShown && statsShown === statsMemo && statsShown.qs === qs && statsMemoLive(statsShown)) return;
     statsLoading = true;
+    // S9: loadApps/fetchTours drop an answer whose query no longer matches (see qs there), so an
+    // in-flight old-window load can't refill these after the null.
     appsAll = null; toursAll = null; // entity filters / window changed → lazy-reload those tabs
     el('veil').classList.remove('hide');
     // F2: generation guard — a quick scope/window change fires two /stats; only the NEWEST may
@@ -5227,7 +5232,9 @@ window.llApplyTheme = function (pref) {
     if (el('page-tours').style.display === 'block') { toursAll = null; loadTours(); }
     if (keysAll !== null) { drawKeyChips(); drawKeys(); }
     if (tasksAll !== null) { drawTaskChips(); drawTasks(); }
-    if (el('page-history').style.display === 'block') { historyAll = null; loadHistory(); }
+    // F-B2: null the key history unconditionally (as renewals already is), or a later visit to
+    // History shows the OLD scope's events under a count line saying "loaded for your scope".
+    historyAll = null; if (el('page-history').style.display === 'block') loadHistory();
     renewalsAll = null; loadRenewals();   // tile + tab are scope-aware
     todayLoaded = null;                   // Today queues are scope-aware too
     if (el('page-today').style.display === 'block') loadToday();
@@ -5640,17 +5647,31 @@ window.llApplyTheme = function (pref) {
     }
     return evs;
   }
+  // T-B8/B11 (audit 2026-10-11): generation-guarded — two quick window changes could land the
+  // older /tours last and paint the stale window. A /tours failure used to leave tdCalRows null,
+  // so the confirm sweep and conflicts panels said "Loading…" forever; tdCalErr makes them say
+  // the tours are unavailable instead (never an all-clear).
+  var tdCalReq = 0, tdCalErr = false, tdCalAgentsErr = false;
   function tdLoadCal(){
+    var q = ++tdCalReq;
     authFetch('/tour-agents')
-      .then(function(j){ tdCalAgents = j.agents || []; tdDrawCal(); })
+      .then(function(j){ if (q !== tdCalReq) return; tdCalAgentsErr = false; tdCalAgents = j.agents || []; tdDrawCal(); })
       .catch(function(e){
-        // the calendar still works without agent chips — degrade, but leave a trace
-        tdCalAgents = []; tdDrawCal();
+        if (q !== tdCalReq) return;
+        // the calendar still works without agent chips — degrade, but say so and leave a trace
+        tdCalAgentsErr = true; tdCalAgents = []; tdDrawCal();
         if (String(e && e.message) !== 'AUTH') console.error('calendar agents failed', e);
       });
     authFetch('/tours?' + toursQuery().toString())
-      .then(function(j){ tdCalRows = j.tours || []; tdDrawCal(); })
-      .catch(function(e){ if (String(e && e.message) !== 'AUTH'){ console.error('calendar tours failed', e); var b = el('td-cal'); if (b) b.innerHTML = '<div class="note">Could not load tours.</div>'; } });
+      .then(function(j){ if (q !== tdCalReq) return; tdCalErr = false; tdCalRows = j.tours || []; tdDrawCal(); })
+      .catch(function(e){
+        if (q !== tdCalReq) { if (String(e && e.message) !== 'AUTH') console.error('stale calendar tours load failed', e); return; }
+        tdCalErr = true;
+        tdRenderReconSweep(); tdRenderConflicts();
+        if (String(e && e.message) === 'AUTH') return;
+        console.error('calendar tours failed', e);
+        var b = el('td-cal'); if (b) b.innerHTML = '<div class="note">Could not load tours.</div>';
+      });
   }
   function tdCalChips(){
     var box = el('td-cal-ag'); if (!box) return;
@@ -5664,6 +5685,7 @@ window.llApplyTheme = function (pref) {
     var h = '<button type="button" class="agchip' + (tdCalAgent === '' ? ' on' : '') + '" data-ag="">All agents</button>';
     h += prim.map(chip).join('');
     if (sec.length) h += '<span class="agchip-sep" title="Bookable when needed — hidden from the all-agents view">Also bookable</span>' + sec.map(chip).join('');
+    if (tdCalAgentsErr) h += '<span class="count-note">Agent list unavailable &mdash; could not load.</span>';
     box.innerHTML = h;
   }
   function tdCalFiltered(){
@@ -5675,34 +5697,50 @@ window.llApplyTheme = function (pref) {
   // Non-tour BUSY blocks (Calendly/external calendar) for the filtered agent — parity
   // with the old Schedule page's booking calendar, but available on a plain chip pick.
   // Session-cached per agent (28-day window); [] doubles as the in-flight marker.
-  var tdCalBusyCache = {};
+  // T-B10: a failure used to be swallowed by a comment-only catch and left [] cached as if loaded,
+  // hiding that agent's busy time for the session. Now it is traced, flagged on the count line,
+  // and retried on a later draw (not before a minute: tdDrawCal calls this, so no hot loop).
+  var tdCalBusyCache = {}, tdCalBusyErr = {};
   function tdCalEnsureBusy(){
     if (!tdCalAgent) return;
     var a = (tdCalAgents || []).filter(function(x){ return x.display_name === tdCalAgent; })[0];
     if (!a) return;
     var key = String(a.id);
-    if (tdCalBusyCache[key] !== undefined) return;
+    if (tdCalBusyCache[key] !== undefined && !(tdCalBusyErr[key] && Date.now() - tdCalBusyErr[key] > 60000)) return;
     tdCalBusyCache[key] = [];
     var from = new Date().toISOString().slice(0, 10);
     var to = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
     authFetch('/agent-schedule?agent_id=' + encodeURIComponent(a.id) + '&from=' + from + '&to=' + to)
-      .then(function(j){ tdCalBusyCache[key] = j.busy || []; tdDrawCal(); })
-      .catch(function(){ /* busy layer is best-effort — tours still render */ });
+      .then(function(j){ delete tdCalBusyErr[key]; tdCalBusyCache[key] = j.busy || []; tdDrawCal(); })
+      .catch(function(e){
+        // the busy layer is best-effort (tours still render), but a failure is never "no busy time"
+        tdCalBusyErr[key] = Date.now(); tdDrawCal();
+        if (String(e && e.message) !== 'AUTH') console.error('agent busy layer failed', e);
+      });
   }
   // Whole-team mirror busy for the ALL-AGENTS view (WS-G M4) — one /gcal/busy read,
   // 10-min session cache (the hourly gcal-sync keeps the mirror itself fresh).
   // Generation-guarded: a slow response can never paint over a newer fetch.
-  var tdTeamBusy = null, tdTeamBusyAt = 0, tdTeamBusyReq = 0;
+  // T-B9: the cache used to be stamped (and set to []) BEFORE the fetch, so a failure read as
+  // "No conflicts in the next 7 days" and blocked a retry for 10 minutes. Now the stamp lands only
+  // on success; a failure is flagged (tdTeamBusyErr = when), shown, and retried after a minute.
+  var tdTeamBusy = null, tdTeamBusyAt = 0, tdTeamBusyReq = 0, tdTeamBusyErr = 0, tdTeamBusyBusy = false;
   function tdTeamBusyEnsure(){
-    if (tdTeamBusy !== null && (Date.now() - tdTeamBusyAt) < 600000) return;
+    if (tdTeamBusyBusy) return;
+    if (tdTeamBusyErr ? (Date.now() - tdTeamBusyErr) < 60000 : (tdTeamBusy !== null && (Date.now() - tdTeamBusyAt) < 600000)) return;
     var gen = ++tdTeamBusyReq;
-    tdTeamBusy = tdTeamBusy || [];
-    tdTeamBusyAt = Date.now();
+    tdTeamBusyBusy = true;
     var from = new Date().toISOString().slice(0, 10);
     var to = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
     authFetch('/gcal/busy?from=' + from + '&to=' + to)
-      .then(function(j){ if (gen !== tdTeamBusyReq) return; tdTeamBusy = (j && j.people) || []; tdDrawCal(); })
-      .catch(function(e){ if (String(e && e.message) === 'AUTH') return; console.error('team busy layer failed', e); });
+      .then(function(j){ if (gen !== tdTeamBusyReq) return; tdTeamBusyBusy = false; tdTeamBusyErr = 0; tdTeamBusyAt = Date.now(); tdTeamBusy = (j && j.people) || []; tdDrawCal(); })
+      .catch(function(e){
+        if (gen !== tdTeamBusyReq) return;
+        tdTeamBusyBusy = false; tdTeamBusyErr = Date.now();
+        tdDrawCal();
+        if (String(e && e.message) === 'AUTH') return;
+        console.error('team busy layer failed', e);
+      });
   }
   function tdDrawCal(){
     var box = el('td-cal'); if (!box || tdCalRows === null) return;
@@ -5737,6 +5775,7 @@ window.llApplyTheme = function (pref) {
         events.push({ id: 'busy_' + b.start, title: b.title || 'Busy', start: b.start, end: b.end || undefined, backgroundColor: sac, borderColor: sac, textColor: '#15110D', classNames: ['fc-ev-teambusy'], extendedProps: { kind: 'busy', busyAgent: tdCalAgent, busyColor: sac, busyLink: b.html_link || null } });
       });
       if (n && bz && bz.length) n.textContent += ' · busy time shown';
+      if (n && tdCalBusyErr[String(busyRow.id)]) n.textContent += ' · busy time could not load';
     }
     // ALL-AGENTS view: the whole team's mirror busy as slim name-tagged blocks (WS-G M4),
     // colour-keyed to the agent chips. Hidden while booking is armed (the picked agent's
@@ -5756,6 +5795,7 @@ window.llApplyTheme = function (pref) {
         });
       });
       if (n && tbN) n.textContent += ' · team busy shown';
+      if (n && tdTeamBusyErr) n.textContent += ' · team busy could not load';
     }
     if (!tdcal){
       var mob = isMobile();
@@ -5797,6 +5837,7 @@ window.llApplyTheme = function (pref) {
   // no phone AND no email coaches instead of rendering dead chips.
   function tdRenderReconSweep(){
     var box = el('td-recon-sweep'); if (!box) return;
+    if (tdCalErr){ box.innerHTML = '<div class="note">Tours unavailable &mdash; could not load, so confirmations cannot be checked. Refresh to try again.</div>'; var n0 = el('td-recon-note'); if (n0) n0.textContent = ''; return; }
     if (tdCalRows === null){ box.innerHTML = '<div class="note">Loading&hellip;</div>'; return; }
     var now = Date.now();
     var tKey = tdDayKeyEd(new Date()), tmKey = tdDayKeyEd(new Date(now + 86400000));
@@ -5840,6 +5881,7 @@ window.llApplyTheme = function (pref) {
   // can dismiss a benign one at a glance. Data = tdCalRows + the cached team-busy layer.
   function tdRenderConflicts(){
     var box = el('td-conflicts'); if (!box) return;
+    if (tdCalErr){ box.innerHTML = '<div class="note">Tours unavailable &mdash; could not load, so conflicts cannot be checked. Refresh to try again.</div>'; var n0 = el('td-conflicts-note'); if (n0) n0.textContent = ''; return; }
     if (tdCalRows === null){ box.innerHTML = '<div class="note">Loading&hellip;</div>'; return; }
     tdTeamBusyEnsure();   // 10-min session cache; re-calls tdDrawCal (→ here) when it lands
     var now = Date.now(), horizon = now + 7 * 86400000;
@@ -5881,9 +5923,11 @@ window.llApplyTheme = function (pref) {
       return '<div class="schoffer" data-uri="' + esc(c.a.uri) + '"><div class="schoffer-main"><b>' + esc(c.a.agent || '?') + ' &middot; tour overlaps &ldquo;' + esc(c.title) + '&rdquo;</b>' +
         '<div class="schoffer-sub">' + esc(when) + ' &middot; ' + esc(c.a.invitee_name || 'Prospect') + '</div></div>' +
         '<span class="chip c-warm">possible clash</span></div>';
-    }).join('') || '<div class="note">No conflicts in the next 7 days.</div>';
+    }).join('') || (tdTeamBusyErr
+      ? '<div class="note">No double-bookings in the next 7 days. Calendar clashes were not checked &mdash; the team busy layer could not load.</div>'
+      : '<div class="note">No conflicts in the next 7 days.</div>');
     var n = el('td-conflicts-note');
-    if (n) n.textContent = out.length ? out.length + ' found' + (out.length > 12 ? ' · showing 12' : '') : '';
+    if (n) n.textContent = (out.length ? out.length + ' found' + (out.length > 12 ? ' · showing 12' : '') : '') + (tdTeamBusyErr ? (out.length ? ' · ' : '') + 'calendar layer unavailable' : '');
   }
   if (el('td-conflicts')) el('td-conflicts').addEventListener('click', function(e){
     var row = e.target.closest('[data-uri]'); if (!row) return; openTourDetail(row.getAttribute('data-uri'));
@@ -10368,7 +10412,9 @@ window.llApplyTheme = function (pref) {
     el('veil').classList.remove('hide');
     authFetch('/keys').then(function(j){
       keysAll = j.keys || []; drawKeyChips(); drawKeys(); el('veil').classList.add('hide');
-    }).catch(function(){ el('veil').classList.add('hide');
+    }).catch(function(e){ el('veil').classList.add('hide');
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('keys load failed', e);
       el('ktable').querySelector('tbody').innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center">Could not load keys.</td></tr>'; });
   }
   function drawKeyChips(){
@@ -11193,7 +11239,9 @@ window.llApplyTheme = function (pref) {
     if (kMgrPinActive()) p.delete('managers');
     authFetch('/key-events?' + p.toString()).then(function(j){
       historyAll = j.events || []; drawHistoryChips(); drawHistory(); el('veil').classList.add('hide');
-    }).catch(function(){ el('veil').classList.add('hide');
+    }).catch(function(e){ el('veil').classList.add('hide');
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('key history load failed', e);
       el('htable').querySelector('tbody').innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center">Could not load history.</td></tr>'; });
   }
   function drawHistoryChips(){
@@ -11401,7 +11449,9 @@ window.llApplyTheme = function (pref) {
     el('veil').classList.remove('hide');
     authFetch('/tasks').then(function(j){
       tasksAll = j.tasks || []; drawTaskChips(); drawTasks(); el('veil').classList.add('hide');
-    }).catch(function(){ el('veil').classList.add('hide');
+    }).catch(function(e){ el('veil').classList.add('hide');
+      if (String(e && e.message) === 'AUTH') return;
+      console.error('tasks load failed', e);
       el('ttable').querySelector('tbody').innerHTML = emptyRow('ttable', 'Could not load tasks.'); });
   }
   function drawTaskChips(){
@@ -13670,10 +13720,23 @@ window.llApplyTheme = function (pref) {
   el('u-chips').addEventListener('click', uChipClick);
   if (el('u-hidden')) el('u-hidden').addEventListener('click', uChipClick);
   // nb-bt / nb-appl are chip groups (CG_ONCHANGE), nb-park is a popover (MS.cb) — they wire themselves
+  // F-B3/B4 (audit 2026-10-11): in-flight + generation guard, the loadApps shape. Every Ledger drill
+  // called showTab('units') (which fires loadUnits() on a null cache) and then loadUnits(go) — two
+  // GET /units and a double paint. Now a second caller queues its callback on the request already
+  // in flight. Callbacks drain once, each isolated, so a throw in one can never land in .catch and
+  // repaint good rows as "Could not load". unitsInvalidate() is the one way to drop the cache.
+  var unitsReq = 0, unitsLoading = false, unitsAfterQ = [];
+  function unitsInvalidate(){ unitsAll = null; unitsReq++; unitsLoading = false; }
   function loadUnits(after){
+    if (after) unitsAfterQ.push(after);
+    if (unitsLoading) return;
+    unitsLoading = true;
+    var q = ++unitsReq;
     el('veil').classList.remove('hide');
     authFetch('/units')
       .then(function(j){
+        if (q !== unitsReq) return;
+        unitsLoading = false;
         unitsAll = j.units || [];
         nrRows = j.not_ready || [];
         tbSrc = j.takebacks || { ledger: [], buildium_property_ids: [] };
@@ -13690,11 +13753,16 @@ window.llApplyTheme = function (pref) {
         fillAmenMS('u_amen', unitsAll, uAmenOf);
         drawChips(); drawUnits();
         el('veil').classList.add('hide');
-        if (after) after();
+        var cbs = unitsAfterQ; unitsAfterQ = [];
+        cbs.forEach(function(cb){ try { cb(); } catch (e) { console.error('loadUnits after-callback failed', e); } });
       })
-      .catch(function(){
+      .catch(function(e){
+        if (q !== unitsReq) { if (String(e && e.message) !== 'AUTH') console.error('stale units load failed', e); return; }
+        unitsLoading = false; unitsAfterQ = [];
         el('veil').classList.add('hide');
-        el('utable').querySelector('tbody').innerHTML = '<tr><td colspan="11" style="padding:24px;text-align:center">Could not load units.</td></tr>';
+        if (String(e && e.message) === 'AUTH') return;
+        console.error('units load failed', e);
+        el('utable').querySelector('tbody').innerHTML = emptyRow('utable', 'Could not load units.');
       });
   }
   function evChip(ev2){
@@ -15611,15 +15679,21 @@ window.llApplyTheme = function (pref) {
     if (!authIdent){ acmSet(false, null); return; }
     authFetch('/me/owners').then(function(j){
       if (gen !== acmReq) return;
+      acmProbeTries = 0;
       acmSet(true, (j && j.owners) || []);
     }).catch(function(e){
       if (gen !== acmReq) return;
       var m = String(e && e.message);
       // 403 = not switched on for this sign-in, the expected answer for everyone else
-      if (m !== 'AUTH' && m !== 'HTTP 403') console.error('me/owners failed', e);
-      acmSet(false, null);
+      if (m === 'AUTH' || m === 'HTTP 403') { acmProbeTries = 0; acmSet(false, null); return; }
+      // S6 (audit 2026-10-11): any other error (a blip, a 500) used to switch the whole Me layer
+      // off until reload — and acmLogTouch re-probes after every touch. Keep what is on screen,
+      // leave a trace, and retry a few times so a first-probe blip doesn't hide it all session.
+      console.error('me/owners failed', e);
+      if (acmProbeTries++ < 3) setTimeout(function(){ if (gen === acmReq) acmProbe(); }, 30000);
     });
   }
+  var acmProbeTries = 0;
   function acmSet(on, rows){
     var roleBefore = tdRole();
     acmOn = !!on; acmRows = acmOn ? rows : null; acmMap = {};
@@ -16227,9 +16301,11 @@ window.llApplyTheme = function (pref) {
         el('veil').classList.add('hide');
         if (after) { try { after(); } catch (e) { console.error('loadOwners after-callback failed', e); } }
       })
-      .catch(function(){
+      .catch(function(e){
         el('veil').classList.add('hide');
-        el('otable').querySelector('tbody').innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center">Could not load owners.</td></tr>';
+        if (String(e && e.message) === 'AUTH') return;
+        console.error('owners load failed', e);
+        el('otable').querySelector('tbody').innerHTML = emptyRow('otable', 'Could not load owners.');
       });
   }
   function ownersFiltered(){
@@ -16467,10 +16543,19 @@ window.llApplyTheme = function (pref) {
   }
   if (el('ls-chips')) el('ls-chips').addEventListener('click', lsChipClick);
   if (el('ls-bal')) el('ls-bal').addEventListener('click', lsChipClick);
+  // F-B3/B4: the loadUnits shape (gotoLeasesWithSearch also fetched twice; after() ran inside .then)
+  var leasesReq = 0, leasesLoading = false, leasesAfterQ = [];
+  function leasesInvalidate(){ leasesAll = null; leasesReq++; leasesLoading = false; }
   function loadLeases(after){
+    if (after) leasesAfterQ.push(after);
+    if (leasesLoading) return;
+    leasesLoading = true;
+    var q = ++leasesReq;
     el('veil').classList.remove('hide');
     authFetch('/leases')
       .then(function(j){
+        if (q !== leasesReq) return;
+        leasesLoading = false;
         leasesAll = j.leases || [];
         leasesAll.forEach(function(r){
           r.tenant_disp = (r.tenant_names || []).join(', ');
@@ -16482,9 +16567,12 @@ window.llApplyTheme = function (pref) {
         });
         drawLsChips(); drawLeases();
         el('veil').classList.add('hide');
-        if (after) after();
+        var cbs = leasesAfterQ; leasesAfterQ = [];
+        cbs.forEach(function(cb){ try { cb(); } catch (e) { console.error('loadLeases after-callback failed', e); } });
       })
       .catch(function(e){
+        if (q !== leasesReq) { if (String(e && e.message) !== 'AUTH') console.error('stale leases load failed', e); return; }
+        leasesLoading = false; leasesAfterQ = [];
         el('veil').classList.add('hide');
         if (String(e && e.message) === 'AUTH') return;
         console.error('leases load failed', e);
@@ -16836,10 +16924,14 @@ window.llApplyTheme = function (pref) {
     // F2: generation guard. The after-callbacks (openAppEnsure → "open this application") are QUEUED
     // and drained by whichever load lands newest-and-successful — a stale load must not drop them.
     if (after) appsAfterQ.push(after);
-    var q = ++appsReq;
-    authFetch('/applications?' + appsQuery().toString())
+    var q = ++appsReq, qs = appsQuery().toString();
+    authFetch('/applications?' + qs)
       .then(function(j){
         if (q !== appsReq) return;
+        // S9 (audit 2026-10-11): load() nulls appsAll on a scope/window change without a new
+        // request; an answer for the OLD query must not refill it. Refetch for the current query
+        // (this keeps the veil and any queued callbacks, e.g. openAppEnsure, on the new request).
+        if (qs !== appsQuery().toString()) { loadApps(); return; }
         appsAll = j.applications || [];
         aServerCount = j.count != null ? j.count : appsAll.length;
         if (aPendingSearch !== null) { el('a-search').value = aPendingSearch; aPendingSearch = null; }
@@ -17357,7 +17449,7 @@ window.llApplyTheme = function (pref) {
     var id = hubMiEditId;
     postJSON('/lease/move-in', { lease_id: Number(id), move_in_date: dateStr, actor: actor })
       .then(function(res){
-        leasesAll = null;
+        leasesInvalidate();
         var lease = res && res.lease;
         hubTeamSigned = (hubTeamSigned || []).map(function(x){
           if (String(x.lease_id) !== String(id)) return x;
@@ -17433,9 +17525,10 @@ window.llApplyTheme = function (pref) {
   // reschedule / no-show / notes). Resolves TRUE when this response was painted, FALSE when a
   // newer fetch outran it (callers then leave the veil/view alone — the newer one owns them).
   function fetchTours(){
-    var q = ++toursReq;
-    return authFetch('/tours?' + toursQuery().toString()).then(function(j){
+    var q = ++toursReq, qs = toursQuery().toString();
+    return authFetch('/tours?' + qs).then(function(j){
       if (q !== toursReq) return false;
+      if (qs !== toursQuery().toString()) return fetchTours();   // S9: the loadApps rule above
       toursAll = j.tours || [];
       buildAgentColors();
       drawAgentLegend();
@@ -18318,11 +18411,10 @@ window.llApplyTheme = function (pref) {
   function gotoUnitsFilter(occ, mkt, band){
     showTab('units');
     var go = function(){
-      el('u-search').value = ''; el('u-rmin').value = ''; el('u-rmax').value = '';
-      uSel = {}; uOcc = occ || 'all'; uMkt = mkt || 'all'; uDV = band || '';
+      unitsDrillReset();   // S10: the shared drill reset (search, rent range, chips, column filters)
+      uOcc = occ || 'all'; uMkt = mkt || 'all'; uDV = band || '';
       if (el('u-dv')) el('u-dv').value = uDV;
-      COLF['utable'] = {};
-      drawChips(); drawUnits();
+      refreshFunnels(); drawChips(); drawUnits();
     };
     if (unitsAll === null) loadUnits(go); else go();
   }
@@ -18374,6 +18466,7 @@ window.llApplyTheme = function (pref) {
   }
   function syncDone(label, failed){
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (pollKick) { clearTimeout(pollKick); pollKick = null; }
     syncBtn.classList.remove('busy');
     if (failed) syncFailed = true;
     syncMsg = label; syncTextRender();
@@ -18399,9 +18492,29 @@ window.llApplyTheme = function (pref) {
         // settling = the main run landed but the chained Property Status (take-back) re-read
         // hasn't yet — hold the ONE reload until it does (the server caps the wait at 5 min)
         if (freshB && d.settling) { syncBusy('Updating take-backs\u2026'); return; }
-        if (freshB) { unitsAll = null; ownersAll = null; appsAll = null; toursAll = null; syncDone('Fresh data loaded ✓'); load(true); }
+        if (freshB) { syncDone('Fresh data loaded ✓'); load(true); syncReloadLists(); }
       })
       .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.warn('sync-status poll failed (will retry)', e); });
+  }
+  // F-B1 (audit 2026-10-11): a Sync moves every list, not just /stats. This used to null four
+  // caches and reload only /stats, so the open tab kept pre-sync rows AND went dead: drawUnits
+  // returns on a null cache, so every chip, search and sort click did nothing. Null every list
+  // cache, then reload the one on screen (the others reload lazily on their next showTab).
+  // One if per tab until the TABS registry (audit batch 4c). load(true) already nulled
+  // appsAll/toursAll.
+  function syncReloadLists(){
+    unitsInvalidate(); leasesInvalidate();
+    ownersAll = null; keysAll = null; tasksAll = null; historyAll = null;
+    var t = ACTIVE_TAB;
+    if (t === 'units') loadUnits();
+    if (t === 'leases') loadLeases();
+    if (t === 'owners') loadOwners();
+    if (t === 'applications') loadApps();
+    if (t === 'tours') loadTours();
+    if (t === 'keys') loadKeys();
+    if (t === 'tasks') loadTasks();
+    if (t === 'history') loadHistory();
+    renewalsAll = null; loadRenewals();   // feeds the Ledger tile too, so it reloads on every tab
   }
   syncBtn.addEventListener('click', function(){
     syncBtn.disabled = true;
@@ -18415,7 +18528,10 @@ window.llApplyTheme = function (pref) {
         syncBusy('Syncing\u2026 (~1\u20132 min)');
         pollStart = Date.now();
         pollTimer = setInterval(function(){ checkFresh(baselineB); }, 30000);
-        setTimeout(function(){ checkFresh(baselineB); }, 45000);
+        // S7: keep the handle so syncDone cancels it — a stray first-poll from an earlier Sync
+        // must never judge (or end) a later one
+        if (pollKick) clearTimeout(pollKick);
+        pollKick = setTimeout(function(){ pollKick = null; checkFresh(baselineB); }, 45000);
       })
       .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('sync start failed', e); syncDone('Sync failed', true); });
   });
@@ -18430,7 +18546,9 @@ window.llApplyTheme = function (pref) {
     var ppnl = el('pnl-phones');
     if (ppnl && ppnl.open) { phonesData = null; loadPhones(); }   // phones panel is window-aware
     else phonesData = null;                                       // closed → refetch on next open
-    if (el('page-schedule') && el('page-schedule').style.display === 'block') loadSchedFunnel();
+    // S11/T-B25: #page-schedule never gets display:block (it sits inside #td-coord, which tdRender
+    // toggles), so this test was always false and the strip kept the old window's numbers
+    var tco = el('td-coord'); if (tco && tco.style.display === 'block') loadSchedFunnel();
     // MyHub shares the window → refresh its scorecard/funnel/signed/follow-ups + team overview
     if (hubLoaded) { loadHubScore(false); if (hubView === 'team') loadHubTeam(); }
   }
@@ -18762,9 +18880,16 @@ window.llApplyTheme = function (pref) {
     return agents.filter(function(g){ return tdFt(g) === ft; })[0] || agents[0];
   }
   function loadHub(){ hubLoaded = 1; hubWinRender(); loadHubScore(true); loadHubTours(); }
+  // T-B5/B6 (audit 2026-10-11): every Hub loader is generation-guarded — clicking leaderboard row A
+  // then B used to land A's follow-ups and signed leases last, under B's name (and Claim credited
+  // B with a lease listed under A). A failed load sets an Err flag the renders read, so a 500 says
+  // "could not load", never "Nothing to follow up — all clear" / "No signed leases".
+  var hubScoreReq = 0, hubFollowReq = 0, hubSignedReq = 0, hubTeamReq = 0, hubFollowErr = false, hubSignedErr = false, hubScoreErr = false;
   function loadHubScore(pickDefault){
-    var w = hubWindow();
+    var w = hubWindow(), q = ++hubScoreReq;
     authFetch('/agent-scorecard?from=' + w.from + '&to=' + w.to).then(function(j){
+      if (q !== hubScoreReq) return;
+      hubScoreErr = false;
       hubScore = j.scorecard || [];
       var agents = hubScore.map(function(r){ return r.agent; }).filter(Boolean).sort();
       if (pickDefault || !hubAgent) hubAgent = hubMatchAgent(getActor(), agents);
@@ -18775,7 +18900,16 @@ window.llApplyTheme = function (pref) {
         if (hubAgent) sel.value = hubAgent;
       }
       hubRenderLeaderboard(); hubRenderFunnel(); loadHubAgent();
-    }).catch(function(e){ if (el('hub-funnel')) el('hub-funnel').innerHTML = '<div class="note">Could not load hub stats.</div>'; if (String(e && e.message) !== 'AUTH') console.error('hub scorecard failed', e); });
+    }).catch(function(e){
+      if (q !== hubScoreReq) { if (String(e && e.message) !== 'AUTH') console.error('stale hub scorecard load failed', e); return; }
+      if (el('hub-funnel')) el('hub-funnel').innerHTML = '<div class="note">Could not load hub stats.</div>';
+      // the admin team table and the leaderboard read the scorecard too: a failure there used to
+      // read as every agent having 0 showings / apps / calls (T-B6 class)
+      hubScoreErr = true;
+      var lb = el('hublead'); if (lb) lb.querySelector('tbody').innerHTML = emptyRow('hublead', 'Could not load the leaderboard. Refresh to try again.');
+      if (hubTeamSigned !== null) hubRenderTeamTable();
+      if (String(e && e.message) !== 'AUTH') console.error('hub scorecard failed', e);
+    });
   }
   // A3 — my pace: attributed signings (confirmed + suggested) month-to-date vs the same
   // day last month. Counts only (the no-commission-$ rule stands); two small scorecard
@@ -18783,8 +18917,8 @@ window.llApplyTheme = function (pref) {
   var hubPaceReq = 0;
   function loadHubPace(){
     var box = el('hub-pace'); if (!box) return;
+    var q = ++hubPaceReq, nowD = new Date();   // T-B12: bump BEFORE the empty-agent return, or the old agent's answer still paints
     if (!hubAgent){ box.textContent = ''; return; }
-    var q = ++hubPaceReq, nowD = new Date();
     var mFrom = new Date(nowD.getFullYear(), nowD.getMonth(), 1);
     var lmFrom = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
     var lmDays = new Date(nowD.getFullYear(), nowD.getMonth(), 0).getDate();   // days in last month (clamp Jul 31 → Jun 30)
@@ -18811,26 +18945,29 @@ window.llApplyTheme = function (pref) {
   function loadHubAgent(){
     hubLoadSigned();   // scope-aware: 'mine' needs hubAgent; 'pool'/'all' don't
     loadHubPace();     // A3 rides every agent pick / hub refresh
-    if (!hubAgent){ hubFollow = []; hubRenderFollow(); return; }
+    var q = ++hubFollowReq;
+    if (!hubAgent){ hubFollow = []; hubFollowErr = false; hubRenderFollow(); return; }
     authFetch('/agent-followups?agent=' + encodeURIComponent(hubAgent))
-      .then(function(j){ hubFollow = j.followups || []; hubRenderFollow(); })
+      .then(function(j){ if (q !== hubFollowReq) return; hubFollow = j.followups || []; hubFollowErr = false; hubRenderFollow(); })
       .catch(function(e){
+        if (q !== hubFollowReq) { if (String(e && e.message) !== 'AUTH') console.error('stale followups load failed', e); return; }
         if (String(e && e.message) !== 'AUTH') console.error('followups load failed', e);
-        hubFollow = []; hubRenderFollow();
+        hubFollow = []; hubFollowErr = true; hubRenderFollow();
       });
   }
   // Signed-leases panel honours the scope toggle: Mine (credited to you) /
   // Available to claim (the shared status='suggested' pool, all agents) / All.
   function hubLoadSigned(){
-    var w = hubWindow(), url;
+    var w = hubWindow(), url, q = ++hubSignedReq;
     if (hubSignedScope === 'pool') url = '/signed-leases?from=' + w.from + '&to=' + w.to + '&status=suggested';
     else if (hubSignedScope === 'all') url = '/signed-leases?from=' + w.from + '&to=' + w.to;
-    else { if (!hubAgent){ hubSigned = []; hubRenderSigned(); return; }
+    else { if (!hubAgent){ hubSigned = []; hubSignedErr = false; hubRenderSigned(); return; }
       url = '/signed-leases?from=' + w.from + '&to=' + w.to + '&agent=' + encodeURIComponent(hubAgent); }
-    authFetch(url).then(function(j){ hubSigned = j.signed || []; hubRenderSigned(); })
+    authFetch(url).then(function(j){ if (q !== hubSignedReq) return; hubSigned = j.signed || []; hubSignedErr = false; hubRenderSigned(); })
       .catch(function(e){
+        if (q !== hubSignedReq) { if (String(e && e.message) !== 'AUTH') console.error('stale signed-leases load failed', e); return; }
         if (String(e && e.message) !== 'AUTH') console.error('signed-leases load failed', e);
-        hubSigned = []; hubRenderSigned();
+        hubSigned = []; hubSignedErr = true; hubRenderSigned();
       });
   }
   function hubScoreFor(agent){
@@ -18941,8 +19078,9 @@ window.llApplyTheme = function (pref) {
         '<td data-label="Tenant">' + esc(r.tenant_name || '–') + '</td>' +
         '<td data-label="Credit">' + credit + '</td></tr>';
     });
-    tb.innerHTML = h || emptyRow('hubsigned', 'No signed leases in this window');
-    if (el('hub-signed-count')) el('hub-signed-count').textContent = rows.length + ' of ' + all.length;
+    tb.innerHTML = hubSignedErr ? emptyRow('hubsigned', 'Could not load signed leases. Refresh to try again.')
+      : (h || emptyRow('hubsigned', 'No signed leases in this window'));
+    if (el('hub-signed-count')) el('hub-signed-count').textContent = hubSignedErr ? '?' : rows.length + ' of ' + all.length;
     hubRenderSignedChips();
   }
   function hubRenderSignedChips(){
@@ -18987,8 +19125,9 @@ window.llApplyTheme = function (pref) {
         hubFuComms(r) +
         (contact ? '<div class="fubtns">' + contact + '</div>' : '') + '</div>';
     });
-    box.innerHTML = h || '<div class="note" style="padding:14px">Nothing to follow up — all clear.</div>';
-    if (el('hub-fu-count')) el('hub-fu-count').textContent = rows.length + ' to chase';
+    box.innerHTML = hubFollowErr ? '<div class="note" style="padding:14px">Could not load follow-ups. Refresh to try again.</div>'
+      : (h || '<div class="note" style="padding:14px">Nothing to follow up — all clear.</div>');
+    if (el('hub-fu-count')) el('hub-fu-count').textContent = hubFollowErr ? '?' : rows.length + ' to chase';
     hubRenderFuChips();
     hubRenderDoNext();   // the queue's follow-up tiers read the same data
   }
@@ -19004,7 +19143,7 @@ window.llApplyTheme = function (pref) {
     if (!actor){ alert('Pick your name first (on the sign-in screen) so the lease is credited correctly.'); return; }
     var body = { lease_id: Number(id), actor: actor }, path = '/lease/confirm';
     if (act === 'claim'){ path = '/lease/claim'; body.agent = hubAgent; }
-    postJSON(path, body).then(function(){ leasesAll = null; loadHubAgent(); loadHubScore(false); })
+    postJSON(path, body).then(function(){ leasesInvalidate(); loadHubAgent(); loadHubScore(false); })
       .catch(function(e){ alert('Could not save: ' + (e && e.message ? e.message : 'error')); });
   }
   function hubExport(){
@@ -19026,7 +19165,8 @@ window.llApplyTheme = function (pref) {
      Fetches all tours once over a broad window (independent of the activity window)
      and filters client-side to hubAgent. Reuses the Tours-tab modal (openTourDetail). ── */
   function loadHubTours(){
-    if (hubTours !== null){ hubRenderTours(); return; }
+    // T-B7: the [] failure sentinel used to count as loaded (no retry until a write cleared it)
+    if (hubTours !== null && !hubToursErr){ hubRenderTours(); return; }
     var from = dstr(new Date(Date.now() - 90 * 86400000)), to = dstr(new Date(Date.now() + 60 * 86400000));
     authFetch('/tours?from=' + from + '&to=' + to)
       .then(function(j){ hubTours = j.tours || []; hubToursErr = false; hubRenderTours(); })
@@ -19210,9 +19350,14 @@ window.llApplyTheme = function (pref) {
     });
     items.sort(function(a, b){ return (a.w - b.w) || (a.s - b.s); });
     var loadedBoth = hubTours !== null && hubFollow !== null;
+    // T-B7: a failed tours or follow-ups load is a MISSING tier, never "you're clear"
+    var miss = [];
+    if (hubToursErr) miss.push('your tours');
+    if (hubFollowErr) miss.push('follow-ups');
+    var missNote = miss.length ? '<div class="note" style="padding:14px">Could not load ' + miss.join(' or ') + ' &mdash; this list may be incomplete. Refresh to try again.</div>' : '';
     box.innerHTML = items.length
-      ? '<div class="schoffers">' + items.slice(0, HUB_NEXT_CAP).map(function(x){ return x.html; }).join('') + '</div>'
-      : '<div class="note" style="padding:14px">' + (loadedBoth ? 'Nothing urgent — you&rsquo;re clear.' : 'Loading&hellip;') + '</div>';
+      ? missNote + '<div class="schoffers">' + items.slice(0, HUB_NEXT_CAP).map(function(x){ return x.html; }).join('') + '</div>'
+      : (missNote || '<div class="note" style="padding:14px">' + (loadedBoth ? 'Nothing urgent — you&rsquo;re clear.' : 'Loading&hellip;') + '</div>');
     var cnt = el('hub-next-count');
     if (cnt){
       // headline = the urgent tiers; the stale no-app long tail (202 rows live on day one)
@@ -19276,17 +19421,20 @@ window.llApplyTheme = function (pref) {
      tdHubView('team')) — aggregated client-side from /agent-scorecard (hubScore)
      + /signed-leases + /tours. ── */
   function loadHubTeam(){
-    var w = hubWindow();
+    var w = hubWindow(), q = ++hubTeamReq;
     slRestore();   // remembered range/agent — safe here, this only runs on the admin board
     var pSigned = authFetch('/signed-leases?from=' + w.from + '&to=' + w.to);
-    var pTours = (hubTours !== null) ? Promise.resolve({ tours: hubTours })
+    // T-B7: a failed My-tours [] is not data — refetch rather than show "–" in Tour conf.
+    var pTours = (hubTours !== null && !hubToursErr) ? Promise.resolve({ tours: hubTours })
       : authFetch('/tours?from=' + dstr(new Date(Date.now() - 90 * 86400000)) + '&to=' + dstr(new Date(Date.now() + 60 * 86400000)));
     Promise.all([pSigned, pTours]).then(function(res){
+      if (q !== hubTeamReq) return;
       hubTeamSigned = (res[0] && res[0].signed) || [];
       hubTeamTours = (res[1] && res[1].tours) || [];
-      if (hubTours === null) hubTours = hubTeamTours;
+      if (hubTours === null || hubToursErr) { hubTours = hubTeamTours; hubToursErr = false; }
       hubRenderTeam();
     }).catch(function(e){
+      if (q !== hubTeamReq) { if (String(e && e.message) !== 'AUTH') console.error('stale team overview load failed', e); return; }
       var tb = el('hub-team-table'); if (tb) tb.querySelector('tbody').innerHTML = emptyRow('hub-team-table', 'Could not load team overview.');
       if (String(e && e.message) !== 'AUTH') console.error('team overview failed', e);
     });
@@ -19443,7 +19591,8 @@ window.llApplyTheme = function (pref) {
         '<td class="rt" data-label="Calls">' + fmtNum(r.calls) + '</td>' +
         '<td class="rt" data-label="Texts">' + fmtNum(r.texts) + '</td></tr>';
     });
-    tb.innerHTML = h || emptyRow('hub-team-table', 'No data in this window');
+    tb.innerHTML = (hubScoreErr ? emptyRow('hub-team-table', 'Could not load the scorecard \u2014 showings, apps, calls and texts below are missing, not zero.') : '') +
+      (h || emptyRow('hub-team-table', 'No data in this window'));
   }
   function slFiltered(){
     var q = (hubTeamLeasesQ || '').trim().toLowerCase();
@@ -19551,7 +19700,7 @@ window.llApplyTheme = function (pref) {
       if (!confirm('Credit this signed lease to ' + ag + '?' + (cur ? ' It is currently ' + cur + '.' : ''))) { close(); return; }
       var actor = getActor();
       postJSON('/lease/reassign', { lease_id: Number(id), agent: ag, actor: actor })
-        .then(function(){ close(); leasesAll = null; loadHubTeam(); loadHubScore(false); })
+        .then(function(){ close(); leasesInvalidate(); loadHubTeam(); loadHubScore(false); })
         .catch(function(e){ close(); if (!e || e.message !== 'AUTH') alert('Could not reassign: ' + (e && e.message ? e.message : 'error')); });
     });
     try { sel.focus(); } catch (e) {}
@@ -19566,7 +19715,7 @@ window.llApplyTheme = function (pref) {
     } else if (act === 'exclude'){
       if (!confirm('Exclude this lease from attribution? It will no longer count toward any agent.')) return;
       postJSON('/lease/exclude', { lease_id: Number(id), actor: actor })
-        .then(function(){ leasesAll = null; loadHubTeam(); loadHubScore(false); })
+        .then(function(){ leasesInvalidate(); loadHubTeam(); loadHubScore(false); })
         .catch(function(e){ alert('Could not exclude: ' + (e && e.message ? e.message : 'error')); });
     }
   }
@@ -20257,6 +20406,7 @@ window.llApplyTheme = function (pref) {
   function schBkCloseConfirm(){ var m = el('sch-bk-modal'); if (m && m.classList.contains('open')) closeModal('sch-bk-modal'); }
   // Disarm the booking when the calendar is set back to "All agents" — hide the event-type picker, drop the armed agent/type.
   function schBkDisarmAgent(){
+    schBkCalReq++;   // T-B14: a late calendar/event-types answer for the disarmed agent must not land
     schedBook.agentId = null; schedBook.agentName = ''; schedBook.eventType = null; schedBook.eventTypeName = '';
     schBkMode = 'single';
     schBkStops = []; schBkRenderStops();
@@ -20500,6 +20650,9 @@ window.llApplyTheme = function (pref) {
   }
   function schBkRenderStops(){
     var box = el('sch-bk-stops'); if (!box) return;
+    // T-B13: schBkStopLocSearch floats #sch-bk-stop-results INSIDE a stop row; rebuilding the rows
+    // deleted it, and stop autocomplete stayed dead until reload. Park it back first.
+    var sres = el('sch-bk-stop-results'); if (sres && box.contains(sres)) { box.insertAdjacentElement('afterend', sres); sres.innerHTML = ''; }
     if (!schBkStops.length){
       box.innerHTML = '<div class="note">No stops yet &mdash; click open times on the calendar above to add them.</div>';
     } else {

@@ -5520,6 +5520,12 @@ window.llApplyTheme = function (pref) {
     var ph = el('page-hub'); if (ph) ph.classList.toggle('teamview', v === 'team');
   }
   function tdDayKeyEd(d){ return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Edmonton', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
+  // T-B15 (audit 2026-10-11): Edmonton "today" / "today + n days" as YYYY-MM-DD. dstr(new Date()) and
+  // toISOString().slice(0,10) are the UTC date, which is TOMORROW from ~18:00 MT (busy layers skipped
+  // the rest of today, the Moves window gained a day, exports were dated tomorrow).
+  function edToday(){ return tdDayKeyEd(new Date()); }
+  function edDayPlus(n){ return tdDayKeyEd(new Date(Date.now() + n * 86400000)); }
+  function edYmd(y, m, d){ return y + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d; }   // m is 1-12
   // post-tour thank-you + the unit's own Buildium application link (Pearse copy, friendlier pass 2026-07-03)
   function tdThanksMsg(name, addr, applyUrl){
     var first = (String(name || '').trim().split(/\s+/)[0]) || 'there';
@@ -5708,8 +5714,7 @@ window.llApplyTheme = function (pref) {
     var key = String(a.id);
     if (tdCalBusyCache[key] !== undefined && !(tdCalBusyErr[key] && Date.now() - tdCalBusyErr[key] > 60000)) return;
     tdCalBusyCache[key] = [];
-    var from = new Date().toISOString().slice(0, 10);
-    var to = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
+    var from = edToday(), to = edDayPlus(28);   // T-B15: Edmonton days (UTC skipped the rest of today from ~18:00)
     authFetch('/agent-schedule?agent_id=' + encodeURIComponent(a.id) + '&from=' + from + '&to=' + to)
       .then(function(j){ delete tdCalBusyErr[key]; tdCalBusyCache[key] = j.busy || []; tdDrawCal(); })
       .catch(function(e){
@@ -5730,8 +5735,7 @@ window.llApplyTheme = function (pref) {
     if (tdTeamBusyErr ? (Date.now() - tdTeamBusyErr) < 60000 : (tdTeamBusy !== null && (Date.now() - tdTeamBusyAt) < 600000)) return;
     var gen = ++tdTeamBusyReq;
     tdTeamBusyBusy = true;
-    var from = new Date().toISOString().slice(0, 10);
-    var to = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
+    var from = edToday(), to = edDayPlus(28);   // T-B15: Edmonton days
     authFetch('/gcal/busy?from=' + from + '&to=' + to)
       .then(function(j){ if (gen !== tdTeamBusyReq) return; tdTeamBusyBusy = false; tdTeamBusyErr = 0; tdTeamBusyAt = Date.now(); tdTeamBusy = (j && j.people) || []; tdDrawCal(); })
       .catch(function(e){
@@ -6411,7 +6415,7 @@ window.llApplyTheme = function (pref) {
   function tdMvWindowPass(r, k){
     if (tdMvDays === 'all') return true;
     var d = tdMvOn(r, k);
-    return !d || d <= dstr(new Date(Date.now() + Number(tdMvDays) * 86400000));
+    return !d || d <= edDayPlus(Number(tdMvDays));   // T-B15: Edmonton day
   }
   function tdMvDateCell(r, k){
     var d = tdMvOn(r, k), lease = tdMvLeaseOn(r, k);
@@ -6686,7 +6690,7 @@ window.llApplyTheme = function (pref) {
     if (tdMvKind !== 'out') rows = rows.concat(tdMvVisible('in'));
     if (tdMvKind !== 'in') rows = rows.concat(tdMvVisible('out'));
     if (!rows.length){ alert('Nothing matches the current filters — nothing to export.'); return; }
-    var bits = tdMvFilterBits(), today = dstr(new Date());
+    var bits = tdMvFilterBits(), today = edToday();   // T-B15
     var note = rows.length + ' moves · exported ' + today + ' · ' + bits.join(' · ');
     var slug = bits.slice(0, 2).join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
     xlPickOpen('moves', 'moves-' + today + (slug ? '-' + slug : '') + '.xlsx',
@@ -6843,7 +6847,7 @@ window.llApplyTheme = function (pref) {
     var leaseId = Number(btn.getAttribute('data-mvl')), k = btn.getAttribute('data-mvk');
     var stage = btn.getAttribute('data-mvtick'), state = btn.getAttribute('data-mvst') || 'done';
     var actor = getActor();
-    if (!actor){ alert('Pick your name first (the actor selector in the sidebar).'); return; }
+    if (!actor){ alert('Sign in first so the change is logged to you.'); return; }
     btn.disabled = true;
     postJSON('/move/tick', { lease_id: leaseId, move_kind: k, stage: TD_MV_STAGE_API[stage] || stage, state: state, actor: actor }).then(function(j){
       var t = (j && j.tick) || {};
@@ -6868,7 +6872,7 @@ window.llApplyTheme = function (pref) {
   // at-risk and the day window both read the date, so a change can move a row's bucket.
   function tdMvSetDate(k, leaseId, val, btn){
     var actor = getActor();
-    if (!actor){ alert('Pick your name first (the actor selector in the sidebar).'); return; }
+    if (!actor){ alert('Sign in first so the change is logged to you.'); return; }
     var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
     var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
     if (!r) return;
@@ -6903,7 +6907,7 @@ window.llApplyTheme = function (pref) {
     var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
     if (!r) return;
     var actor = getActor();
-    if (!actor){ alert('Pick your name first (the actor selector in the sidebar).'); cb.checked = tdMvDone(r); return; }
+    if (!actor){ alert('Sign in first so the change is logged to you.'); cb.checked = tdMvDone(r); return; }
     var want = tdMvDone(r) ? 'cleared' : 'done';
     var stages = want === 'done' ? tdMvOpenStages(r, k) : [];
     cb.disabled = true;
@@ -6944,7 +6948,7 @@ window.llApplyTheme = function (pref) {
   // through the same function; taId is the only thing that differs between them.
   function tdMvNoteSave(k, leaseId, btn, taId){
     var actor = getActor();
-    if (!actor){ alert('Pick your name first (the actor selector in the sidebar).'); return; }
+    if (!actor){ alert('Sign in first so the change is logged to you.'); return; }
     var L = k === 'in' ? tdMvData.in_ : tdMvData.out_;
     var r = (L || []).filter(function(x){ return String(x.lease_id) === String(leaseId); })[0];
     if (!r) return;
@@ -9495,8 +9499,12 @@ window.llApplyTheme = function (pref) {
       // the row keeps its own default (the Buildium link on a task row, for one).
       var kt = e.target.closest('.tdtkrow');
       if (kt && e.target === kt){ e.preventDefault(); openTask(kt.getAttribute('data-tkid')); return; }
-      var kr = e.target.closest('.tdrentrow'); if (!kr || e.target !== kr) return;
-      e.preventDefault(); tdRentOpen(kr.getAttribute('data-rentlid'));
+      var kr = e.target.closest('.tdrentrow');
+      if (kr && e.target === kr){ e.preventDefault(); tdRentOpen(kr.getAttribute('data-rentlid')); return; }
+      // T-B20: every other role="button" row here (Moves, unit and application rows) opens through
+      // its click handler — Enter on them used to do nothing
+      var rb = e.target.closest('[role="button"]');
+      if (rb && e.target === rb && rb.tagName !== 'BUTTON' && rb.tagName !== 'A'){ e.preventDefault(); rb.click(); }
     });
     if (tg) tg.addEventListener('click', function(e){
       var c = e.target.closest('.schoffer-copy');
@@ -18870,14 +18878,14 @@ window.llApplyTheme = function (pref) {
     return [r.property_name, r.unit_number, r.tenant_name, r.credited_agent, r.suggested_agent]
       .filter(Boolean).join(' ').toLowerCase();
   }
-  // dstr() is UTC, but a local midnight in Mountain time lands on the same calendar date, so
-  // these boundaries are correct for Edmonton (the house bucketing timezone).
+  // T-B15: month boundaries from the EDMONTON date. The old dstr(new Date()) "to" was the UTC date,
+  // tomorrow from ~18:00 MT (and a browser outside Mountain time got the wrong month edges too).
   function slRangeDates(){
-    var r = hubTeamLeasesRange, d = new Date();
-    if (r === 'month') return { from: dstr(new Date(d.getFullYear(), d.getMonth(), 1)), to: dstr(d) };
-    if (r === 'lastmonth') return { from: dstr(new Date(d.getFullYear(), d.getMonth() - 1, 1)),
-                                    to: dstr(new Date(d.getFullYear(), d.getMonth(), 0)) };
-    if (r === '90') return { from: dstr(new Date(Date.now() - 90 * 86400000)), to: dstr(d) };
+    var r = hubTeamLeasesRange, t = edToday(), y = +t.slice(0, 4), m = +t.slice(5, 7);
+    var ly = m === 1 ? y - 1 : y, lm = m === 1 ? 12 : m - 1;
+    if (r === 'month') return { from: t.slice(0, 8) + '01', to: t };
+    if (r === 'lastmonth') return { from: edYmd(ly, lm, 1), to: edYmd(ly, lm, new Date(Date.UTC(ly, lm, 0)).getUTCDate()) };
+    if (r === '90') return { from: edDayPlus(-90), to: t };
     return hubWindow();
   }
   // Own request + generation guard: a range flip or a role switch can outrun this, and a stale
@@ -18885,7 +18893,7 @@ window.llApplyTheme = function (pref) {
   var hubSlReq = 0;
   function loadHubTeamSigned(){
     var w = slRangeDates(), q = ++hubSlReq;
-    var t = el('hub-team-leases'); if (t) t.querySelector('tbody').innerHTML = emptyRow('hub-team-leases', 'Loading&hellip;');
+    var t = el('hub-team-leases'); if (t) t.querySelector('tbody').innerHTML = emptyRow('hub-team-leases', 'Loading\u2026');   // T-B18: emptyRow escapes its message
     return authFetch('/signed-leases?from=' + w.from + '&to=' + w.to).then(function(j){
       if (q !== hubSlReq) return;
       hubSlRows = (j && j.signed) || [];
@@ -18955,19 +18963,20 @@ window.llApplyTheme = function (pref) {
   var hubPaceReq = 0;
   function loadHubPace(){
     var box = el('hub-pace'); if (!box) return;
-    var q = ++hubPaceReq, nowD = new Date();   // T-B12: bump BEFORE the empty-agent return, or the old agent's answer still paints
+    var q = ++hubPaceReq;   // T-B12: bump BEFORE the empty-agent return, or the old agent's answer still paints
     if (!hubAgent){ box.textContent = ''; return; }
-    var mFrom = new Date(nowD.getFullYear(), nowD.getMonth(), 1);
-    var lmFrom = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
-    var lmDays = new Date(nowD.getFullYear(), nowD.getMonth(), 0).getDate();   // days in last month (clamp Jul 31 → Jun 30)
-    var lmTo = new Date(nowD.getFullYear(), nowD.getMonth() - 1, Math.min(nowD.getDate(), lmDays));
+    // T-B15: Edmonton calendar (the old "to" was the UTC date — tomorrow from ~18:00 MT)
+    var t = edToday(), y = +t.slice(0, 4), m = +t.slice(5, 7), dd = +t.slice(8, 10);
+    var ly = m === 1 ? y - 1 : y, lm = m === 1 ? 12 : m - 1;
+    var lmDays = new Date(Date.UTC(ly, lm, 0)).getUTCDate();   // days in last month (clamp Jul 31 → Jun 30)
+    var mFrom = t.slice(0, 8) + '01', lmFrom = edYmd(ly, lm, 1), lmTo = edYmd(ly, lm, Math.min(dd, lmDays));
     function signedFor(j){
       var r = ((j && j.scorecard) || []).filter(function(x){ return x.agent === hubAgent; })[0];
       return r ? (r.signed || 0) + (r.signed_suggested || 0) : 0;
     }
     Promise.all([
-      authFetch('/agent-scorecard?from=' + dstr(mFrom) + '&to=' + dstr(nowD)),
-      authFetch('/agent-scorecard?from=' + dstr(lmFrom) + '&to=' + dstr(lmTo))
+      authFetch('/agent-scorecard?from=' + mFrom + '&to=' + t),
+      authFetch('/agent-scorecard?from=' + lmFrom + '&to=' + lmTo)
     ]).then(function(res){
       if (q !== hubPaceReq) return;
       var cur = signedFor(res[0]), prev = signedFor(res[1]);
@@ -19085,16 +19094,20 @@ window.llApplyTheme = function (pref) {
     if (b === 'unit') return '<span class="pill" style="background:rgba(var(--clay-rgb),.18);color:var(--clay)">likely</span>';
     return '<span class="pill" style="color:var(--ink-soft)">no guess</span>';
   }
-  function hubRenderSigned(){
-    var tbl = el('hubsigned'); if (!tbl) return; var tb = tbl.querySelector('tbody');
-    var all = hubSigned || [];
+  // the rows the signed-leases table shows — the CSV export reads the same list (T-B23)
+  function hubSignedRows(){
     var hq = (hubSignedQ || '').trim().toLowerCase();
-    var rows = all.filter(function(r){
+    return (hubSigned || []).filter(function(r){
       if (hubSignedFilter === 'confirmed' && r.status !== 'confirmed') return false;
       if (hubSignedFilter === 'pending' && r.status === 'confirmed') return false;
       if (hq && slHay(r).indexOf(hq) === -1) return false;
       return true;
     });
+  }
+  function hubRenderSigned(){
+    var tbl = el('hubsigned'); if (!tbl) return; var tb = tbl.querySelector('tbody');
+    var all = hubSigned || [];
+    var rows = hubSignedRows();
     var h = '';
     rows.forEach(function(r){
       var credit;
@@ -19138,7 +19151,8 @@ window.llApplyTheme = function (pref) {
       var contact = '';
       if (r.phone){
         if (isConf){
-          var whenC = r.last_at ? new Date(Date.parse(r.last_at)).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+          // T-B17: Edmonton time — this text goes to the prospect, whatever the viewer's device zone
+          var whenC = r.last_at ? schEdFmt(r.last_at, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
           var addrC = (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : '');
           var msgC = reconMsg(r.tenant_name, addrC, whenC, hubAgent);
           contact = '<a href="' + rcCall(esc(r.phone)) + '" class="fubtn">&#128222; Call</a> <a href="' + rcText(esc(r.phone), msgC) + '" class="fubtn">&#128172; Confirm text</a>';
@@ -19146,7 +19160,7 @@ window.llApplyTheme = function (pref) {
           contact = '<a href="' + rcCall(esc(r.phone)) + '" class="fubtn">&#128222; Call</a> <a href="' + rcText(esc(r.phone)) + '" class="fubtn">&#128172; Text</a>';
         }
       } else if (r.email){
-        contact = '<a href="mailto:' + esc(r.email) + '" class="fubtn">&#9993; Email</a>';
+        contact = '<a href="' + esc(tdMailto(r.email)) + '" class="fubtn">&#9993; Email</a>';   // T-B19: encoded address
       }
       var tag = isConf ? '<span class="pill" style="background:rgba(var(--clay-rgb),.18);color:var(--clay)">confirm tour</span>'
               : r.bucket === 'approved_unsigned' ? '<span class="pill" style="background:rgba(var(--clay-rgb),.18);color:var(--clay)">approved · close it</span>'
@@ -19165,7 +19179,7 @@ window.llApplyTheme = function (pref) {
     });
     box.innerHTML = hubFollowErr ? '<div class="note" style="padding:14px">Could not load follow-ups. Refresh to try again.</div>'
       : (h || '<div class="note" style="padding:14px">Nothing to follow up — all clear.</div>');
-    if (el('hub-fu-count')) el('hub-fu-count').textContent = hubFollowErr ? '?' : rows.length + ' to chase';
+    if (el('hub-fu-count')) el('hub-fu-count').textContent = hubFollowErr ? '?' : rows.length + ' to chase' + (rows.length > 200 ? ' · showing 200' : '');   // T-B24
     hubRenderFuChips();
     hubRenderDoNext();   // the queue's follow-up tiers read the same data
   }
@@ -19178,14 +19192,14 @@ window.llApplyTheme = function (pref) {
   }
   function hubAct(id, act){
     var actor = getActor();
-    if (!actor){ alert('Pick your name first (on the sign-in screen) so the lease is credited correctly.'); return; }
+    if (!actor){ alert('Sign in first so the lease is credited correctly.'); return; }
     var body = { lease_id: Number(id), actor: actor }, path = '/lease/confirm';
     if (act === 'claim'){ path = '/lease/claim'; body.agent = hubAgent; }
     postJSON(path, body).then(function(){ leasesInvalidate(); loadHubAgent(); loadHubScore(false); })
-      .catch(function(e){ alert('Could not save: ' + (e && e.message ? e.message : 'error')); });
+      .catch(function(e){ if (String(e && e.message) === 'AUTH') return; alert('Could not save: ' + (e && e.message ? e.message : 'error')); });   // T-B22
   }
   function hubExport(){
-    var rows = hubSigned || [];
+    var rows = hubSignedRows();   // T-B23: the file matches the screen (it used to write hubSigned unfiltered)
     var head = ['Property', 'Unit', 'Signed date', 'Move-in', 'Rent', 'Tenant', 'Credited agent', 'Status', 'Suggestion'];
     var lines = [head.join(',')];
     rows.forEach(function(r){
@@ -19205,7 +19219,7 @@ window.llApplyTheme = function (pref) {
   function loadHubTours(){
     // T-B7: the [] failure sentinel used to count as loaded (no retry until a write cleared it)
     if (hubTours !== null && !hubToursErr){ hubRenderTours(); return; }
-    var from = dstr(new Date(Date.now() - 90 * 86400000)), to = dstr(new Date(Date.now() + 60 * 86400000));
+    var from = edDayPlus(-90), to = edDayPlus(60);   // T-B15
     authFetch('/tours?from=' + from + '&to=' + to)
       .then(function(j){ hubTours = j.tours || []; hubToursErr = false; hubRenderTours(); })
       .catch(function(e){
@@ -19373,13 +19387,13 @@ window.llApplyTheme = function (pref) {
       var acts = '';
       if (r.phone){
         var conf = r.bucket === 'unconfirmed_tour';
-        var whenC = conf && r.last_at ? new Date(Date.parse(r.last_at)).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+        var whenC = conf && r.last_at ? schEdFmt(r.last_at, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';   // T-B17
         var addrC = (r.property_name || '') + (r.unit_number ? ' · ' + r.unit_number : '');
         acts = '<a href="' + rcCall(esc(r.phone)) + '" class="tdact">&#128222; Call</a> ' +
           (conf ? '<a href="' + rcText(esc(r.phone), reconMsg(r.tenant_name, addrC, whenC, hubAgent)) + '" class="tdact">&#128172; Confirm</a>'
                 : '<a href="' + rcText(esc(r.phone)) + '" class="tdact">&#128172; Text</a>');
       } else if (r.email){
-        acts = '<a href="mailto:' + esc(r.email) + '" class="tdact">&#9993; Email</a>';
+        acts = '<a href="' + esc(tdMailto(r.email)) + '" class="tdact">&#9993; Email</a>';   // T-B19
       }
       items.push({ w: w, s: d == null ? 0 : -d, html:   // stalest first within a tier
         '<div class="schoffer"><div class="schoffer-main"><b>' + label + '</b> &middot; ' + esc(r.tenant_name || r.email || 'Prospect') +
@@ -19432,7 +19446,7 @@ window.llApplyTheme = function (pref) {
     var h = '';
     rows.forEach(function(r){
       var t = Date.parse(r.start_time);
-      var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      var when = isNaN(t) ? '–' : schEdFmt(r.start_time, { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });   // T-B17
       var rc = reconChip(r);
       h += '<div class="fucard rowlink" data-uri="' + esc(r.uri) + '" style="cursor:pointer">' +
         '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b>' + esc(when) + '</b>' + tourPill(r) + '</div>' +
@@ -19464,7 +19478,7 @@ window.llApplyTheme = function (pref) {
     var pSigned = authFetch('/signed-leases?from=' + w.from + '&to=' + w.to);
     // T-B7: a failed My-tours [] is not data — refetch rather than show "–" in Tour conf.
     var pTours = (hubTours !== null && !hubToursErr) ? Promise.resolve({ tours: hubTours })
-      : authFetch('/tours?from=' + dstr(new Date(Date.now() - 90 * 86400000)) + '&to=' + dstr(new Date(Date.now() + 60 * 86400000)));
+      : authFetch('/tours?from=' + edDayPlus(-90) + '&to=' + edDayPlus(60));   // T-B15
     Promise.all([pSigned, pTours]).then(function(res){
       if (q !== hubTeamReq) return;
       hubTeamSigned = (res[0] && res[0].signed) || [];
@@ -19747,14 +19761,14 @@ window.llApplyTheme = function (pref) {
     if (act === 'editmi'){ hubMiOpenEdit(id); return; }   // move-in edit (team overview is admin-only anyway)
     if (!IS_ADMIN) return;
     var actor = getActor();
-    if (!actor){ alert('Pick your name first (on the sign-in screen).'); return; }
+    if (!actor){ alert('Sign in first so the change is logged to you.'); return; }
     if (act === 'reassign'){
       hubOpenReassign(id, btn);
     } else if (act === 'exclude'){
       if (!confirm('Exclude this lease from attribution? It will no longer count toward any agent.')) return;
       postJSON('/lease/exclude', { lease_id: Number(id), actor: actor })
         .then(function(){ leasesInvalidate(); loadHubTeam(); loadHubScore(false); })
-        .catch(function(e){ alert('Could not exclude: ' + (e && e.message ? e.message : 'error')); });
+        .catch(function(e){ if (String(e && e.message) === 'AUTH') return; alert('Could not exclude: ' + (e && e.message ? e.message : 'error')); });   // T-B22
     }
   }
 
@@ -19893,7 +19907,7 @@ window.llApplyTheme = function (pref) {
   function slExport(){
     var rows = slRowsCur || [];
     if (!rows.length) return;
-    var today = dstr(new Date()), bits = slFilterBits();
+    var today = edToday(), bits = slFilterBits();   // T-B15
     var note = rows.length + ' of ' + slRows().length + ' signed leases · exported ' + today + ' · ' + bits.join(' · ');
     var slug = (hubTeamLeasesAgent || hubTeamLeasesRange || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
     xlPickOpen('signed', 'signed-leases-' + today + (slug ? '-' + slug : '') + '.xlsx',
@@ -20520,7 +20534,7 @@ window.llApplyTheme = function (pref) {
     if (!schedBook.agentId) return;
     var gen = ++schBkCalReq;
     var days = 28;   // fixed horizon — the calendar's own prev/next handles navigation (window dropdown retired)
-    var to = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    var to = edDayPlus(days);   // T-B15: Edmonton day
     var note = el('sch-bk-cal-note'); if (note) note.textContent = 'Loading…';
     var aid = encodeURIComponent(schedBook.agentId);
     bkData.showings = []; bkData.busy = []; bkData.slots = []; bkData.slotsRaw = null;
@@ -20576,7 +20590,7 @@ window.llApplyTheme = function (pref) {
         var tc = el('td-cal'); if (tc) tc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });   // slots are live — bring the calendar into view
         // F3: a failed schedule leg (whichever order the two land in) keeps its warning — the busy
         // layer is blank, so the open-times hint alone would invite a double-booking.
-        if (!tdBkFresh()) tdBkStatus(bkData.schedErr ? 'Could not load the schedule — busy times are not shown. Pick the agent again to retry.' : (bkData.slots.length ? schBkClickHint() : 'No open times in this window — widen it or pick another agent.'));
+        if (!tdBkFresh()) tdBkStatus(bkData.schedErr ? 'Could not load the schedule — busy times are not shown. Pick the agent again to retry.' : (bkData.slots.length ? schBkClickHint() : 'No open times in this window — move the calendar forward or pick another agent.'));
       })
       .catch(function(e){ if (String(e.message) !== 'AUTH' && note) note.textContent = 'Could not load the calendar.'; });
   }
@@ -20595,7 +20609,7 @@ window.llApplyTheme = function (pref) {
       return true;
     });
   }
-  function schBkDayKey(ms){ var d = new Date(ms); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
+  function schBkDayKey(ms){ return tdDayKeyEd(new Date(ms)); }   // T-B16: Edmonton day, not the device's
   function schBkSlotsForDay(ms){ var k = schBkDayKey(ms); return (bkData.slots || []).filter(function(sl){ return schBkDayKey(Date.parse(sl.start_time)) === k; }); }
   function schBkShowingTitle(s){
     if (s.addr && String(s.addr).trim()) return String(s.addr).trim();   // matched property · unit, when resolved
@@ -21463,6 +21477,7 @@ window.llApplyTheme = function (pref) {
       }, 350);
     }).catch(function(e){
       btn.textContent = orig; btn.disabled = false;
+      if (String(e && e.message) === 'AUTH') return;   // T-B22: the sign-in screen is already up
       if (rb){ var m = (e && e.message) ? e.message : 'error'; rb.style.display = 'block'; rb.innerHTML = '<div class="note">Could not book: ' + esc(m) + (/taken|already|conflict|busy|available|open/i.test(m) ? ' — pick another time.' : '') + '</div>'; }
       schBkLoadCalendar();
     });

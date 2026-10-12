@@ -14235,6 +14235,7 @@ window.llApplyTheme = function (pref) {
     { label:'Lease end',       key:'lease_to_date', w:12 },
     { label:'Days remaining',  key:'days_remaining', type:'num', w:13 },
     { label:'Next move-out',   key:'next_move_out', w:13 },
+    { label:'Last move-out',   key:'last_move_out_on', w:13 },
     { label:'Balance',         key:'balance_disp', type:'money', w:13 },
     { label:'Balance basis',   w:12, get:function(r){ return r.balance_src === 'active' ? 'Active lease' : r.balance_src === 'pre' ? 'Pre move-in' : ''; } },
     { label:'Security deposit', key:'security_deposit', type:'money', w:14 },
@@ -15311,6 +15312,10 @@ window.llApplyTheme = function (pref) {
     f += fitem('Lease start', esc(r.lease_from_date));
     f += fitem('Lease end', r.lease_to_date ? esc(r.lease_to_date) + (r.days_remaining != null ? ' (' + r.days_remaining + 'd)' : '') : null);
     f += fitem('Next move-out', esc(r.next_move_out));
+    // The outgoing tenant's move-out stays on the unit until the next tenant MOVES IN
+    // (Pearse 2026-10-12) — on a pre-leased unit this is the only place the turnover gap shows,
+    // because the Lease rows above describe the incoming lease. NULL whenever a lease is Active.
+    f += fitem('Last move-out', r.last_move_out_on ? esc(r.last_move_out_on) + mvoSrcChip(r.last_move_out_src === 'manual' ? 'manual' : 'lease') : null);
     // calendar appointment (Google mirror), deliberately distinct from the lease-date fields —
     // an elevator booked days before/after lease start is routine, not a contradiction
     f += fitem('Move-in appt', esc(r.next_move_in_appt));

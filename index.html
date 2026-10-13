@@ -13383,6 +13383,7 @@ window.llApplyTheme = function (pref) {
     ]).then(function(res){
       if (myDesc !== lmDescReq) return;   // F1: a newer listing modal owns the feed
       lmFeed = { showings: (res[0] && res[0].showings) || [], keyEvents: (res[0] && res[0].key_events) || [], apps: (res[1] && res[1].applications) || [], r: r,
+        act: (res[0] && !res[0].error) ? res[0] : null,
         err: !!((res[0] && res[0].error) || (res[1] && res[1].error)) };
       lmFeedFilter = 'all';
       renderListingFeed();
@@ -13393,6 +13394,123 @@ window.llApplyTheme = function (pref) {
   function feedLegFail(what){ return function(e){ if (String(e && e.message) !== 'AUTH') console.error(what + ' load failed', e); return { error: true }; }; }
   function listFeedItem(icon, title, sub){
     return '<div class="rmfi"><div class="rmfi-ic">' + icon + '</div><div class="rmfi-main"><div class="rmfi-t">' + title + '</div><div class="rmfi-s">' + (sub || '') + '</div></div></div>';
+  }
+  // ── Move + lease history for the unit AND listing activity feeds (2026-10-08) ──
+  // ONE builder and ONE row renderer, shared by both feeds (never a second copy). Input is the
+  // /unit-activity payload; output is feed items of kind 'move' | 'lease' | 'override'.
+  // A move date is ranked: a date a person recorded → the Google Calendar appointment matched to
+  // the unit (within 21 days, the tracker's window) → Buildium's per-tenant date → the lease
+  // date; the row says which one it used. 'YYYY-MM-DD' strings parse as LOCAL noon so a lease
+  // date never renders as the day before (Date.parse('2026-10-15') is UTC midnight = Oct 14 MT).
+  function feedDateAt(v){
+    var s = String(v || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return Date.parse(s + 'T12:00:00');
+    return Date.parse(s);
+  }
+  var ACT_STAGE_LABEL = { welcome_email: 'Welcome email sent', cleaned: 'Cleaned', insurance: 'Insurance certificate', inspection: 'Inspection',
+    completed: 'Completed', ntv_signed: 'Notice to vacate signed', soda: 'SODA sent', turned: 'Unit turned' };
+  function actFeedExtra(act){
+    var items = []; if (!act) return items;
+    var leases = act.leases || [], appts = act.move_appts || [], ticks = act.move_ticks || [], actuals = act.move_actuals || [],
+        manual = act.move_in_manual || [], lts = act.lease_tenants || [];
+    var DAY = 86400000, used = {};   // appointment ids a lease has claimed — local, so a re-render starts clean
+    function pm(a){ return a && a.calendar && a.calendar.person_name ? ' &middot; ' + esc(a.calendar.person_name) : ''; }
+    function nearestAppt(kind, at){
+      var best = null, bd = 0;
+      appts.forEach(function(a){
+        if (a.event_kind !== kind || used[a.id]) return;
+        var d = Math.abs(Date.parse(a.starts_at) - at);
+        if (d <= 21 * DAY && (!best || d < bd)) { best = a; bd = d; }
+      });
+      if (best) used[best.id] = 1;
+      return best;
+    }
+    function names(L){
+      var t = L.tenant_names;
+      if (!t) return '';
+      if (Array.isArray(t)) t = t.filter(Boolean).join(', ');
+      return t ? ' &middot; ' + esc(String(t)) : '';
+    }
+    leases.forEach(function(L){
+      var lid = String(L.buildium_id), who = names(L);
+      items.push({ at: feedDateAt(L.lease_from_date), kind: 'lease', L: L, who: who });
+      // move-in
+      var man = manual.filter(function(m){ return String(m.lease_id) === lid && m.move_in_date; })[0];
+      var ltIn = lts.filter(function(t){ return String(t.lease_id) === lid && t.move_in_date; }).map(function(t){ return String(t.move_in_date); }).sort()[0];
+      var baseIn = feedDateAt(man ? man.move_in_date : (ltIn || L.lease_from_date));
+      if (!isNaN(baseIn)) {
+        var apIn = nearestAppt('move_in', baseIn);
+        items.push({ at: man ? baseIn : (apIn ? Date.parse(apIn.starts_at) : baseIn), kind: 'move', dir: 'in', who: who, appt: apIn, L: L,
+          src: man ? 'recorded by ' + esc(man.actor || 'someone') : (apIn ? 'calendar appointment' + pm(apIn) : (ltIn ? 'Buildium move-in date' : 'lease start')) });
+      }
+      // move-out — a Buildium notice (MoveOutData) is its own event; the move-out itself only
+      // when something dates it: a recorded actual, a notice date, or the end of a PAST lease.
+      // An Active lease with no notice has no move-out yet, so none is shown.
+      var moDate = null, ntv = null;
+      (Array.isArray(L.move_out_data) ? L.move_out_data : []).forEach(function(m){
+        if (!m) return;
+        if (m.MoveOutDate && (!moDate || m.MoveOutDate > moDate)) moDate = m.MoveOutDate;
+        if (m.NoticeGivenDate && (!ntv || m.NoticeGivenDate < ntv)) ntv = m.NoticeGivenDate;
+      });
+      if (ntv) items.push({ at: feedDateAt(ntv), kind: 'move', dir: 'notice', who: who, L: L, moDate: moDate });
+      var rec = actuals.filter(function(a){ return String(a.lease_id) === lid && a.move_kind === 'out' && a.actual_on; })[0];
+      var baseOut = rec ? rec.actual_on : (moDate || (L.lease_status === 'Past' ? L.lease_to_date : null));
+      if (baseOut) {
+        var bo = feedDateAt(baseOut);
+        if (!isNaN(bo)) {
+          var apOut = nearestAppt('move_out', bo);
+          items.push({ at: rec ? bo : (apOut ? Date.parse(apOut.starts_at) : bo), kind: 'move', dir: 'out', who: who, appt: apOut, L: L,
+            src: rec ? 'recorded by ' + esc(rec.actor || 'someone') : (apOut ? 'calendar appointment' + pm(apOut) : (moDate ? 'Buildium move-out date' : 'lease end')) });
+        }
+      }
+      ticks.forEach(function(t){ if (String(t.lease_id) === lid) items.push({ at: Date.parse(t.noted_at), kind: 'move', dir: 'tick', t: t }); });
+    });
+    // appointments no lease claimed — the mirror keeps one Past lease at most, so older moves land here
+    appts.forEach(function(a){
+      if (used[a.id]) return;
+      items.push({ at: Date.parse(a.starts_at), kind: 'move', dir: a.event_kind === 'move_out' ? 'out' : 'in', who: '', appt: a, L: null, bare: true,
+        src: 'calendar appointment' + pm(a) });
+    });
+    (act.override_events || []).forEach(function(o){ items.push({ at: Date.parse(o.created_at), kind: 'override', o: o }); });
+    (act.takeback_events || []).forEach(function(k){ items.push({ at: Date.parse(k.created_at), kind: 'override', tb: k }); });
+    return items.filter(function(it){ return !isNaN(it.at); });
+  }
+  function actFeedRow(it){
+    var wd = new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+    var future = it.at > Date.now();
+    if (it.kind === 'lease') {
+      var L = it.L, st = L.lease_status || '';
+      var chip = st ? ' <span class="chip ' + (st === 'Active' ? 'c-cool' : (st === 'Future' ? 'c-cold' : 'c-otb')) + '">' + esc(st.toLowerCase()) + '</span>' : '';
+      var evict = L.is_eviction_pending ? ' <span class="chip c-hot">eviction pending</span>' : '';
+      return listFeedItem('&#128196;', 'Lease' + (L.lease_type ? ' &middot; ' + esc(L.lease_type) : '') + chip + evict,
+        esc(String(L.lease_from_date || '')) + (L.lease_to_date ? ' &rarr; ' + esc(String(L.lease_to_date)) : '') + it.who);
+    }
+    if (it.kind === 'override') {
+      if (it.tb) {
+        var k = it.tb, tbv = k.action === 'clear' || k.action === 'remove' ? 'cleared' : 'set';
+        return listFeedItem('&#9881;', 'Owner take-back ' + esc(tbv) + (k.scope ? ' &middot; ' + esc(String(k.scope)) : ''), (k.actor ? esc(k.actor) + ' &middot; ' : '') + wd);
+      }
+      var o = it.o, mode = o.mode ? String(o.mode).replace(/_/g, ' ') : '';
+      var what = o.action === 'clear' ? 'Status override cleared' : 'Status override &middot; ' + esc(mode || o.action || '');
+      var pay = o.payload && o.payload.expected_move_in_on ? ' &middot; expected ' + esc(String(o.payload.expected_move_in_on)) : '';
+      return listFeedItem('&#9881;', what + pay, (o.actor ? esc(o.actor) + ' &middot; ' : '') + wd);
+    }
+    // kind === 'move'
+    if (it.dir === 'tick') {
+      var t = it.t, lab = ACT_STAGE_LABEL[t.stage] || esc(String(t.stage || '').replace(/_/g, ' '));
+      return listFeedItem('&#9745;', (t.move_kind === 'in' ? 'Move-in step' : 'Move-out step') + ' &middot; ' + lab + (t.state === 'cleared' ? ' <span class="qn">unticked</span>' : ''),
+        (t.actor ? esc(t.actor) + ' &middot; ' : '') + wd + (t.note ? ' &middot; ' + esc(t.note) : ''));
+    }
+    if (it.dir === 'notice') {
+      return listFeedItem('&#128203;', 'Notice to vacate' + it.who, 'given ' + wd + (it.moDate ? ' &middot; moving out ' + esc(String(it.moDate)) : ''));
+    }
+    var a = it.appt, when = wd;
+    if (a && !a.all_day) when = schEdFmt(a.starts_at, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    var verb = it.bare ? (it.dir === 'in' ? 'Move-in appointment' : 'Move-out appointment')
+             : (it.dir === 'in' ? (future ? 'Moving in' : 'Moved in') : (future ? 'Moving out' : 'Moved out'));
+    var tent = a && a.tentative ? ' <span class="chip c-warm">tentative</span>' : '';
+    var link = a && a.html_link ? ' <a href="' + esc(String(a.html_link)) + '" target="_blank" rel="noopener" title="Open in Google Calendar">&#8599;</a>' : '';
+    return listFeedItem(it.dir === 'in' ? '&#128682;' : '&#128230;', verb + it.who + tent, when + ' &middot; ' + it.src + link);
   }
   // Listing activity feed: applications + tours/showings + key check-in/out history,
   // newest-first, with filter chips (counts) and a terminal "Listed for rent" marker.
@@ -13405,9 +13523,10 @@ window.llApplyTheme = function (pref) {
     (d.apps || []).forEach(function(a){ items.push({ at: Date.parse(a.submitted_at), kind: 'app', a: a }); });
     (d.showings || []).forEach(function(s){ items.push({ at: Date.parse(s.start_time), kind: 'tour', s: s }); });
     (d.keyEvents || []).forEach(function(k){ items.push({ at: Date.parse(k.created_at), kind: 'key', k: k }); });
-    return items;
+    return items.concat(actFeedExtra(d.act));
   }
   function lmFeedRow(it){
+    if (it.kind === 'move' || it.kind === 'lease' || it.kind === 'override') return actFeedRow(it);
     var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
     if (it.kind === 'app') {
       var a = it.a, nm = esc(a.applicant_name || 'Applicant');
@@ -13435,9 +13554,9 @@ window.llApplyTheme = function (pref) {
     var box = el('lm-feed'), chips = el('lm-feedchips'); if (!box) return;
     if (!lmFeed) { box.innerHTML = ''; if (chips) chips.innerHTML = ''; return; }
     var all = lmFeedItems();
-    var counts = { all: all.length, app: 0, tour: 0, key: 0 };
+    var counts = { all: all.length, app: 0, tour: 0, key: 0, move: 0, lease: 0, override: 0 };
     all.forEach(function(it){ counts[it.kind]++; });
-    var defs = [['all', 'All'], ['app', 'Applications'], ['tour', 'Tours'], ['key', 'Keys']];
+    var defs = [['all', 'All'], ['app', 'Applications'], ['tour', 'Tours'], ['key', 'Keys'], ['move', 'Moves'], ['lease', 'Leases'], ['override', 'Overrides']];
     if (chips) chips.innerHTML = defs.filter(function(d){ return d[0] === 'all' || counts[d[0]] > 0; }).map(function(d){
       return '<button type="button" class="qchip' + (lmFeedFilter === d[0] ? ' on' : '') + '" data-ff="' + d[0] + '">' + d[1] + ' <span class="qn">' + counts[d[0]] + '</span></button>';
     }).join('');
@@ -15629,6 +15748,7 @@ window.llApplyTheme = function (pref) {
     ]).then(function(res){
       if (uOpen !== umOpenReq) return;   // F1: a newer unit modal owns the feed
       umFeed = { showings: (res[0] && res[0].showings) || [], keyEvents: (res[0] && res[0].key_events) || [], lstatus: (res[0] && res[0].leasing_status) || [], apps: (res[1] && res[1].applications) || [], renewals: (renewalsAll && rnForUnit(uid)) || [], r: r,
+        act: (res[0] && !res[0].error) ? res[0] : null,
         err: !!((res[0] && res[0].error) || (res[1] && res[1].error)) };
       umFeedFilter = 'all';
       renderUnitFeed();
@@ -15658,9 +15778,10 @@ window.llApplyTheme = function (pref) {
     (d.keyEvents || []).forEach(function(k){ items.push({ at: Date.parse(k.created_at), kind: 'key', k: k }); });
     (d.renewals || []).forEach(function(rn){ items.push({ at: Date.parse(rn.last_updated_date_time || rn.lease_from_date), kind: 'renewal', rn: rn }); });
     (d.lstatus || []).forEach(function(l){ items.push({ at: Date.parse(l.created_at), kind: 'lstatus', l: l }); });
-    return items;
+    return items.concat(actFeedExtra(d.act));
   }
   function umFeedRow(it){
+    if (it.kind === 'move' || it.kind === 'lease' || it.kind === 'override') return actFeedRow(it);
     var wd = isNaN(it.at) ? '' : new Date(it.at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
     if (it.kind === 'app') {
       var a = it.a;
@@ -15698,16 +15819,19 @@ window.llApplyTheme = function (pref) {
     var box = el('um-feed'), chips = el('um-feedchips'); if (!box) return;
     if (!umFeed) { box.innerHTML = ''; if (chips) chips.innerHTML = ''; return; }
     var all = umFeedItems();
-    var counts = { all: all.length, app: 0, tour: 0, key: 0, renewal: 0, lstatus: 0 };
+    var counts = { all: all.length, app: 0, tour: 0, key: 0, renewal: 0, lstatus: 0, move: 0, lease: 0, override: 0 };
     all.forEach(function(it){ counts[it.kind]++; });
-    var defs = [['all', 'All'], ['app', 'Applications'], ['tour', 'Tours'], ['key', 'Keys'], ['renewal', 'Renewals'], ['lstatus', 'Leasing status']];
+    var defs = [['all', 'All'], ['app', 'Applications'], ['tour', 'Tours'], ['key', 'Keys'], ['move', 'Moves'], ['lease', 'Leases'], ['renewal', 'Renewals'], ['lstatus', 'Leasing status'], ['override', 'Overrides']];
     if (chips) chips.innerHTML = defs.filter(function(d){ return d[0] === 'all' || counts[d[0]] > 0; }).map(function(d){
       return '<button type="button" class="qchip' + (umFeedFilter === d[0] ? ' on' : '') + '" data-uf="' + d[0] + '">' + d[1] + ' <span class="qn">' + counts[d[0]] + '</span></button>';
     }).join('');
     var items = (umFeedFilter === 'all') ? all : all.filter(function(it){ return it.kind === umFeedFilter; });
     items.sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
     var rows = items.map(umFeedRow);
-    if (umFeedFilter === 'all' && umFeed.r.lease_from_date) {
+    // The old single lease marker stays only as the fallback for when the leases leg did not
+    // load — otherwise every lease the mirror holds is already a dated 'lease' item above.
+    var haveLeases = !!(umFeed.act && umFeed.act.leases && umFeed.act.leases.length);
+    if (umFeedFilter === 'all' && umFeed.r.lease_from_date && !haveLeases) {
       rows.push(listFeedItem('&#128196;', 'Lease' + (umFeed.r.lease_type ? ' &middot; ' + esc(umFeed.r.lease_type) : ''), esc(umFeed.r.lease_from_date) + (umFeed.r.lease_to_date ? ' &rarr; ' + esc(umFeed.r.lease_to_date) : '')));
     }
     var errNote = umFeed.err ? '<div class="count-note" style="margin-bottom:6px">Some activity could not be loaded right now — this list may be incomplete.</div>' : '';

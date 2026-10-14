@@ -303,7 +303,7 @@ window.llApplyTheme = function (pref) {
   .scope-note-sub{color:var(--ink-soft)}
   .scope-note-btn{min-height:40px;padding:0 12px;font-family:var(--sans);font-size:.78rem;font-weight:700;cursor:pointer;border-radius:var(--r-sm);
     border:1px solid var(--hairline-dark);background:var(--glass-2);color:var(--ink)}
-  #scope-note-keep{margin-left:auto}
+  #scope-note-keep,#link-note-x{margin-left:auto}
   .scope-note-btn:hover{border-color:var(--clay)}
   /* F3: the footer is ONE row — sync icon, "Synced h:mm", initials avatar (menu above it) */
   .sidefoot{margin-top:auto;display:flex;flex-direction:row;align-items:center;gap:8px;padding-top:12px;border-top:1px solid var(--hairline);position:relative}
@@ -2165,6 +2165,12 @@ window.llApplyTheme = function (pref) {
     <span id="scope-note-t">Showing your saved scope</span><span class="scope-note-sub">&middot; set on your last visit</span>
     <button type="button" class="scope-note-btn" id="scope-note-keep">Keep</button>
     <button type="button" class="scope-note-btn" id="scope-note-all">Show everything</button>
+  </div>
+  <!-- Deep-link (?go=) notice: what a one-shot link could not do. Text only (values come from the
+       URL, so textContent, never innerHTML); Dismiss or the next tab change hides it. -->
+  <div id="link-note" class="scope-note" role="status" style="display:none">
+    <span id="link-note-t"></span>
+    <button type="button" class="scope-note-btn" id="link-note-x">Dismiss</button>
   </div>
 
   <div id="errbox">
@@ -4199,6 +4205,99 @@ window.llApplyTheme = function (pref) {
   // Parse email from the RAW query so a literal '+' in the address survives (URLSearchParams
   // would turn '+' into a space).
   try { var _em = /[?&]lead_email=([^&#]*)/.exec(window.location.search); if (_em) { var _e = decodeURIComponent(_em[1]); if (_e.indexOf('@') > 0 && _e.length <= 160) pendingLeadEmail = _e.trim(); } } catch (e) {}
+  // Deep links (2026-10-14, Reports/ledger-deep-links-scheme-2026-10-14.md): ?go=<target>&<param>=…
+  // opens ONE view — a tab, Today as a persona, Alerts, an owner / unit / key-set popup, or a
+  // filtered table — so Fermatype can open the Ledger by voice. Same shape as the lead link above:
+  // captured here (pure string work, no DOM), consumed ONCE by dlStart() inside startApp(). The URL
+  // is deliberately NOT tidied at boot (unlike ?lead=): a refresh at the sign-in code step must
+  // still carry the link; dlStart tidies it. No go= → pendingLink stays null and boot is unchanged.
+  // A link only ever OPENS views: no value here reaches a write, a send or a popup action button.
+  var DL_TABS = { ledger:1, units:1, leases:1, applications:1, tours:1, renewals:1, owners:1, keys:1, tasks:1, history:1 };
+  // names supabase-js, the lead link and the mock harness own — skipped silently, never "unknown"
+  var DL_RESERVED = { code:1, error:1, error_description:1, access_token:1, refresh_token:1, type:1, lead:1, lead_email:1,
+    actor:1, hrole:1, role:1, now:1, signedout:1, mfa:1, fail:1, delay:1, fbfail:1, deskconflict:1, legacy:1, mgrview:1, mgrqview:1, hpm:1 };
+  // the closed filter vocabulary: param → how its value is validated (list = comma list, any of)
+  var DL_ENUM = {
+    status_u: { vacant:'vacant', occupied:'occupied', upcoming:'upcoming' },
+    marketing: { marketed:'marketed', unlisted:'unlisted', fb:'onfb', fb_pending:'pendfb' },
+    flags: { notice:'notice', moveout:'mo', eviction:'eviction', balance:'balance', ends30:'le30', ends60:'le60', ends90:'le90' },
+    show: { takebacks:'otb', notready:'notready' },
+    days_vacant: { '0-30':'d0_30', '31-60':'d31_60', '61-90':'d61_90', '90+':'d90_plus', unknown:'unknown' },
+    beds: { studio:'Studio', '1':'1', '2':'2', '3':'3', '4':'4', '5':'5' },
+    status_l: { active:'Active', future:'Future', past:'Past' },
+    keys: { out:'out', overdue:'overdue', missing:'missing', available:'available', in_office:'in_office' },
+    persona: { me:'me', agent:'agent', manager:'manager', coordinator:'coordinator', admin:'admin' }
+  };
+  function dlParse(search){
+    if (!/[?&]go=/.test(search || '')) return null;
+    var own = function(o, k){ return Object.prototype.hasOwnProperty.call(o, k); };
+    var sp = new URLSearchParams(search), ignored = [], params = {};
+    var goRaw = (sp.get('go') || '').trim().toLowerCase();
+    var DL_GO = { today:'today', alerts:'today', owner:'owners', unit:'units', key:'keys' };
+    var tab = own(DL_TABS, goRaw) ? goRaw : (own(DL_GO, goRaw) ? DL_GO[goRaw] : '');
+    if (!tab) return { go: goRaw, bad: true, tab: 'today', params: params, ignored: ignored };
+    var enumv = function(map, v){ v = String(v).trim().toLowerCase(); return own(map, v) ? map[v] : null; };
+    var listv = function(map, v){
+      var out = [], seen = {}, parts = String(v).split(',');
+      for (var i = 0; i < parts.length; i++){ var m = enumv(map, parts[i]); if (m == null) return null; if (!seen[m]){ seen[m] = 1; out.push(m); } }
+      return out.length ? out : null;
+    };
+    var intv = function(v, lo, hi){ if (!/^\d{1,6}$/.test(String(v).trim())) return null; var n = Number(v); return (n >= lo && n <= hi) ? n : null; };
+    var datev = function(v){
+      v = String(v).trim(); if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+      var y = +v.slice(0, 4), m = +v.slice(5, 7), d = +v.slice(8, 10), t = new Date(y, m - 1, d);
+      return (t.getFullYear() === y && t.getMonth() === m - 1 && t.getDate() === d) ? v : null;
+    };
+    var idv = function(v){ v = String(v).trim(); return /^\d{1,12}$/.test(v) ? v : null; };
+    // which params this target accepts, and the validator for each
+    var V = {};
+    if (goRaw === 'today') V.persona = function(v){ return enumv(DL_ENUM.persona, v); };
+    else if (goRaw === 'owner' || goRaw === 'unit') V.id = idv;
+    else if (goRaw === 'key'){ V.id = idv; V.unit = idv; }
+    else {
+      if (goRaw !== 'ledger') V.q = function(v){ v = String(v).trim(); return (v && v.length <= 80) ? v : null; };
+      if (goRaw === 'units'){
+        V.beds = function(v){ return listv(DL_ENUM.beds, v); };
+        V.beds_min = function(v){ return intv(v, 1, 5); };
+        V.baths_min = function(v){ v = String(v).trim(); return /^[1-4](\.5)?$/.test(v) && Number(v) <= 4 ? Number(v) : null; };
+        V.rent_min = function(v){ return intv(v, 0, 20000); };
+        V.rent_max = function(v){ return intv(v, 0, 20000); };
+        V.status = function(v){ return enumv(DL_ENUM.status_u, v); };
+        V.marketing = function(v){ return enumv(DL_ENUM.marketing, v); };
+        V.flags = function(v){ return listv(DL_ENUM.flags, v); };
+        V.show = function(v){ return listv(DL_ENUM.show, v); };
+        V.days_vacant = function(v){ return enumv(DL_ENUM.days_vacant, v); };
+        V.city = function(v){ v = String(v).trim(); return (v && v.length <= 40) ? v : null; };
+      } else if (goRaw === 'leases'){
+        V.status = function(v){ return listv(DL_ENUM.status_l, v); };
+        V.ends_from = datev; V.ends_by = datev;
+        V.rent_min = function(v){ return intv(v, 0, 20000); };
+        V.rent_max = function(v){ return intv(v, 0, 20000); };
+      } else if (goRaw === 'keys'){
+        V.keys = function(v){ return listv(DL_ENUM.keys, v); };
+      }
+    }
+    var names = [], seenName = {};
+    sp.forEach(function(_v, k){ if (!seenName[k]){ seenName[k] = 1; names.push(k); } });
+    names.forEach(function(k){
+      if (k === 'go' || own(DL_RESERVED, k)) return;
+      var vals = sp.getAll(k);
+      if (!own(V, k)){ ignored.push(k.slice(0, 40)); return; }                       // unknown for this target
+      if (vals.length > 1){ ignored.push(k.slice(0, 40) + ' (repeated)'); return; }  // repeated param
+      var ok = V[k](vals[0]);
+      if (ok == null){ ignored.push(k.slice(0, 40) + '=' + String(vals[0]).slice(0, 40)); return; }   // bad value
+      params[k] = ok;
+    });
+    // a popup target with no usable id is malformed: Today + the "not recognised" notice
+    if ((goRaw === 'owner' || goRaw === 'unit') && !params.id) return { go: goRaw, bad: true, tab: 'today', params: {}, ignored: ignored };
+    if (goRaw === 'key'){
+      if (params.id && params.unit){ delete params.unit; ignored.push('unit (id given too)'); }
+      if (!params.id && !params.unit) return { go: goRaw, bad: true, tab: 'today', params: {}, ignored: ignored };
+    }
+    return { go: goRaw, bad: false, tab: tab, params: params, ignored: ignored };
+  }
+  var pendingLink = null;
+  try { pendingLink = dlParse(window.location.search); } catch (e) { console.error('deep link parse failed', e); }
   var IS_ADMIN = false;          // from the /user/hello roster role; gates key edit/delete/link controls
   function applyRole(role){ IS_ADMIN = (role === 'admin'); try { document.body.classList.toggle('isadmin', IS_ADMIN); } catch (e) {} }
   var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -4960,6 +5059,7 @@ window.llApplyTheme = function (pref) {
     syncMobNav(key);
     winbarSync();          // F3: the window chip shows only on the tabs it narrows
     scopeNoteSync(key);    // F3: once-per-load "set on your last visit" notice
+    dlNoteHide();          // a deep-link notice belongs to the view the link opened
     scopeMenuClose(); acctMenuClose();
     Object.keys(PAGES).forEach(function(k){
       el(PAGES[k]).style.display = k === key ? 'block' : 'none';
@@ -10455,11 +10555,27 @@ window.llApplyTheme = function (pref) {
       return true;
     });
   }
-  function loadKeys(){
+  // Same in-flight queue as loadUnits (the v278 lesson): showTab('keys') fires loadKeys() on a
+  // null cache, and a deep link / openKeyEnsure calling loadKeys(cb) in the same tick must ride
+  // that request, not open a second GET /keys. Callbacks drain once, each isolated.
+  // keysInvalidate (a Sync) bumps the generation so an older response can never win over the reload.
+  var keysReq = 0, keysLoading = false, keysAfterQ = [];
+  function keysInvalidate(){ keysAll = null; keysReq++; keysLoading = false; }
+  function loadKeys(after){
+    if (after) keysAfterQ.push(after);
+    if (keysLoading) return;
+    keysLoading = true;
+    var q = ++keysReq;
     el('veil').classList.remove('hide');
     authFetch('/keys').then(function(j){
+      if (q !== keysReq) return;
+      keysLoading = false;
       keysAll = j.keys || []; drawKeyChips(); drawKeys(); el('veil').classList.add('hide');
-    }).catch(function(e){ el('veil').classList.add('hide');
+      var cbs = keysAfterQ; keysAfterQ = [];
+      cbs.forEach(function(cb){ try { cb(); } catch (e) { console.error('loadKeys after-callback failed', e); } });
+    }).catch(function(e){
+      if (q !== keysReq) { if (String(e && e.message) !== 'AUTH') console.error('stale keys load failed', e); return; }
+      keysLoading = false; keysAfterQ = []; el('veil').classList.add('hide');
       if (String(e && e.message) === 'AUTH') return;
       console.error('keys load failed', e);
       el('ktable').querySelector('tbody').innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center">Could not load keys.</td></tr>'; });
@@ -11356,16 +11472,8 @@ window.llApplyTheme = function (pref) {
   });
   // open a key's modal from anywhere (History tab) — load the keys list first if needed
   function openKeyEnsure(kid){
-    if (keysAll !== null) {
-      var r = findKey(kid);
-      if (r) openKeyRow(r, null, keyGroupOf(r));
-      return;
-    }
-    el('veil').classList.remove('hide');
-    authFetch('/keys').then(function(j){
-      keysAll = j.keys || []; drawKeyChips(); drawKeys(); el('veil').classList.add('hide');
-      var r = findKey(kid); if (r) openKeyRow(r, null, keyGroupOf(r));
-    }).catch(function(){ el('veil').classList.add('hide'); });
+    var go = function(){ var r = findKey(kid); if (r) openKeyRow(r, null, keyGroupOf(r)); };
+    if (keysAll !== null) go(); else loadKeys(go);   // rides the in-flight /keys request if one is open
   }
 
   /* ── multi-select ─────────────────────────── */
@@ -11856,7 +11964,12 @@ window.llApplyTheme = function (pref) {
       balance_disp:{ t:'num', label:'Balance' },
       is_listed:{ t:'enum', label:'Listed', disp:cf_yesno },
       // free text: the enum list is every distinct note (short-labelled) + blank; "contains" search covers the rest
-      leasing_status:{ t:'enum', label:'Leasing status', disp:function(v){ v = v == null ? '' : String(v); return v.length > 48 ? v.slice(0, 48) + '…' : v; } }
+      leasing_status:{ t:'enum', label:'Leasing status', disp:function(v){ v = v == null ? '' : String(v); return v.length > 48 ? v.slice(0, 48) + '…' : v; } },
+      // Headerless columns (no <th data-k>): set only by ?go=units deep links (baths_min=, city=).
+      // The Filters drawer lists header columns alone (fltRenderCols), so they are NOT in it; the
+      // applied row and XLSX row 1 label and clear them through colDef().label.
+      unit_bathrooms:{ t:'num', label:'Baths' },
+      city:{ t:'text', label:'City' }
     }},
     atable: { rows:function(){ return appsAll || []; }, redraw:function(){ drawApps(); }, cols:{
       submitted_at:{ t:'date', label:'Submitted', get:function(r){ return (r.submitted_at||'').slice(0,10); } },
@@ -15934,7 +16047,14 @@ window.llApplyTheme = function (pref) {
     acmRenderBar();
     acmRenderBrief();
     if (curOwner && el('omodal') && el('omodal').classList.contains('open')) acmPaintOwner(curOwner);
+    // one-shot waiters for the first probe answer (a ?go=alerts / persona=me deep link): swapped
+    // out before draining, each isolated, so a throw in one can't stop the others or this paint
+    acmSettled = true;
+    var waiters = acmAfterQ; acmAfterQ = [];
+    waiters.forEach(function(fn){ try { fn(); } catch (e) { console.error('acm after-callback failed', e); } });
   }
+  var acmSettled = false, acmAfterQ = [];
+  function acmAfter(fn){ if (acmSettled) fn(); else acmAfterQ.push(fn); }
   function acmMerge(){
     (ownersAll || []).forEach(function(r){
       var a = acmMap[String(r.buildium_id)];
@@ -16516,17 +16636,30 @@ window.llApplyTheme = function (pref) {
   }, true);
 
   /* ── Owners directory ─────────────────────── */
+  // In-flight queue as loadUnits / loadKeys: showTab('owners') fires loadOwners() on a null cache
+  // and a deep link's loadOwners(cb) in the same tick rides that request (no second GET /owners).
+  var ownersReq = 0, ownersLoading = false, ownersAfterQ = [];
+  function ownersInvalidate(){ ownersAll = null; ownersReq++; ownersLoading = false; }
   function loadOwners(after){
+    if (after) ownersAfterQ.push(after);
+    if (ownersLoading) return;
+    ownersLoading = true;
+    var q = ++ownersReq;
     el('veil').classList.remove('hide');
     authFetch('/owners')
       .then(function(j){
+        if (q !== ownersReq) return;
+        ownersLoading = false;
         ownersAll = j.owners || [];
         acmMerge();   // account-manager fields ride on the rows so the column sort/filter see them
         drawOwners();
         el('veil').classList.add('hide');
-        if (after) { try { after(); } catch (e) { console.error('loadOwners after-callback failed', e); } }
+        var cbs = ownersAfterQ; ownersAfterQ = [];
+        cbs.forEach(function(cb){ try { cb(); } catch (e) { console.error('loadOwners after-callback failed', e); } });
       })
       .catch(function(e){
+        if (q !== ownersReq) { if (String(e && e.message) !== 'AUTH') console.error('stale owners load failed', e); return; }
+        ownersLoading = false; ownersAfterQ = [];
         el('veil').classList.add('hide');
         if (String(e && e.message) === 'AUTH') return;
         console.error('owners load failed', e);
@@ -18728,8 +18861,8 @@ window.llApplyTheme = function (pref) {
   // One if per tab until the TABS registry (audit batch 4c). load(true) already nulled
   // appsAll/toursAll.
   function syncReloadLists(){
-    unitsInvalidate(); leasesInvalidate();
-    ownersAll = null; keysAll = null; tasksAll = null; historyAll = null;
+    unitsInvalidate(); leasesInvalidate(); ownersInvalidate(); keysInvalidate();
+    tasksAll = null; historyAll = null;
     var t = ACTIVE_TAB;
     if (t === 'units') loadUnits();
     if (t === 'leases') loadLeases();
@@ -18938,12 +19071,189 @@ window.llApplyTheme = function (pref) {
     // forces coordinator via tdCoordinatorHome(); mirror that here so both deep links agree.
     var t = tabFromHash();
     var h0 = (location.hash || '').replace(/^#/, '').toLowerCase();
-    if (h0 === 'schedule') tdCoordinatorHome();
+    // ?go= deep link (dlStart) replaces the hash branch; a lead link beside it wins (the go= link
+    // is dropped here and said so AFTER the lead landing, since every showTab hides the notice)
+    var dlLeadWins = !!(pendingLink && (pendingLeadCard || pendingLeadEmail));
+    if (dlLeadWins) pendingLink = null;
+    if (pendingLink) dlStart();
+    else if (h0 === 'schedule') tdCoordinatorHome();
     else if (h0 === 'hub') tdHubHome();   // legacy My-hub bookmarks land on the merged Today view
     else showTab(t || 'today');
     // ?lead=<cardId> or ?lead_email=<email> → Schedule tab pre-filled
     if (pendingLeadCard) openLeadDeepLink('card_id=' + encodeURIComponent(pendingLeadCard));
     else if (pendingLeadEmail) openLeadDeepLink('email=' + encodeURIComponent(pendingLeadEmail));
+    if (dlLeadWins) dlNote('Ignored the go= link.');
+  }
+  /* ── ?go= deep links: consume (startApp → dlStart), apply after the data is loaded ─────
+     Parsed at boot by dlParse (top of the IIFE). startApp runs inside lgHello's promise, AFTER
+     __llBooted, so the head boot-crash guard would NOT catch a throw here — uncaught, it would
+     leave the login hidden and no tab shown (a blank page). Hence: the whole body in try/catch,
+     and every after-load callback wrapped by dlGuard. Fallback = Today + "Couldn't open that
+     link." Order matters: take the link, tidy the URL (showTab keeps location.search, so tidying
+     after would leave ?go= behind), then showTab, then apply once the tab's rows exist. ── */
+  var DL_SEARCH = { units:'u-search', leases:'ls-search', applications:'a-search', tours:'r-search', renewals:'rn-search', owners:'o-search', keys:'k-search', tasks:'t-search', history:'h-search' };
+  var DL_TID = { units:'utable', leases:'ltable', applications:'atable', tours:'rtable', renewals:'rntable', owners:'otable', keys:'ktable', tasks:'ttable', history:'htable' };
+  var DL_PERSONA_LABEL = { me:'Me', agent:'Agent', manager:'Manager', coordinator:'Coordinator', admin:'Admin' };
+  function dlNote(msg){
+    var n = el('link-note'), t = el('link-note-t'); if (!n || !t) return;
+    t.textContent = msg;   // values in these messages come from the URL — text only, never markup
+    n.style.display = '';
+  }
+  function dlNoteHide(){ var n = el('link-note'); if (n) n.style.display = 'none'; }
+  (function(){ var x = el('link-note-x'); if (x) x.addEventListener('click', dlNoteHide); })();
+  function dlGuard(fn){
+    return function(){
+      try { fn(); } catch (e) {
+        console.error('deep link apply failed', e);
+        try { showTab('today'); } catch (e2) { console.error('deep link fallback failed', e2); }   // scheme §2: any throw while applying → Today + notice
+        dlNote('Couldn’t open that link.');
+      }
+    };
+  }
+  function dlStart(){
+    var L = pendingLink; pendingLink = null;   // consume once: a sign-out + sign-in in this tab can never replay it
+    try {
+      try { history.replaceState(null, '', location.pathname); } catch (e) {}   // one-shot: refresh = the plain tab
+      if (!L || L.bad){ showTab('today'); dlNote('That Ledger link wasn’t recognised.'); return; }
+      var ign = L.ignored.length ? 'Ignored: ' + L.ignored.join(', ') : '';
+      if (L.go === 'today' || L.go === 'alerts'){ dlToday(L, ign); return; }
+      showTab(L.tab);
+      if (L.tab === 'units') dlUnitsApply(L, ign);
+      else if (L.tab === 'leases') dlLeasesApply(L, ign);
+      else if (L.tab === 'owners') dlOwnersApply(L, ign);
+      else if (L.tab === 'keys') dlKeysApply(L, ign);
+      else dlSimpleApply(L, ign);
+    } catch (e) {
+      console.error('deep link failed', e);
+      try { showTab('today'); } catch (e2) { console.error('deep link fallback failed', e2); }
+      dlNote('Couldn’t open that link.');
+    }
+  }
+  // Today as a persona (writes ledger_role_v1 the way the role chips and tdCoordinatorHome do;
+  // tdRole() still arbitrates — an identity lock or a missing admin token falls back and says so).
+  // "Me" and Alerts exist only once the /me/owners probe answers, so those wait on acmAfter.
+  function dlToday(L, ign){
+    var want = L.go === 'alerts' ? 'me' : (L.params.persona || '');
+    var said = function(extra){ var parts = []; if (extra) parts.push(extra); if (ign) parts.push(ign); if (parts.length) dlNote(parts.join(' ')); };
+    var label = function(r){ return DL_PERSONA_LABEL[r] || r; };
+    // Allowed for THIS sign-in? idLock is still null here (idRecompute waits for /team-roster), so
+    // tdRole() would say yes to anything; authIdent IS set before startApp, so ask idFromAuth() —
+    // the same lock idRecompute will apply — and never persist a persona it will flip back.
+    var lk = idFromAuth();
+    var ok = want === 'me' || ((want !== 'admin' || IS_ADMIN) && (!lk || tdRoleAllowed(lk.role).indexOf(want) >= 0));
+    if (want && !ok){
+      showTab('today');
+      said('Opened Today as ' + label(lk ? lk.role : tdRole()) + '.');
+      return;
+    }
+    var prev = '';
+    if (want){ try { prev = localStorage.getItem(TD_ROLE_KEY) || ''; localStorage.setItem(TD_ROLE_KEY, want); } catch (e) {} }
+    var loaded = todayLoaded !== null;
+    showTab('today');
+    if (loaded){ tdSyncRoles(); tdRender(); }
+    if (want !== 'me'){ said(''); return; }
+    // "Me" / Alerts exist only once the /me/owners probe answers. acmSet settles only on success,
+    // 403 or AUTH (a 500 retries in 30 s; a throw before acmProbe never settles), so the wait has
+    // a deadline: past it the link falls back the way a 403 does and says so. Whichever fires
+    // first wins; the other is a no-op.
+    var done = false;
+    var settle = dlGuard(function(){
+      if (done) return; done = true;
+      if (acmOn){ if (L.go === 'alerts' && ACTIVE_TAB === 'today') acmOpenAlerts(); said(''); return; }
+      var before = tdRole();
+      try { if (prev && prev !== 'me') localStorage.setItem(TD_ROLE_KEY, prev); else localStorage.removeItem(TD_ROLE_KEY); } catch (e) {}   // never leave 'me' saved
+      tdSyncRoles();
+      if (tdRole() !== before && todayLoaded !== null) tdRender();
+      said(L.go === 'alerts' ? 'Alerts are only on account-manager sign-ins.' : 'Opened Today as ' + label(tdRole()) + '.');
+    });
+    acmAfter(settle);
+    setTimeout(settle, 8000);
+  }
+  // Units: gotoUnitsColFilter's shape — clean board, set state, refreshFunnels/drawChips/drawUnits,
+  // all AFTER the rows are loaded (loadUnits's in-flight queue coalesces with showTab's own load).
+  function dlUnitsApply(L, ign){
+    var p = L.params;
+    var go = dlGuard(function(){
+      unitsDrillReset();
+      if (p.q != null) fltInputSet('u-search', p.q);
+      if (p.status) uOcc = p.status;
+      if (p.marketing) uMkt = p.marketing;
+      (p.flags || []).concat(p.show || []).forEach(function(k){ uSel[k] = 1; });
+      if (p.days_vacant){ uDV = p.days_vacant; fltInputSet('u-dv', uDV); }
+      if (p.rent_min != null) fltInputSet('u-rmin', String(p.rent_min));
+      if (p.rent_max != null) fltInputSet('u-rmax', String(p.rent_max));
+      if (p.beds || p.beds_min != null){
+        var s = colfState('utable', 'unit_bedrooms');
+        (p.beds || []).forEach(function(v){ s.sel[v] = 1; });
+        if (p.beds_min != null){
+          s.sel[String(p.beds_min)] = 1;   // present even when no loaded unit has it: an empty table, not "no filter"
+          (unitsAll || []).forEach(function(u){ var n = parseFloat(u.unit_bedrooms); if (!isNaN(n) && n >= p.beds_min) s.sel[colKeyOf(u.unit_bedrooms)] = 1; });   // parseFloat: Buildium's NineBedPlus arrives as "9+"
+        }
+      }
+      if (p.baths_min != null) colfState('utable', 'unit_bathrooms').min = p.baths_min;
+      if (p.city) colfState('utable', 'city').q = p.city.toLowerCase();   // "contains" (Fort Sask / Fort Saskatchewan)
+      refreshFunnels(); drawChips(); drawUnits();
+      if (L.go === 'unit'){
+        var hit = false; (unitsAll || []).forEach(function(u){ if (String(u.unit_id) === p.id) hit = true; });
+        if (hit) openUnit(p.id);
+        else dlNote('Unit ' + p.id + ' isn’t in the Ledger (BC, archived and former-client units aren’t mirrored).');
+      }
+      if (ign) dlNote(ign);
+    });
+    if (unitsAll === null) loadUnits(go); else go();
+  }
+  function dlLeasesApply(L, ign){
+    var p = L.params;
+    var go = dlGuard(function(){
+      FT.ltable.clear(); COLF['ltable'] = {};
+      if (p.q != null) fltInputSet('ls-search', p.q);
+      if (p.status){ var s = colfState('ltable', 'lease_status'); p.status.forEach(function(v){ s.sel[v] = 1; }); }
+      if (p.ends_from || p.ends_by){ var d = colfState('ltable', 'lease_to_date'); if (p.ends_from) d.min = p.ends_from; if (p.ends_by) d.max = p.ends_by; }
+      if (p.rent_min != null || p.rent_max != null){ var r = colfState('ltable', 'lease_rent'); if (p.rent_min != null) r.min = p.rent_min; if (p.rent_max != null) r.max = p.rent_max; }
+      refreshFunnels(); FT.ltable.redraw();
+      if (ign) dlNote(ign);
+    });
+    if (leasesAll === null) loadLeases(go); else go();
+  }
+  function dlOwnersApply(L, ign){
+    var p = L.params;
+    var go = dlGuard(function(){
+      if (p.q != null){ fltInputSet('o-search', p.q); drawOwners(); }
+      if (L.go === 'owner'){
+        var r = null; (ownersAll || []).forEach(function(o){ if (String(o.buildium_id) === p.id) r = o; });
+        if (r) omOpen(r); else dlNote('Owner ' + p.id + ' isn’t in the Ledger.');
+      }
+      if (ign) dlNote(ign);
+    });
+    if (ownersAll === null) loadOwners(go); else go();
+  }
+  function dlKeysApply(L, ign){
+    var p = L.params;
+    var go = dlGuard(function(){
+      if (p.q != null) fltInputSet('k-search', p.q);
+      if (p.keys){ kSel = {}; p.keys.forEach(function(k){ kSel[k] = 1; }); }
+      drawKeyChips(); drawKeys();
+      if (L.go === 'key'){
+        if (p.id){ var r = findKey(p.id); if (r) openKeyRow(r, null, keyGroupOf(r)); else dlNote('Key set ' + p.id + ' isn’t in the Ledger.'); }
+        else {
+          var g = (keysAll || []).filter(function(x){ return String(x.unit_id) === p.unit; });   // every set on that unit, with the set switcher
+          if (g.length) openKeyGroup(g, null); else dlNote('No key sets on unit ' + p.unit + ' in the Ledger.');
+        }
+      }
+      if (ign) dlNote(ign);
+    });
+    if (keysAll === null) loadKeys(go); else go();
+  }
+  // Tabs with only q= (applications, tours, renewals, tasks, history) and the Ledger: the search
+  // box is set BEFORE the tab's own load so its first draw reads it; an already-loaded tab redraws.
+  function dlSimpleApply(L, ign){
+    var p = L.params, id = DL_SEARCH[L.tab], tid = DL_TID[L.tab];
+    if (p.q != null && id){
+      fltInputSet(id, p.q);
+      var loaded = { applications: appsAll, tours: toursAll, renewals: renewalsAll, tasks: tasksAll, history: historyAll }[L.tab];
+      if (loaded !== null && loaded !== undefined && tid && COLF_DEF[tid]) COLF_DEF[tid].redraw();
+    }
+    if (ign) dlNote(ign);
   }
   // Open the Schedule tab from an Aptly lead deep link (by card id or email): land on the
   // two-button landing with the prospect pre-loaded so the coordinator picks Book vs Offer.

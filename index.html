@@ -803,7 +803,13 @@ window.llApplyTheme = function (pref) {
   @keyframes veilglow{
     0%,100%{box-shadow:0 30px 70px rgba(var(--shade-rgb),.5),var(--rim-strong),0 0 34px rgba(var(--clay-rgb),.12)}
     50%{box-shadow:0 30px 70px rgba(var(--shade-rgb),.5),var(--rim-strong),0 0 80px rgba(var(--clay-rgb),.32)}}
-  #veil.hide{opacity:0;transform:translate(-50%,-50%) scale(.9);pointer-events:none}
+  /* Hidden = visibility:hidden AND every keyframe stopped (B1, 2026-10-17): opacity:0 alone kept
+     veilglow (a box-shadow tween on a blur(26px) element), whirl and rulegrow running for the life of
+     the tab — ~20% of a phone's main thread, idle (idle-probe 942 -> 214 ms busy per 3 s). The
+     visibility flip waits .4s so the fade-out still plays; un-hiding is instant (base rule). */
+  #veil.hide{opacity:0;transform:translate(-50%,-50%) scale(.9);pointer-events:none;visibility:hidden;
+    transition:opacity .4s var(--ease-out),transform .4s var(--ease-out),visibility 0s .4s;animation:none}
+  #veil.hide .vspin,#veil.hide .vrule{animation:none}
   #veil .vspin{width:42px;height:42px;border-radius:50%;
     background:conic-gradient(from 0deg, rgba(var(--clay-rgb),0), var(--clay) 84%, #F6D77E);
     -webkit-mask:radial-gradient(farthest-side,#0000 61%,#000 62%);mask:radial-gradient(farthest-side,#0000 61%,#000 62%);
@@ -4347,42 +4353,47 @@ window.llApplyTheme = function (pref) {
     pill.style.transform = 'translateY(' + on.offsetTop + 'px)';
     list.classList.add('pillready');
   }
-  // staggered "cards pull up" entrance for whichever tab just opened
+  // staggered "cards pull up" entrance for whichever tab just opened.
+  // B2 (2026-10-17): every entrance is HALF as long and its stagger is a capped total (gsap's
+  // stagger.amount), never per-item — a tab with 20 cards used to take 0.6 + 20 x 0.05 = 1.6 s to
+  // settle, and it ran again on EVERY tab switch over content that was already there. Pearse read
+  // that as the Ledger being slow. The shapes (slide, fade, ease) are unchanged.
   function fxTabReveal(node){
     if (!FXON || !GS || !node) return;
     var cards = node.querySelectorAll('.kpi, .card');
     if (cards.length > 1){
       GS.killTweensOf(cards);
       GS.fromTo(cards, { opacity:0, y:24, scale:0.985 },
-        { opacity:1, y:0, scale:1, duration:0.6, ease:'power3.out', stagger:0.05, clearProps:'transform,opacity' });
+        { opacity:1, y:0, scale:1, duration:0.3, ease:'power3.out', stagger:{ amount:0.15 }, clearProps:'transform,opacity' });
     } else {
       var card = cards[0] || node;
       var inner = [].slice.call(card.children || []);
       GS.killTweensOf(card); GS.killTweensOf(inner);
       GS.fromTo(card, { opacity:0, y:22, scale:0.99 },
-        { opacity:1, y:0, scale:1, duration:0.5, ease:'power3.out', clearProps:'transform,opacity' });
+        { opacity:1, y:0, scale:1, duration:0.3, ease:'power3.out', clearProps:'transform,opacity' });
       if (inner.length) GS.fromTo(inner, { opacity:0, y:14 },
-        { opacity:1, y:0, duration:0.5, ease:'power2.out', stagger:0.05, delay:0.08, clearProps:'transform,opacity' });
+        { opacity:1, y:0, duration:0.3, ease:'power2.out', stagger:{ amount:0.12 }, delay:0.04, clearProps:'transform,opacity' });
     }
   }
   function fxReveal(){
     if (fxRevealed) return; fxRevealed = true;
     document.body.classList.remove('preanim');
     if (!FXON || !GS) return;
-    // sidebar slides in + nav items cascade
-    GS.from('.sidebar', { opacity:0, x:-28, duration:0.65, ease:'power3.out', clearProps:'transform,opacity' });
-    GS.from('#tabs .navitem', { opacity:0, x:-16, duration:0.5, stagger:0.05, delay:0.12, ease:'power2.out', clearProps:'transform,opacity', onComplete:fxNavPill });
+    // sidebar slides in + nav items cascade (B2: half-length, capped staggers — see fxTabReveal;
+    // the first paint used to settle ~1.3 s after /stats had already answered)
+    GS.from('.sidebar', { opacity:0, x:-28, duration:0.3, ease:'power3.out', clearProps:'transform,opacity' });
+    GS.from('#tabs .navitem', { opacity:0, x:-16, duration:0.3, stagger:{ amount:0.15 }, delay:0.05, ease:'power2.out', clearProps:'transform,opacity', onComplete:fxNavPill });
     var top  = el('app').querySelectorAll('.panel');
     var rest = el('app').querySelectorAll('.tablecard');
     GS.set(top,  { opacity:0, y:22, scale:0.985 });
-    GS.to(top,   { opacity:1, y:0, scale:1, duration:0.7, ease:'power3.out', stagger:0.055, clearProps:'transform,opacity' });
+    GS.to(top,   { opacity:1, y:0, scale:1, duration:0.35, ease:'power3.out', stagger:{ amount:0.12 }, clearProps:'transform,opacity' });
     if (STRG) {
       GS.set(rest, { opacity:0, y:26 });
       STRG.batch(rest, { start:'top 90%', once:true,
-        onEnter:function(b){ GS.to(b, { opacity:1, y:0, duration:0.6, ease:'power3.out', stagger:0.08, clearProps:'transform,opacity' }); } });
+        onEnter:function(b){ GS.to(b, { opacity:1, y:0, duration:0.35, ease:'power3.out', stagger:{ amount:0.12 }, clearProps:'transform,opacity' }); } });
       try { STRG.refresh(); } catch (e) {}
     } else {
-      GS.fromTo(rest, { opacity:0, y:26 }, { opacity:1, y:0, duration:0.6, ease:'power3.out', stagger:0.06, delay:0.2, clearProps:'transform,opacity' });
+      GS.fromTo(rest, { opacity:0, y:26 }, { opacity:1, y:0, duration:0.35, ease:'power3.out', stagger:{ amount:0.12 }, delay:0.1, clearProps:'transform,opacity' });
     }
   }
   function setupFX(){
@@ -4835,7 +4846,7 @@ window.llApplyTheme = function (pref) {
     if (isNaN(fromV)) fromV = 0;
     node.setAttribute('data-v', value);
     if (REDUCED || fromV === value) { node.textContent = formatter(value); return; }
-    var t0 = null, DUR = 650;
+    var t0 = null, DUR = 400;   // B2: was 650 — the tiles read as "still loading" for most of a second
     function step(ts){
       if (t0 === null) t0 = ts;
       var p = Math.min(1, (ts - t0) / DUR);
@@ -10154,9 +10165,40 @@ window.llApplyTheme = function (pref) {
   function lgAfterSession(){
     return SB.auth.mfa.getAuthenticatorAssuranceLevel().then(function(r){
       var lvl = r && r.data;
-      if (lvl && lvl.currentLevel === 'aal2') return lgHello();
+      if (lvl && lvl.currentLevel === 'aal2'){ bootPrefire(); return lgHello(); }
       return lgMfaStart();
     });
+  }
+  // B3 (2026-10-17): the first data fetch no longer waits for the /user/hello round trip (one fresh
+  // isolate, 0.55-0.75 s on every open). Every route verifies the session itself; hello only names
+  // the identity. So, on a resumed aal2 session, /stats (and a ?go=unit / ?go=key&unit= card row)
+  // goes out HERE, and startApp's load() joins the same in-flight request (statsGet's memo).
+  // Guard (Pearse 2026-10-17, v278's one-/stats-per-manager-boot): only for a sign-in this device
+  // has seen before (ledger_ident_v1, written by the handshake) whose role was NOT manager — a
+  // manager's scope is seeded from hello's property_manager_id and is never persisted, so an
+  // unscoped early /stats would be a second one. A stale cache (role changed to manager since)
+  // costs one extra /stats on that open and rewrites itself. A session hello then rejects
+  // (NOT_ON_TEAM, SESSION_EXPIRED) sends the early request to the same onAuthFail screen.
+  var IDENT_KEY = 'ledger_ident_v1', dlPre = {};
+  function bootPrefire(){
+    var c = null;
+    try { c = JSON.parse(localStorage.getItem(IDENT_KEY) || 'null'); } catch (e) { c = null; }
+    if (!c || !lgEmail || c.email !== lgEmail || c.role === 'manager') return;
+    try {
+      scopeRestore();   // A-13: the saved scope first, so this /stats is the one startApp wants
+      // Warm the memo only — never load(): load() would paint the Ledger before hello (a flash before
+      // Today / the deep-link tab) and its failure path calls onAuthFail() with no code, wiping the
+      // SESSION_EXPIRED / NOT_ON_TEAM message. A 401 here still routes through apiFetch's onAuthFail(code)
+      // (the right message); the memo drops a failed request, so startApp never joins a dead one.
+      statsGet(buildQuery().toString(), false).catch(function(){ /* quiet: load() reports the same request when it joins it */ });
+      var L = pendingLink;
+      if (pendingLeadCard || pendingLeadEmail) L = null;   // a lead link beside go= wins; nothing to pre-fire
+      if (L && !L.bad && L.go === 'unit' && L.params.id) dlPre.unit = authFetch('/unit?unit_id=' + encodeURIComponent(L.params.id));
+      else if (L && !L.bad && L.go === 'key' && !L.params.id && L.params.unit) dlPre.keys = authFetch('/keys?unit_id=' + encodeURIComponent(L.params.unit));
+      // handled later by the deep-link apply; this stops a fast rejection surfacing as "Uncaught (in promise)"
+      if (dlPre.unit) dlPre.unit.catch(function(){ /* quiet: the deep-link apply attaches the real handler and traces it */ });
+      if (dlPre.keys) dlPre.keys.catch(function(){ /* quiet: same — dlKeysApply traces the failure */ });
+    } catch (e) { console.error('boot pre-fire failed (the handshake path still loads everything)', e); }
   }
   function lgMfaStart(){
     showLogin(); loginStep('mfa'); lgBusy(true);
@@ -10224,6 +10266,8 @@ window.llApplyTheme = function (pref) {
       if (j && j.ok){
         authIdent = { email: j.email, display_name: j.display_name, role: j.role, agent_name: j.agent_name || null,
           property_manager_id: j.property_manager_id != null ? Number(j.property_manager_id) : null };
+        // what the next open on this device may pre-fire on (B3, bootPrefire): the sign-in email + role
+        try { localStorage.setItem(IDENT_KEY, JSON.stringify({ email: lgEmail, role: j.role })); } catch (e) {}
         idApplyAdmin();
         startApp();
         return;
@@ -11116,7 +11160,14 @@ window.llApplyTheme = function (pref) {
         holder: cHolder || null,
         expected: cHolder ? ((el('kf-exp') && el('kf-exp').value) || null) : null };
       postJSON('/key/create', cbody).then(function(j){
-        if (j && j.key) { if (keysAll) keysAll.push(j.key); kCur = j.key; kCreateCtx = null; kGroup = keyGroupOf(j.key); }
+        if (j && j.key) {
+          // keysAll null = the Keys list has not loaded (a card-first popup, or a unit panel): keyGroupOf
+          // would find no siblings and the set switcher would vanish — keep the open group's sets on
+          // this unit and add the new one (review nit 8). The list, when it loads, carries the new set.
+          var kgPrev = keysAll ? null : (kGroup || (kCur ? [kCur] : [])).filter(function(x){ return String(x.unit_id) === String(j.key.unit_id); }).concat([j.key]);
+          if (keysAll) keysAll.push(j.key); kCur = j.key; kCreateCtx = null;
+          kGroup = keysAll ? keyGroupOf(j.key) : (kgPrev.length > 1 ? kgPrev : null);
+        }
         el('km-form').style.display = 'none';
         if (kCur) { renderKey(); loadKeyHistory(kCur.key_id); }
         if (keysAll) { drawKeyChips(); drawKeys(); }
@@ -14022,6 +14073,19 @@ window.llApplyTheme = function (pref) {
   // repaint good rows as "Could not load". unitsInvalidate() is the one way to drop the cache.
   var unitsReq = 0, unitsLoading = false, unitsAfterQ = [];
   function unitsInvalidate(){ unitsAll = null; unitsReq++; unitsLoading = false; }
+  // The per-row prep every directory row gets before anything reads it — the /units list AND the
+  // single /unit row a ?go=unit link opens card-first (A1). ONE copy: a field derived here and
+  // not there would make the popup disagree with its own board row.
+  function unitsPrepRow(u){
+    miDerive(u);
+    // Balance blend: Active-lease total_balance (outstanding-balances mirror) wins;
+    // else a FUTURE lease's ledger_balance (amount due before move-in — the balances
+    // mirror has no future-lease rows). Row-flagging (r-bal) stays Active-only.
+    u.balance_disp = (u.total_balance || 0) > 0 ? u.total_balance
+      : (u.lease_source === 'Future' && (u.ledger_balance || 0) > 0.005 ? u.ledger_balance : null);
+    u.balance_src = (u.total_balance || 0) > 0 ? 'active' : (u.balance_disp != null ? 'pre' : null);
+    return u;
+  }
   function loadUnits(after){
     if (after) unitsAfterQ.push(after);
     if (unitsLoading) return;
@@ -14035,15 +14099,8 @@ window.llApplyTheme = function (pref) {
         unitsAll = j.units || [];
         nrRows = j.not_ready || [];
         tbSrc = j.takebacks || { ledger: [], buildium_property_ids: [] };
-        unitsAll.forEach(function(u){
-          miDerive(u);
-          // Balance blend: Active-lease total_balance (outstanding-balances mirror) wins;
-          // else a FUTURE lease's ledger_balance (amount due before move-in — the balances
-          // mirror has no future-lease rows). Row-flagging (r-bal) stays Active-only.
-          u.balance_disp = (u.total_balance || 0) > 0 ? u.total_balance
-            : (u.lease_source === 'Future' && (u.ledger_balance || 0) > 0.005 ? u.ledger_balance : null);
-          u.balance_src = (u.total_balance || 0) > 0 ? 'active' : (u.balance_disp != null ? 'pre' : null);
-        });
+        unitsAll.forEach(unitsPrepRow);
+        umRepoint();   // a card-first popup adopts its list row (renewal fields, current-term lease end) before the board draws
         fillParkMS();
         fillAmenMS('u_amen', unitsAll, uAmenOf);
         drawChips(); drawUnits();
@@ -15661,11 +15718,63 @@ window.llApplyTheme = function (pref) {
     if (unitsAll === null) loadUnits(function(){ openUnit(uid); });
     else openUnit(uid);
   }
-  function openUnit(uid){
-    var r = null;
-    (unitsAll || []).forEach(function(x){ if (String(x.unit_id) === String(uid)) r = x; });
+  // row: an already-prepped directory row to render instead of the unitsAll lookup — the
+  // card-first deep link (A1) hands over the single /unit row before /units has landed, flagged
+  // __card so umPaint shows the board-derived fields as pending and umRepoint (loadUnits) swaps
+  // the list's row in once it lands. detail: that same /unit answer (tenants + notes), so the
+  // popup does not fetch it a second time.
+  var umCurRow = null;
+  function openUnit(uid, row, detail){
+    var r = row || null;
+    if (!r) (unitsAll || []).forEach(function(x){ if (String(x.unit_id) === String(uid)) r = x; });
     if (!r) return;
     var uOpen = ++umOpenReq;   // F1: photos + activity below belong to THIS open; a later openUnit outranks them
+    umCurRow = r;
+    umPaint(r);
+    umOpenRest(uid, r, uOpen, detail);
+  }
+  // /units landed while a card-first popup is up: the list row carries what the single /unit row
+  // cannot (renewal_stage / notice / lapsed, the current-term lease_to_date + shifted
+  // days_remaining, renewed_lease_to_date — index.ts /units). Merge it onto the popup's object and
+  // make THAT object the board's row, so the popup's editors (status override, move dates, NB
+  // appliances / turnover, leasing status) and the board write the same row from here on; then
+  // repaint the fields. Nothing re-fetched. An edit saved in the window before the list landed is
+  // overwritten by the list's copy of that field (it reaches the DB first; the next Sync shows it).
+  function umRepoint(){
+    var c = umCurRow; if (!c || !c.__card) return;
+    var i = -1; (unitsAll || []).forEach(function(x, k){ if (String(x.unit_id) === String(c.unit_id)) i = k; });
+    delete c.__card;
+    if (i < 0) return;   // not on the board (it is unfiltered, so only a unit that left the mirror)
+    var desc = c.listing_description;
+    Object.assign(c, unitsAll[i]);
+    if (desc != null) c.listing_description = desc;
+    unitsAll[i] = c;
+    // Repaint ONLY the two /units-derived fields, in place. A full umPaint here rebuilt #um-fields
+    // and #um-contact under a live popup: the Nookbook sheet-note box came back as "Loading…" with
+    // an empty textarea (a Save would have cleared the client's note), the tenant contact strip
+    // vanished, and a "Balance aging" row /lease-detail had already added was dropped (review N1-N3).
+    var m = el('umodal');
+    if (!(m && m.classList.contains('open') && umCurRow === c)) return;
+    var ev = el('um-ev-v'), le = el('um-le-v');
+    if (ev) ev.innerHTML = umEvHtml(c);
+    if (le) le.innerHTML = umLeHtml(c);
+  }
+  // The two popup fields /units derives (renewal_stage/notice/lapsed; the current-term lease end +
+  // shifted days_remaining). A card-first row (__card) says "pending" instead of guessing: no renewal
+  // chip, and never Buildium's raw lease_to_date. ONE source for umPaint and umRepoint.
+  var UM_PENDING = '<span class="qn">pending &middot; loading the board</span>';
+  function umEvHtml(r){
+    if (r.__card) return (evChip(r.unit_event) || '') + ' ' + UM_PENDING;
+    return (evChip(r.unit_event) + rnUnitChip(r)) || '–';
+  }
+  function umLeHtml(r){
+    if (!r.lease_to_date) return '–';
+    if (r.__card) return UM_PENDING;
+    return esc(r.lease_to_date) + (r.days_remaining != null ? ' (' + r.days_remaining + 'd)' : '');
+  }
+  // The popup's static paint (title, sub line, actions, fields + their editors). Pure render from
+  // the row: safe to run again on the same open (umRepoint); every editor re-binds to its fresh nodes.
+  function umPaint(r){
     el('um-title').textContent = (r.property_name || '') + ' — ' + (r.unit_number || '');
     var sub = [];
     var stat = STATUS_CHIP[r.occupancy_status] || '';
@@ -15698,7 +15807,9 @@ window.llApplyTheme = function (pref) {
     el('um-contact').innerHTML = '';
     // collapsed details — fields
     var f = '';
-    f += fitem('Unit event', (evChip(r.unit_event) + rnUnitChip(r)) || '–');
+    // A card-first row (__card) has no renewal fields and Buildium's raw lease end (index.ts /units
+    // derives both); say so until umRepoint swaps the list row in, never show the raw date.
+    f += fitem('Unit event', '<span id="um-ev-v">' + umEvHtml(r) + '</span>');
     f += fitem('Owner', esc(r.primary_owner_name));
     f += fitem('Property type', esc(r.property_type));
     f += fitem('Furnished', furnValueHtml(r));
@@ -15711,7 +15822,7 @@ window.llApplyTheme = function (pref) {
     }
     f += fitem('Lease', r.lease_source ? esc(r.lease_source) + (r.lease_type ? ' · ' + esc(r.lease_type) : '') : 'None');
     f += fitem('Lease start', esc(r.lease_from_date));
-    f += fitem('Lease end', r.lease_to_date ? esc(r.lease_to_date) + (r.days_remaining != null ? ' (' + r.days_remaining + 'd)' : '') : null);
+    f += fitem('Lease end', '<span id="um-le-v">' + umLeHtml(r) + '</span>');
     f += fitem('Next move-out', esc(r.next_move_out));
     // The outgoing tenant's move-out stays on the unit until the next tenant MOVES IN
     // (Pearse 2026-10-12) — on a pre-leased unit this is the only place the turnover gap shows,
@@ -15749,6 +15860,9 @@ window.llApplyTheme = function (pref) {
     usoBind(r);
     mvoBind(r);
     if (r.is_nookbook) { nbaBind(r); nbtBind(r); nbnBind(r); }   // listeners bind to the freshly rendered editor nodes
+  }
+  // The rest of an open: the per-open fetches and mounts (ONCE per open, never on a repaint).
+  function umOpenRest(uid, r, uOpen, detail){
     // Aged AR buckets live only in the lease directory (v_lease_directory) — fetched on
     // demand, and only when something is owing, so the /units payload stays flat (R5 spirit).
     if (r.lease_id && ((r.total_balance || 0) > 0 || r.balance_src === 'pre')) {
@@ -15786,7 +15900,7 @@ window.llApplyTheme = function (pref) {
     // and notes into B's modal, since every id written below exists in both.
     if (r.lease_id || r.is_nookbook) {
       var uReq = ++umUnitReq;
-      authFetch('/unit?unit_id=' + encodeURIComponent(uid))
+      (detail ? Promise.resolve(detail) : authFetch('/unit?unit_id=' + encodeURIComponent(uid)))   // card-first already has this answer
         .then(function(j){
           if (uReq !== umUnitReq) return;   // a newer unit modal owns these nodes now
           if (r.is_nookbook) {
@@ -19195,11 +19309,33 @@ window.llApplyTheme = function (pref) {
       refreshFunnels(); drawChips(); drawUnits();
       if (L.go === 'unit'){
         var hit = false; (unitsAll || []).forEach(function(u){ if (String(u.unit_id) === p.id) hit = true; });
-        if (hit) openUnit(p.id);
+        if (hit){ if (!cardOpen){ openUnit(p.id); cardOpen = true; } }
         else dlNote('Unit ' + p.id + ' isn’t in the Ledger (BC, archived and former-client units aren’t mirrored).');
       }
       if (ign) dlNote(ign);
     });
+    // Card-first (A1, 2026-10-17): the popup should not wait for the whole board. While /units
+    // (1.9 MB, 877 rows) loads behind it, ONE row comes from GET /unit (the popup fetches it again
+    // for tenants + notes; a few KB, same isolate cost) and opens the popup as soon as it lands.
+    // Whichever side wins opens it once (cardOpen); the loser is a no-op. A take-back or not-ready
+    // unit waits for the list: its popup lines read the stored sources /units carries (tbSrc, nrRows).
+    // Not found, a throw, AUTH: nothing here — the list path says "isn't in the Ledger" as before.
+    var cardOpen = false;
+    if (L.go === 'unit' && unitsAll === null){
+      var pu = dlPre.unit || authFetch('/unit?unit_id=' + encodeURIComponent(p.id)); dlPre.unit = null;   // B3 may have sent it already
+      pu.then(function(j){
+        var u = j && j.unit;
+        if (cardOpen || unitsAll !== null || !u || String(u.unit_id) !== p.id || u.is_owner_takeback || u.is_not_ready) return;
+        // __card: the row lacks /units' derived fields (renewal_*, current-term lease_to_date) — umPaint
+        // shows those as pending and umRepoint swaps the list row in when it lands. j doubles as the
+        // popup's tenants + notes answer, so it is not fetched twice. cardOpen only once openUnit returned.
+        u.__card = true;
+        dlGuard(function(){ openUnit(p.id, unitsPrepRow(u), j); cardOpen = true; })();
+      }).catch(function(e){
+        var m = String(e && e.message);
+        if (m !== 'AUTH' && m !== 'HTTP 404') console.error('deep link: card-first /unit failed (the list path still opens it)', e);   // 404 = not in the Ledger: the list path says so
+      });
+    }
     if (unitsAll === null) loadUnits(go); else go();
   }
   function dlLeasesApply(L, ign){
@@ -19237,11 +19373,25 @@ window.llApplyTheme = function (pref) {
         if (p.id){ var r = findKey(p.id); if (r) openKeyRow(r, null, keyGroupOf(r)); else dlNote('Key set ' + p.id + ' isn’t in the Ledger.'); }
         else {
           var g = (keysAll || []).filter(function(x){ return String(x.unit_id) === p.unit; });   // every set on that unit, with the set switcher
-          if (g.length) openKeyGroup(g, null); else dlNote('No key sets on unit ' + p.unit + ' in the Ledger.');
+          if (g.length){ if (!cardOpen){ cardOpen = true; openKeyGroup(g, null); } }
+          else dlNote('No key sets on unit ' + p.unit + ' in the Ledger.');
         }
       }
       if (ign) dlNote(ign);
     });
+    // Card-first (A1): by unit, the sets come from GET /keys?unit_id= (the route's own filter; the
+    // unit_id test below also holds should a caller answer unfiltered) and the popup opens before
+    // the 1.1 MB /keys list lands — once, whichever side is first (cardOpen). By key_id there is no
+    // single-row route (A1b, not built), so that path waits for the list as before.
+    var cardOpen = false;
+    if (L.go === 'key' && !p.id && keysAll === null){
+      var pk = dlPre.keys || authFetch('/keys?unit_id=' + encodeURIComponent(p.unit)); dlPre.keys = null;   // B3 may have sent it already
+      pk.then(function(j){
+        var g = ((j && j.keys) || []).filter(function(x){ return String(x.unit_id) === p.unit; });
+        if (cardOpen || keysAll !== null || !g.length) return;
+        dlGuard(function(){ openKeyGroup(g, null); cardOpen = true; })();
+      }).catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('deep link: card-first /keys failed (the list path still opens it)', e); });
+    }
     if (keysAll === null) loadKeys(go); else go();
   }
   // Tabs with only q= (applications, tours, renewals, tasks, history) and the Ledger: the search

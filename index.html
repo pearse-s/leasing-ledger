@@ -19863,11 +19863,21 @@ window.llApplyTheme = function (pref) {
   /* ── My tours ("Today" list default, Upcoming/Past) — the selected agent's tours ──
      Fetches all tours once over a broad window (independent of the activity window)
      and filters client-side to hubAgent. Reuses the Tours-tab modal (openTourDetail). ── */
+  // ONE /tours request at a time for My tours + the admin Team overview: admin Today calls
+  // loadHubTours and loadHubTeam in the same tick, and the hubTours === null cache guard stays
+  // true for the whole request, so each sent its own identical 206 KB /tours (2026-10-17).
+  var hubToursP = null;
+  function hubToursFetch(){
+    if (hubToursP) return hubToursP;
+    var p = hubToursP = authFetch('/tours?from=' + edDayPlus(-90) + '&to=' + edDayPlus(60));   // T-B15
+    var clear = function(){ if (hubToursP === p) hubToursP = null; };
+    p.then(clear, clear);
+    return p;
+  }
   function loadHubTours(){
     // T-B7: the [] failure sentinel used to count as loaded (no retry until a write cleared it)
     if (hubTours !== null && !hubToursErr){ hubRenderTours(); return; }
-    var from = edDayPlus(-90), to = edDayPlus(60);   // T-B15
-    authFetch('/tours?from=' + from + '&to=' + to)
+    hubToursFetch()
       .then(function(j){ hubTours = j.tours || []; hubToursErr = false; hubRenderTours(); })
       .catch(function(e){
         // [] keeps the Do-next queue rendering, but the list must say it FAILED, never "No tours today"
@@ -20125,7 +20135,7 @@ window.llApplyTheme = function (pref) {
     var pSigned = authFetch('/signed-leases?from=' + w.from + '&to=' + w.to);
     // T-B7: a failed My-tours [] is not data — refetch rather than show "–" in Tour conf.
     var pTours = (hubTours !== null && !hubToursErr) ? Promise.resolve({ tours: hubTours })
-      : authFetch('/tours?from=' + edDayPlus(-90) + '&to=' + edDayPlus(60));   // T-B15
+      : hubToursFetch();
     Promise.all([pSigned, pTours]).then(function(res){
       if (q !== hubTeamReq) return;
       hubTeamSigned = (res[0] && res[0].signed) || [];

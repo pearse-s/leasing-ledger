@@ -10099,8 +10099,8 @@ window.llApplyTheme = function (pref) {
   /* ── Identity: the personal sign-in IS the gate (2026-10-01) ────────── */
   // supabase-js UMD ships a global named "supabase" (loaded in <head> like the other
   // vendors). SB stays null-guarded: if the CDN fails, the login screen says so instead of
-  // the boot path throwing. Session lives in localStorage ledger_sbauth_v1 (7-day cap
-  // server-side); the authenticator step is required on every device.
+  // the boot path throwing. Session lives in localStorage ledger_sbauth_v1 (30-day cap
+  // server-side, SESSION_MAX_AGE_S); the authenticator step is required on every device.
   var AUTH_ON = true;   // kill switch is historical: with no password tier, false = nobody can sign in
   var SB = null;
   if (AUTH_ON && typeof supabase !== 'undefined' && supabase.createClient) {
@@ -10279,7 +10279,7 @@ window.llApplyTheme = function (pref) {
       // LOUD on purpose — Cheryl hit the not-on-team case silently on 2026-07-20 and it read
       // as "sign-in broken".
       if (code === 'NOT_ON_TEAM') lgErr(String(j.email || 'That email') + ' isn\u2019t on the team list \u2014 an admin needs to add you first (Today \u2192 Team & sign-ins).');
-      else if (code === 'SESSION_EXPIRED') lgErr('Your session reached its 7-day limit \u2014 sign in again.');
+      else if (code === 'SESSION_EXPIRED') lgErr('Your session reached its 30-day limit \u2014 sign in again.');
       else if (code === 'PASSWORD_LOGIN') lgErr('Password sign-ins aren\u2019t accepted \u2014 use the emailed code.');
       else lgErr('Please sign in again.');
     }).catch(function(e){
@@ -19163,7 +19163,7 @@ window.llApplyTheme = function (pref) {
     if (code === 'MFA_REQUIRED' && SB){ lgMfaStart(); return; }
     lgSignOutLocal();
     showLogin(); loginStep('email');
-    if (code === 'SESSION_EXPIRED') lgErr('Your session reached its 7-day limit \u2014 sign in again.');
+    if (code === 'SESSION_EXPIRED') lgErr('Your session reached its 30-day limit \u2014 sign in again.');
     else if (code === 'NOT_ON_TEAM') lgErr('Your sign-in is no longer on the team list.');
   }
   function startApp(){

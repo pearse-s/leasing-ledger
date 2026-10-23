@@ -1,1 +1,0 @@
-var e=`America/Edmonton`,t=new Intl.DateTimeFormat(`en-CA`,{timeZone:e}),n=e=>t.format(typeof e==`object`?e:new Date(e)),r=()=>n(Date.now());export{n,r,e as t};

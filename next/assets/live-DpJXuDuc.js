@@ -1,0 +1,1 @@
+import{l as e}from"./index-VfYWoGkg.js";var t={screen(t,n,r){let i=new URLSearchParams(Object.entries(n).map(([e,t])=>[e,String(t)])).toString();return e(`/screen/${t}${i?`?${i}`:``}`,{signal:r})},write(t,n){return e(t,{method:`POST`,body:n})}};export{t as live};

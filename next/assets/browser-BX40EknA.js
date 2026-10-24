@@ -1,0 +1,1 @@
+import{a as e,i as t,n,o as r,r as i,t as a}from"./supabase-lib-S2e0VZFG.js";r();export{a as Headers,n as Request,i as Response,t as default,e as fetch};

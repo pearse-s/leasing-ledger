@@ -2210,10 +2210,10 @@ window.llApplyTheme = function (pref) {
         <div class="num" id="k-signed-mtd">&ndash;</div>
         <div class="sub" id="k-signed-mtd-sub">new rent this month</div>
       </div>
-      <div class="kpi click" id="kpi-conv" title="Showings that became signed leases, last 30 days — open Applications">
+      <div class="kpi click" id="kpi-conv" title="Leases signed ÷ completed showings (the tour happened: not cancelled, not a no-show), last 30 days — open Applications">
         <div class="lbl">Showing &rarr; lease</div>
         <div class="num" id="k-conv">&ndash;</div>
-        <div class="sub">conversion &middot; last 30 days</div>
+        <div class="sub">of completed showings &middot; last 30 days</div>
       </div>
       <div class="kpi alert click" id="kpi-needs" title="Prospects toured with no call or text in 7+ days, resolved applications excluded — team-wide — open My hub">
         <div class="lbl">Needs follow-up</div>
@@ -2307,8 +2307,9 @@ window.llApplyTheme = function (pref) {
         <div class="card">
           <h2>Showings</h2>
           <div class="note" id="sh-note">click a row to open the Tours tab</div>
-          <div class="pair click" data-go="tours"><span class="pl">Showings booked</span><span class="pv" id="sh-booked">&ndash;</span></div>
-          <div class="pair click" data-go="tours"><span class="pl">&mdash; completed / canceled</span><span class="pv" id="sh-dc">&ndash;</span></div>
+          <div class="pair click" data-go="tours" title="Every showing booked for this window = completed + cancelled + upcoming + no-show. The old half of a reschedule is not counted."><span class="pl">Showings booked</span><span class="pv" id="sh-booked">&ndash;</span></div>
+          <div class="pair click" data-go="tours" title="Completed = the tour happened (ended, not a no-show). Cancelled leaves out reschedules."><span class="pl">&mdash; completed / cancelled</span><span class="pv" id="sh-dc">&ndash;</span></div>
+          <div class="pair click" data-go="tours" title="Upcoming = booked, not ended yet. No-show = marked no-show on the Tours tab. Rescheduled bookings moved to a new time, which is counted instead."><span class="pl">&mdash; upcoming / no-show</span><span class="pv" id="sh-un">&ndash;</span></div>
           <div class="pair" id="sh-recon-row" title="Tours the prospect reconfirmed &divide; tours Calendly asked to confirm, in this window"><span class="pl">Confirmation rate</span><span class="pv" id="sh-recon">&ndash;</span></div>
           <div class="agents" id="sh-agents"></div>
           <div class="warnchip" id="caly-warn"></div>
@@ -3078,7 +3079,7 @@ window.llApplyTheme = function (pref) {
       <div class="tablebar"><h2>Team leaderboard</h2><span class="count-note">all agents &middot; window applies</span></div>
       <div class="scrolly">
         <table id="hublead"><thead><tr>
-          <th>Agent</th><th class="rt">Showings</th><th class="rt">Applications</th><th class="rt">Signed</th><th class="rt">Suggested</th><th class="rt">Calls</th><th class="rt">Texts</th>
+          <th>Agent</th><th class="rt" title="Completed showings (the tour happened)">Showings</th><th class="rt">Applications</th><th class="rt">Signed</th><th class="rt">Suggested</th><th class="rt">Calls</th><th class="rt">Texts</th>
         </tr></thead><tbody></tbody></table>
       </div>
     </div>
@@ -3103,7 +3104,7 @@ window.llApplyTheme = function (pref) {
         <div class="tablebar"><h2>By agent</h2><span class="count-note">signed &middot; pending &middot; conversion &middot; tour confirmations &middot; window applies</span></div>
         <div class="scrolly">
           <table id="hub-team-table"><thead><tr>
-            <th>Agent</th><th class="rt">Signed</th><th class="rt">Pending</th><th class="rt">Showings</th><th class="rt">Apps</th><th class="rt">Conv.</th><th class="rt">Tour conf.</th><th class="rt">Calls</th><th class="rt">Texts</th>
+            <th>Agent</th><th class="rt">Signed</th><th class="rt">Pending</th><th class="rt" title="Completed showings (the tour happened)">Showings</th><th class="rt">Apps</th><th class="rt" title="Signed ÷ completed showings">Conv.</th><th class="rt">Tour conf.</th><th class="rt">Calls</th><th class="rt">Texts</th>
           </tr></thead><tbody></tbody></table>
         </div>
       </div>
@@ -3420,6 +3421,7 @@ window.llApplyTheme = function (pref) {
             <div class="chipset" id="r-status">
               <button type="button" class="chip-mini" data-st="upcoming">Upcoming</button>
               <button type="button" class="chip-mini" data-st="completed">Completed</button>
+              <button type="button" class="chip-mini" data-st="no-show">No-show</button>
               <button type="button" class="chip-mini" data-st="cancelled">Cancelled</button>
             </div>
           </div>
@@ -13109,7 +13111,7 @@ window.llApplyTheme = function (pref) {
     // "Conversion" (labeled "last 30 days"), which is a different period basis.
     var rhtml = '<div class="sect">Conversion &middot; this window</div>';
     rhtml += '<div class="pair" title="Leases signed ÷ completed showings in the selected reporting window (differs from the trailing-30-day KPI tile)"><span class="pl">Showing &rarr; lease conversion</span><span class="pv">' + pct(shPct) +
-      ' <small>' + fmtNum(convSigned) + ' signed / ' + fmtNum(shDen) + ' showings</small></span></div>';
+      ' <small>' + fmtNum(convSigned) + ' signed / ' + fmtNum(shDen) + ' completed showings</small></span></div>';
     rhtml += '<div class="pair" title="Leases signed ÷ inbound leads in this window"><span class="pl">Lead &rarr; lease conversion</span><span class="pv" id="lead-conv"><span class="skel skel-line"></span></span></div>';
     el('activity-rates').innerHTML = rhtml;
     loadLeads(d);
@@ -13155,6 +13157,9 @@ window.llApplyTheme = function (pref) {
     }
     el('sh-booked').textContent = fmtNum(sh.booked);
     el('sh-dc').innerHTML = fmtNum(sh.completed) + ' <small>/</small> ' + fmtNum(sh.canceled);
+    var shUn = el('sh-un');
+    if (shUn) shUn.innerHTML = fmtNum(sh.upcoming) + ' <small>/</small> ' + fmtNum(sh.no_show) +
+      (sh.rescheduled ? ' <small>&middot; ' + fmtNum(sh.rescheduled) + ' rescheduled, not counted</small>' : '');
 
     var rcS = sh.reconfirmation || {}, rcEl = el('sh-recon');
     if (rcEl) {
@@ -13171,7 +13176,7 @@ window.llApplyTheme = function (pref) {
     var agents = sh.by_agent || [];
     var ahtml = '';
     if (agents.length) {
-      ahtml += '<div class="agrow aghead"><span class="an">By agent</span><span class="av">bkd</span><span class="av">done</span><span class="av">cxl</span></div>';
+      ahtml += '<div class="agrow aghead" title="bkd = booked (done + cxl + upcoming + no-show) · done = completed · cxl = cancelled, reschedules left out"><span class="an">By agent</span><span class="av">bkd</span><span class="av">done</span><span class="av">cxl</span></div>';
       agents.forEach(function(a){
         ahtml += '<div class="agrow"><span class="an" title="' + esc(a.agent) + '">' + esc(a.agent) + '</span>' +
           '<span class="av">' + fmtNum(a.booked) + '</span>' +
@@ -13284,7 +13289,7 @@ window.llApplyTheme = function (pref) {
   var schFunnelReq = 0;
   // ONE segment builder for BOTH funnel strips (coordinator #sch-funnel + admin #hub-team-funnel)
   function schFunnelHtml(d){
-    var segs = [['Offers sent', d.offers], ['Booked direct', d.booked], ['Showings', d.toured], ['Applications', d.applied], ['Leases signed', d.signed]];
+    var segs = [['Offers sent', d.offers], ['Booked direct', d.booked], ['Showings held', d.toured], ['Applications', d.applied], ['Leases signed', d.signed]];
     return segs.map(function(s, i){
       return (i ? '<span class="sf-arrow">&rarr;</span>' : '') +
         '<div class="sf-seg"><div class="sfv">' + fmtNum(s[1] || 0) + '</div><div class="sfl">' + s[0] + '</div></div>';
@@ -18046,10 +18051,16 @@ window.llApplyTheme = function (pref) {
         var n = el('r-cal-note'); if (n) { n.textContent = 'Refresh failed — showing last load'; setTimeout(function(){ n.textContent = ''; }, 2600); }
       });
   }
+  // Filter buckets follow dashboard.showing_rows: a marked no-show is a no-show at once (even mid-tour), else
+  // upcoming until the tour ENDS, then completed.
   function tourStatusOf(r){
-    return r.status === 'canceled' ? 'cancelled'
-         : (Date.parse(r.start_time) >= Date.now() ? 'upcoming' : 'completed');
+    if (r.status === 'canceled') return 'cancelled';
+    if (r.is_no_show) return 'no-show';
+    if (Date.parse(r.end_time || r.start_time) >= Date.now()) return 'upcoming';
+    return 'completed';
   }
+  // Calendly accepts a no-show (and refuses a cancel) from the scheduled START, not the end
+  function tourStarted(r){ return Date.parse(r.start_time) <= Date.now(); }
   // Display pill — richer than the 3-bucket filter status: surfaces no-show + rescheduled.
   function tourPill(r){
     if (r.is_no_show) return '<span class="chip c-hot">no-show</span>';
@@ -18185,7 +18196,7 @@ window.llApplyTheme = function (pref) {
     // nearest-first for that case only; completed/cancelled still read newest-first, and an
     // explicit sort from the column popover always wins.
     var sortD = rSort.d;
-    if (!rSortUser && rSort.k === 'start_time' && rStatus.upcoming && !rStatus.completed && !rStatus.cancelled) sortD = 1;
+    if (!rSortUser && rSort.k === 'start_time' && rStatus.upcoming && !rStatus.completed && !rStatus['no-show'] && !rStatus.cancelled) sortD = 1;
     rows.sort(cmpRows(rSort.k, sortD, rSort.k === 'start_time'));
     return rows;
   }
@@ -18421,7 +18432,7 @@ window.llApplyTheme = function (pref) {
     // Cancel / Reschedule = Calendly's own hosted links (the prospect/agent confirms on
     // Calendly; the webhook then updates the mirror). Only meaningful for a live, upcoming
     // booking. No-show = a real API writeback (post-showing), reversible.
-    var canMod = r.status === 'active' && s === 'upcoming';
+    var canMod = r.status === 'active' && s === 'upcoming' && !tourStarted(r);
     var cxA = el('rm-cancel'), rsA = el('rm-resched'), nsB = el('rm-noshow');
     // Cancel = a real Calendly API cancellation (POST /tour/cancel), shown for any live
     // upcoming tour (no longer needs the hosted cancel_url). Reschedule stays a hosted
@@ -18430,7 +18441,7 @@ window.llApplyTheme = function (pref) {
     if (canMod && r.reschedule_url) { rsA.style.display = ''; rsA.href = r.reschedule_url; } else rsA.style.display = 'none';
     // No-show only applies once the showing has started (Calendly 400s "Event is not
     // started yet" otherwise); always allow UNDO of an existing no-show.
-    var canNoShow = r.invitee_uri && r.status !== 'canceled' && s !== 'upcoming';
+    var canNoShow = r.invitee_uri && r.status !== 'canceled' && (r.is_no_show || tourStarted(r));
     if (r.is_no_show || canNoShow) { nsB.style.display = ''; nsB.disabled = false; nsB.innerHTML = r.is_no_show ? '&#8617; Undo no-show' : '&#8856; Mark no-show'; }
     else { nsB.style.display = 'none'; }
     var ni = el('rm-noteinput'); if (ni) { ni.value = ''; ni.disabled = false; }
@@ -19682,7 +19693,7 @@ window.llApplyTheme = function (pref) {
     var c2 = s.applications ? Math.round(sgn / s.applications * 100) : 0;
     function arr(p){ return '<div style="text-align:center;color:var(--ink-soft)"><div style="font-size:1.1rem">&rarr;</div><div style="font-size:.7rem">' + p + '%</div></div>'; }
     var signedVal = fmtNum(s.signed) + (s.signed_suggested ? ' <span style="font-size:.95rem;color:var(--ink-soft);font-weight:600">+' + s.signed_suggested + ' sug.</span>' : '');
-    f.innerHTML = hubTileHtml('Showings', fmtNum(s.showings)) + arr(c1) + hubTileHtml('Applications', fmtNum(s.applications)) + arr(c2) + hubTileHtml('Signed', signedVal, 'confirmed · suggested');
+    f.innerHTML = hubTileHtml('Showings held', fmtNum(s.showings)) + arr(c1) + hubTileHtml('Applications', fmtNum(s.applications)) + arr(c2) + hubTileHtml('Signed', signedVal, 'confirmed · suggested');
     var rc = el('hub-rc');
     if (rc){
       var co = s.calls_out||0, ci = s.calls_in||0, to = s.texts_out||0, ti = s.texts_in||0;
@@ -20286,7 +20297,7 @@ window.llApplyTheme = function (pref) {
     rows.sort(function(a, b){ return (b.confirmed - a.confirmed) || (b.pending - a.pending) || (b.showings - a.showings); });
     var h = '';
     rows.forEach(function(r){
-      var conv = r.apps ? Math.round(r.confirmed / r.apps * 100) + '%' : '–';
+      var conv = r.showings ? Math.round(r.confirmed / r.showings * 100) + '%' : '–';   // signed ÷ completed showings, like every other conversion
       var tconf = r.tup ? Math.round(r.tconf / r.tup * 100) + '%' : '–';
       var un = r.agent === 'Unassigned';
       h += '<tr' + (un ? '' : ' class="rowlink" data-agent="' + esc(r.agent) + '"') + '>' +

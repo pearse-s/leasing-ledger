@@ -1,1 +1,0 @@
-import{D as e}from"./index-UD52muhf.js";var t=async(t,n)=>(await e()).read(`/move-detail`,t,n),n=async(t,n)=>(await e()).read(`/lease-detail`,t,n),r=async(t,n)=>(await e()).read(`/find`,t,n);export{r as find,n as leaseDetail,t as moveDetail};

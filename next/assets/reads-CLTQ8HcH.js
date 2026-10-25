@@ -1,1 +1,0 @@
-import{T as e}from"./index-BCsHabwg.js";var t=async(t,n)=>(await e()).read(`/move-detail`,t,n),n=async(t,n)=>(await e()).read(`/find`,t,n);export{n as find,t as moveDetail};

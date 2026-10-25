@@ -1,0 +1,1 @@
+import{S as e}from"./index-C21iqx4d.js";var t=async(t,n)=>(await e()).read(`/move-detail`,t,n);export{t as moveDetail};

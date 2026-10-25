@@ -1,1 +1,0 @@
-import{S as e}from"./index-BJ8Uuve_.js";var t=async(t,n)=>(await e()).read(`/move-detail`,t,n);export{t as moveDetail};

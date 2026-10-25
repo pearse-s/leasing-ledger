@@ -1,0 +1,1 @@
+import{S as e}from"./index-CzMvmFBs.js";var t=async(t,n)=>(await e()).read(`/move-detail`,t,n);export{t as moveDetail};

@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-DApVmHJR.js";var t=e(),n=`No data yet`,r=(0,t.jsxs)(`span`,{className:`text-muted-foreground`,title:n,children:[(0,t.jsx)(`span`,{"aria-hidden":!0,children:`—`}),(0,t.jsx)(`span`,{className:`sr-only`,children:n})]});function i({v:e,children:n}){return e==null?r:(0,t.jsx)(t.Fragment,{children:n?n(e):String(e)})}export{i as n,r as t};

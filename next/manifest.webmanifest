@@ -1,0 +1,16 @@
+{
+  "id": "/leasing-ledger/next/",
+  "name": "Leasing Ledger",
+  "short_name": "Ledger",
+  "description": "Live Furnished's leasing ledger: today's tours, units, keys and move-ins.",
+  "start_url": "/leasing-ledger/next/",
+  "scope": "/leasing-ledger/next/",
+  "display": "standalone",
+  "background_color": "#f8fbfc",
+  "theme_color": "#f8fbfc",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

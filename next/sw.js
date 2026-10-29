@@ -4,7 +4,7 @@
    /functions/v1/, no auth, no non-GET, no manifest or icons: those requests are not handled here, so they go straight to
    the network. No push, no notifications. A new worker waits until the page asks it to take over (the "New version" bar). */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + '11525c1bb3';
+var CACHE = PREFIX + '731688c317';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
@@ -15,9 +15,10 @@ var SHELL = [
   "/leasing-ledger/next/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
   "/leasing-ledger/next/assets/hashParam-Vu0PHkjq.js",
   "/leasing-ledger/next/assets/identity-YMv0rgq4.js",
-  "/leasing-ledger/next/assets/index-BDsq-_Pu.css",
-  "/leasing-ledger/next/assets/index-Dk28cy9F.js",
+  "/leasing-ledger/next/assets/index-BW-Kh_8P.css",
+  "/leasing-ledger/next/assets/index-Dp0uz0ew.js",
   "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
+  "/leasing-ledger/next/assets/patch-DBCwBv1g.js",
   "/leasing-ledger/next/assets/preload-helper-BgGd1xQk.js",
   "/leasing-ledger/next/assets/query-BZxt791f.js",
   "/leasing-ledger/next/assets/react-dom-sir4vwKI.js",

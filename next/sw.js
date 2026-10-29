@@ -4,7 +4,7 @@
    /functions/v1/, no auth, no non-GET, no manifest or icons: those requests are not handled here, so they go straight to
    the network. No push, no notifications. A new worker waits until the page asks it to take over (the "New version" bar). */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + '361197b493';
+var CACHE = PREFIX + '91e64cbabe';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
@@ -15,17 +15,17 @@ var SHELL = [
   "/leasing-ledger/next/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
   "/leasing-ledger/next/assets/hashParam-Vu0PHkjq.js",
   "/leasing-ledger/next/assets/identity-YMv0rgq4.js",
-  "/leasing-ledger/next/assets/index-kTdF_I58.js",
-  "/leasing-ledger/next/assets/index-mHzD2rk5.css",
+  "/leasing-ledger/next/assets/index-BEdqC2xg.css",
+  "/leasing-ledger/next/assets/index-BGAwiTts.js",
   "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
   "/leasing-ledger/next/assets/preload-helper-BgGd1xQk.js",
-  "/leasing-ledger/next/assets/query-DNNV73o7.js",
+  "/leasing-ledger/next/assets/query-BmNreaJf.js",
   "/leasing-ledger/next/assets/react-dom-sir4vwKI.js",
   "/leasing-ledger/next/assets/rolldown-runtime-BWaJ3C7D.js",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-400-normal-DPhJBilQ.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-500-normal-rf9C4Thp.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-600-normal-Czv9Obfv.woff2",
-  "/leasing-ledger/next/assets/scope-CkoW_2lC.js"
+  "/leasing-ledger/next/assets/scope-CQcnxLl6.js"
 ];
 
 self.addEventListener('install', function (e) {

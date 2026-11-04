@@ -2,31 +2,34 @@
    It precaches index.html + the entry chunks, serves hashed /assets/ files cache-first, and falls back to the cached shell
    when a page navigation fails (weak signal). It NEVER touches anything else: no other origin (Supabase, tiles), no
    /functions/v1/, no auth, no non-GET, no manifest or icons: those requests are not handled here, so they go straight to
-   the network. No push, no notifications. A new worker waits until the page asks it to take over (the "New version" bar). */
+   the network. A new worker waits until the page asks it to take over (the "New version" bar).
+   Push (p23): shows the notification the P-AL2 sender's payload carries ({title, body, url, tag}, end-to-end encrypted
+   to this device), and a tap focuses an open app tab (moving it to the payload's url) or opens one. The url is kept
+   inside the app: a relative one ('#/alerts') resolves against BASE; any other url keeps only a '#/<route>' hash. */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + '41bb75087f';
+var CACHE = PREFIX + 'f1a6d81a6c';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
-  "/leasing-ledger/next/assets/adapters-xbhsuXMQ.js",
-  "/leasing-ledger/next/assets/client-BvklFQFV.js",
+  "/leasing-ledger/next/assets/adapters-Blg7T0xy.js",
+  "/leasing-ledger/next/assets/client-BeFSyQBF.js",
   "/leasing-ledger/next/assets/createLucideIcon-D501yjzk.js",
   "/leasing-ledger/next/assets/fraunces-latin-wght-normal-ukD16Tqj.woff2",
   "/leasing-ledger/next/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
   "/leasing-ledger/next/assets/hashParam-Vu0PHkjq.js",
   "/leasing-ledger/next/assets/identity-YMv0rgq4.js",
-  "/leasing-ledger/next/assets/index--52GwcBO.js",
-  "/leasing-ledger/next/assets/index-iG2OpPE-.css",
+  "/leasing-ledger/next/assets/index-B2iaIL8T.css",
+  "/leasing-ledger/next/assets/index-DnlqyqzQ.js",
   "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
   "/leasing-ledger/next/assets/patch-DBCwBv1g.js",
   "/leasing-ledger/next/assets/preload-helper-BgGd1xQk.js",
-  "/leasing-ledger/next/assets/query-BLVYj5-g.js",
+  "/leasing-ledger/next/assets/query-DK-vQQAT.js",
   "/leasing-ledger/next/assets/react-dom-sir4vwKI.js",
   "/leasing-ledger/next/assets/rolldown-runtime-BWaJ3C7D.js",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-400-normal-DPhJBilQ.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-500-normal-rf9C4Thp.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-600-normal-Czv9Obfv.woff2",
-  "/leasing-ledger/next/assets/scope-DfJiMIeb.js"
+  "/leasing-ledger/next/assets/scope-C8UsnfYH.js"
 ];
 
 self.addEventListener('install', function (e) {
@@ -42,6 +45,49 @@ self.addEventListener('activate', function (e) {
 
 self.addEventListener('message', function (e) {
   if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
+/* Where a notification tap goes: always a page of the app. */
+function appUrl(u) {
+  var home = new URL(BASE, self.location.origin).href;
+  var hash = '';
+  try {
+    var x = new URL(typeof u === 'string' ? u : '', home);
+    if (x.origin === self.location.origin && x.pathname === new URL(home).pathname) return x.href;
+    hash = x.hash;
+  } catch (err) { hash = ''; }
+  return home + (/^#\/[\w-]+/.test(hash) ? hash : '');
+}
+
+self.addEventListener('push', function (e) {
+  var d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
+  if (!d || typeof d !== 'object') d = {};
+  e.waitUntil(self.registration.showNotification(typeof d.title === 'string' && d.title ? d.title : 'Leasing Ledger', {
+    body: typeof d.body === 'string' ? d.body : '',
+    tag: typeof d.tag === 'string' && d.tag ? d.tag : 'ledger',
+    icon: BASE + 'icons/icon-192.png',
+    data: { url: appUrl(d.url) }
+  }));
+});
+
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var url = appUrl(e.notification.data && e.notification.data.url);
+  var home = new URL(BASE, self.location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (c.url.indexOf(home) === 0 && 'focus' in c) {
+        return c.focus().then(function (w) {
+          var t = w || c;
+          // navigate() refuses a tab this worker does not control; the focused tab is still the right place
+          return t.url !== url && 'navigate' in t ? t.navigate(url).catch(function () { return t; }) : t;
+        });
+      }
+    }
+    return self.clients.openWindow(url);
+  }));
 });
 
 self.addEventListener('fetch', function (e) {

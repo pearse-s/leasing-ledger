@@ -7,7 +7,7 @@
    to this device), and a tap focuses an open app tab (moving it to the payload's url) or opens one. The url is kept
    inside the app: a relative one ('#/alerts') resolves against BASE; any other url keeps only a '#/<route>' hash. */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + 'acbdcd3818';
+var CACHE = PREFIX + '4b7f41bfe6';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
@@ -18,8 +18,8 @@ var SHELL = [
   "/leasing-ledger/next/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
   "/leasing-ledger/next/assets/hashParam-Vu0PHkjq.js",
   "/leasing-ledger/next/assets/identity-DfbCzcIF.js",
-  "/leasing-ledger/next/assets/index-C0Q0YRKR.js",
-  "/leasing-ledger/next/assets/index-zTe5w1OW.css",
+  "/leasing-ledger/next/assets/index-DSHbksW3.css",
+  "/leasing-ledger/next/assets/index-Dpw-ZY72.js",
   "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
   "/leasing-ledger/next/assets/patch-CS-5Lbw1.js",
   "/leasing-ledger/next/assets/persistLink-D1lCK6tE.js",

@@ -1,0 +1,1 @@
+var e=null,t=[];function n(n){e?e.persistAs(n):t.push(e=>e.persistAs(n))}function r(n=!1){e?e.wipePersisted(n):t.push(e=>e.wipePersisted(n))}function i(n){e=n;let r=t;t=[];for(let e of r)e(n)}export{n,r,i as t};

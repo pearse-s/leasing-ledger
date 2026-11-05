@@ -7,29 +7,29 @@
    to this device), and a tap focuses an open app tab (moving it to the payload's url) or opens one. The url is kept
    inside the app: a relative one ('#/alerts') resolves against BASE; any other url keeps only a '#/<route>' hash. */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + 'e6560e07b5';
+var CACHE = PREFIX + '48b9be8852';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
-  "/leasing-ledger/next/assets/adapters-D7z7WIZ7.js",
-  "/leasing-ledger/next/assets/client-BTkACRup.js",
+  "/leasing-ledger/next/assets/adapters-BXP_ZDFW.js",
+  "/leasing-ledger/next/assets/client-nWl8asr3.js",
   "/leasing-ledger/next/assets/createLucideIcon-D501yjzk.js",
   "/leasing-ledger/next/assets/fraunces-latin-wght-normal-ukD16Tqj.woff2",
   "/leasing-ledger/next/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
   "/leasing-ledger/next/assets/hashParam-Vu0PHkjq.js",
-  "/leasing-ledger/next/assets/identity-YMv0rgq4.js",
-  "/leasing-ledger/next/assets/index-CloLfHS7.js",
+  "/leasing-ledger/next/assets/identity-C5g7_1AL.js",
+  "/leasing-ledger/next/assets/index-CqetUpMX.js",
   "/leasing-ledger/next/assets/index-mYPG9wQF.css",
   "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
   "/leasing-ledger/next/assets/patch-DBCwBv1g.js",
   "/leasing-ledger/next/assets/preload-helper-BgGd1xQk.js",
-  "/leasing-ledger/next/assets/query-fF9umnw3.js",
+  "/leasing-ledger/next/assets/query-C0Iz5JMB.js",
   "/leasing-ledger/next/assets/react-dom-sir4vwKI.js",
   "/leasing-ledger/next/assets/rolldown-runtime-BWaJ3C7D.js",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-400-normal-DPhJBilQ.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-500-normal-rf9C4Thp.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-600-normal-Czv9Obfv.woff2",
-  "/leasing-ledger/next/assets/scope-qANl7lit.js"
+  "/leasing-ledger/next/assets/scope-Cgmac3RV.js"
 ];
 
 self.addEventListener('install', function (e) {

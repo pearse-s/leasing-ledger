@@ -21105,6 +21105,11 @@ window.llApplyTheme = function (pref) {
       res.innerHTML = html;
     }).catch(function(e){ if (sq !== schBkSearchReq) return; if (String(e.message) !== 'AUTH') res.innerHTML = '<span class="count-note">Search failed.</span>'; });
   }
+  // The pick fills the form from the search row's contact (no detail route runs), so log the read here — fire-and-forget (Pearse 2026-11-06).
+  function schBkAuditPick(source, id){
+    if (id == null || id === '') return;
+    postJSON('/audit/contact-pick', { source: source, id: id }).catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('audit pick failed', e); });
+  }
   function schBkPickProspect(o){
     schedBook.applicant = o;
     schedBook.locDefault = o.unit_address || (o.property ? o.property + (o.unit_number ? ' ' + o.unit_number : '') : '');
@@ -22187,11 +22192,13 @@ window.llApplyTheme = function (pref) {
       if (b.getAttribute('data-kind') === 'lead'){
         var cid = b.getAttribute('data-card');
         var l = schBkLeadRows.filter(function(x){ return String(x.card_id) === String(cid); })[0];
+        if (l) schBkAuditPick('lead', l.card_id);
         if (l) schBkPickProspect({ application_id: null, name: l.name, email: l.email, phone: l.phone, property: '', unit_number: '', unit_address: l.location, aptly_card_id: l.card_id });
         return;
       }
       var id = b.getAttribute('data-app');
       var r = schBkSearchRows.filter(function(x){ return String(x.application_id) === String(id); })[0];
+      if (r) schBkAuditPick('applicant', r.applicant_id);
       if (r) schBkPickProspect({ application_id: r.application_id, name: r.applicant_name, email: r.applicant_email, phone: r.applicant_phone, property: r.property_name, unit_number: r.unit_number, unit_address: r.unit_address });
     });
     var bmt = el('sch-bk-app-manual-toggle'); if (bmt) bmt.addEventListener('click', function(){ var m = el('sch-bk-app-manual'); if (m) m.style.display = (m.style.display === 'none' ? 'block' : 'none'); });

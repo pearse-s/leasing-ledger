@@ -1,2 +1,0 @@
-var e=/^[=+\-@\t\r]/;function t(t){if(t==null)return``;let n=String(t);return typeof t==`string`&&e.test(n)&&(n=`'${n}`),/[",\r\n]/.test(n)?`"${n.replace(/"/g,`""`)}"`:n}function n(e,n){return`﻿${[e,...n].map(e=>e.map(t).join(`,`)).join(`\r
-`)}\r\n`}export{n as t};

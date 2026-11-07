@@ -1,0 +1,1 @@
+var e=(e,t)=>`Authenticator reset for ${e} (${t.factors_removed||0} factor(s) removed, ${t.sessions_ended||0} session(s) ended).`,t=e=>`Reset failed: ${e||`error`}`;function n(e){let t=new Map;return n=>{let r=n.trim().toLowerCase(),i=t.get(r);if(i)return i;let a=e(n).finally(()=>{t.delete(r)});return t.set(r,a),a}}export{e as mfaResetDone,t as mfaResetFailed,n as oncePerFlight};

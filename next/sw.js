@@ -1,13 +1,14 @@
 /* Ledger (next) service worker: the app SHELL only. Template: sw-plugin.mjs fills the three double-underscore tokens below at build.
    It precaches index.html + the entry chunks, serves hashed /assets/ files cache-first, and falls back to the cached shell
    when a page navigation fails (weak signal). It NEVER touches anything else: no other origin (Supabase, tiles), no
-   /functions/v1/, no auth, no non-GET, no manifest or icons: those requests are not handled here, so they go straight to
+   /functions/v1/, no auth, no non-GET, no manifest or icons (theme-init.js, the pre-paint theme script, is the one unhashed
+   shell file it serves): those requests are not handled here, so they go straight to
    the network. A new worker waits until the page asks it to take over (the "New version" bar).
    Push (p23): shows the notification the P-AL2 sender's payload carries ({title, body, url, tag}, end-to-end encrypted
    to this device), and a tap focuses an open app tab (moving it to the payload's url) or opens one. The url is kept
    inside the app: a relative one ('#/alerts') resolves against BASE; any other url keeps only a '#/<route>' hash. */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + '789c6da103';
+var CACHE = PREFIX + 'bced4c55b9';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
@@ -19,7 +20,7 @@ var SHELL = [
   "/leasing-ledger/next/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
   "/leasing-ledger/next/assets/hashParam-Vu0PHkjq.js",
   "/leasing-ledger/next/assets/identity-DPpcYE0l.js",
-  "/leasing-ledger/next/assets/index-CnCwk02d.js",
+  "/leasing-ledger/next/assets/index-Br30iOUR.js",
   "/leasing-ledger/next/assets/index-j9xeRRUg.css",
   "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
   "/leasing-ledger/next/assets/patch-CS-5Lbw1.js",
@@ -31,7 +32,8 @@ var SHELL = [
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-500-normal-rf9C4Thp.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-600-normal-Czv9Obfv.woff2",
   "/leasing-ledger/next/assets/scope-CD9c55L2.js",
-  "/leasing-ledger/next/assets/screens-fML7Yt_K.js"
+  "/leasing-ledger/next/assets/screens-fML7Yt_K.js",
+  "/leasing-ledger/next/theme-init.js"
 ];
 
 self.addEventListener('install', function (e) {
@@ -102,6 +104,10 @@ self.addEventListener('fetch', function (e) {
   if (path.indexOf('/functions/v1/') >= 0 || path.indexOf('/auth/') >= 0) return;
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).catch(function () { return caches.match(BASE, { ignoreSearch: true }); }));
+  } else if (path === BASE + 'theme-init.js') {
+    // the pre-paint theme script is a shell file with an unhashed name: cache-first from this version's cache (the version
+    // carries its bytes), so first paint never waits on the network for it
+    e.respondWith(caches.match(req).then(function (hit) { return hit || fetch(req); }));
   } else if (path.indexOf(BASE + 'assets/') === 0) {
     e.respondWith(caches.match(req).then(function (hit) {
       return hit || fetch(req).then(function (res) {

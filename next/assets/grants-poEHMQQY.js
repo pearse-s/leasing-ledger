@@ -1,1 +1,0 @@
-var e=(e,t)=>e?.tabs?e.tabs.includes(t):e?.role===`admin`;export{e as t};

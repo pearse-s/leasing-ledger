@@ -1,0 +1,1 @@
+var e=e=>e===`admin`||e===`manager`||e===`coordinator`;export{e as t};

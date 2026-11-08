@@ -1,0 +1,1 @@
+var e=`https://livefurnished.managebuilding.com/manager/app`,t=t=>`${e}/rentroll/${t}/summary`,n=t=>`${e}/leasing/applicant/${t}/summary`,r=t=>`${e}/leasing/applicant/${t}/application`,i=(t,n)=>`${e}/properties/${t}/units/${n}/summary`;export{i,r as n,t as r,n as t};

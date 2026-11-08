@@ -1,1 +1,0 @@
-import{t as e}from"./jsx-runtime-DApVmHJR.js";import{w as t}from"./index-D-cxFZy-.js";import{t as n}from"./StatusChip-DDQ4QUM6.js";var r=e();function i({children:e,testId:i,tone:a}){return(0,r.jsx)(`span`,{"data-testid":i,className:t(`rounded-md border px-1.5 text-xs`,a?n[a]:`border-border`),children:e})}export{i as t};

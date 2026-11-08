@@ -1,1 +1,0 @@
-import{t as e}from"./adapters-DqmM0mBh.js";var t=async t=>(await e()).write(`/user/event`,t);export{t as userEvent};

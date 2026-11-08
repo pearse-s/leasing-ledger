@@ -1,0 +1,1 @@
+import{t as e}from"./adapters-zxqPRiLQ.js";var t=async t=>(await e()).read(`/sync-status`,{},t),n=async()=>(await e()).write(`/sync`,{});export{n as startSync,t as syncStatus};

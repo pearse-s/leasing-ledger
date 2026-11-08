@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/live-C7SugYlC.js","assets/client-CUPE5OeR.js","assets/preload-helper-BgGd1xQk.js"])))=>i.map(i=>d[i]);
+import{t as e}from"./preload-helper-BgGd1xQk.js";var t;function n(){return t??=e(()=>import(`./live-C7SugYlC.js`).then(e=>e.live),__vite__mapDeps([0,1,2])),t}export{n as t};

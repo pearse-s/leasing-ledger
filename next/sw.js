@@ -8,22 +8,22 @@
    to this device), and a tap focuses an open app tab (moving it to the payload's url) or opens one. The url is kept
    inside the app: a relative one ('#/alerts') resolves against BASE; any other url keeps only a '#/<route>' hash. */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + '32037dc0bd';
+var CACHE = PREFIX + '32d64e98fc';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
   "/leasing-ledger/next/assets/QueryClientProvider-BQ3du4Ix.js",
-  "/leasing-ledger/next/assets/adapters-DqmM0mBh.js",
-  "/leasing-ledger/next/assets/client-77y15jWO.js",
+  "/leasing-ledger/next/assets/adapters-zxqPRiLQ.js",
+  "/leasing-ledger/next/assets/client-CUPE5OeR.js",
   "/leasing-ledger/next/assets/createLucideIcon-D501yjzk.js",
   "/leasing-ledger/next/assets/fraunces-display-500-C6_ug22j.woff2",
   "/leasing-ledger/next/assets/fraunces-latin-wght-normal-ukD16Tqj.woff2",
   "/leasing-ledger/next/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
   "/leasing-ledger/next/assets/grants-poEHMQQY.js",
-  "/leasing-ledger/next/assets/hashParam--bmMe5Rf.js",
+  "/leasing-ledger/next/assets/hashParam-DQxRo_fm.js",
   "/leasing-ledger/next/assets/identity-DPpcYE0l.js",
-  "/leasing-ledger/next/assets/index-DJh-PKb5.css",
-  "/leasing-ledger/next/assets/index-s1zFJoJ8.js",
+  "/leasing-ledger/next/assets/index-BAHDnj_X.css",
+  "/leasing-ledger/next/assets/index-DGLSZ7YJ.js",
   "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
   "/leasing-ledger/next/assets/patch-CS-5Lbw1.js",
   "/leasing-ledger/next/assets/persistLink-D1lCK6tE.js",
@@ -31,8 +31,8 @@ var SHELL = [
   "/leasing-ledger/next/assets/rolldown-runtime-BWaJ3C7D.js",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-400-normal-DPhJBilQ.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-500-normal-rf9C4Thp.woff2",
-  "/leasing-ledger/next/assets/scope-B7RCMvFR.js",
-  "/leasing-ledger/next/assets/screens-Bxmlmtc2.js",
+  "/leasing-ledger/next/assets/scope-D7OUKVRt.js",
+  "/leasing-ledger/next/assets/screens-lPueiVZu.js",
   "/leasing-ledger/next/assets/tabs-QDDbKvHm.js",
   "/leasing-ledger/next/theme-init.js"
 ];

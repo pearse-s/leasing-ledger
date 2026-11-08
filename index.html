@@ -9962,6 +9962,17 @@ window.llApplyTheme = function (pref) {
   var tmRoster = null;    // /team-roster cache: null = not loaded, [] = failed (no tailoring)
   function idApplyAdmin(){
     applyRole((authIdent && authIdent.role === 'admin') ? 'admin' : 'user');
+    syncRoleApply();
+  }
+  // Pearse 2026-11-07: POST /sync is for admins, managers and coordinators (the server's SYNC_ROLES, routes/stats.ts,
+  // answers anyone else 403). Hide the footer Sync button for every other signed-in role; keep the element (and its
+  // id) so the listeners bound at boot stay valid. Pre-sign-in nothing is hidden. style.display, not [hidden]:
+  // .sidefoot .syncbtn sets display:flex, which would beat the attribute.
+  var SYNC_ROLES = ['admin', 'manager', 'coordinator'];
+  function syncRoleApply(){
+    var b = el('syncbtn'); if (!b) return;
+    var r = authIdent && authIdent.role;
+    b.style.display = (!r || SYNC_ROLES.indexOf(r) >= 0) ? '' : 'none';
   }
   // In-flight dedup. The tmRoster === null guard below stays true for the WHOLE flight, so
   // concurrent callers each used to send their own /team-roster: on a normal signed-in manager
@@ -19008,6 +19019,8 @@ window.llApplyTheme = function (pref) {
       // check "bad" read false, the badge said Syncing… and the poll ran for 15 minutes
       .then(function(r){
         return r.json().catch(function(){ return {}; }).then(function(res){
+          // a 403 is the role rule (SYNC_ROLES), not a failure — say so instead of "Sync failed"
+          if (r.status === 403) { var e403 = new Error((res && res.error) || 'sync is for admins, managers and coordinators'); e403.denied = true; throw e403; }
           if (!r.ok) throw new Error((res && res.error) || ('HTTP ' + r.status));
           if (!res || typeof res !== 'object' || !('buildium' in res) || !('calendly' in res)) throw new Error('unexpected /sync answer');
           return res;
@@ -19024,7 +19037,11 @@ window.llApplyTheme = function (pref) {
         if (pollKick) clearTimeout(pollKick);
         pollKick = setTimeout(function(){ pollKick = null; checkFresh(baselineB); }, 45000);
       })
-      .catch(function(e){ if (String(e && e.message) !== 'AUTH') console.error('sync start failed', e); syncDone('Sync failed', true); });
+      .catch(function(e){
+        if (e && e.denied) { console.warn('sync refused (role)', e.message); syncDone('Admins, managers and coordinators sync'); return; }
+        if (String(e && e.message) !== 'AUTH') console.error('sync start failed', e);
+        syncDone('Sync failed', true);
+      });
   });
 
   /* ── filter events (Ledger) ───────────────── */

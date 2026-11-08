@@ -1,1 +1,0 @@
-import{t as e}from"./jsx-runtime-DApVmHJR.js";var t=e();function n({children:e,testId:n}){return(0,t.jsx)(`span`,{"data-testid":n,className:`rounded-md border border-border px-1.5 text-xs`,children:e})}export{n as t};

@@ -1,0 +1,1 @@
+function e(e,t,n,r){let i=e.map(e=>({id:t(e),v:n(e)})).filter(e=>e.v!==null),a=new Map;if(i.length<2||i.every(e=>e.v===i[0].v))return a;i.sort((e,t)=>r===`low`?e.v-t.v:t.v-e.v);let o=Math.ceil(i.length/4);return i.forEach((e,t)=>{e.v===i[0].v?a.set(e.id,`bad`):t<o&&a.set(e.id,`warn`)}),a}export{e as t};

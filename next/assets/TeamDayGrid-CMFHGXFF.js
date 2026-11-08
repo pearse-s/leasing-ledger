@@ -1,1 +1,0 @@
-import{t as e}from"./jsx-runtime-DApVmHJR.js";import{n as t}from"./NoteSheet-CKAgvLOi.js";import{r as n}from"./StatusChip-DMRfQY0U.js";import{s as r}from"./PersonChips-DoDlhO0G.js";var i=e();function a({lay:e,onTour:a,onEmpty:o}){let s=e(n,t()?4:2);return(0,i.jsx)(r,{columns:[s.column],hours:s.hours,onTour:a,onEmpty:o})}export{a as TeamDayGrid};

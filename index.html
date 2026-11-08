@@ -4197,6 +4197,12 @@ window.llApplyTheme = function (pref) {
 <script>
 (function(){
   'use strict';
+  // THE zone id for Alberta time on this page (Pearse 2026-11-07). Alberta stays UTC-6 all year from 2026-11-01;
+  // a browser or OS with older tz data still falls America/Edmonton back to UTC-7, and the server pins this zone too.
+  // America/Regina is UTC-6 all year in every tz database. Labels still say Edmonton / MT; only the zone id differs.
+  // Declared FIRST: top-level init (e.g. "var state = {from: edDayPlus(-7), to: edToday()}") formats dates before
+  // the helpers further down, and an unassigned LOCAL_TZ silently means the device's own zone.
+  var LOCAL_TZ = 'America/Regina';
   var API = 'https://yplsskzukmnvdnkzlygt.supabase.co/functions/v1/dashboard';
   var BMGR = 'https://livefurnished.managebuilding.com/manager/app';
   var qs = new URLSearchParams(window.location.search);
@@ -5656,7 +5662,7 @@ window.llApplyTheme = function (pref) {
     hubView = v;
     var ph = el('page-hub'); if (ph) ph.classList.toggle('teamview', v === 'team');
   }
-  function tdDayKeyEd(d){ return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Edmonton', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
+  function tdDayKeyEd(d){ return new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
   // T-B15 (audit 2026-10-11): Edmonton "today" / "today + n days" as YYYY-MM-DD. dstr(new Date()) and
   // toISOString().slice(0,10) are the UTC date, which is TOMORROW from ~18:00 MT (busy layers skipped
   // the rest of today, the Moves window gained a day, exports were dated tomorrow).
@@ -6119,7 +6125,7 @@ window.llApplyTheme = function (pref) {
   }
   // "needing attention" = actionable now; Deferred is parked on purpose, Completed/Closed are done
   function tdMgrOpenTask(t){ return t.task_status === 'New' || t.task_status === 'InProgress'; }
-  // Whole CALENDAR days from today to a date, on the America/Edmonton calendar: 0 = today,
+  // Whole CALENDAR days from today to a date, on the Alberta (LOCAL_TZ) calendar: 0 = today,
   // 3 = in three days, -2 = two days ago; null when there is no usable date.
   // This used to be Math.ceil((Date.parse(date) - Date.now()) / 86400000). Date.parse of a
   // date-only string is UTC midnight, so from about 18:00 Mountain — when the UTC date is
@@ -10370,7 +10376,7 @@ window.llApplyTheme = function (pref) {
     if (mins < 60) return mins + 'm ago';
     if (mins < 1440) return Math.round(mins / 60) + 'h ago';
     if (mins < 43200) return Math.round(mins / 1440) + 'd ago';
-    return d.toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' });
+    return d.toLocaleDateString('en-CA', { timeZone: LOCAL_TZ });
   }
   function tmActor(){
     var a = getActor();
@@ -11482,7 +11488,7 @@ window.llApplyTheme = function (pref) {
     el('h-chips').innerHTML = html;
   }
   // A-06: History rendered created_at.slice(0,16) — i.e. raw UTC — so a 2:32pm action read
-  // "20:32". House rule is America/Edmonton; schEdFmt is the existing formatter. Display only:
+  // "20:32". House rule is Alberta time (LOCAL_TZ); schEdFmt is the existing formatter. Display only:
   // the column still SORTS on the raw ISO string (cmpRows raw=true), which stays chronological.
   function khWhen(iso){
     if (!iso) return '–';
@@ -15608,7 +15614,7 @@ window.llApplyTheme = function (pref) {
   // hard-coded to 'sheet' — the channel is still real, it just has no UI here.
   function nbtToday(){
     // Edmonton, not the browser's zone — the whole app buckets dates there.
-    try { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' }); }
+    try { return new Date().toLocaleDateString('en-CA', { timeZone: LOCAL_TZ }); }
     catch (e) { return new Date().toISOString().slice(0, 10); }
   }
   function nbtChip(d){
@@ -18976,7 +18982,7 @@ window.llApplyTheme = function (pref) {
       .then(function(d){
         if (!d || pollTimer === null) return;
         // Compare INSTANTS, never strings: /stats renders this timestamp from get_stats, which is
-        // pinned to America/Edmonton ("…T12:25:37-06:00"), while /sync-status comes straight from
+        // pinned to Alberta time, America/Regina ("…T12:25:37-06:00"), while /sync-status comes straight from
         // PostgREST in UTC ("…T18:25:37+00:00"). Same moment, different text — the string compare
         // read "fresh" on the FIRST poll of every Sync and reloaded before the sync had landed
         // (v333-v335; found live 2026-10-02).
@@ -21045,7 +21051,7 @@ window.llApplyTheme = function (pref) {
     }).catch(function(e){ if (q !== schOffersReq) return; if (String(e.message) !== 'AUTH') box.innerHTML = '<div class="note">Could not load recent offers.</div>'; });
   }
   function schUnlock(id, on){ var n = el(id); if (n) n.classList.toggle('schlocked', !on); }
-  function schEdFmt(iso, opts){ try { return new Intl.DateTimeFormat('en-CA', Object.assign({ timeZone:'America/Edmonton' }, opts)).format(new Date(iso)); } catch(e){ return iso; } }
+  function schEdFmt(iso, opts){ try { return new Intl.DateTimeFormat('en-CA', Object.assign({ timeZone:LOCAL_TZ }, opts)).format(new Date(iso)); } catch(e){ return iso; } }
   // ── Book-for-prospect flow (auto-book via Calendly Create Event Invitee) ───────────
   var schedProspect = null;   // prospect from a lead deep link, carried to either flow
   var schedBook = { applicant:null, agentId:null, agentName:'', eventType:null, eventTypeName:'', duration:0, locDefault:'', chosen:null, isGroup:false, capacity:0, ohLocation:'', scheduled:[] };

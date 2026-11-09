@@ -1,1 +1,0 @@
-import{t as e}from"./adapters-zxqPRiLQ.js";var t=async t=>(await e()).read(`/inbox/connections`,{},t),n=async()=>(await e()).write(`/inbox/connect/start`,{provider:`google`,return_path:`/next/#/connections`}),r=async()=>(await e()).write(`/inbox/disconnect`,{provider:`gmail`});export{n as connectGoogle,r as disconnectGmail,t as inboxConnections};

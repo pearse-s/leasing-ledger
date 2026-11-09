@@ -1,1 +1,0 @@
-import{t as e}from"./adapters-zxqPRiLQ.js";var t=async t=>(await e()).read(`/inbox/connections`,{},t),n=async t=>(await e()).write(`/inbox/connect/start`,{provider:t===`gmail`?`google`:`ringcentral`,return_path:`/next/#/connections`}),r=async t=>(await e()).write(`/inbox/disconnect`,{provider:t});export{n as connectProvider,r as disconnectProvider,t as inboxConnections};

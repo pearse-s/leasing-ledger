@@ -1,1 +1,0 @@
-import{t as e}from"./jsx-runtime-DApVmHJR.js";import{s as t}from"./hashParam-DQxRo_fm.js";import{t as n}from"./Pills-DP0ao81p.js";var r=e(),i=[`log`,`managers`];function a({on:e,log:a=!0}){return a?(0,r.jsx)(n,{label:`View`,items:i,on:e,set:e=>t({view:e===`managers`?`managers`:null}),text:e=>e===`log`?`Log`:`By manager`}):null}export{a as t};

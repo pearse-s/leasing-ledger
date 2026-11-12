@@ -1,0 +1,1 @@
+var e={confirmed:{label:`Confirmed`,tone:`ok`,variant:`tint`},awaiting:{label:`Awaiting reply`,tone:`warn`,variant:`tint`},none:{label:`Not asked to confirm`,tone:`neutral`,variant:`tint`}};export{e as t};

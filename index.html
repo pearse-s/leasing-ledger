@@ -8803,18 +8803,18 @@ window.llApplyTheme = function (pref) {
       var me = String(getActor() || '').trim().split(/\s+/)[0] || 'the Live Furnished team';
       if (channel === 'sms'){
         var phone = t0.phone;
-        if (!phone){ alert('No phone number on file for this tenant — try the email chase.'); return; }
+        if (!phone){ alert((det && det.contact_withheld) || 'No phone number on file for this tenant — try the email chase.'); return; }
         tdWiReminder('renewal', leaseId, 'sms');   // O3: logged on press, before the hand-off
         window.location.href = rcText(String(phone), tdRwChaseText(first, addr, end, me));
       } else {
         var email = t0.email || t0.alt_email;
-        if (!email){ alert('No email on file for this tenant — try the text chase.'); return; }
+        if (!email){ alert((det && det.contact_withheld) || 'No email on file for this tenant — try the text chase.'); return; }
         tdWiReminder('renewal', leaseId, 'email');
         window.location.href = tdMailto(email, tdRwChaseSubject(addr), tdRwChaseBody(first, addr, end, me));
       }
     };
     if (tdRwLeaseCache[leaseId]) return go(tdRwLeaseCache[leaseId]);
-    authFetch('/lease-detail?lease_id=' + encodeURIComponent(leaseId)).then(function(j){ tdRwLeaseCache[leaseId] = j; go(j); }).catch(function(e){
+    authFetch('/lease-detail?lease_id=' + encodeURIComponent(leaseId)).then(function(j){ if (!(j && j.contact_withheld)) tdRwLeaseCache[leaseId] = j; go(j); }).catch(function(e){
       if (String(e && e.message) === 'AUTH') return;
       console.error('lease-detail (renewal chase) failed', e);
       alert('Could not load the tenant contact — please try again.');
@@ -9568,18 +9568,18 @@ window.llApplyTheme = function (pref) {
       var amt = fmtMoney(Number(u.total_balance) || 0);
       var me = String(getActor() || '').trim().split(/\s+/)[0] || 'the Live Furnished team';
       if (channel === 'sms'){
-        if (!t0.phone){ alert('No phone number on file for this tenant — try the email reminder.'); return; }
+        if (!t0.phone){ alert((det && det.contact_withheld) || 'No phone number on file for this tenant — try the email reminder.'); return; }
         tdWiReminder('rent', leaseId, 'sms');   // O3: logged on press, before the hand-off
         window.location.href = rcText(String(t0.phone), tdRentMsgText(first, addr, amt, me));
       } else {
         var email = t0.email || t0.alt_email;
-        if (!email){ alert('No email on file for this tenant — try the text reminder.'); return; }
+        if (!email){ alert((det && det.contact_withheld) || 'No email on file for this tenant — try the text reminder.'); return; }
         tdWiReminder('rent', leaseId, 'email');
         window.location.href = tdMailto(email, tdRentMsgSubject(addr), tdRentMsgBody(first, addr, amt, me));
       }
     };
     if (tdRwLeaseCache[leaseId]) return go(tdRwLeaseCache[leaseId]);
-    authFetch('/lease-detail?lease_id=' + encodeURIComponent(leaseId)).then(function(j){ tdRwLeaseCache[leaseId] = j; go(j); }).catch(function(e){
+    authFetch('/lease-detail?lease_id=' + encodeURIComponent(leaseId)).then(function(j){ if (!(j && j.contact_withheld)) tdRwLeaseCache[leaseId] = j; go(j); }).catch(function(e){
       if (String(e && e.message) === 'AUTH') return;
       console.error('lease-detail (rent reminder) failed', e);
       alert('Could not load the tenant contact — please try again.');

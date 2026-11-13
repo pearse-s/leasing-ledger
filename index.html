@@ -13787,6 +13787,7 @@ window.llApplyTheme = function (pref) {
     authFetch('/move-in-contact?unit_id=' + encodeURIComponent(unitId)).then(function(j){
       var r = j && j.move_in;
       if (!r) { box.innerHTML = ''; return; }
+      var miWh = (j && j.contact_withheld) || '';   // 2026-11-12: no access-log row = names only; the stat line says why
       var badge = r.is_flip ? '<span class="chip c-warm">flip &middot; tenant in place</span>' : '<span class="chip c-cold">pre-leased</span>';
       var ts = (r.incoming_tenants && r.incoming_tenants.length) ? r.incoming_tenants
         : [{ name:r.incoming_tenant_names, phone:r.incoming_phone, email:r.incoming_email, applicant_id:(r.incoming_applicant_ids || [])[0] }];
@@ -13795,7 +13796,7 @@ window.llApplyTheme = function (pref) {
         var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
         return '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div>' +
           '<div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div>' +
-          '<div class="rmpro-stat">' + esc(t.email || t.phone || '') + '</div></div>' +
+          '<div class="rmpro-stat">' + esc(miWh || t.email || t.phone || '') + '</div></div>' +
           '<div class="rmpro-acts">' + incomingActs(t.phone, t.email, t.applicant_id, nm) + '</div></div>';
       }).join('');
       box.innerHTML = '<div class="sect">Incoming tenant ' + badge +
@@ -13864,6 +13865,8 @@ window.llApplyTheme = function (pref) {
         var box = el('mi-list') && el('mi-list').querySelector('[data-mi-acts="' + uid + '"]');
         if (!box) return;   // list redrawn / closed meanwhile
         var appId = (r.incoming_applicant_ids && r.incoming_applicant_ids[0]) || null;
+        // 2026-11-12: a withheld answer says why (never "No contact on file"); nothing is kept, so the next tap asks again
+        if (j && j.contact_withheld) { box.innerHTML = '<span class="count-note">' + esc(j.contact_withheld) + '</span>'; return; }
         box.innerHTML = incomingActs(r.incoming_phone, r.incoming_email, appId, r.incoming_tenant_names) || '<span class="count-note">No contact on file</span>';
       }).catch(function(err){
         if (mc.isConnected) { mc.disabled = false; mc.textContent = 'Contact'; }
@@ -15931,10 +15934,11 @@ window.llApplyTheme = function (pref) {
           }
           if (!r.lease_id) return;          // Nookbook with no lease: notes only, no tenant strip
           var ts = j.tenants || [];
+          var uWh = (j && j.contact_withheld) || '';   // 2026-11-12: no access-log row = names only; say why, never "none on file"
           if (ts.length) {
             var t0 = ts[0], nm = (t0.name || 'Tenant').trim();
             var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
-            var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div><div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div><div class="rmpro-stat">' + (ts.length > 1 ? esc(ts.length + ' tenants') : esc(t0.email || t0.phone || 'Tenant')) + '</div></div><div class="rmpro-acts">';
+            var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div><div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div><div class="rmpro-stat">' + (uWh ? esc(uWh) : ts.length > 1 ? esc(ts.length + ' tenants') : esc(t0.email || t0.phone || 'Tenant')) + '</div></div><div class="rmpro-acts">';
             if (t0.phone) { var tel = String(t0.phone).replace(/[^0-9+]/g, ''); pc += '<a href="' + rcCall(esc(tel)) + '" aria-label="Call" title="Call">&#128222;</a><a href="' + rcText(esc(tel)) + '" aria-label="Text" title="Text">&#128172;</a>' + threadIcon(tel, nm); }
             if (t0.email) pc += '<a href="mailto:' + esc(t0.email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
             pc += '</div></div>';
@@ -15947,6 +15951,7 @@ window.llApplyTheme = function (pref) {
               (t.email ? '<a href="mailto:' + esc(t.email) + '">' + esc(t.email) + '</a>' : '') +
               (t.phone ? '<span>' + esc(t.phone) + '</span>' : '') + '</div>';
           });
+          if (uWh) th += '<div class="count-note">' + esc(uWh) + '</div>';
           el('um-tenants').innerHTML = th;
         })
         .catch(function(e){
@@ -16850,7 +16855,7 @@ window.llApplyTheme = function (pref) {
   });
   // Owner modal identity strip + collapsed details. c = {phone,email,alternate_email} once known,
   // null while /owner-detail is loading; failed=true when that fetch errored.
-  function omPaintContact(r, c, failed){
+  function omPaintContact(r, c, failed, wh){   // wh: /owner-detail's contact_withheld sentence (2026-11-12), else falsy
     var nm = (r.display_name || 'Owner').trim();
     var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
     var pc = '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div><div class="rmpro-main"><div class="rmpro-name">' + esc(nm) + '</div><div class="rmpro-stat">' + (r.is_company ? 'Company' : 'Individual') + ' &middot; ' + fmtNum(r.property_count) + (r.property_count === 1 ? ' property' : ' properties') + '</div></div><div class="rmpro-acts">';
@@ -16858,6 +16863,7 @@ window.llApplyTheme = function (pref) {
     if (c && c.email) pc += '<a href="mailto:' + esc(c.email) + '" aria-label="Email" title="Email">&#9993;&#65039;</a>';
     if (!c) pc += '<span class="rmpro-load" style="font-size:.8rem;color:var(--ink-soft)">Loading contact&hellip;</span>';
     else if (failed) pc += '<span style="font-size:.8rem;color:var(--ink-soft)">Contact unavailable</span>';
+    else if (wh) pc += '<span style="font-size:.8rem;color:var(--ink-soft)">' + esc(wh) + '</span>';
     pc += '</div></div>';
     el('om-contact').innerHTML = pc;
     var f = '';
@@ -16886,7 +16892,7 @@ window.llApplyTheme = function (pref) {
     if (!hasContact && r.buildium_id != null) {
       authFetch('/owner-detail?owner_id=' + encodeURIComponent(r.buildium_id)).then(function(j){
         if (curOwner !== r) return;
-        omPaintContact(r, (j && j.owner) || {}, false);
+        omPaintContact(r, (j && j.owner) || {}, false, j && j.contact_withheld);
       }).catch(function(e){
         if (curOwner !== r) return;
         omPaintContact(r, {}, true);
@@ -17578,6 +17584,8 @@ window.llApplyTheme = function (pref) {
       .then(function(j){
         if (String(amCurAid) !== String(aid)) return;   // modal moved on — don't paint stale contact
         paintContact((j && j.application) || {});
+        // 2026-11-12: no access-log row = no email / phone: the stat line says why instead of staying blank
+        if (j && j.contact_withheld) { var sw = el('am-prostat'); if (sw) sw.textContent = j.contact_withheld; }
       })
       .catch(function(e){
         if (String(amCurAid) !== String(aid) || String(e && e.message) === 'AUTH') return;
@@ -18143,7 +18151,11 @@ window.llApplyTheme = function (pref) {
     var box = el('rm-roster'); if (!box) return;
     box.innerHTML = '<div class="count-note" style="padding:2px 0">Loading…</div>';   // neutral: branch fills attendees (group) or "Their answers" (1:1)
     authFetch('/open-house-attendees?event_uri=' + encodeURIComponent(r.uri))
-      .then(function(d){ renderRoster(box, (d && d.attendees) || []); })
+      .then(function(d){
+        renderRoster(box, (d && d.attendees) || []);
+        // 2026-11-12: no access-log row = every attendee's email, phone and answers withheld: say so above the roster
+        if (d && d.contact_withheld) box.innerHTML = '<div class="count-note" style="padding:2px 0">' + esc(d.contact_withheld) + '</div>' + box.innerHTML;
+      })
       .catch(function(){ box.innerHTML = ''; });
   }
   // one attendee's questions + answers as a small block ('' when they answered nothing)
@@ -18395,6 +18407,13 @@ window.llApplyTheme = function (pref) {
     r._contact_loading = true;
     authFetch('/tour-contact?uri=' + encodeURIComponent(r.uri)).then(function(j){
       r._contact_loading = false;
+      if (j && j.contact_withheld) {   // 2026-11-12: no access-log row = no contact. Say why; nothing is merged or marked loaded, so the next open asks again
+        if (curTour === r) {
+          var sw = el('rm-prostat'); if (sw) sw.textContent = j.contact_withheld;
+          var fw = el('rm-feed'); if (fw) fw.innerHTML = '<span class="count-note">' + esc(j.contact_withheld) + '</span>';
+        }
+        return;
+      }
       var c = (j && j.contact) || {};
       r.invitee_email = c.invitee_email || null;
       r.invitee_phone = c.invitee_phone || null;
@@ -20938,8 +20957,10 @@ window.llApplyTheme = function (pref) {
     var items = texts.concat(calls).filter(function(x){ return x.at; }).sort(function(a, b){ return (Date.parse(a.at)||0) - (Date.parse(b.at)||0); });
     var s = j.summary || {};
     if (el('ct-sub')) el('ct-sub').textContent = (s.texts != null ? s.texts : texts.length) + ' texts · ' + (s.calls != null ? s.calls : calls.length) + ' calls' + (s.agents && s.agents.length ? ' · ' + s.agents.join(', ') : '');
-    if (!items.length){ if (el('ct-body')) el('ct-body').innerHTML = '<div class="note" style="padding:18px;text-align:center">No texts or calls on record.</div>'; return; }
-    var h = '', lastDay = '';
+    // 2026-11-12: no access-log row = every text's body withheld: the sentence leads the thread, bubbles show a dash
+    var ctWh = j.contact_withheld || '';
+    if (!items.length){ if (el('ct-body')) el('ct-body').innerHTML = '<div class="note" style="padding:18px;text-align:center">' + esc(ctWh || 'No texts or calls on record.') + '</div>'; return; }
+    var h = ctWh ? '<div class="note" style="padding:10px;text-align:center">' + esc(ctWh) + '</div>' : '', lastDay = '';
     items.forEach(function(it){
       var dt = new Date(it.at), day = dt.toDateString();
       if (day !== lastDay){ lastDay = day; h += '<div class="ct-day">' + esc(ctDay(dt)) + '</div>'; }
@@ -20948,7 +20969,7 @@ window.llApplyTheme = function (pref) {
         var mins = it.dur ? Math.round(it.dur / 60) : 0;
         h += '<div class="ct-call">&#128222; ' + (out ? 'Outbound' : 'Inbound') + ' call' + (it.agent ? ' · ' + esc(it.agent) : '') + (mins ? ' · ' + mins + 'm' : '') + (it.result ? ' · ' + esc(it.result) : '') + ' · ' + tm + '</div>';
       } else {
-        h += '<div class="ct-row ' + (out ? 'ct-out' : 'ct-in') + '"><div class="ct-bub">' + esc(it.body || '') + '</div>' +
+        h += '<div class="ct-row ' + (out ? 'ct-out' : 'ct-in') + '"><div class="ct-bub">' + esc(it.body == null && ctWh ? '—' : (it.body || '')) + '</div>' +
           '<div class="ct-meta">' + (out ? esc(it.agent || 'Us') : esc(name || 'Prospect')) + ' · ' + tm + '</div></div>';
       }
     });

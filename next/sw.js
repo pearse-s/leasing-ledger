@@ -8,7 +8,7 @@
    to this device), and a tap focuses an open app tab (moving it to the payload's url) or opens one. The url is kept
    inside the app: a relative one ('#/alerts') resolves against BASE; any other url keeps only a '#/<route>' hash. */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + '06908ccf4e';
+var CACHE = PREFIX + '8328adcc62';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
@@ -16,6 +16,7 @@ var SHELL = [
   "/leasing-ledger/next/assets/adapters-zxqPRiLQ.js",
   "/leasing-ledger/next/assets/client-CUPE5OeR.js",
   "/leasing-ledger/next/assets/createLucideIcon-D501yjzk.js",
+  "/leasing-ledger/next/assets/dist-Bcow9Ss5.js",
   "/leasing-ledger/next/assets/entryMark-D2eIz8Bd.js",
   "/leasing-ledger/next/assets/fraunces-display-500-C6_ug22j.woff2",
   "/leasing-ledger/next/assets/fraunces-latin-wght-normal-ukD16Tqj.woff2",
@@ -23,9 +24,10 @@ var SHELL = [
   "/leasing-ledger/next/assets/grants-poEHMQQY.js",
   "/leasing-ledger/next/assets/hashParam-B3gHJEBo.js",
   "/leasing-ledger/next/assets/identity-BqxF2K2B.js",
-  "/leasing-ledger/next/assets/index-BqPUTJF1.js",
-  "/leasing-ledger/next/assets/index-W0ZirLm7.css",
+  "/leasing-ledger/next/assets/index-BFtpWwCK.js",
+  "/leasing-ledger/next/assets/index-CsKPlKjh.css",
   "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
+  "/leasing-ledger/next/assets/loadingAnnounce-BWj7EDCu.js",
   "/leasing-ledger/next/assets/mutation-C6HrxYyd.js",
   "/leasing-ledger/next/assets/patch-CS-5Lbw1.js",
   "/leasing-ledger/next/assets/persistLink-D1lCK6tE.js",

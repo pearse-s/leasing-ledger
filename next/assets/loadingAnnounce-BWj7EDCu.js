@@ -1,0 +1,1 @@
+var e=[],t=0,n=new Set,r=()=>{for(let e of n)e()};function i(n){let i=++t;return e=[...e,{id:i,text:n}],r(),()=>{e.some(e=>e.id===i)&&(e=e.filter(e=>e.id!==i),r())}}var a=()=>e[e.length-1]?.text??``;function o(e){return n.add(e),()=>{n.delete(e)}}export{a as n,o as r,i as t};

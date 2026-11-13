@@ -1,0 +1,1 @@
+import{t as e}from"./adapters-zxqPRiLQ.js";var t=async t=>(await e()).read(`/me/desk`,{},t),n=async t=>(await e()).write(`/me/desk/task`,t),r=async t=>(await e()).read(`/me/owners`,{},t);export{t as deskRead,n as deskTask,r as meOwners};

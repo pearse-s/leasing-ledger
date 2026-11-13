@@ -19598,13 +19598,14 @@ window.llApplyTheme = function (pref) {
     var s = el('sl-range'); if (s) s.value = hubTeamLeasesRange;
     if (hubTeamLeasesRange !== 'window') loadHubTeamSigned();
   }
+  // Pearse 2026-11-12 ("leasing agents should only see their tours"): no match = NO agent (empty My tours /
+  // follow-ups / pace), never agents[0], which showed the alphabetically first agent's tours as "mine".
   function hubMatchAgent(actor, agents){
-    if (!agents.length) return '';
-    if (!actor) return agents[0];
+    if (!agents.length || !actor) return '';
     var ex = agents.filter(function(g){ return g.toLowerCase() === actor.toLowerCase(); })[0];
     if (ex) return ex;
     var ft = tdFt(actor);
-    return agents.filter(function(g){ return tdFt(g) === ft; })[0] || agents[0];
+    return agents.filter(function(g){ return tdFt(g) === ft; })[0] || '';
   }
   function loadHub(){ hubLoaded = 1; hubWinRender(); loadHubScore(true); loadHubTours(); }
   // T-B5/B6 (audit 2026-10-11): every Hub loader is generation-guarded — clicking leaderboard row A
@@ -19624,7 +19625,7 @@ window.llApplyTheme = function (pref) {
       if (sel){
         var h = ''; agents.forEach(function(g){ h += '<option' + (g === hubAgent ? ' selected' : '') + '>' + esc(g) + '</option>'; });
         sel.innerHTML = h || '<option value="">(no agents yet)</option>';
-        if (hubAgent) sel.value = hubAgent;
+        if (hubAgent) sel.value = hubAgent; else sel.selectedIndex = -1;   // no agent: show none picked, not the first
       }
       hubRenderLeaderboard(); hubRenderFunnel(); loadHubAgent();
     }).catch(function(e){
@@ -19875,7 +19876,7 @@ window.llApplyTheme = function (pref) {
     var actor = getActor();
     if (!actor){ alert('Sign in first so the lease is credited correctly.'); return; }
     var body = { lease_id: Number(id), actor: actor }, path = '/lease/confirm';
-    if (act === 'claim'){ path = '/lease/claim'; body.agent = hubAgent; }
+    if (act === 'claim'){ if (!hubAgent){ alert('Pick an agent first.'); return; } path = '/lease/claim'; body.agent = hubAgent; }
     postJSON(path, body).then(function(){ leasesInvalidate(); loadHubAgent(); loadHubScore(false); })
       .catch(function(e){ if (String(e && e.message) === 'AUTH') return; alert('Could not save: ' + (e && e.message ? e.message : 'error')); });   // T-B22
   }
@@ -20725,6 +20726,7 @@ window.llApplyTheme = function (pref) {
     var b = e.target.closest('.hubact'); if (!b) return;
     var act = b.getAttribute('data-act'), id = b.getAttribute('data-id'), sug = b.getAttribute('data-sug') || '';
     // double-claim guard: claiming a lease the system suggested for someone else asks first
+    if (act === 'claim' && !hubAgent){ alert('Pick an agent first.'); return; }   // review L4: one dialog, not "Claim it for  instead?" first
     if (act === 'claim' && sug && !sameAgent(sug, hubAgent)){
       if (!confirm('This lease was suggested for ' + sug + '. Claim it for ' + hubAgent + ' instead?')) return;
     }

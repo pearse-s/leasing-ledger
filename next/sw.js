@@ -8,7 +8,7 @@
    to this device), and a tap focuses an open app tab (moving it to the payload's url) or opens one. The url is kept
    inside the app: a relative one ('#/alerts') resolves against BASE; any other url keeps only a '#/<route>' hash. */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + '4e21dc21d6';
+var CACHE = PREFIX + '2cfb85bb0e';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
@@ -23,20 +23,22 @@ var SHELL = [
   "/leasing-ledger/next/assets/grants-poEHMQQY.js",
   "/leasing-ledger/next/assets/hashParam-B3gHJEBo.js",
   "/leasing-ledger/next/assets/identity-BqxF2K2B.js",
-  "/leasing-ledger/next/assets/index-DxNYr9kV.js",
+  "/leasing-ledger/next/assets/index-CfaDQKyW.js",
   "/leasing-ledger/next/assets/index-PKvWDlj4.css",
   "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
+  "/leasing-ledger/next/assets/mutation-C6HrxYyd.js",
   "/leasing-ledger/next/assets/patch-CS-5Lbw1.js",
   "/leasing-ledger/next/assets/persistLink-D1lCK6tE.js",
   "/leasing-ledger/next/assets/preload-helper-BgGd1xQk.js",
   "/leasing-ledger/next/assets/rolldown-runtime-BWaJ3C7D.js",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-400-normal-DPhJBilQ.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-500-normal-rf9C4Thp.woff2",
-  "/leasing-ledger/next/assets/scope-D9rJ6FPW.js",
+  "/leasing-ledger/next/assets/scope-CCd4C9AM.js",
   "/leasing-ledger/next/assets/screenShape-Da0TQ1F4.js",
-  "/leasing-ledger/next/assets/screens-ea7_Iw5C.js",
+  "/leasing-ledger/next/assets/screens-Db4EZSfx.js",
   "/leasing-ledger/next/assets/store-DatPGCM4.js",
   "/leasing-ledger/next/assets/tabs-QDDbKvHm.js",
+  "/leasing-ledger/next/assets/useQuery-QmPNuDDG.js",
   "/leasing-ledger/next/theme-init.js"
 ];
 

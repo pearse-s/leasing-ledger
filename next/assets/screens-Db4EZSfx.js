@@ -1,0 +1,1 @@
+import{t as e}from"./adapters-zxqPRiLQ.js";import{t}from"./screenShape-Da0TQ1F4.js";async function n(n,r,i){return t(n,await(await e()).screen(n,r,i))}export{n as t};

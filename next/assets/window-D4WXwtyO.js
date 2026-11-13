@@ -1,0 +1,1 @@
+import{a as e}from"./hashParam-DQxRo_fm.js";var t=[7,30,90],n=e=>t.includes(Number(e))?Number(e):30,r=()=>e(`window`,n);export{r as n,t};

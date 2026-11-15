@@ -8,39 +8,40 @@
    to this device), and a tap focuses an open app tab (moving it to the payload's url) or opens one. The url is kept
    inside the app: a relative one ('#/alerts') resolves against BASE; any other url keeps only a '#/<route>' hash. */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + 'a689a7431a';
+var CACHE = PREFIX + 'e1c2e12491';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
-  "/leasing-ledger/next/assets/QueryClientProvider-BQ3du4Ix.js",
+  "/leasing-ledger/next/assets/QueryClientProvider-AZThsBPM.js",
   "/leasing-ledger/next/assets/adapters-zxqPRiLQ.js",
   "/leasing-ledger/next/assets/client-CUPE5OeR.js",
-  "/leasing-ledger/next/assets/createLucideIcon-D501yjzk.js",
+  "/leasing-ledger/next/assets/createLucideIcon-dpyInQuO.js",
   "/leasing-ledger/next/assets/dist-Bcow9Ss5.js",
   "/leasing-ledger/next/assets/entryMark-D2eIz8Bd.js",
   "/leasing-ledger/next/assets/fraunces-display-500-C6_ug22j.woff2",
   "/leasing-ledger/next/assets/fraunces-latin-wght-normal-ukD16Tqj.woff2",
   "/leasing-ledger/next/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
   "/leasing-ledger/next/assets/grants-poEHMQQY.js",
-  "/leasing-ledger/next/assets/hashParam-B3gHJEBo.js",
-  "/leasing-ledger/next/assets/identity-BqxF2K2B.js",
+  "/leasing-ledger/next/assets/hashParam-CupOhp0b.js",
+  "/leasing-ledger/next/assets/identity-BqyGIBF-.js",
+  "/leasing-ledger/next/assets/index-B3V9q_jV.js",
   "/leasing-ledger/next/assets/index-C2lAAdYN.css",
-  "/leasing-ledger/next/assets/index-D7V3jiT7.js",
-  "/leasing-ledger/next/assets/jsx-runtime-DApVmHJR.js",
+  "/leasing-ledger/next/assets/jsx-runtime-lTuChwRC.js",
   "/leasing-ledger/next/assets/loadingAnnounce-BWj7EDCu.js",
-  "/leasing-ledger/next/assets/mutation-C6HrxYyd.js",
+  "/leasing-ledger/next/assets/mutation-CjpjUsm8.js",
   "/leasing-ledger/next/assets/patch-CS-5Lbw1.js",
   "/leasing-ledger/next/assets/persistLink-D1lCK6tE.js",
   "/leasing-ledger/next/assets/preload-helper-BgGd1xQk.js",
+  "/leasing-ledger/next/assets/react-CaKr0epQ.js",
   "/leasing-ledger/next/assets/rolldown-runtime-BWaJ3C7D.js",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-400-normal-DPhJBilQ.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-500-normal-rf9C4Thp.woff2",
-  "/leasing-ledger/next/assets/scope-CCd4C9AM.js",
+  "/leasing-ledger/next/assets/scope-N0fHpkTH.js",
   "/leasing-ledger/next/assets/screenShape-Da0TQ1F4.js",
   "/leasing-ledger/next/assets/screens-Db4EZSfx.js",
-  "/leasing-ledger/next/assets/store-DatPGCM4.js",
+  "/leasing-ledger/next/assets/store-BgtxhDFV.js",
   "/leasing-ledger/next/assets/tabs--XbGYnpt.js",
-  "/leasing-ledger/next/assets/useQuery-QmPNuDDG.js",
+  "/leasing-ledger/next/assets/useQuery-CwQtLWUu.js",
   "/leasing-ledger/next/theme-init.js"
 ];
 

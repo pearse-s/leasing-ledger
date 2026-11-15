@@ -1021,6 +1021,7 @@ window.llApplyTheme = function (pref) {
   /* the booked appointment time - the one thing a manager wants off this row on the day */
   .mvappt{margin-top:3px;font-weight:700;font-size:.8rem;color:var(--moss);white-space:normal}
   .mvappt.off{color:var(--amber)}
+  .mvappt.tent{color:var(--ink-soft);font-weight:600}   /* tentative = not booked (2026-11-14): neutral, never the booked green */
   .mvappt-t{font-weight:600;font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
   @media (max-width:880px){ .mvexp{margin-left:0} }
   .srctag{display:inline-block;font-size:.58rem;font-weight:700;letter-spacing:.06em;border:1px solid var(--hairline-dark);border-radius:5px;padding:1px 6px;color:var(--ink-soft);text-decoration:none}
@@ -1441,6 +1442,9 @@ window.llApplyTheme = function (pref) {
      title is on the block's hover tooltip instead (fcTourEventContent sets wrap.title).
      .fcloc has no current builder (legacy) — left as-is. */
   .fc-ev-t{flex:1 1 auto;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* a tentative tile (2026-11-14): the "tentative" chip takes its own line and wraps (never clipped at 375) */
+  .fc-ev-wrap.fc-tentwrap{flex-wrap:wrap}
+  .fc-ev-wrap .fc-tent{flex:0 1 auto;max-width:100%;min-width:0;padding:0 4px;font-size:.62rem;line-height:1.3;white-space:normal;overflow-wrap:anywhere;margin-top:1px}
   .fcloc{font-size:.66rem;opacity:.92;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fc-list-event td{cursor:pointer}
   /* day "+N more" popover (month view): FC backs the popover with --fc-page-bg-color, which #rcal sets transparent, so the opened day list was see-through + unreadable over the grid. Give it a solid dark-glass panel. */
@@ -1534,6 +1538,9 @@ window.llApplyTheme = function (pref) {
   .rmpro-acts{display:flex;gap:8px;flex-shrink:0}
   .rmpro-acts a{font-size:1rem;text-decoration:none;color:var(--ink-soft);width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--hairline-dark);border-radius:50%}
   .rmpro-acts a:hover{color:var(--clay);border-color:var(--clay)}
+  /* move-ins list, withheld contact (2026-11-14): the sentence takes its own line and wraps, Try again + App sit under it */
+  .rmpro-acts.mi-wh{flex-wrap:wrap;flex-shrink:1;min-width:0;flex-basis:100%;align-items:center}
+  .rmpro-acts.mi-wh > .count-note{flex:1 1 100%}
   .rm-feedlab{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:8px 0 4px}
   .rmfi{display:flex;gap:9px;padding:7px 0;font-size:.84rem}
   .rmfi-ic{flex-shrink:0;width:18px;text-align:center;font-size:.92rem;margin-top:1px}
@@ -6194,6 +6201,10 @@ window.llApplyTheme = function (pref) {
       || r.location_text
       || 'Address not matched';
   }
+  // THE one test for "this move has a firm (booked) appointment" (Pearse 2026-11-14: a
+  // tentative appointment is NOT booked; /next/'s isBooked agrees). Two row shapes reach it:
+  // tracker rows pass (appt_at, appt_tentative), /gcal/moves rows pass (starts_at, tentative).
+  function mvApptFirm(at, tentative){ return !!at && !tentative; }
   function gcalMoveChips(r){
     var isIn = r.event_kind === 'move_in';
     return '<span class="chip ' + (isIn ? 'c-ok' : 'c-warm') + '">' + (isIn ? 'move-in' : 'move-out') + '</span>' +
@@ -6320,8 +6331,9 @@ window.llApplyTheme = function (pref) {
     var out = [];
     // a finished move needs no "no appt" nag on the calendar — its real gcal event, if there
     // is one, still comes through tdMvCalSrc untouched
-    if (tdMvKind !== 'out') (tdMvData.in_ || []).forEach(function(r){ if (!r.appt_at && !tdMvDone(r)) out.push(r); });
-    if (tdMvKind !== 'in') (tdMvData.out_ || []).forEach(function(r){ if (!r.appt_at && !tdMvDone(r)) out.push(r); });
+    // A tentative appointment is not booked, so its move keeps the ghost too (2026-11-14).
+    if (tdMvKind !== 'out') (tdMvData.in_ || []).forEach(function(r){ if (!mvApptFirm(r.appt_at, r.appt_tentative) && !tdMvDone(r)) out.push(r); });
+    if (tdMvKind !== 'in') (tdMvData.out_ || []).forEach(function(r){ if (!mvApptFirm(r.appt_at, r.appt_tentative) && !tdMvDone(r)) out.push(r); });
     return out;
   }
   // Prefilled Google Calendar draft (D9: deep-link OUT for now — no write scope). All-day
@@ -6422,11 +6434,14 @@ window.llApplyTheme = function (pref) {
   function fcMoveEventContent(arg){
     var p = arg.event.extendedProps || {};
     var wrap = document.createElement('div');
-    wrap.className = 'fc-ev-wrap';
+    wrap.className = 'fc-ev-wrap' + (p.tentative ? ' fc-tentwrap' : '');
+    if (p.tentative) wrap.title = (arg.event.title || '') + ' · tentative';
     wrap.innerHTML = '<span class="fc-mv-k">' + (p.kind === 'move_out' ? 'OUT' : 'IN') + (p.ghost ? '?' : '') + '</span>' +
       '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' +
       (p.risk ? '<span class="fc-mv-r" title="at risk">&#9888;</span>' : '') +
-      (p.tentative ? '<span class="fcx" title="tentative">?</span>' : '');
+      // the word, as gcalMoveChips shows it (no hover on a phone), on its own wrapping line so a
+      // narrow month cell never clips it (2026-11-14)
+      (p.tentative ? '<span class="chip c-cold fc-tent">tentative</span>' : '');
     return { domNodes: [wrap] };
   }
   function tdMvCalSrc(info, success, failure){
@@ -6468,7 +6483,7 @@ window.llApplyTheme = function (pref) {
       if (!d || d < from || d >= to) return;
       // keyed on unit_id, not lease_id: a manually forced move-in has no lease, and two
       // of them would otherwise collide on the same FullCalendar event id
-      evs.push({ id: 't' + r.__k + r.unit_id, title: tdMvWhere(r) + ' — no appt', start: d, allDay: true,
+      evs.push({ id: 't' + r.__k + r.unit_id, title: tdMvWhere(r) + (r.appt_at ? ' — tentative appt' : ' — no appt'), start: d, allDay: true,
         classNames: ['fc-mv', 'fc-mv-ghost', r.__k === 'in' ? 'fc-mv-in' : 'fc-mv-out'],
         extendedProps: { kind: r.__k === 'in' ? 'move_in' : 'move_out', unit_id: r.unit_id,
           lease_id: r.lease_id, ghost: true, risk: !!r.__risk } });
@@ -6540,7 +6555,7 @@ window.llApplyTheme = function (pref) {
     if (f === 'all') return true;
     if (f === 'risk') return !!r.__risk;
     if (k === 'in'){
-      if (f === 'noappt') return !r.appt_at;
+      if (f === 'noappt') return !mvApptFirm(r.appt_at, r.appt_tentative);   // tentative = not booked (2026-11-14)
       if (f === 'sd') return s.sd === 'due';
       if (f === 'clean') return s.cleaned === 'no';
       if (f === 'ins') return s.insurance === 'no';
@@ -6578,16 +6593,20 @@ window.llApplyTheme = function (pref) {
     // (the v_pm_moves lateral), so it can legitimately fall on ANOTHER day - show the date
     // too whenever they differ, or the row reads as "10:00 AM on the move date" when it is
     // nothing of the kind. Same reason the actual-vs-lease date shows its provenance above.
+    // A tentative appointment is NOT booked (Pearse 2026-11-14): its time shows in the neutral
+    // style, never titled "Booked", and the no-appt nudge to book stays beside it.
+    var apFirm = mvApptFirm(r.appt_at, r.appt_tentative);
     if (r.appt_at){
       var apd = '', apSame = false;
       try { apd = tdDayKeyEd(new Date(r.appt_at)); apSame = !!d && apd === d; } catch (e) {}
-      h += '<div class="mvappt' + (apSame ? '' : ' off') + '" title="' +
-        (apSame ? 'Booked appointment time' : 'Booked appointment is on a different day than the move date') + '">' +
+      h += '<div class="mvappt' + (apFirm ? '' : ' tent') + (apSame ? '' : ' off') + '" title="' +
+        (!apFirm ? 'Tentative appointment — not booked yet'
+          : apSame ? 'Booked appointment time' : 'Booked appointment is on a different day than the move date') + '">' +
         esc(schEdFmt(r.appt_at, apSame ? { hour: 'numeric', minute: '2-digit', hour12: true }
                                        : { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })) +
         (r.appt_tentative ? ' <span class="mvappt-t">tentative</span>' : '') + '</div>';
     }
-    else h += ' <a class="srctag ghost" href="' + esc(tdMvGcalDraft(r)) + '" target="_blank" rel="noopener" title="Nothing booked — draft it in Google Calendar">no appt &#8599;</a>';
+    if (!apFirm) h += ' <a class="srctag ghost" href="' + esc(tdMvGcalDraft(r)) + '" target="_blank" rel="noopener" title="Nothing booked — draft it in Google Calendar">no appt &#8599;</a>';
     return h;
   }
   // The tracker cells ARE the controls (Pearse 2026-07-27): a manager works a row without
@@ -6877,7 +6896,11 @@ window.llApplyTheme = function (pref) {
       }
     }
     h += '<div class="mvd-row"><button type="button" class="tdact" data-uid="' + esc(String(r.unit_id)) + '">Open unit</button> ' +
-      (!r.appt_at ? '<a class="tdact" href="' + esc(tdMvGcalDraft(r)) + '" target="_blank" rel="noopener">Book in Google Calendar &#8599;</a>' : '<span class="srctag ok">appt ' + esc(schEdFmt(r.appt_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })) + '</span>') + '</div>';
+      // a tentative appointment is not booked (2026-11-14): its tag says so in the neutral style
+      // and the Book action stays
+      (mvApptFirm(r.appt_at, r.appt_tentative) ? '<span class="srctag ok">appt ' + esc(schEdFmt(r.appt_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })) + '</span>'
+        : (r.appt_at ? '<span class="srctag">appt ' + esc(schEdFmt(r.appt_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })) + ' &middot; tentative</span> ' : '') +
+          '<a class="tdact" href="' + esc(tdMvGcalDraft(r)) + '" target="_blank" rel="noopener">Book in Google Calendar &#8599;</a>') + '</div>';
     // money (daily-fresh ledger mirror; the unit modal's Ledger drill is the live view)
     if (k === 'in'){
       h += '<div class="mvd-money"><div class="orcfg-h">Ledger &middot; as of last sync</div>' +
@@ -8158,7 +8181,7 @@ window.llApplyTheme = function (pref) {
   // it belongs to when that move is in the queue. Returns the counts the header line and the
   // tray need alongside the events.
   function tdQCalEvents(){
-    var q = tdQLast, m = tdMgrLast, out = { evs: [], dated: [], undated: [], appts: 0, apptsFailed: false };
+    var q = tdQLast, m = tdMgrLast, out = { evs: [], dated: [], undated: [], appts: 0, apptsTent: 0, apptsFailed: false };
     if (!q) return out;
     var items = [];
     TD_Q_LANES.forEach(function(l){ q.lanes[l].forEach(function(it){ items.push(it); }); });
@@ -8188,7 +8211,7 @@ window.llApplyTheme = function (pref) {
       else gcalMovesInWindow(moves).filter(tdMgrMovesScopePass).forEach(function(r){
         var isIn = r.event_kind === 'move_in', k = isIn ? 'move_in' : 'move_out';
         var qi = byUnit[k + ':' + r.unit_id];
-        out.appts++;
+        if (mvApptFirm(r.starts_at, r.tentative)) out.appts++; else out.apptsTent++;   // tentative is not booked (2026-11-14)
         out.evs.push({ id: 'g' + r.id, title: gcalMoveWhere(r), start: r.starts_at, end: r.ends_at || undefined, allDay: !!r.all_day,
           classNames: ['fc-q', 'fc-q-appt', isIn ? 'fc-mv-in' : 'fc-mv-out'],
           extendedProps: { qi: qi == null ? null : qi, appt: true, kind: k, tag: 'APPT', unit_id: r.unit_id, tentative: !!r.tentative } });
@@ -8201,15 +8224,15 @@ window.llApplyTheme = function (pref) {
     // the agenda list prints the time in its own column; the grids need it inside the block
     var time = arg.timeText && !(arg.view && arg.view.type === 'listWeek') ? arg.timeText : '';
     var wrap = document.createElement('div');
-    wrap.className = 'fc-ev-wrap';
+    wrap.className = 'fc-ev-wrap' + (p.tentative ? ' fc-tentwrap' : '');
     // the block's hover title carries the full text: in a narrow month cell (the pane docked
     // beside the calendar) only the kind tag fits and the title is the documented ellipsis case
-    wrap.title = (p.tag ? p.tag + ' · ' : '') + (time ? time + ' · ' : '') + (arg.event.title || '');
+    wrap.title = (p.tag ? p.tag + ' · ' : '') + (time ? time + ' · ' : '') + (arg.event.title || '') + (p.tentative ? ' · tentative' : '');
     wrap.innerHTML = '<span class="fc-mv-k">' + esc(p.tag || '') + '</span>' +
       (time ? '<span class="fc-q-time">' + esc(time) + '</span>' : '') +
       '<span class="fc-ev-t">' + esc(arg.event.title || '') + '</span>' +
       (p.snoozed ? '<span class="fcx" title="snoozed to this follow-up date">zz</span>' : '') +
-      (p.tentative ? '<span class="fcx" title="tentative">?</span>' : '');
+      (p.tentative ? '<span class="chip c-cold fc-tent">tentative</span>' : '');   // the word, as gcalMoveChips shows it, on its own line (2026-11-14)
     return { domNodes: [wrap] };
   }
   // the header line: "8 on this month's calendar, 6 undated" — queue items on the visible range
@@ -8223,7 +8246,8 @@ window.llApplyTheme = function (pref) {
     var inRange = r ? s.dated.filter(function(x){ return x.d >= r.start && x.d < r.end; }).length : s.dated.length;
     var h = '<b>' + inRange + '</b> on this ' + word + '&rsquo;s calendar, <b>' + s.undated.length + '</b> undated';
     if (s.dated.length > inRange) h += ' &middot; ' + (s.dated.length - inRange) + ' dated outside this ' + word;
-    if (s.appts) h += ' &middot; ' + s.appts + ' booked move appointment' + (s.appts === 1 ? '' : 's') + ' in the next ' + GCAL_MOVE_DAYS + ' days';
+    if (s.appts) h += ' &middot; ' + s.appts + ' booked move appointment' + (s.appts === 1 ? '' : 's') + (s.apptsTent ? ' and ' + s.apptsTent + ' tentative' : '') + ' in the next ' + GCAL_MOVE_DAYS + ' days';
+    else if (s.apptsTent) h += ' &middot; ' + s.apptsTent + ' tentative move appointment' + (s.apptsTent === 1 ? '' : 's') + ', none booked, in the next ' + GCAL_MOVE_DAYS + ' days';
     if (s.apptsFailed) h += ' &middot; the booked move appointments could not load';
     if (q.failed.length) h += ' &middot; could not load ' + q.failed.map(function(k){ return TD_Q_SOURCE_LABEL[k] || k; }).join(', ') + ', so those are missing here too';
     hd.innerHTML = h;
@@ -13694,7 +13718,7 @@ window.llApplyTheme = function (pref) {
     if (a && !a.all_day) when = schEdFmt(a.starts_at, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
     var verb = it.bare ? (it.dir === 'in' ? 'Move-in appointment' : 'Move-out appointment')
              : (it.dir === 'in' ? (future ? 'Moving in' : 'Moved in') : (future ? 'Moving out' : 'Moved out'));
-    var tent = a && a.tentative ? ' <span class="chip c-warm">tentative</span>' : '';
+    var tent = a && a.tentative ? ' <span class="chip c-cold">tentative</span>' : '';   // c-cold, as gcalMoveChips (2026-11-14)
     var link = a && a.html_link ? ' <a href="' + esc(String(a.html_link)) + '" target="_blank" rel="noopener" title="Open in Google Calendar">&#8599;</a>' : '';
     return listFeedItem(it.dir === 'in' ? '&#128682;' : '&#128230;', verb + it.who + tent, when + ' &middot; ' + it.src + link);
   }
@@ -13809,9 +13833,11 @@ window.llApplyTheme = function (pref) {
   }
   // S6: the move-ins LIST carries has_phone/has_email only. "Contact" fetches this one row and
   // swaps in the real Call/Text/Email links, so the phone launch is still a direct tap.
-  function miContactBtn(r){
+  // label: 'Try again' after a withheld answer (2026-11-14) — the same button, so the same
+  // handler and its disabled-while-in-flight guard carry the retry
+  function miContactBtn(r, label){
     if (!(r.has_phone || r.has_email)) return '';
-    return '<button type="button" class="listbtn" data-mi-contact="' + esc(r.unit_id) + '" title="Show contact">Contact</button>';
+    return '<button type="button" class="listbtn" data-mi-contact="' + esc(r.unit_id) + '" title="Show contact">' + esc(label || 'Contact') + '</button>';
   }
   // Dedicated "Upcoming move-ins" list (opened from the Pre-leased/upcoming KPI + Move-ins tile).
   var miAll = null, miFilter = 'all';
@@ -13859,17 +13885,28 @@ window.llApplyTheme = function (pref) {
     var mc = e.target.closest('[data-mi-contact]');
     if (mc){
       var uid = mc.getAttribute('data-mi-contact');
+      if (mc.disabled) return;   // in flight already (a disabled button fires no click; belt and braces)
+      var mcLabel = mc.textContent;
       mc.disabled = true; mc.textContent = '…';
       authFetch('/move-in-contact?unit_id=' + encodeURIComponent(uid)).then(function(j){
         var r = (j && j.move_in) || {};
         var box = el('mi-list') && el('mi-list').querySelector('[data-mi-acts="' + uid + '"]');
         if (!box) return;   // list redrawn / closed meanwhile
         var appId = (r.incoming_applicant_ids && r.incoming_applicant_ids[0]) || null;
-        // 2026-11-12: a withheld answer says why (never "No contact on file"); nothing is kept, so the next tap asks again
-        if (j && j.contact_withheld) { box.innerHTML = '<span class="count-note">' + esc(j.contact_withheld) + '</span>'; return; }
+        // 2026-11-12: a withheld answer says why (never "No contact on file"); nothing is kept.
+        // 2026-11-14: the row keeps a "Try again" (the same Contact button: one read per tap,
+        // disabled while in flight) and its App link, so the next tap really can ask again
+        if (j && j.contact_withheld) {
+          var lr = (miAll || []).filter(function(x){ return String(x.unit_id) === String(uid); })[0] || { unit_id: uid, has_phone: true };
+          box.classList.add('mi-wh');
+          box.innerHTML = '<span class="count-note">' + esc(j.contact_withheld) + '</span> ' + miContactBtn(lr, 'Try again') +
+            incomingActs(null, null, appId, r.incoming_tenant_names);
+          return;
+        }
+        box.classList.remove('mi-wh');   // a Try again that succeeded: back to the normal row
         box.innerHTML = incomingActs(r.incoming_phone, r.incoming_email, appId, r.incoming_tenant_names) || '<span class="count-note">No contact on file</span>';
       }).catch(function(err){
-        if (mc.isConnected) { mc.disabled = false; mc.textContent = 'Contact'; }
+        if (mc.isConnected) { mc.disabled = false; mc.textContent = mcLabel; }
         if (String(err && err.message) !== 'AUTH') console.error('move-in-contact', err);
       });
       return;
@@ -16867,9 +16904,12 @@ window.llApplyTheme = function (pref) {
     pc += '</div></div>';
     el('om-contact').innerHTML = pc;
     var f = '';
-    f += fitem('Phone', c ? esc(c.phone) : null);
-    f += fitem('Email', c && c.email ? '<a href="mailto:' + esc(c.email) + '" style="color:var(--clay)">' + esc(c.email) + '</a>' : null);
-    f += fitem('Alt email', c && c.alternate_email ? esc(c.alternate_email) : null);
+    if (wh) f += fitem('Contact', '<span class="count-note">' + esc(wh) + '</span>');   // 2026-11-14: withheld is never a dash ("none on file")
+    else {
+      f += fitem('Phone', c ? esc(c.phone) : null);
+      f += fitem('Email', c && c.email ? '<a href="mailto:' + esc(c.email) + '" style="color:var(--clay)">' + esc(c.email) + '</a>' : null);
+      f += fitem('Alt email', c && c.alternate_email ? esc(c.alternate_email) : null);
+    }
     f += fitem('Properties', fmtNum(r.property_count));
     f += fitem('Mgmt start', esc(r.management_agreement_start_date));
     f += fitem('Mgmt end', esc(r.management_agreement_end_date));
@@ -17546,7 +17586,7 @@ window.llApplyTheme = function (pref) {
     // /lease-detail pattern. paintContact renders the contact-dependent chrome twice: once
     // with det=null (loading), once with the fetched detail; the amCurAid compare guards the
     // async paint against the modal having moved on to another application.
-    function paintContact(det){
+    function paintContact(det, wh){   // wh: /application-detail's contact_withheld sentence (2026-11-14), else falsy
       var em = det ? String(det.applicant_email || '') : '';
       var ph = det ? String(det.applicant_phone || '') : '';
       // action row — In Buildium (primary) · View unit · View in Tours
@@ -17570,8 +17610,11 @@ window.llApplyTheme = function (pref) {
       var f = '';
       f += fitem('Property', esc(r.property_name));
       f += fitem('Unit', esc(r.unit_number));
-      f += fitem('Email', em ? '<a href="mailto:' + esc(em) + '" style="color:var(--clay)">' + esc(em) + '</a>' : null);
-      f += fitem('Phone', ph ? esc(ph) : null);
+      if (wh) f += fitem('Contact', '<span class="count-note">' + esc(wh) + '</span>');   // withheld is never a dash ("none on file")
+      else {
+        f += fitem('Email', em ? '<a href="mailto:' + esc(em) + '" style="color:var(--clay)">' + esc(em) + '</a>' : null);
+        f += fitem('Phone', ph ? esc(ph) : null);
+      }
       f += fitem('History', appHistHtml(r));
       f += fitem('Days to decision', r.approx_decision_days != null ? r.approx_decision_days + 'd (approx)' : null);
       f += fitem('Manager', esc(r.property_manager_name));
@@ -17583,7 +17626,7 @@ window.llApplyTheme = function (pref) {
     authFetch('/application-detail?application_id=' + encodeURIComponent(r.application_id))
       .then(function(j){
         if (String(amCurAid) !== String(aid)) return;   // modal moved on — don't paint stale contact
-        paintContact((j && j.application) || {});
+        paintContact((j && j.application) || {}, j && j.contact_withheld);
         // 2026-11-12: no access-log row = no email / phone: the stat line says why instead of staying blank
         if (j && j.contact_withheld) { var sw = el('am-prostat'); if (sw) sw.textContent = j.contact_withheld; }
       })
@@ -18343,6 +18386,7 @@ window.llApplyTheme = function (pref) {
     var r = (toursAll || []).concat(hubTours || []).concat(tdCalRows || []).filter(function(x){ return x.uri === uri; })[0];
     if (!r) return;
     curTour = r;
+    r._contact_withheld = null;   // a new open asks /tour-contact again (2026-11-14)
     var t = Date.parse(r.start_time);
     var s = tourStatusOf(r);
     var when = isNaN(t) ? '–' : new Date(t).toLocaleString('en-CA', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
@@ -18408,6 +18452,9 @@ window.llApplyTheme = function (pref) {
     authFetch('/tour-contact?uri=' + encodeURIComponent(r.uri)).then(function(j){
       r._contact_loading = false;
       if (j && j.contact_withheld) {   // 2026-11-12: no access-log row = no contact. Say why; nothing is merged or marked loaded, so the next open asks again
+        // 2026-11-14: the sentence (not contact) rides the row for THIS open, so a later feed or
+        // strip repaint (a note added) shows it instead of "Loading…"; openTourDetail clears it
+        r._contact_withheld = j.contact_withheld;
         if (curTour === r) {
           var sw = el('rm-prostat'); if (sw) sw.textContent = j.contact_withheld;
           var fw = el('rm-feed'); if (fw) fw.innerHTML = '<span class="count-note">' + esc(j.contact_withheld) + '</span>';
@@ -18436,7 +18483,7 @@ window.llApplyTheme = function (pref) {
       var initials = nm.split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
       pc += '<div class="rmpro"><div class="rmav">' + esc(initials || '?') + '</div>';
       pc += '<div class="rmpro-main"><div class="rmpro-name">' + esc(r.invitee_name || 'Prospect') + '</div>';
-      pc += '<div class="rmpro-stat" id="rm-prostat">' + (pending ? 'Loading contact&hellip;' : esc(dispEmail(r.invitee_email) || r.invitee_phone || '') + (isSynthEmail(r.invitee_email) ? ' <span class="chip c-warm">texts only</span>' : '')) + '</div></div>';
+      pc += '<div class="rmpro-stat" id="rm-prostat">' + (pending ? (r._contact_withheld ? esc(r._contact_withheld) : 'Loading contact&hellip;') : esc(dispEmail(r.invitee_email) || r.invitee_phone || '') + (isSynthEmail(r.invitee_email) ? ' <span class="chip c-warm">texts only</span>' : '')) + '</div></div>';
       pc += '<div class="rmpro-acts">';
       if (r.invitee_phone) {
         var tel = r.invitee_phone.replace(/[^0-9+]/g, '');
@@ -18544,7 +18591,7 @@ window.llApplyTheme = function (pref) {
   function loadProspectFeed(r){
     var feed = el('rm-feed'), lab = el('rm-feedlab'); if (!feed) return;
     var email = (r.invitee_email || '').trim();
-    if (!email && tourNeedsContact(r)) { lab.textContent = 'Activity · across all their tours'; feed.innerHTML = '<span class="count-note">Loading…</span>'; return; }   // S6: re-run once /tour-contact lands
+    if (!email && tourNeedsContact(r)) { lab.textContent = 'Activity · across all their tours'; feed.innerHTML = '<span class="count-note">' + (r._contact_withheld ? esc(r._contact_withheld) : 'Loading…') + '</span>'; return; }   // S6: re-run once /tour-contact lands; withheld says why (2026-11-14)
     if (!email) { lab.textContent = 'Notes'; feed.innerHTML = '<span class="count-note">No prospect email on this tour — notes can’t be grouped by person.</span>'; return; }
     lab.textContent = 'Activity · across all their tours';
     feed.innerHTML = '<span class="count-note">Loading…</span>';

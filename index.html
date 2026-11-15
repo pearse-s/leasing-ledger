@@ -14388,7 +14388,9 @@ window.llApplyTheme = function (pref) {
         '<td>' + (r.is_not_ready ? '<span class="chip c-otb">not ready</span>' : (STATUS_CHIP[r.occupancy_status] || '') + ((r.occupancy_status === 'op_vacant' || r.occupancy_status === 'never_leased') ? ' ' + chipFor(r.days_vacant, r.days_vacant == null) : '')) + (r.is_owner_takeback ? ' <span class="chip c-otb">take-back</span>' : '') + usoChip(r) + sdChip(r) + appStageChip(r) + '</td>' +
         '<td>' + evChip(r.unit_event) + rnUnitChip(r) + (r.is_listed ? ' <button type="button" class="listbtn" data-uid="' + r.unit_id + '">listed &#9656;</button>' : '') +
           (r.website_url ? ' <button type="button" class="listbtn" data-wshare="' + r.unit_id + '" title="Copy listing — summary + website link" aria-label="Copy listing">&#128279; copy</button>' : '') + fbChip(r) + '</td>' +
-        '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + ' <span class="qn">' + miSrcTag(r.move_in_src) + '</span>' : '–') + '</td>' +
+        // a tentative calendar appointment is not booked (2026-11-14): the neutral chip, never "Booked"
+        '<td>' + (r.move_in_disp ? esc(r.move_in_disp) + (r.move_in_src === 'appt' && !mvApptFirm(r.next_move_in_appt, r.next_move_in_appt_tentative)
+          ? mvoSrcChip('appt_tent') : ' <span class="qn">' + miSrcTag(r.move_in_src) + '</span>') : '–') + '</td>' +
         '<td>' + leaseEnd + '</td>' +
         '<td class="rt">' + (rentBasis(r) != null ? fmtMoney(rentBasis(r)) : '–') + '</td>' +
         '<td class="rt">' + ((r.total_balance || 0) > 0 ? '<b style="color:var(--clay)">' + fmtMoney(r.total_balance) + '</b>'
@@ -14711,7 +14713,7 @@ window.llApplyTheme = function (pref) {
     { label:'Renewal',         w:12, get:function(r){ return rnStageLabel(r); } },
     { label:'Pending app',     w:13, get:function(r){ return r.pending_app_stage === 'draft_lease' ? 'Draft lease' : r.pending_app_stage === 'approved' ? 'Approved' : ''; } },
     { label:'Move-in',         key:'move_in_disp', w:12 },
-    { label:'Move-in source',  w:13, get:function(r){ return r.move_in_src === 'appt' ? 'Appointment' : r.move_in_src === 'lease' ? 'Lease start' : r.move_in_src === 'expected' ? 'Expected (manual)' : r.move_in_src === 'manual' ? 'Actual (manual)' : ''; } },
+    { label:'Move-in source',  w:13, get:function(r){ return r.move_in_src === 'appt' ? 'Appointment' + (mvApptFirm(r.next_move_in_appt, r.next_move_in_appt_tentative) ? '' : ' (tentative)') : r.move_in_src === 'lease' ? 'Lease start' : r.move_in_src === 'expected' ? 'Expected (manual)' : r.move_in_src === 'manual' ? 'Actual (manual)' : ''; } },
     { label:'Lease type',      key:'lease_type', w:13 },
     { label:'Lease start',     key:'lease_from_date', w:12 },
     { label:'Lease end',       key:'lease_to_date', w:12 },
@@ -15449,6 +15451,8 @@ window.llApplyTheme = function (pref) {
   }
   function mvoSrcChip(s){
     if (s === 'appt')     return ' <span class="srctag ok" title="Booked appointment from Google Calendar">appt</span>';
+    // a tentative calendar appointment is not booked (2026-11-14): v506's neutral c-cold treatment
+    if (s === 'appt_tent') return ' <span class="chip c-cold" title="Tentative appointment — not booked yet">appt &middot; tentative</span>';
     if (s === 'expected') return ' <span class="srctag warn" title="Expected date from the status override — no lease behind it">expected</span>';
     if (s === 'manual')   return ' <span class="srctag ok" title="Recorded by a person against this lease">actual</span>';
     if (s === 'lease')    return ' <span class="srctag" title="Derived from Buildium">lease</span>';
@@ -15456,7 +15460,9 @@ window.llApplyTheme = function (pref) {
   }
   function mvoStatHtml(r, k){
     var d = mvoOn(r, k);
-    return '<b>' + esc(String(d || '–')) + '</b>' + mvoSrcChip(mvoSrc(r, k));
+    var s = mvoSrc(r, k);
+    if (s === 'appt' && !mvApptFirm(r.next_move_in_appt, r.next_move_in_appt_tentative)) s = 'appt_tent';
+    return '<b>' + esc(String(d || '–')) + '</b>' + mvoSrcChip(s);
   }
   // The provenance sentence — the "overridden vs derived" half of the field.
   function mvoNote(r, k){
@@ -15467,10 +15473,15 @@ window.llApplyTheme = function (pref) {
         ' &middot; ' + (k === 'in' ? 'the lease says ' : 'Buildium says ') + esc(String(der || '–'));
       // a booked appointment outranks a typed date in the Move-in column, so the number above
       // is NOT this override — say which one is showing rather than looking self-contradictory
-      if (k === 'in' && src !== 'manual') s += ' &middot; the booked appointment is showing above';
+      // (a status-override expected date also outranks it: that is not an appointment at all — review L2, 2026-11-15)
+      if (k === 'in' && src === 'appt') s += mvApptFirm(r.next_move_in_appt, r.next_move_in_appt_tentative)
+        ? ' &middot; the booked appointment is showing above' : ' &middot; the tentative appointment is showing above';
+      else if (k === 'in' && src === 'expected') s += ' &middot; the expected date is showing above';
       return s;
     }
-    if (src === 'appt')     return 'From Google Calendar &mdash; a booked move-in appointment.';
+    if (src === 'appt')     return mvApptFirm(r.next_move_in_appt, r.next_move_in_appt_tentative)
+      ? 'From Google Calendar &mdash; a booked move-in appointment.'
+      : 'From Google Calendar &mdash; a tentative move-in appointment, not booked yet.';
     if (src === 'expected') return 'Expected move-in from the status override, not a lease.' +
       (r.status_override_expires_on ? ' Held until ' + esc(r.status_override_expires_on) + '.' : '');
     if (src === 'lease')    return k === 'in' ? 'From the lease.' : (mvoPast(r, k) ? 'From Buildium &mdash; the last tenant&rsquo;s move-out.' : 'From the move-out notice in Buildium.');
@@ -15892,7 +15903,8 @@ window.llApplyTheme = function (pref) {
     f += fitem('Last move-out', '<span id="um-lmo">' + lmoValueHtml(r) + '</span>');
     // calendar appointment (Google mirror), deliberately distinct from the lease-date fields —
     // an elevator booked days before/after lease start is routine, not a contradiction
-    f += fitem('Move-in appt', esc(r.next_move_in_appt));
+    f += fitem('Move-in appt', r.next_move_in_appt && !mvApptFirm(r.next_move_in_appt, r.next_move_in_appt_tentative)
+      ? esc(r.next_move_in_appt) + mvoSrcChip('appt_tent') : esc(r.next_move_in_appt));   // tentative = not booked (2026-11-14)
     f += fitem('Lease rent', r.monthly_rent != null ? fmtMoney(r.monthly_rent) : null);
     f += fitem('Deposit', r.security_deposit != null ? fmtMoney(r.security_deposit) : null);
     f += fitem('SD received', r.sd_paid != null ? fmtMoney(r.sd_paid) + (r.security_deposit ? ' of ' + fmtMoney(r.security_deposit) : '') : null);

@@ -1,1 +1,0 @@
-import{t as e}from"./adapters-zxqPRiLQ.js";var t=async t=>(await e()).write(`/leads`,{from:t.from,to:t.to,match_keys:null});export{t as leadsRead};

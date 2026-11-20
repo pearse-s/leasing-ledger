@@ -1,0 +1,1 @@
+import{t as e}from"./adapters-4w8IGNlt.js";var t=async t=>(await e()).write(`/user/event`,t);export{t as userEvent};

@@ -8,12 +8,12 @@
    to this device), and a tap focuses an open app tab (moving it to the payload's url) or opens one. The url is kept
    inside the app: a relative one ('#/alerts') resolves against BASE; any other url keeps only a '#/<route>' hash. */
 var PREFIX = 'ledger-next-shell-';
-var CACHE = PREFIX + '82dab62e50';
+var CACHE = PREFIX + '451ab46e15';
 var BASE = '/leasing-ledger/next/';
 var SHELL = [
   "/leasing-ledger/next/",
   "/leasing-ledger/next/assets/QueryClientProvider-AZThsBPM.js",
-  "/leasing-ledger/next/assets/adapters-4w8IGNlt.js",
+  "/leasing-ledger/next/assets/adapters-LXWCIMLj.js",
   "/leasing-ledger/next/assets/client-CRdTpfEb.js",
   "/leasing-ledger/next/assets/createLucideIcon-dpyInQuO.js",
   "/leasing-ledger/next/assets/dist-Bcow9Ss5.js",
@@ -24,8 +24,8 @@ var SHELL = [
   "/leasing-ledger/next/assets/grants-poEHMQQY.js",
   "/leasing-ledger/next/assets/hashParam-CupOhp0b.js",
   "/leasing-ledger/next/assets/identity-CTbti0zm.js",
-  "/leasing-ledger/next/assets/index-BbNZ3WHp.js",
-  "/leasing-ledger/next/assets/index-CeLsOTA3.css",
+  "/leasing-ledger/next/assets/index-4oDlBiEW.js",
+  "/leasing-ledger/next/assets/index-x59sePY0.css",
   "/leasing-ledger/next/assets/jsx-runtime-lTuChwRC.js",
   "/leasing-ledger/next/assets/loadingAnnounce-BWj7EDCu.js",
   "/leasing-ledger/next/assets/mutation-CjpjUsm8.js",
@@ -36,9 +36,9 @@ var SHELL = [
   "/leasing-ledger/next/assets/rolldown-runtime-BWaJ3C7D.js",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-400-normal-DPhJBilQ.woff2",
   "/leasing-ledger/next/assets/schibsted-grotesk-latin-500-normal-rf9C4Thp.woff2",
-  "/leasing-ledger/next/assets/scope-gHCQuVLs.js",
+  "/leasing-ledger/next/assets/scope-C_CI_yrp.js",
   "/leasing-ledger/next/assets/screenShape-Da0TQ1F4.js",
-  "/leasing-ledger/next/assets/screens-UcmH75RH.js",
+  "/leasing-ledger/next/assets/screens-DQcFRP38.js",
   "/leasing-ledger/next/assets/store-BgtxhDFV.js",
   "/leasing-ledger/next/assets/tabs--XbGYnpt.js",
   "/leasing-ledger/next/assets/useQuery-CwQtLWUu.js",

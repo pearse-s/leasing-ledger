@@ -1,0 +1,1 @@
+import{t as e}from"./adapters-LXWCIMLj.js";var t=async t=>(await e()).write(`/user/event`,t);export{t as userEvent};
